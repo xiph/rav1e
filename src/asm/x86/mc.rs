@@ -402,3 +402,198 @@ cpu_function_lookup_table!(
 );
 
 cpu_function_lookup_table!(AVG_HBD_FNS: [Option<AvgHBDFn>], default: None, []);
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  use rand::random;
+  use std::str::FromStr;
+
+  macro_rules! test_put_fns {
+    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:literal, $BD:expr) => {
+      $(
+        paste::item! {
+          #[test]
+          fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            let test_mvs = [MotionVector { row: 0, col: 0 }, MotionVector { row: 4, col: 0 }, MotionVector { row: 0, col: 4 }, MotionVector { row: 4, col: 4 }];
+            if $BD > 8 {
+              // dynamic allocation: test
+              let mut src = Plane::wrap(vec![0u16; 64 * 64], 64);
+              for s in src.data.iter_mut() {
+                *s = random::<u8>() as u16 * $BD / 8;
+              }
+              // dynamic allocation: test
+              let mut dst1 = Plane::wrap(vec![0u16; 64 * 64], 64);
+              // dynamic allocation: test
+              let mut dst2 = Plane::wrap(vec![0u16; 64 * 64], 64);
+
+              for mv in &test_mvs {
+                let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
+                super::put_8tap(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::put_8tap(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::NATIVE);
+
+                assert_eq!(&*dst1.data, &*dst2.data);
+              }
+            } else {
+              // dynamic allocation: test
+              let mut src = Plane::wrap(vec![0u8; 64 * 64], 64);
+              for s in src.data.iter_mut() {
+                *s = random::<u8>();
+              }
+              // dynamic allocation: test
+              let mut dst1 = Plane::wrap(vec![0u8; 64 * 64], 64);
+              // dynamic allocation: test
+              let mut dst2 = Plane::wrap(vec![0u8; 64 * 64], 64);
+
+              for mv in &test_mvs {
+                let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
+                super::put_8tap(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::put_8tap(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::NATIVE);
+
+                assert_eq!(&*dst1.data, &*dst2.data);
+              }
+            };
+          }
+        }
+      )*
+    }
+  }
+
+  test_put_fns!(
+    (REGULAR, REGULAR, rav1e_put_8tap_regular),
+    (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth),
+    (REGULAR, SHARP, rav1e_put_8tap_regular_sharp),
+    (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular),
+    (SMOOTH, SMOOTH, rav1e_put_8tap_smooth),
+    (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp),
+    (SHARP, REGULAR, rav1e_put_8tap_sharp_regular),
+    (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth),
+    (SHARP, SHARP, rav1e_put_8tap_sharp),
+    (BILINEAR, BILINEAR, rav1e_put_bilin),
+    ssse3,
+    "ssse3",
+    8
+  );
+
+  test_put_fns!(
+    (REGULAR, REGULAR, rav1e_put_8tap_regular),
+    (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth),
+    (REGULAR, SHARP, rav1e_put_8tap_regular_sharp),
+    (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular),
+    (SMOOTH, SMOOTH, rav1e_put_8tap_smooth),
+    (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp),
+    (SHARP, REGULAR, rav1e_put_8tap_sharp_regular),
+    (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth),
+    (SHARP, SHARP, rav1e_put_8tap_sharp),
+    (BILINEAR, BILINEAR, rav1e_put_bilin),
+    avx2,
+    "avx2",
+    8
+  );
+
+  macro_rules! test_prep_fns {
+    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:literal, $BD:expr) => {
+      $(
+        paste::item! {
+          #[test]
+          fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            // dynamic allocation: test
+            let mut dst1 = Aligned::<[i16; 128 * 128]>::uninitialized();
+            // dynamic allocation: test
+            let mut dst2 = Aligned::<[i16; 128 * 128]>::uninitialized();
+            let test_mvs = [MotionVector { row: 0, col: 0 }, MotionVector { row: 4, col: 0 }, MotionVector { row: 0, col: 4 }, MotionVector { row: 4, col: 4 }];
+
+            if $BD > 8 {
+              // dynamic allocation: test
+              let mut src = Plane::wrap(vec![0u16; 64 * 64], 64);
+              for s in src.data.iter_mut() {
+                *s = random::<u8>() as u16 * $BD / 8;
+              }
+
+              for mv in &test_mvs {
+                let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
+                super::prep_8tap(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::prep_8tap(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::NATIVE);
+              }
+            } else {
+              // dynamic allocation: test
+              let mut src = Plane::wrap(vec![0u8; 64 * 64], 64);
+              for s in src.data.iter_mut() {
+                *s = random::<u8>();
+              }
+
+              for mv in &test_mvs {
+                let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
+                super::prep_8tap(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::prep_8tap(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::NATIVE);
+              }
+            };
+
+            assert_eq!(&dst1.data.to_vec(), &dst2.data.to_vec());
+          }
+        }
+      )*
+    }
+  }
+
+  test_prep_fns!(
+    (REGULAR, REGULAR, rav1e_prep_8tap_regular),
+    (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth),
+    (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp),
+    (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular),
+    (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth),
+    (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp),
+    (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular),
+    (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth),
+    (SHARP, SHARP, rav1e_prep_8tap_sharp),
+    (BILINEAR, BILINEAR, rav1e_prep_bilin),
+    ssse3,
+    "ssse3",
+    8
+  );
+
+  test_prep_fns!(
+    (REGULAR, REGULAR, rav1e_prep_8tap_regular),
+    (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth),
+    (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp),
+    (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular),
+    (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth),
+    (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp),
+    (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular),
+    (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth),
+    (SHARP, SHARP, rav1e_prep_8tap_sharp),
+    (BILINEAR, BILINEAR, rav1e_prep_bilin),
+    avx2,
+    "avx2",
+    8
+  );
+
+  fn get_params<'a, T: Pixel>(
+    rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
+  ) -> (i32, i32, PlaneSlice<'a, T>) {
+    let rec_cfg = &rec_plane.cfg;
+    let shift_row = 3 + rec_cfg.ydec;
+    let shift_col = 3 + rec_cfg.xdec;
+    let row_offset = mv.row as i32 >> shift_row;
+    let col_offset = mv.col as i32 >> shift_col;
+    let row_frac =
+      (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+    let col_frac =
+      (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+    let qo = PlaneOffset {
+      x: po.x + col_offset as isize - 3,
+      y: po.y + row_offset as isize - 3,
+    };
+    (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
+  }
+}
