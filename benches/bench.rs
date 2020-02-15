@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 mod dist;
+mod mc;
 mod plane;
 mod predict;
 mod rdo;
@@ -207,5 +208,6 @@ criterion_main!(
   inverse_transforms,
   ec,
   rdo,
-  plane
+  plane,
+  mc::mc
 );
