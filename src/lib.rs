@@ -347,6 +347,9 @@ pub mod bench {
   pub mod encoder {
     pub use crate::encoder::*;
   }
+  pub mod mc {
+    pub use crate::mc::*;
+  }
   pub mod partition {
     pub use crate::partition::*;
   }
