@@ -7,11 +7,14 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use self::hbd::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::partition::BlockSize;
 use crate::tiling::*;
 use crate::util::*;
+
+mod hbd;
 
 type SadFn = unsafe extern fn(
   src: *const u8,
@@ -181,12 +184,13 @@ pub fn get_satd<T: Pixel>(
       None => call_native(),
     },
     PixelType::U16 => match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+      // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
       Some(func) => unsafe {
         (func)(
           src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
+          src.plane_cfg.stride as isize,
           dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
+          dst.plane_cfg.stride as isize,
         )
       },
       None => call_native(),
@@ -429,10 +433,43 @@ cpu_function_lookup_table!(
   [SSSE3, SSE4_1, AVX2]
 );
 
+static SATD_HBD_FNS_AVX2: [Option<SatdHBDFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SatdHBDFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_4X4 as usize] = Some(rav1e_satd_4x4_hbd_avx2);
+  out[BLOCK_8X8 as usize] = Some(rav1e_satd_8x8_hbd_avx2);
+  out[BLOCK_16X16 as usize] = Some(rav1e_satd_16x16_hbd_avx2);
+  out[BLOCK_32X32 as usize] = Some(rav1e_satd_32x32_hbd_avx2);
+  out[BLOCK_64X64 as usize] = Some(rav1e_satd_64x64_hbd_avx2);
+  out[BLOCK_128X128 as usize] = Some(rav1e_satd_128x128_hbd_avx2);
+
+  out[BLOCK_4X8 as usize] = Some(rav1e_satd_4x8_hbd_avx2);
+  out[BLOCK_8X4 as usize] = Some(rav1e_satd_8x4_hbd_avx2);
+  out[BLOCK_8X16 as usize] = Some(rav1e_satd_8x16_hbd_avx2);
+  out[BLOCK_16X8 as usize] = Some(rav1e_satd_16x8_hbd_avx2);
+  out[BLOCK_16X32 as usize] = Some(rav1e_satd_16x32_hbd_avx2);
+  out[BLOCK_32X16 as usize] = Some(rav1e_satd_32x16_hbd_avx2);
+  out[BLOCK_32X64 as usize] = Some(rav1e_satd_32x64_hbd_avx2);
+  out[BLOCK_64X32 as usize] = Some(rav1e_satd_64x32_hbd_avx2);
+  out[BLOCK_64X128 as usize] = Some(rav1e_satd_64x128_hbd_avx2);
+  out[BLOCK_128X64 as usize] = Some(rav1e_satd_128x64_hbd_avx2);
+
+  out[BLOCK_4X16 as usize] = Some(rav1e_satd_4x16_hbd_avx2);
+  out[BLOCK_16X4 as usize] = Some(rav1e_satd_16x4_hbd_avx2);
+  out[BLOCK_8X32 as usize] = Some(rav1e_satd_8x32_hbd_avx2);
+  out[BLOCK_32X8 as usize] = Some(rav1e_satd_32x8_hbd_avx2);
+  out[BLOCK_16X64 as usize] = Some(rav1e_satd_16x64_hbd_avx2);
+  out[BLOCK_64X16 as usize] = Some(rav1e_satd_64x16_hbd_avx2);
+
+  out
+};
+
 cpu_function_lookup_table!(
   SATD_HBD_FNS: [[Option<SatdHBDFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
-  []
+  [AVX2]
 );
 
 #[cfg(test)]
@@ -585,6 +622,35 @@ mod test {
     (64, 16),
     satd,
     8,
+    avx2,
+    "avx2"
+  );
+
+  test_dist_fns!(
+    (4, 4),
+    (8, 8),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (16, 64),
+    (64, 16),
+    satd,
+    10,
     avx2,
     "avx2"
   );
