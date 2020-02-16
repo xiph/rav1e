@@ -1,4 +1,4 @@
-use crate::util::msb;
+use crate::util::{msb, Aligned};
 use std::arch::x86_64::*;
 
 macro_rules! satd_hbd_avx2 {
@@ -21,9 +21,9 @@ macro_rules! satd_hbd_avx2 {
           // Loop over chunks the size of the chosen transform
           for chunk_y in (0isize..$H).step_by(size) {
             for chunk_x in (0isize..$W).step_by(size) {
-              let buf: &mut [i32] = &mut [0; 8 * 8][..size * size];
-              let input1: &mut [i32] = &mut [0; 8 * 8][..size * size];
-              let input2: &mut [i32] = &mut [0; 8 * 8][..size * size];
+              let buf = &mut Aligned::<[i32; 8 * 8]>::uninitialized().data[..size * size];
+              let input1 = &mut Aligned::<[i32; 8 * 8]>::uninitialized().data[..size * size];
+              let input2 = &mut Aligned::<[i32; 8 * 8]>::uninitialized().data[..size * size];
               for y in 0..(sizei) {
                 let y1 = chunk_y + y;
                 for x in 0..(sizei) {
@@ -36,15 +36,15 @@ macro_rules! satd_hbd_avx2 {
               // Move the difference of the transforms to a buffer
               for y in 0..(sizei) {
                 if size == 4 {
-                  let row_src = _mm_loadu_si128(input1.as_ptr().offset(y * sizei) as *const __m128i);
-                  let row_dst = _mm_loadu_si128(input2.as_ptr().offset(y * sizei) as *const __m128i);
+                  let row_src = _mm_load_si128(input1.as_ptr().offset(y * sizei) as *const __m128i);
+                  let row_dst = _mm_load_si128(input2.as_ptr().offset(y * sizei) as *const __m128i);
                   let diff = _mm_sub_epi32(row_src, row_dst);
-                  _mm_storeu_si128(buf.as_mut_ptr().offset(y * sizei) as *mut __m128i, diff);
+                  _mm_store_si128(buf.as_mut_ptr().offset(y * sizei) as *mut __m128i, diff);
                 } else {
-                  let row_src = _mm256_loadu_si256(input1.as_ptr().offset(y * sizei) as *const __m256i);
-                  let row_dst = _mm256_loadu_si256(input2.as_ptr().offset(y * sizei) as *const __m256i);
+                  let row_src = _mm256_load_si256(input1.as_ptr().offset(y * sizei) as *const __m256i);
+                  let row_dst = _mm256_load_si256(input2.as_ptr().offset(y * sizei) as *const __m256i);
                   let diff = _mm256_sub_epi32(row_src, row_dst);
-                  _mm256_storeu_si256(buf.as_mut_ptr().offset(y * sizei) as *mut __m256i, diff);
+                  _mm256_store_si256(buf.as_mut_ptr().offset(y * sizei) as *mut __m256i, diff);
                 }
               }
 
@@ -52,22 +52,22 @@ macro_rules! satd_hbd_avx2 {
               // Then sum the absolute values of the transformed differences
               if size == 4 {
                 hadamard4x4(buf.as_mut_ptr());
-                let row1 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(0) as *const __m256i));
-                let row2 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(8) as *const __m256i));
+                let row1 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(0) as *const __m256i));
+                let row2 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(8) as *const __m256i));
                 let sum_t = _mm256_add_epi32(row1, row2);
-                let mut abs = [0u32; 8];
-                _mm256_storeu_si256(abs.as_mut_ptr() as *mut __m256i, sum_t);
-                sum += abs.iter().copied().map(|a| a as u64).sum::<u64>();
+                let mut abs = Aligned::<[u32; 8]>::uninitialized();
+                _mm256_store_si256(abs.data.as_mut_ptr() as *mut __m256i, sum_t);
+                sum += abs.data.iter().copied().map(|a| a as u64).sum::<u64>();
               } else {
                 hadamard8x8(buf.as_mut_ptr());
-                let row1 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(0) as *const __m256i));
-                let row2 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(8) as *const __m256i));
-                let row3 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(16) as *const __m256i));
-                let row4 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(24) as *const __m256i));
-                let row5 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(32) as *const __m256i));
-                let row6 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(40) as *const __m256i));
-                let row7 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(48) as *const __m256i));
-                let row8 = _mm256_abs_epi32(_mm256_loadu_si256(buf.as_ptr().add(56) as *const __m256i));
+                let row1 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(0) as *const __m256i));
+                let row2 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(8) as *const __m256i));
+                let row3 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(16) as *const __m256i));
+                let row4 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(24) as *const __m256i));
+                let row5 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(32) as *const __m256i));
+                let row6 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(40) as *const __m256i));
+                let row7 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(48) as *const __m256i));
+                let row8 = _mm256_abs_epi32(_mm256_load_si256(buf.as_ptr().add(56) as *const __m256i));
                 let sum1 = _mm256_add_epi32(row1, row2);
                 let sum2 = _mm256_add_epi32(row3, row4);
                 let sum3 = _mm256_add_epi32(row5, row6);
@@ -75,9 +75,9 @@ macro_rules! satd_hbd_avx2 {
                 let sum5 = _mm256_add_epi32(sum1, sum2);
                 let sum6 = _mm256_add_epi32(sum3, sum4);
                 let sum_t = _mm256_add_epi32(sum5, sum6);
-                let mut abs_sums = [0u32; 8];
-                _mm256_storeu_si256(abs_sums.as_mut_ptr() as *mut __m256i, sum_t);
-                sum += abs_sums.iter().copied().map(|a| a as u64).sum::<u64>();
+                let mut abs_sums = Aligned::<[u32; 8]>::uninitialized();
+                _mm256_store_si256(abs_sums.data.as_mut_ptr() as *mut __m256i, sum_t);
+                sum += abs_sums.data.iter().copied().map(|a| a as u64).sum::<u64>();
               }
             }
           }
