@@ -63,10 +63,6 @@ impl ActivityMask {
             _ => unreachable!(),
         };
 
-    let tot_bins = variances.len();
-    let mut avg_var = 0f64;
-    let mut max = 0f64;
-
     for y in 0..height >> act_granularity {
       for x in 0..width >> act_granularity {
         let block_rect = Area::Rect {
@@ -102,8 +98,6 @@ impl ActivityMask {
         }
 
         sum_f /= (tot_pix - 4*4) as f64;
-        avg_var += sum_f;
-        max = max.max(sum_f);
 
         /* Copy down to granularity */
         for i in 0..(1 << (act_granularity - granularity)) {
@@ -119,10 +113,9 @@ impl ActivityMask {
       }
     }
 
-    let old_avg_var = avg_var / (tot_bins as f64);
-
-    avg_var = 0f64;
-    max = 0f64;
+    let tot_bins = variances.len();
+    let mut avg_var = 0f64;
+    let mut max = 0f64;
 
     /* Merge temporal activity */
     for y in 0..fi.h_in_imp_b {
@@ -137,13 +130,13 @@ impl ActivityMask {
                 } else {
                     let strength = 1.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
-                    (frac.powf(strength / 3.0) * old_avg_var * 0.954745190983) - 13.056080429
+                    frac.powf(strength / 3.0)
                 };
 
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = (*x + temporal_act).max(0f64);
+                    *x = (*x * temporal_act) * 0.6472725012 - 24.32294559;
                     avg_var += *x;
                     max = max.max(*x);
                 }
@@ -152,7 +145,9 @@ impl ActivityMask {
         }
     }
 
-//    println!("Avg var = {}", avg_var);
+    avg_var /= tot_bins as f64;
+    avg_var /= max;
+    avg_var *= 7f64;
 
     let mut seg_bins = [0usize; 8];
     for i in 0..tot_bins {
@@ -165,10 +160,6 @@ impl ActivityMask {
             None => unreachable!(),
         }
     }
-
-    avg_var /= tot_bins as f64;
-    avg_var /= max;
-    avg_var *= 7f64;
 
     let var_scale = max / 7f64;
 
