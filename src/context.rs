@@ -47,16 +47,16 @@ pub const PARTITION_CONTEXTS: usize = PARTITION_CONTEXTS_PRIMARY;
 pub const PARTITION_TYPES: usize = 4;
 
 pub const MI_SIZE_LOG2: usize = 2;
-pub const MI_SIZE: usize = (1 << MI_SIZE_LOG2);
-pub const MAX_MIB_SIZE_LOG2: usize = (MAX_SB_SIZE_LOG2 - MI_SIZE_LOG2);
-pub const MIB_SIZE_LOG2: usize = (SB_SIZE_LOG2 - MI_SIZE_LOG2);
-pub const MIB_SIZE: usize = (1 << MIB_SIZE_LOG2);
-pub const MIB_MASK: usize = (MIB_SIZE - 1);
+pub const MI_SIZE: usize = 1 << MI_SIZE_LOG2;
+pub const MAX_MIB_SIZE_LOG2: usize = MAX_SB_SIZE_LOG2 - MI_SIZE_LOG2;
+pub const MIB_SIZE_LOG2: usize = SB_SIZE_LOG2 - MI_SIZE_LOG2;
+pub const MIB_SIZE: usize = 1 << MIB_SIZE_LOG2;
+pub const MIB_MASK: usize = MIB_SIZE - 1;
 
 const MAX_SB_SIZE_LOG2: usize = 7;
 const SB_SIZE_LOG2: usize = 6;
-pub const SB_SIZE: usize = (1 << SB_SIZE_LOG2);
-const SB_SQUARE: usize = (SB_SIZE * SB_SIZE);
+pub const SB_SIZE: usize = 1 << SB_SIZE_LOG2;
+const SB_SQUARE: usize = SB_SIZE * SB_SIZE;
 
 pub const MAX_TX_SIZE: usize = 64;
 
@@ -87,7 +87,7 @@ pub const TX_SETS_INTRA: usize = 3;
 pub const TX_SETS_INTER: usize = 4;
 
 pub const TXFM_PARTITION_CONTEXTS: usize =
-  ((TxSize::TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3);
+  (TxSize::TX_SIZES - TxSize::TX_8X8 as usize) * 6 - 3;
 
 const MAX_VARTX_DEPTH: usize = 2;
 
@@ -254,12 +254,12 @@ const TX_PAD_HOR: usize = 4;
 // check.
 const TX_PAD_TOP: usize = 2;
 const TX_PAD_BOTTOM: usize = 4;
-const TX_PAD_VER: usize = (TX_PAD_TOP + TX_PAD_BOTTOM);
+const TX_PAD_VER: usize = TX_PAD_TOP + TX_PAD_BOTTOM;
 // Pad 16 extra bytes to avoid reading overflow in SIMD optimization.
 const TX_PAD_END: usize = 16;
-const TX_PAD_2D: usize = ((MAX_CODED_TX_SIZE + TX_PAD_HOR)
+const TX_PAD_2D: usize = (MAX_CODED_TX_SIZE + TX_PAD_HOR)
   * (MAX_CODED_TX_SIZE + TX_PAD_VER)
-  + TX_PAD_END);
+  + TX_PAD_END;
 
 const TX_CLASSES: usize = 3;
 
@@ -491,8 +491,8 @@ static av1_nz_map_ctx_offset: [[[i8; 5]; 5]; TxSize::TX_SIZES_ALL] = [
 ];
 
 const NZ_MAP_CTX_0: usize = SIG_COEF_CONTEXTS_2D;
-const NZ_MAP_CTX_5: usize = (NZ_MAP_CTX_0 + 5);
-const NZ_MAP_CTX_10: usize = (NZ_MAP_CTX_0 + 10);
+const NZ_MAP_CTX_5: usize = NZ_MAP_CTX_0 + 5;
+const NZ_MAP_CTX_10: usize = NZ_MAP_CTX_0 + 10;
 
 static nz_map_ctx_offset_1d: [usize; 32] = [
   NZ_MAP_CTX_0,
@@ -4330,18 +4330,18 @@ const MV_CLASS_9: usize = 9; /* (512, 1024] integer pel */
 const MV_CLASS_10: usize = 10; /* (1024,2048] integer pel */
 
 const CLASS0_BITS: usize = 1; /* bits at integer precision for class 0 */
-const CLASS0_SIZE: usize = (1 << CLASS0_BITS);
-const MV_OFFSET_BITS: usize = (MV_CLASSES + CLASS0_BITS - 2);
+const CLASS0_SIZE: usize = 1 << CLASS0_BITS;
+const MV_OFFSET_BITS: usize = MV_CLASSES + CLASS0_BITS - 2;
 const MV_BITS_CONTEXTS: usize = 6;
 const MV_FP_SIZE: usize = 4;
 
-const MV_MAX_BITS: usize = (MV_CLASSES + CLASS0_BITS + 2);
-const MV_MAX: usize = ((1 << MV_MAX_BITS) - 1);
-const MV_VALS: usize = ((MV_MAX << 1) + 1);
+const MV_MAX_BITS: usize = MV_CLASSES + CLASS0_BITS + 2;
+const MV_MAX: usize = (1 << MV_MAX_BITS) - 1;
+const MV_VALS: usize = (MV_MAX << 1) + 1;
 
 const MV_IN_USE_BITS: usize = 14;
-const MV_UPP: i32 = (1 << MV_IN_USE_BITS);
-const MV_LOW: i32 = (-(1 << MV_IN_USE_BITS));
+const MV_UPP: i32 = 1 << MV_IN_USE_BITS;
+const MV_LOW: i32 = -(1 << MV_IN_USE_BITS);
 
 #[inline(always)]
 pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
