@@ -136,7 +136,7 @@ impl ActivityMask {
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = (*x * temporal_act) * 0.6472725012 - 24.32294559;
+                    *x = ((*x * temporal_act) * 0.6472725012 - 24.32294559).max(0f64);
                     avg_var += *x;
                     max = max.max(*x);
                 }
