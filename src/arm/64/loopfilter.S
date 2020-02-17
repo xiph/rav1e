@@ -981,13 +981,13 @@ function lpf_h_16_16_neon
         br              x15
 endfunc
 
-// void dav1d_lpf_v_sb_y_neon(pixel *dst, const ptrdiff_t stride,
-//                            const uint32_t *const vmask,
-//                            const uint8_t (*l)[4], ptrdiff_t b4_stride,
-//                            const Av1FilterLUT *lut, const int w)
+// void dav1d_lpf_v_sb_y_8bpc_neon(pixel *dst, const ptrdiff_t stride,
+//                                 const uint32_t *const vmask,
+//                                 const uint8_t (*l)[4], ptrdiff_t b4_stride,
+//                                 const Av1FilterLUT *lut, const int w)
 
 .macro lpf_func dir, type
-function lpf_\dir\()_sb_\type\()_neon, export=1
+function lpf_\dir\()_sb_\type\()_8bpc_neon, export=1
         mov             x11, x30
         stp             d8,  d9,  [sp, #-0x40]!
         stp             d10, d11, [sp, #0x10]
