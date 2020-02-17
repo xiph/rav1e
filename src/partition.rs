@@ -444,10 +444,10 @@ pub const INTER_COMPOUND_MODES: usize = 1 + PredictionMode::NEW_NEWMV as usize
 
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
-pub const NEWMV_CTX_MASK: usize = ((1 << GLOBALMV_OFFSET) - 1);
+pub const NEWMV_CTX_MASK: usize = (1 << GLOBALMV_OFFSET) - 1;
 pub const GLOBALMV_CTX_MASK: usize =
-  ((1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1);
-pub const REFMV_CTX_MASK: usize = ((1 << (8 - REFMV_OFFSET)) - 1);
+  (1 << (REFMV_OFFSET - GLOBALMV_OFFSET)) - 1;
+pub const REFMV_CTX_MASK: usize = (1 << (8 - REFMV_OFFSET)) - 1;
 
 pub static RAV1E_PARTITION_TYPES: &[PartitionType] = &[
   PartitionType::PARTITION_NONE,
