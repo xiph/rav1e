@@ -63,6 +63,10 @@ impl ActivityMask {
             _ => unreachable!(),
         };
 
+    let tot_bins = variances.len();
+    let mut avg_var = 0f64;
+    let mut max = 0f64;
+
     for y in 0..height >> act_granularity {
       for x in 0..width >> act_granularity {
         let block_rect = Area::Rect {
@@ -98,6 +102,8 @@ impl ActivityMask {
         }
 
         sum_f /= (tot_pix - 4*4) as f64;
+        avg_var += sum_f;
+        max = max.max(sum_f);
 
         /* Copy down to granularity */
         for i in 0..(1 << (act_granularity - granularity)) {
@@ -113,8 +119,11 @@ impl ActivityMask {
       }
     }
 
-    let mut avg_var = 0f64;
-    let mut max = 0f64;
+    let old_avg_var = avg_var / (tot_bins as f64);
+    let old_max = max;
+
+    avg_var = 0f64;
+    max = 0f64;
 
     /* Merge temporal activity */
     for y in 0..fi.h_in_imp_b {
@@ -129,13 +138,13 @@ impl ActivityMask {
                 } else {
                     let strength = 1.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
-                    frac.powf(strength / 3.0) * 1.0f64
+                    frac.powf(strength / 3.0)
                 };
 
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = *x;
+                    *x = (*x + temporal_act * old_avg_var) * 0.940799829805f64 - 19.7703361851f64;
                     avg_var += *x;
                     max = max.max(*x);
                 }
@@ -147,7 +156,7 @@ impl ActivityMask {
 //    println!("Avg var = {}", avg_var);
 
     let mut seg_bins = [0usize; 8];
-    for i in 0..variances.len() {
+    for i in 0..tot_bins {
         let element = variances.get_mut(i);
         match element {
             Some(x) => {
@@ -157,8 +166,6 @@ impl ActivityMask {
             None => unreachable!(),
         }
     }
-
-    let tot_bins = variances.len();
 
     avg_var /= tot_bins as f64;
     avg_var /= max;
