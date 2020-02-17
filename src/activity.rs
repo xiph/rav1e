@@ -120,7 +120,6 @@ impl ActivityMask {
     }
 
     let old_avg_var = avg_var / (tot_bins as f64);
-    let old_max = max;
 
     avg_var = 0f64;
     max = 0f64;
@@ -138,13 +137,13 @@ impl ActivityMask {
                 } else {
                     let strength = 1.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
-                    frac.powf(strength / 3.0)
+                    (frac.powf(strength / 3.0) * old_avg_var * 0.954745190983) - 13.056080429
                 };
 
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = (*x + temporal_act * old_avg_var) * 0.940799829805f64 - 19.7703361851f64;
+                    *x = (*x + temporal_act).max(0f64);
                     avg_var += *x;
                     max = max.max(*x);
                 }
