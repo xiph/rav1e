@@ -81,10 +81,10 @@ itertools = "0.8"
 simd_helpers = "0.1"
 
 [dependencies.image]
-version = "0.22.1"
+version = "0.23"
 optional = true
 default-features = false
-features = ["png_codec"]
+features = ["png"]
 
 [dependencies.rust_hawktracer]
 version = "0.7.0"
