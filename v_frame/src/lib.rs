@@ -21,7 +21,7 @@ mod serialize {
      }
   }
 }
-pub mod preamble {
+pub mod prelude {
   pub use crate::math::*;
   pub use crate::pixel::*;
 }
