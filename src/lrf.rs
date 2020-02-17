@@ -99,7 +99,7 @@ pub fn get_sgr_sets(complexity: SGRComplexityLevel) -> &'static [u8] {
   }
 }
 
-pub const SOLVE_IMAGE_MAX: usize = (1 << RESTORATION_TILESIZE_MAX_LOG2);
+pub const SOLVE_IMAGE_MAX: usize = 1 << RESTORATION_TILESIZE_MAX_LOG2;
 pub const SOLVE_IMAGE_STRIDE: usize = SOLVE_IMAGE_MAX + 6 + 2;
 pub const SOLVE_IMAGE_HEIGHT: usize = SOLVE_IMAGE_STRIDE;
 pub const SOLVE_IMAGE_SIZE: usize = SOLVE_IMAGE_STRIDE * SOLVE_IMAGE_HEIGHT;
