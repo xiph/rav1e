@@ -734,13 +734,13 @@ function lpf_h_16_8_neon
         bx              r12
 endfunc
 
-// void dav1d_lpf_v_sb_y_neon(pixel *dst, const ptrdiff_t stride,
-//                            const uint32_t *const vmask,
-//                            const uint8_t (*l)[4], ptrdiff_t b4_stride,
-//                            const Av1FilterLUT *lut, const int w)
+// void dav1d_lpf_v_sb_y_8bpc_neon(pixel *dst, const ptrdiff_t stride,
+//                                 const uint32_t *const vmask,
+//                                 const uint8_t (*l)[4], ptrdiff_t b4_stride,
+//                                 const Av1FilterLUT *lut, const int w)
 
 .macro lpf_func dir, type
-function lpf_\dir\()_sb_\type\()_neon, export=1
+function lpf_\dir\()_sb_\type\()_8bpc_neon, export=1
         push            {r4-r11,lr}
         vpush           {q4-q7}
         ldrd            r4,  r5,  [sp, #100]
