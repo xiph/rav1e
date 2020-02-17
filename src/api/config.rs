@@ -264,13 +264,10 @@ impl fmt::Display for EncoderConfig {
   }
 }
 
+// NOTE: Add Structures at the end.
 /// Contains the speed settings.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct SpeedSettings {
-  /// Range of partition sizes that can be used. Larger ranges are slower.
-  ///
-  /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
-  pub partition_range: PartitionRange,
   /// Enables inter-frames to have multiple reference frames.
   ///
   /// Enabled is slower.
@@ -336,6 +333,12 @@ pub struct SpeedSettings {
 
   /// Use fine directional intra prediction
   pub fine_directional_intra: bool,
+
+  // NOTE: put enums and basic type fields above
+  /// Range of partition sizes that can be used. Larger ranges are slower.
+  ///
+  /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
+  pub partition_range: PartitionRange,
 }
 
 impl Default for SpeedSettings {
