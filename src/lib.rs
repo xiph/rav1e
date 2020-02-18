@@ -205,6 +205,7 @@ pub mod prelude {
   pub use crate::api::*;
   pub use crate::encoder::Tune;
   pub use crate::frame::Frame;
+  pub use crate::frame::FrameAlloc;
   pub use crate::frame::FrameParameters;
   pub use crate::frame::FrameTypeOverride;
   pub use crate::frame::Plane;

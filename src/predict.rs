@@ -1279,7 +1279,7 @@ mod test {
     let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
     let top_left = edge_buf.data[MAX_TX_SIZE];
 
-    let mut output = Plane::wrap(vec![0u8; 4 * 4], 4);
+    let mut output = Plane::from_slice(&vec![0u8; 4 * 4], 4);
 
     pred_dc(&mut output.as_region_mut(), above, left, 4, 4, 8);
     assert_eq!(&output.data[..], [32u8; 16]);
@@ -1387,7 +1387,7 @@ mod test {
     let above = [max12bit; 32];
     let left = [max12bit; 32];
 
-    let mut o = Plane::wrap(vec![0u16; 32 * 32], 32);
+    let mut o = Plane::from_slice(&vec![0u16; 32 * 32], 32);
 
     pred_dc(&mut o.as_region_mut(), &above[..4], &left[..4], 4, 4, 16);
 
