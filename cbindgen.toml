@@ -9,7 +9,7 @@ cpp_compat = true
 
 [parse]
 parse_deps = true
-include = ['rav1e']
+include = ['rav1e', 'v_frame']
 
 [export]
 prefix = "Ra"
