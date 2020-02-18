@@ -131,7 +131,7 @@ impl ActivityMask {
                 if intra_cost == 0. {
                     1.0f64
                 } else {
-                    let strength = 1.0; // empirical, see comment above
+                    let strength = 2.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
                     frac.powf(strength / 3.0) * old_max
                 };
