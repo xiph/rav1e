@@ -63,7 +63,7 @@ impl ActivityMask {
             _ => unreachable!(),
         };
 
-    let mut old_max = 0f64;
+    let mut old_avg_var = 0f64;
 
     for y in 0..height >> act_granularity {
       for x in 0..width >> act_granularity {
@@ -100,7 +100,7 @@ impl ActivityMask {
         }
 
         sum_f /= (tot_pix - 4*4) as f64;
-        old_max = old_max.max(sum_f);
+        old_avg_var += sum_f;
 
         /* Copy down to granularity */
         for i in 0..(1 << (act_granularity - granularity)) {
@@ -120,6 +120,8 @@ impl ActivityMask {
     let mut avg_var = 0f64;
     let mut max = 0f64;
 
+    old_avg_var /= tot_bins as f64;
+
     /* Merge temporal activity */
     for y in 0..fi.h_in_imp_b {
         for x in 0..fi.w_in_imp_b {
@@ -131,15 +133,15 @@ impl ActivityMask {
                 if intra_cost == 0. {
                     1.0f64
                 } else {
-                    let strength = 2.0; // empirical, see comment above
+                    let strength = 1.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
-                    frac.powf(strength / 3.0) * old_max
+                    frac.powf(strength / 3.0) * old_avg_var
                 };
 
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = ((*x + temporal_act)* 0.954745190983 - 13.056080429).max(0f64);
+                    *x = *x + temporal_act;
                     avg_var += *x;
                     max = max.max(*x);
                 }
@@ -182,8 +184,7 @@ impl ActivityMask {
     let dec_width = self.width >> self.granularity;
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
-        /* Tuned to 16x16 varience from 3976852114 samples of a variety of pictures */
-        Some(val) => return (*val * self.var_scale) * 188.04406752f64,
+        Some(val) => return (*val * self.var_scale),
         None => unreachable!(),
     }
   }
