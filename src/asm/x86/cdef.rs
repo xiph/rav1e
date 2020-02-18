@@ -245,7 +245,7 @@ mod test {
             // dynamic allocation: test
             let mut src = vec![0u16; area];
             // dynamic allocation: test
-            let mut dst = Plane::wrap(vec![0u8; area], width);
+            let mut dst = Plane::from_slice(&vec![0u8; area], width);
             for (s, d) in src.iter_mut().zip(dst.data.iter_mut()) {
               *s = random::<u8>() as u16;
               *d = random::<u8>();

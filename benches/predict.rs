@@ -22,8 +22,8 @@ pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 pub fn generate_block<T: Pixel>(
   rng: &mut ChaChaRng, edge_buf: &mut Aligned<[T; 257]>,
 ) -> (Plane<T>, Vec<i16>) {
-  let block = Plane::wrap(
-    vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
+  let block = Plane::from_slice(
+    &vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
   );
   let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();

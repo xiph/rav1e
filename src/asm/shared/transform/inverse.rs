@@ -108,7 +108,8 @@ pub mod test {
     for sub_h in 0..sub_h_iterations {
       let mut src_storage = [0u8; 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
-      let mut dst = Plane::wrap(vec![0u8; tx_size.area()], tx_size.width());
+      let mut dst =
+        Plane::from_slice(&vec![0u8; tx_size.area()], tx_size.width());
       let mut res_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
       let res = &mut res_storage.data[..tx_size.area()];
       let mut freq_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();

@@ -9,7 +9,6 @@
 
 use num_derive::FromPrimitive;
 
-use crate::api::ChromaSampling;
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 use crate::util::*;
@@ -21,6 +20,7 @@ mod plane;
 pub use plane::*;
 
 const FRAME_MARGIN: usize = 16 + SUBPEL_FILTER_SIZE;
+const LUMA_PADDING: usize = SB_SIZE + FRAME_MARGIN;
 
 /// Override the frame type decision
 ///
@@ -41,70 +41,61 @@ pub struct FrameParameters {
   pub frame_type_override: FrameTypeOverride,
 }
 
-/// One video frame.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Frame<T: Pixel> {
-  /// Planes constituting the frame.
-  pub planes: [Plane<T>; 3],
+pub use v_frame::frame::Frame;
+
+/// Public Trait Interface for Frame Allocation
+pub trait FrameAlloc {
+  /// Initialise new frame default type
+  fn new(width: usize, height: usize, chroma_sampling: ChromaSampling)
+    -> Self;
 }
 
-impl<T: Pixel> Frame<T> {
+impl<T: Pixel> FrameAlloc for Frame<T> {
   /// Creates a new frame with the given parameters.
-  ///
-  /// Allocates data for the planes.
-  pub fn new(
+  /// new function calls new_with_padding function which takes luma_padding
+  /// as parameter
+  fn new(
     width: usize, height: usize, chroma_sampling: ChromaSampling,
   ) -> Self {
-    let luma_width = width.align_power_of_two(3);
-    let luma_height = height.align_power_of_two(3);
-    let luma_padding = SB_SIZE + FRAME_MARGIN;
-
-    let (chroma_decimation_x, chroma_decimation_y) =
-      chroma_sampling.get_decimation().unwrap_or((0, 0));
-    let (chroma_width, chroma_height) =
-      chroma_sampling.get_chroma_dimensions(luma_width, luma_height);
-    let chroma_padding_x = luma_padding >> chroma_decimation_x;
-    let chroma_padding_y = luma_padding >> chroma_decimation_y;
-
-    Frame {
-      planes: [
-        Plane::new(luma_width, luma_height, 0, 0, luma_padding, luma_padding),
-        Plane::new(
-          chroma_width,
-          chroma_height,
-          chroma_decimation_x,
-          chroma_decimation_y,
-          chroma_padding_x,
-          chroma_padding_y,
-        ),
-        Plane::new(
-          chroma_width,
-          chroma_height,
-          chroma_decimation_x,
-          chroma_decimation_y,
-          chroma_padding_x,
-          chroma_padding_y,
-        ),
-      ],
-    }
+    v_frame::frame::Frame::new_with_padding(
+      width,
+      height,
+      chroma_sampling,
+      LUMA_PADDING,
+    )
   }
+}
 
-  pub(crate) fn pad(&mut self, w: usize, h: usize) {
+/// Public Trait for calulating Padding
+pub(crate) trait FramePad {
+  fn pad(&mut self, w: usize, h: usize);
+}
+
+impl<T: Pixel> FramePad for Frame<T> {
+  fn pad(&mut self, w: usize, h: usize) {
     for p in self.planes.iter_mut() {
       p.pad(w, h);
     }
   }
+}
 
-  #[inline(always)]
+/// Public Trait for new Tile of a frame
+pub(crate) trait AsTile<T: Pixel> {
   #[cfg(test)]
-  pub(crate) fn as_tile(&self) -> Tile<'_, T> {
+  fn as_tile(&self) -> Tile<'_, T>;
+  #[cfg(test)]
+  fn as_tile_mut(&mut self) -> TileMut<'_, T>;
+}
+
+#[cfg(test)]
+impl<T: Pixel> AsTile<T> for Frame<T> {
+  #[inline(always)]
+  fn as_tile(&self) -> Tile<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     Tile::new(self, TileRect { x: 0, y: 0, width, height })
   }
-
   #[inline(always)]
-  #[cfg(test)]
-  pub fn as_tile_mut(&mut self) -> TileMut<'_, T> {
+  fn as_tile_mut(&mut self) -> TileMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.planes[0].cfg;
     TileMut::new(self, TileRect { x: 0, y: 0, width, height })
   }

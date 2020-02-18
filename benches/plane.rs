@@ -6,13 +6,13 @@ use rav1e::bench::frame::*;
 fn init_plane_u8(width: usize, height: usize) -> Plane<u8> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
   let data: Vec<u8> = (0..(width * height)).map(|_| ra.gen()).collect();
-  Plane::wrap(data, width)
+  Plane::from_slice(&data, width)
 }
 
 fn init_plane_u16(width: usize, height: usize) -> Plane<u16> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
   let data: Vec<u16> = (0..(width * height)).map(|_| ra.gen()).collect();
-  Plane::wrap(data, width)
+  Plane::from_slice(&data, width)
 }
 
 pub fn downsample_8bit(c: &mut Criterion) {
