@@ -1267,6 +1267,7 @@ fn sse_h_edge<T: Pixel>(
         width: 4,
         height: filter_size,
       });
+
       match filter_size {
         4 => {
           sse_size4(&rec_region, &src_region, tally, true, bd);
@@ -1607,10 +1608,10 @@ fn sse_optimize<T: Pixel>(
 }
 
 #[hawktracer(deblock_filter_optimize)]
-pub fn deblock_filter_optimize<T: Pixel> (
+pub fn deblock_filter_optimize<T: Pixel, U: Pixel> (
   fi: &FrameInvariants<T>,
-  rec: &Tile<T>,
-  input: &Tile<T>,
+  rec: &Tile<U>,
+  input: &Tile<U>,
   blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize
 ) -> [u8; 4] {

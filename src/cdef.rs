@@ -260,7 +260,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 pub fn cdef_analyze_superblock_range<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset, sb_w: usize,
-  sb_h: usize, bit_depth: usize,
+  sb_h: usize
 ) -> Vec<CdefDirections> {
   let mut ret = Vec::<CdefDirections>::with_capacity(sb_h * sb_w);
   for sby in 0..sb_h {
@@ -279,7 +279,6 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
         blocks,
         local_sbo,
         toplevel_sbo,
-        bit_depth,
       ));
     }
   }
@@ -292,10 +291,9 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
 
 pub fn cdef_analyze_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, blocks: &TileBlocks<'_>,
-  sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset,
-  bit_depth: usize,
+  sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset
 ) -> CdefDirections {
-  let coeff_shift = bit_depth as usize - 8;
+  let coeff_shift = fi.sequence.bit_depth as usize - 8;
   let mut dir: CdefDirections =
     CdefDirections { dir: [[0; 8]; 8], var: [[0; 8]; 8] };
   // Each direction block is 8x8 in y, and direction computation only looks at y
@@ -335,7 +333,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 
 pub fn cdef_sb_frame<T: Pixel>(
   fi: &FrameInvariants<T>, sb_w: usize, sb_h: usize, tile: &Tile<'_, T>,
-) -> Frame<T> {
+) -> Frame<u16> {
   let sb_h_size =
     if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_w;
   let sb_v_size =
@@ -359,9 +357,9 @@ pub fn cdef_sb_frame<T: Pixel>(
   }
 }
 
-pub fn cdef_sb_padded_frame_copy<T: Pixel>(
+pub fn cdef_sb_padded_frame_copy<T: Pixel, U: Pixel>(
   fi: &FrameInvariants<T>, sbo: TileSuperBlockOffset, sb_w: usize,
-  sb_h: usize, tile: &Tile<'_, T>, pad: usize,
+  sb_h: usize, tile: &Tile<'_, U>, pad: usize,
 ) -> Frame<u16> {
   let ipad = pad as isize;
   let sb_h_size =
@@ -411,8 +409,8 @@ pub fn cdef_sb_padded_frame_copy<T: Pixel>(
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
-pub fn cdef_filter_superblock<T: Pixel>(
-  fi: &FrameInvariants<T>, in_frame: &Frame<u16>, out_frame: &mut Frame<T>,
+pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
+  fi: &FrameInvariants<T>, in_frame: &Frame<u16>, out_frame: &mut Frame<U>,
   blocks: &TileBlocks<'_>, sbo: TileSuperBlockOffset,
   sbo_global: TileSuperBlockOffset, cdef_index: u8,
   cdef_dirs: &CdefDirections,
@@ -526,7 +524,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
             });
             for i in 0..ysize {
               for j in 0..xsize {
-                out_block[i][j] = T::cast_from(in_block[i][j]);
+                out_block[i][j] = U::cast_from(in_block[i][j]);
               }
             }
           }
@@ -629,8 +627,8 @@ pub fn cdef_filter_frame<T: Pixel>(
         &tb,
         sbo,
         sbo,
-        fi.sequence.bit_depth,
       );
+      
       cdef_filter_superblock(
         fi,
         &cdef_frame,
