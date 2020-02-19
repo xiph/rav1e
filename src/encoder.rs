@@ -253,7 +253,7 @@ impl Sequence {
         && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
       enable_large_lru: true,
-      enable_delayed_loopfilter_rdo: true,
+      enable_delayed_loopfilter_rdo: false,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
@@ -3338,7 +3338,8 @@ fn check_lf_queue<T: Pixel>(
   sbs_q: &mut VecDeque<SBSQueueEntry>,
   last_lru_ready: &mut [i32; 3],
   last_lru_rdoed: &mut [i32; 3],
-  last_lru_coded: &mut [i32; 3]
+  last_lru_coded: &mut [i32; 3],
+  deblock_p: bool,
 ){
   let mut check_queue = true;
 
@@ -3380,7 +3381,7 @@ fn check_lf_queue<T: Pixel>(
             }
           }
           if !already_rdoed {
-            rdo_loop_decision(qe.sbo, fi, ts, cw, w);
+            rdo_loop_decision(qe.sbo, fi, ts, cw, w, deblock_p);
             for pli in 0..PLANES {
               if qe.lru_index[pli] != -1
                 && last_lru_rdoed[pli] < qe.lru_index[pli]
@@ -3513,7 +3514,8 @@ fn encode_tile<'a, T: Pixel>(
           check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
                          &mut last_lru_ready,
                          &mut last_lru_rdoed,
-                         &mut last_lru_coded);
+                         &mut last_lru_coded,
+                         true);
         }
       }
     }
@@ -3530,6 +3532,7 @@ fn encode_tile<'a, T: Pixel>(
       fi.width,
       fi.height,
       fi.sequence.bit_depth);
+
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
 
       // copy reconstruction to a temp frame to restore it later
@@ -3553,7 +3556,8 @@ fn encode_tile<'a, T: Pixel>(
       check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
                      &mut last_lru_ready,
                      &mut last_lru_rdoed,
-                     &mut last_lru_coded);
+                     &mut last_lru_coded,
+                     false);
       
       // copy original reference back in
       for pli in 0..PLANES {
@@ -3565,17 +3569,16 @@ fn encode_tile<'a, T: Pixel>(
           }
         }
       }
-      
-    } else {
-      
+    } else {      
       // rdo lf and write
       check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
                      &mut last_lru_ready,
                      &mut last_lru_rdoed,
-                     &mut last_lru_coded);
+                     &mut last_lru_coded,
+                     false);
     }
   }
-    
+
   assert!(
     sbs_q.is_empty(),
     "Superblock queue not empty in tile at offset {}:{}",
