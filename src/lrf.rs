@@ -603,10 +603,10 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
-pub fn sgrproj_stripe_filter<T: Pixel>(
+pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
-  cdeffed: &PlaneSlice<T>, out: &mut PlaneRegionMut<T>,
+  cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
 ) {
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
   let bdm8 = fi.sequence.bit_depth - 8;
@@ -756,7 +756,6 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       }
 
       /* apply filter */
-      let bit_depth = fi.sequence.bit_depth;
       let w0 = xqd[0] as i32;
       let w1 = xqd[1] as i32;
       let w2 = (1 << SGRPROJ_PRJ_BITS) - w0 - w1;
@@ -764,8 +763,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
       let line = &cdeffed[y];
 
       #[inline(always)]
-      fn apply_filter<T: Pixel>(
-        out: &mut [T], line: &[T], f_r1: &[u32], f_r2_ab: &[u32],
+      fn apply_filter<U: Pixel>(
+        out: &mut [U], line: &[U], f_r1: &[u32], f_r2_ab: &[u32],
         stripe_w: usize, bit_depth: usize, w0: i32, w1: i32, w2: i32,
       ) {
         let line_it = line[..stripe_w].iter();
@@ -780,7 +779,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
           let v = w0 * f_r2_ab as i32 + w1 * u + w2 * f_r1 as i32;
           let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1))
             >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
-          *o = T::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+          *o = U::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
         }
       }
 
@@ -790,7 +789,7 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
         &f_r1,
         f_r2_ab[dy],
         stripe_w,
-        bit_depth,
+        fi.sequence.bit_depth,
         w0,
         w1,
         w2,
@@ -815,8 +814,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
-  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<T>,
-  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
+  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<u16>,
+  cdeffed: &PlaneSlice<u16>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
 
