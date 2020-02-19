@@ -13,6 +13,7 @@
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
+use crate::deblock::*;
 use crate::dist::*;
 use crate::ec::{Writer, WriterCounter, OD_BITRES};
 use crate::encode_block_with_modes;
@@ -43,6 +44,7 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
+use std::cmp;
 use std::fmt;
 use std::vec::Vec;
 
@@ -1815,9 +1817,16 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 }
 
 fn rdo_loop_plane_error<T: Pixel>(
-  sbo: TileSuperBlockOffset, tile_sbo: TileSuperBlockOffset, sb_w: usize,
-  sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
-  blocks: &TileBlocks<'_>, test: &Frame<T>, pli: usize,
+  sbo: TileSuperBlockOffset,
+  tile_sbo: TileSuperBlockOffset,
+  sb_w: usize,
+  sb_h: usize,
+  fi: &FrameInvariants<T>,
+  ts: &TileStateMut<'_, T>,
+  blocks: &TileBlocks<'_>,
+  test: &Frame<u16>,
+  src: &Frame<u16>,
+  pli: usize,
 ) -> ScaledDistortion {
   let sb_w_blocks =
     if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
@@ -1828,35 +1837,34 @@ fn rdo_loop_plane_error<T: Pixel>(
   let mut err = Distortion::zero();
   for by in 0..sb_h_blocks {
     for bx in 0..sb_w_blocks {
-      let bo = tile_sbo.block_offset(bx << 1, by << 1);
-      if bo.0.x < blocks.cols() && bo.0.y < blocks.rows() {
-        let in_plane = &ts.input_tile.planes[pli];
+      let tile_bo = tile_sbo.block_offset(bx << 1, by << 1);
+      if tile_bo.0.x < blocks.cols() && tile_bo.0.y < blocks.rows() {
+        let src_plane = &src.planes[pli];
         let test_plane = &test.planes[pli];
-        let &PlaneConfig { xdec, ydec, .. } = in_plane.plane_cfg;
+        let PlaneConfig { xdec, ydec, .. } = src_plane.cfg;
         debug_assert_eq!(xdec, test_plane.cfg.xdec);
         debug_assert_eq!(ydec, test_plane.cfg.ydec);
 
-        let in_bo = tile_sbo.block_offset(bx << 1, by << 1);
-        let in_region =
-          in_plane.subregion(Area::BlockStartingAt { bo: in_bo.0 });
-
-        let test_bo = sbo.block_offset(bx << 1, by << 1);
+        let bo = sbo.block_offset(bx << 1, by << 1);
+        
+        let src_region =
+          src_plane.region(Area::BlockStartingAt { bo: bo.0 });
         let test_region =
-          test_plane.region(Area::BlockStartingAt { bo: test_bo.0 });
+          test_plane.region(Area::BlockStartingAt { bo: bo.0 });
 
         let bias = distortion_scale(
           fi,
-          ts.to_frame_block_offset(bo),
+          ts.to_frame_block_offset(tile_bo),
           BlockSize::BLOCK_8X8,
         );
         err += if pli == 0 {
           // For loop filters, We intentionally use cdef_dist even with
           // `--tune Psnr`. Using SSE instead gives no PSNR gain but has a
           // significant negative impact on other metrics and visual quality.
-          cdef_dist_wxh_8x8(&in_region, &test_region, fi.sequence.bit_depth)
+          cdef_dist_wxh_8x8(&src_region, &test_region, fi.sequence.bit_depth)
             * bias
         } else {
-          sse_wxh(&in_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
+          sse_wxh(&src_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
         };
       }
     }
@@ -1871,6 +1879,7 @@ fn rdo_loop_plane_error<T: Pixel>(
 pub fn rdo_loop_decision<T: Pixel>(
   tile_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut dyn Writer,
+  deblock_p: bool
 ) {
   assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
   // Determine area of optimization: Which plane has the largest LRUs?
@@ -1898,6 +1907,16 @@ pub fn rdo_loop_decision<T: Pixel>(
     lru_h[pli] = sb_h / (1 << sb_v_shift);
   }
 
+  // The width/height determinations may be calling for us to compute
+  // over superblocks that do not actually exist in the frame (off the
+  // right or lower edge).  Trim sb width/height down to actual
+  // superblocks.  Note that these last superblocks on the
+  // right/bottom may themselves still span the edge of the frame, but
+  // they do hold at least some visible pixels.
+
+  sb_w = sb_w.min(ts.sb_width - tile_sbo.0.x);
+  sb_h = sb_h.min(ts.sb_height - tile_sbo.0.y);
+
   let mut best_index = vec![-1; sb_w * sb_h];
   let mut best_lrf = ArrayVec::<[Vec<RestorationFilter>; 3]>::new();
   // due to imprecision in the reconstruction parameter solver, we
@@ -1911,35 +1930,103 @@ pub fn rdo_loop_decision<T: Pixel>(
     best_lrf_cost.push(vec![-1.0; lru_h[pli] * lru_w[pli]]);
   }
 
-  // Construct a largest-LRU-sized padded frame to filter from,
-  // and a largest-LRU-sized padded frame to test-filter into
-  // all stages; reconstruction goes to cdef so it must be additionally padded
-  let mut cdef_input = None;
-  let const_rec = ts.rec.as_const();
-  let mut lrf_input = cdef_sb_frame(fi, sb_w, sb_h, &const_rec);
-  let mut lrf_output = cdef_sb_frame(fi, sb_w, sb_h, &const_rec);
-  if fi.sequence.enable_cdef {
-    // min sized temporary frame; sb_wh number of superblocks with padding
-    cdef_input =
-      Some(cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &const_rec, 2));
-  }
-  // Initialize cdef output
-  for pli in 0..PLANES {
-    let po = tile_sbo.plane_offset(ts.rec.planes[pli].plane_cfg);
-    let rec_region =
-      ts.rec.planes[pli].subregion(Area::StartingAt { x: po.x, y: po.y });
-    let width = lrf_input.planes[pli].cfg.width.min(rec_region.rect().width);
-    let height =
-      lrf_input.planes[pli].cfg.height.min(rec_region.rect().height);
-    for (rec, inp) in rec_region
-      .rows_iter()
-      .zip(lrf_input.planes[pli].as_region_mut().rows_iter_mut())
-      .take(height)
-    {
-      inp[..width].copy_from_slice(&rec[..width]);
+  // Loop filter RDO is an iterative process and we need temporary
+  // scratch data to hold the results of deblocking, cdef, and the
+  // loop reconstruction filter so that each can be partially updated
+  // without recomputing the entire stack.  Construct
+  // largest-LRU-sized frames for each, accounting for padding
+  // required by deblocking, cdef and [optionally] LR.
+  
+  // NOTE: the CDEF code requires padding to simplify addressing.
+  // Right now, the padded area does borrow neighboring pixels for the
+  // border so long as they're within the tile [as opposed to simply
+  // flagging the border pixels as inactive].  LR code currently does
+  // not need and will not use padding area.  It always edge-extends
+  // the passed in rectangle.
+
+  let mut rec_subset = {
+    let const_rec = ts.rec.as_const();
+    // a padding of 8 gets us a full block of border.  CDEF
+    // only needs 2 pixels, but deblocking is happier with full
+    // blocks.
+    cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &const_rec, 8)
+  };
+
+  // sub-setted region of the TileBlocks for our working frame area
+  let tileblocks_subset = cw.bc.blocks.as_const().subregion(
+      tile_sbo.block_offset(0,0).0.x,
+      tile_sbo.block_offset(0,0).0.y,
+      sb_w << SUPERBLOCK_TO_BLOCK_SHIFT,
+      sb_h << SUPERBLOCK_TO_BLOCK_SHIFT,
+    );
+
+  // why copy and not just a view?  Because CDEF optimization requires
+  // u16 working space. This avoids adding another generic buffer
+  // typing parameter and expanding code to handle all the possible
+  // input/output combinations.  In the future we may decide to prefer
+  // that over the additional temp buffer (after doing the work needed
+  // to allow CDEF opt to work on 8 bit).
+  let src_subset = {
+    cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &ts.input_tile, 0)
+  };
+  
+  if deblock_p {
+    // Find a good deblocking filter solution for the passed in area.
+    // This is not RDO of deblocking itself, merely a solution to get
+    // better results from CDEF/LRF RDO.
+    let deblock_levels = deblock_filter_optimize (
+      fi,
+      &rec_subset.as_tile(),
+      &src_subset.as_tile(),
+      &tileblocks_subset,
+      fi.width, fi.height, fi.sequence.bit_depth
+    );
+
+    // Deblock the contents of our reconstruction copy.
+    if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
+      // copy ts.deblock because we need to set some of our own values here
+      let mut deblock_copy = ts.deblock.clone();
+      deblock_copy.levels = deblock_levels;
+      
+      // finally, deblock the temp frame
+      deblock_filter_frame(&mut deblock_copy,
+                           &mut rec_subset.as_tile_mut(),
+                           &tileblocks_subset,
+                           fi.width, fi.height, fi.sequence.bit_depth);
     }
-    lrf_input.planes[pli].pad(width, height);
   }
+  
+  let mut cdef_work = if fi.sequence.enable_cdef {
+    Some(cdef_sb_padded_frame_copy(fi, TileSuperBlockOffset(SuperBlockOffset {x: 0, y: 0}), sb_w, sb_h, &rec_subset.as_tile(), 0))
+  } else {
+    None
+  };
+  let mut lrf_work = if fi.sequence.enable_restoration {
+    Some (cdef_sb_frame(fi, sb_w, sb_h, &ts.rec.as_const()))
+  } else {
+    None
+  };
+  
+  // Precompute directional analysis for CDEF
+  let cdef_data = {
+    if cdef_work.is_some() {
+      let sbo_0 = TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
+      Some ((
+        &rec_subset,
+        cdef_analyze_superblock_range(
+          fi,
+          &rec_subset,
+          &cw.bc.blocks.as_const(),
+          sbo_0,
+          tile_sbo,
+          sb_w,
+          sb_h
+        ),
+      ))
+    }else{
+      None
+    }
+  };
 
   // CDEF/LRF decision iteration
   // Start with a default of CDEF 0 and RestorationFilter::None
@@ -1947,30 +2034,12 @@ pub fn rdo_loop_decision<T: Pixel>(
   // Then try all LRF options with current CDEFs; if new CDEFs+LRF choice is better, select it.
   // If LRF choice changed for any plane, repeat until no changes
   // Limit iterations and where we break based on speed setting (in the TODO list ;-)
-  let bd = fi.sequence.bit_depth;
-
-  let sbo_0 = TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
-  let cdef_data = cdef_input.as_ref().map(|input| {
-    (
-      input,
-      cdef_analyze_superblock_range(
-        fi,
-        input,
-        &cw.bc.blocks.as_const(),
-        sbo_0,
-        tile_sbo,
-        sb_w,
-        sb_h,
-        bd,
-      ),
-    )
-  });
 
   let mut cdef_change = true;
   let mut lrf_change = true;
   while cdef_change || lrf_change {
-    // check for [new] cdef indices if cdef is enabled.
-    if let Some((cdef_input, cdef_dirs)) = cdef_data.as_ref() {
+    // search for improved cdef indices, superblock by superblock, if cdef is enabled.
+    if let (Some((rec_copy, cdef_dirs)), Some(cdef_ref)) = (&cdef_data, &mut cdef_work.as_mut()) {
       for sby in 0..sb_h {
         for sbx in 0..sb_w {
           let prev_best_index = best_index[sby * sb_w + sbx];
@@ -1988,8 +2057,8 @@ pub fn rdo_loop_decision<T: Pixel>(
             let mut rate = 0;
             cdef_filter_superblock(
               fi,
-              cdef_input,
-              &mut lrf_input,
+              &rec_subset,
+              cdef_ref,
               &cw.bc.blocks.as_const(),
               loop_sbo,
               loop_tile_sbo,
@@ -2000,19 +2069,29 @@ pub fn rdo_loop_decision<T: Pixel>(
             for pli in 0..PLANES {
               let wh =
                 if fi.sequence.use_128x128_superblock { 128 } else { 64 };
-              let xdec = lrf_input.planes[pli].cfg.xdec;
-              let ydec = lrf_input.planes[pli].cfg.ydec;
-              let width = (wh + (1 << xdec >> 1)) >> xdec;
-              let height = (wh + (1 << ydec >> 1)) >> ydec;
-              // which LRU are we currently testing against?
-              let rp = &ts.restoration.planes[pli];
+              let xdec = cdef_ref.planes[pli].cfg.xdec;
+              let ydec = cdef_ref.planes[pli].cfg.ydec;
+              let width =
+                cmp::min((wh + (1 << xdec >> 1)) >> xdec,
+                         (fi.width>>xdec) -
+                         loop_tile_sbo.plane_offset(&cdef_ref.planes[pli].cfg).x as usize);
+              let height =
+                cmp::min((wh + (1 << ydec >> 1)) >> ydec,
+                         (fi.height>>ydec) -
+                         loop_tile_sbo.plane_offset(&cdef_ref.planes[pli].cfg).y as usize);
+             // which LRU are we currently testing against?
               if let (
                 Some((tile_lru_x, tile_lru_y)),
                 Some((loop_tile_lru_x, loop_tile_lru_y)),
-              ) = (
-                rp.restoration_unit_index(tile_sbo, false),
-                rp.restoration_unit_index(loop_tile_sbo, false),
-              ) {
+                Some(lrf_ref),
+              ) = {
+                let rp = &ts.restoration.planes[pli];                
+                (
+                  rp.restoration_unit_index(tile_sbo, false),
+                  rp.restoration_unit_index(loop_tile_sbo, false),
+                  &mut lrf_work,
+                )
+              } {
                 let lru_x = loop_tile_lru_x - tile_lru_x;
                 let lru_y = loop_tile_lru_y - tile_lru_y;
 
@@ -2026,7 +2105,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       ts,
                       &cw.bc.blocks.as_const(),
-                      &lrf_input,
+                      &cdef_ref,
+                      &src_subset,
                       pli,
                     );
 
@@ -2043,11 +2123,11 @@ pub fn rdo_loop_decision<T: Pixel>(
                     };
                   }
                   RestorationFilter::Sgrproj { set, xqd } => {
-                    // only run on this superblock
-                    // if height is 128x128, we'll need to run two stripes
+                    // only run on this single superblock
                     let loop_po =
-                      loop_sbo.plane_offset(&lrf_input.planes[pli].cfg);
-
+                      loop_sbo.plane_offset(&cdef_ref.planes[pli].cfg);
+                    // todo: experiment with borrowing border pixels
+                    // rather than edge-extending
                     setup_integral_image(
                       &mut ts.integral_buffer,
                       SOLVE_IMAGE_STRIDE,
@@ -2055,8 +2135,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                       height,
                       width,
                       height,
-                      &lrf_input.planes[pli].slice(loop_po),
-                      &lrf_input.planes[pli].slice(loop_po),
+                      &cdef_ref.planes[pli].slice(loop_po),
+                      &cdef_ref.planes[pli].slice(loop_po),
                     );
 
                     sgrproj_stripe_filter(
@@ -2065,8 +2145,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       &ts.integral_buffer,
                       SOLVE_IMAGE_STRIDE,
-                      &lrf_input.planes[pli].slice(loop_po),
-                      &mut lrf_output.planes[pli].region_mut(Area::Rect {
+                      &cdef_ref.planes[pli].slice(loop_po),
+                      &mut lrf_ref.planes[pli].region_mut(Area::Rect {
                         x: loop_po.x,
                         y: loop_po.y,
                         width,
@@ -2081,7 +2161,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       ts,
                       &cw.bc.blocks.as_const(),
-                      &lrf_output,
+                      &lrf_ref,
+                      &src_subset,
                       pli,
                     );
                     rate += cw.count_lrf_switchable(
@@ -2103,7 +2184,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &cw.bc.blocks.as_const(),
-                  &lrf_input,
+                  &cdef_ref,
+                  &src_subset,
                   pli,
                 );
                 // no relative cost differeneces to different
@@ -2129,8 +2211,8 @@ pub fn rdo_loop_decision<T: Pixel>(
           // both below and above (padding)
           cdef_filter_superblock(
             fi,
-            cdef_input,
-            &mut lrf_input,
+            &rec_copy,
+            cdef_ref,
             &cw.bc.blocks.as_const(),
             loop_sbo,
             loop_tile_sbo,
@@ -2147,8 +2229,13 @@ pub fn rdo_loop_decision<T: Pixel>(
     cdef_change = false;
     lrf_change = false;
 
-    // check for new best restoration filter if enabled
-    if fi.sequence.enable_restoration {
+    // search for improved restoration filter parameters if enabled
+    if let Some(lrf_ref) = &mut lrf_work.as_mut() {
+      let lrf_input = if cdef_work.is_some() {
+        &cdef_work.as_ref().unwrap()
+      } else {
+        &rec_subset
+      };
       for pli in 0..PLANES {
         let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
         let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
@@ -2167,13 +2254,10 @@ pub fn rdo_loop_decision<T: Pixel>(
               x: tile_sbo.0.x + loop_sbo.0.x,
               y: tile_sbo.0.y + loop_sbo.0.y,
             });
-            if fi.sequence.enable_restoration
-              && ts.restoration.has_restoration_unit(loop_tile_sbo, pli, false)
-            {
-              let ref_plane = &ts.input.planes[pli]; // reference
+            if ts.restoration.has_restoration_unit(loop_tile_sbo, pli, false) {
+              let src_plane = &src_subset.planes[pli]; // original input for reference
               let lrf_in_plane = &lrf_input.planes[pli];
-              let loop_po = loop_sbo.plane_offset(&lrf_in_plane.cfg);
-              let loop_tile_po = loop_tile_sbo.plane_offset(&ref_plane.cfg);
+              let lrf_po = loop_sbo.plane_offset(&src_plane.cfg);
               let mut best_new_lrf = best_lrf[pli][lru_y * lru_w[pli] + lru_x];
               let mut best_cost =
                 best_lrf_cost[pli][lru_y * lru_w[pli] + lru_x];
@@ -2189,6 +2273,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   ts,
                   &cw.bc.blocks.as_const(),
                   &lrf_input,
+                  &src_subset,
                   pli,
                 );
                 let rate = cw.count_lrf_switchable(
@@ -2208,9 +2293,12 @@ pub fn rdo_loop_decision<T: Pixel>(
 
               // Look for a self guided filter
               let unit_width =
-                unit_size.min(ref_plane.cfg.width - loop_tile_po.x as usize);
+                unit_size.min(src_plane.cfg.width - lrf_po.x as usize)
+                .min((fi.width>>src_plane.cfg.xdec) - loop_tile_sbo.plane_offset(&src_plane.cfg).x as usize);
               let unit_height =
-                unit_size.min(ref_plane.cfg.height - loop_tile_po.y as usize);
+                unit_size.min(src_plane.cfg.height - lrf_po.y as usize)
+                .min((fi.height>>src_plane.cfg.ydec) - loop_tile_sbo.plane_offset(&src_plane.cfg).y as usize);
+
               setup_integral_image(
                 &mut ts.integral_buffer,
                 SOLVE_IMAGE_STRIDE,
@@ -2218,8 +2306,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                 unit_height,
                 unit_width,
                 unit_height,
-                &lrf_input.planes[pli].slice(loop_po),
-                &lrf_input.planes[pli].slice(loop_po),
+                &lrf_in_plane.slice(lrf_po),
+                &lrf_in_plane.slice(lrf_po),
               );
 
               for &set in get_sgr_sets(fi.config.speed_settings.sgr_complexity)
@@ -2229,8 +2317,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                   set,
                   fi,
                   &ts.integral_buffer,
-                  &ref_plane.slice(loop_tile_po),
-                  &lrf_in_plane.slice(loop_po),
+                  &src_plane.slice(lrf_po),
+                  &lrf_in_plane.slice(lrf_po),
                   unit_width,
                   unit_height,
                 );
@@ -2243,10 +2331,10 @@ pub fn rdo_loop_decision<T: Pixel>(
                     fi,
                     &ts.integral_buffer,
                     SOLVE_IMAGE_STRIDE,
-                    &lrf_input.planes[pli].slice(loop_po),
-                    &mut lrf_output.planes[pli].region_mut(Area::Rect {
-                      x: loop_po.x,
-                      y: loop_po.y,
+                    &lrf_in_plane.slice(lrf_po),
+                    &mut lrf_ref.planes[pli].region_mut(Area::Rect {
+                      x: lrf_po.x,
+                      y: lrf_po.y,
                       width: unit_width,
                       height: unit_height,
                     }),
@@ -2260,7 +2348,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &cw.bc.blocks.as_const(),
-                  &lrf_output,
+                  &lrf_ref,
+                  &src_subset,
                   pli,
                 );
                 let rate = cw.count_lrf_switchable(
