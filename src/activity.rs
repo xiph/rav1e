@@ -64,7 +64,6 @@ impl ActivityMask {
         };
 
     let mut old_avg_var = 0f64;
-    let mut old_max = 0f64;
 
     for y in 0..height >> act_granularity {
       for x in 0..width >> act_granularity {
@@ -102,7 +101,6 @@ impl ActivityMask {
 
         sum_f /= (tot_pix - 4*4) as f64;
         old_avg_var += sum_f;
-        old_max = old_max.max(sum_f);
 
         /* Copy down to granularity */
         for i in 0..(1 << (act_granularity - granularity)) {
@@ -143,7 +141,7 @@ impl ActivityMask {
             let element = variances.get_mut(y * (width >> granularity) + x);
             match element {
                 Some(x) => {
-                    *x = (old_max - *x) + temporal_act;
+                    *x = *x + temporal_act;
                     avg_var += *x;
                     max = max.max(*x);
                 }
