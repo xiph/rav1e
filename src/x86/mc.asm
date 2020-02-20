@@ -63,6 +63,10 @@ wm_420_mask:    db  3,  7, 11, 15, 19, 23, 27, 31, 35, 39, 43, 47, 51, 55, 59, 6
                 db 67, 71, 75, 79, 83, 87, 91, 95, 99,103,107,111,115,119,123,127
                 db  1,  5,  9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61
                 db 65, 69, 73, 77, 81, 85, 89, 93, 97,101,105,109,113,117,121,125
+wm_422_mask:    db  2,  6, 10, 14, 18, 22, 26, 30, 34, 38, 42, 46, 50, 54, 58, 62
+                db  1,  5,  9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61
+                db 66, 70, 74, 78, 82, 86, 90, 94, 98,102,106,110,114,118,122,126
+                db 65, 69, 73, 77, 81, 85, 89, 93, 97,101,105,109,113,117,121,125
 bilin_h_perm16: db  1,  0,  2,  1,  3,  2,  4,  3,  5,  4,  6,  5,  7,  6,  8,  7
                 db  9,  8, 10,  9, 11, 10, 12, 11, 13, 12, 14, 13, 15, 14, 16, 15
                 db 33, 32, 34, 33, 35, 34, 36, 35, 37, 36, 38, 37, 39, 38, 40, 39
@@ -133,10 +137,10 @@ blend_shuf:     db  0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  2,  3,  2,  3,  2,  
 
 wm_420_perm64:  dq 0xfedcba9876543210
 wm_420_sign:    dd 0x01020102, 0x01010101
-wm_sign_avx512: dd 0x40804080, 0x40404040
+wm_422_sign:    dd 0x80808080, 0x7f7f7f7f
+wm_sign_avx512: dd 0x40804080, 0xc0c0c0c0, 0x40404040
 
-pb_m64:  times 4 db -64
-pb_64:   times 4 db 64
+pw_m128  times 2 dw -128
 pw_34:   times 2 dw 34
 pw_258:  times 2 dw 258
 pw_512:  times 2 dw 512
@@ -148,6 +152,10 @@ pd_2:     dd 2
 pd_32:    dd 32
 pd_512:   dd 512
 pd_32768: dd 32768
+
+%define pb_m64 (wm_sign_avx512+4)
+%define pb_64  (wm_sign_avx512+8)
+%define pb_127 (wm_422_sign   +4)
 
 cextern mc_subpel_filters
 cextern mc_warp_filter
@@ -235,6 +243,7 @@ BIDIR_JMP_TABLE avg_avx512icl,             4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_avg_avx512icl,           4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE mask_avx512icl,            4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420_avx512icl,      4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_422_avx512icl,      4, 8, 16, 32, 64, 128
 
 SECTION .text
 
@@ -4420,181 +4429,6 @@ cglobal mask, 4, 8, 6, dst, stride, tmp1, tmp2, w, h, mask, stride3
     packuswb            m%1, m1
 %endmacro
 
-cglobal w_mask_422, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
-%define base r7-w_mask_422_avx2_table
-    lea                  r7, [w_mask_422_avx2_table]
-    tzcnt                wd, wm
-    movifnidn            hd, hm
-    mov               maskq, maskmp
-    movd                xm0, r7m ; sign
-    pxor                 m9, m9
-    movsxd               wq, dword [r7+wq*4]
-    vpbroadcastd         m6, [base+pw_6903] ; ((64 - 38) << 8) + 255 - 8
-    vpbroadcastd         m7, [base+pw_2048]
-    pmovzxbd            m10, [base+deint_shuf4]
-    add                  wq, r7
-    psrlw               xm8, xm7, 4 ; pw_128
-    psubb               xm8, xm0
-    vpbroadcastb         m8, xm8
-    W_MASK                0, 4, 0, 1
-    lea            stride3q, [strideq*3]
-    jmp                  wq
-.w4:
-    vextracti128        xm1, m0, 1
-    movd   [dstq+strideq*0], xm0
-    pextrd [dstq+strideq*1], xm0, 1
-    movd   [dstq+strideq*2], xm1
-    pextrd [dstq+stride3q ], xm1, 1
-    cmp                  hd, 8
-    jl .w4_end
-    lea                dstq, [dstq+strideq*4]
-    pextrd [dstq+strideq*0], xm0, 2
-    pextrd [dstq+strideq*1], xm0, 3
-    pextrd [dstq+strideq*2], xm1, 2
-    pextrd [dstq+stride3q ], xm1, 3
-    jg .w4_h16
-.w4_end:
-    vextracti128        xm5, m4, 1
-    packuswb            xm4, xm5
-    psubb               xm5, xm8, xm4
-    pavgb               xm5, xm9
-    pshufd              xm5, xm5, q3120
-    mova            [maskq], xm5
-    RET
-.w4_h16:
-    W_MASK                0, 5, 2, 3
-    lea                dstq, [dstq+strideq*4]
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermd               m5, m10, m5
-    vextracti128        xm1, m0, 1
-    movd   [dstq+strideq*0], xm0
-    pextrd [dstq+strideq*1], xm0, 1
-    movd   [dstq+strideq*2], xm1
-    pextrd [dstq+stride3q ], xm1, 1
-    lea                dstq, [dstq+strideq*4]
-    pextrd [dstq+strideq*0], xm0, 2
-    pextrd [dstq+strideq*1], xm0, 3
-    pextrd [dstq+strideq*2], xm1, 2
-    pextrd [dstq+stride3q ], xm1, 3
-    mova            [maskq], m5
-    RET
-.w8_loop:
-    add               tmp1q, 32*2
-    add               tmp2q, 32*2
-    W_MASK                0, 4, 0, 1
-    lea                dstq, [dstq+strideq*4]
-    add               maskq, 16
-.w8:
-    vextracti128        xm5, m4, 1
-    vextracti128        xm1, m0, 1
-    packuswb            xm4, xm5
-    psubb               xm5, xm8, xm4
-    pavgb               xm5, xm9
-    pshufd              xm5, xm5, q3120
-    movq   [dstq+strideq*0], xm0
-    movq   [dstq+strideq*1], xm1
-    movhps [dstq+strideq*2], xm0
-    movhps [dstq+stride3q ], xm1
-    mova            [maskq], xm5
-    sub                  hd, 4
-    jg .w8_loop
-    RET
-.w16_loop:
-    add               tmp1q, 32*4
-    add               tmp2q, 32*4
-    W_MASK                0, 4, 0, 1
-    lea                dstq, [dstq+strideq*4]
-    add               maskq, 32
-.w16:
-    vpermq               m0, m0, q3120
-    mova         [dstq+strideq*0], xm0
-    vextracti128 [dstq+strideq*1], m0, 1
-    W_MASK                0, 5, 2, 3
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermq               m0, m0, q3120
-    vpermd               m5, m10, m5
-    mova         [dstq+strideq*2], xm0
-    vextracti128 [dstq+stride3q ], m0, 1
-    mova            [maskq], m5
-    sub                  hd, 4
-    jg .w16_loop
-    RET
-.w32_loop:
-    add               tmp1q, 32*4
-    add               tmp2q, 32*4
-    W_MASK                0, 4, 0, 1
-    lea                dstq, [dstq+strideq*2]
-    add               maskq, 32
-.w32:
-    vpermq               m0, m0, q3120
-    mova   [dstq+strideq*0], m0
-    W_MASK                0, 5, 2, 3
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermq               m0, m0, q3120
-    vpermd               m5, m10, m5
-    mova   [dstq+strideq*1], m0
-    mova            [maskq], m5
-    sub                  hd, 2
-    jg .w32_loop
-    RET
-.w64_loop:
-    add               tmp1q, 32*4
-    add               tmp2q, 32*4
-    W_MASK                0, 4, 0, 1
-    add                dstq, strideq
-    add               maskq, 32
-.w64:
-    vpermq               m0, m0, q3120
-    mova        [dstq+32*0], m0
-    W_MASK                0, 5, 2, 3
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermq               m0, m0, q3120
-    vpermd               m5, m10, m5
-    mova        [dstq+32*1], m0
-    mova            [maskq], m5
-    dec                  hd
-    jg .w64_loop
-    RET
-.w128_loop:
-    add               tmp1q, 32*8
-    add               tmp2q, 32*8
-    W_MASK                0, 4, 0, 1
-    add                dstq, strideq
-    add               maskq, 32*2
-.w128:
-    vpermq               m0, m0, q3120
-    mova        [dstq+32*0], m0
-    W_MASK                0, 5, 2, 3
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermq               m0, m0, q3120
-    vpermd               m5, m10, m5
-    mova        [dstq+32*1], m0
-    mova       [maskq+32*0], m5
-    W_MASK                0, 4, 4, 5
-    vpermq               m0, m0, q3120
-    mova        [dstq+32*2], m0
-    W_MASK                0, 5, 6, 7
-    packuswb             m4, m5
-    psubb                m5, m8, m4
-    pavgb                m5, m9
-    vpermq               m0, m0, q3120
-    vpermd               m5, m10, m5
-    mova        [dstq+32*3], m0
-    mova       [maskq+32*1], m5
-    dec                  hd
-    jg .w128_loop
-    RET
-
 cglobal w_mask_444, 4, 8, 8, dst, stride, tmp1, tmp2, w, h, mask, stride3
 %define base r7-w_mask_444_avx2_table
     lea                  r7, [w_mask_444_avx2_table]
@@ -5486,6 +5320,179 @@ cglobal w_mask_420, 4, 8, 14, dst, stride, tmp1, tmp2, w, h, mask, stride3
     jg .w128_loop
     RET
 
+cglobal w_mask_422, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_422_avx2_table
+    lea                  r7, [w_mask_422_avx2_table]
+    tzcnt                wd, wm
+    mov                 r6d, r7m ; sign
+    movifnidn            hd, hm
+    pxor                 m9, m9
+    movsxd               wq, dword [r7+wq*4]
+    vpbroadcastd         m6, [base+pw_6903] ; ((64 - 38) << 8) + 255 - 8
+    vpbroadcastd         m7, [base+pw_2048]
+    pmovzxbd            m10, [base+deint_shuf4]
+    vpbroadcastd         m8, [base+wm_422_sign+r6*4] ; 128 - sign
+    add                  wq, r7
+    mov               maskq, maskmp
+    W_MASK                0, 4, 0, 1
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    vextracti128        xm1, m0, 1
+    movd   [dstq+strideq*0], xm0
+    pextrd [dstq+strideq*1], xm0, 1
+    movd   [dstq+strideq*2], xm1
+    pextrd [dstq+stride3q ], xm1, 1
+    cmp                  hd, 8
+    jl .w4_end
+    lea                dstq, [dstq+strideq*4]
+    pextrd [dstq+strideq*0], xm0, 2
+    pextrd [dstq+strideq*1], xm0, 3
+    pextrd [dstq+strideq*2], xm1, 2
+    pextrd [dstq+stride3q ], xm1, 3
+    jg .w4_h16
+.w4_end:
+    vextracti128        xm5, m4, 1
+    packuswb            xm4, xm5
+    psubb               xm5, xm8, xm4
+    pavgb               xm5, xm9
+    pshufd              xm5, xm5, q3120
+    mova            [maskq], xm5
+    RET
+.w4_h16:
+    W_MASK                0, 5, 2, 3
+    lea                dstq, [dstq+strideq*4]
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermd               m5, m10, m5
+    vextracti128        xm1, m0, 1
+    movd   [dstq+strideq*0], xm0
+    pextrd [dstq+strideq*1], xm0, 1
+    movd   [dstq+strideq*2], xm1
+    pextrd [dstq+stride3q ], xm1, 1
+    lea                dstq, [dstq+strideq*4]
+    pextrd [dstq+strideq*0], xm0, 2
+    pextrd [dstq+strideq*1], xm0, 3
+    pextrd [dstq+strideq*2], xm1, 2
+    pextrd [dstq+stride3q ], xm1, 3
+    mova            [maskq], m5
+    RET
+.w8_loop:
+    add               tmp1q, 32*2
+    add               tmp2q, 32*2
+    W_MASK                0, 4, 0, 1
+    lea                dstq, [dstq+strideq*4]
+    add               maskq, 16
+.w8:
+    vextracti128        xm5, m4, 1
+    vextracti128        xm1, m0, 1
+    packuswb            xm4, xm5
+    psubb               xm5, xm8, xm4
+    pavgb               xm5, xm9
+    pshufd              xm5, xm5, q3120
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+stride3q ], xm1
+    mova            [maskq], xm5
+    sub                  hd, 4
+    jg .w8_loop
+    RET
+.w16_loop:
+    add               tmp1q, 32*4
+    add               tmp2q, 32*4
+    W_MASK                0, 4, 0, 1
+    lea                dstq, [dstq+strideq*4]
+    add               maskq, 32
+.w16:
+    vpermq               m0, m0, q3120
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    W_MASK                0, 5, 2, 3
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermq               m0, m0, q3120
+    vpermd               m5, m10, m5
+    mova         [dstq+strideq*2], xm0
+    vextracti128 [dstq+stride3q ], m0, 1
+    mova            [maskq], m5
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32_loop:
+    add               tmp1q, 32*4
+    add               tmp2q, 32*4
+    W_MASK                0, 4, 0, 1
+    lea                dstq, [dstq+strideq*2]
+    add               maskq, 32
+.w32:
+    vpermq               m0, m0, q3120
+    mova   [dstq+strideq*0], m0
+    W_MASK                0, 5, 2, 3
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermq               m0, m0, q3120
+    vpermd               m5, m10, m5
+    mova   [dstq+strideq*1], m0
+    mova            [maskq], m5
+    sub                  hd, 2
+    jg .w32_loop
+    RET
+.w64_loop:
+    add               tmp1q, 32*4
+    add               tmp2q, 32*4
+    W_MASK                0, 4, 0, 1
+    add                dstq, strideq
+    add               maskq, 32
+.w64:
+    vpermq               m0, m0, q3120
+    mova        [dstq+32*0], m0
+    W_MASK                0, 5, 2, 3
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermq               m0, m0, q3120
+    vpermd               m5, m10, m5
+    mova        [dstq+32*1], m0
+    mova            [maskq], m5
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128_loop:
+    add               tmp1q, 32*8
+    add               tmp2q, 32*8
+    W_MASK                0, 4, 0, 1
+    add                dstq, strideq
+    add               maskq, 32*2
+.w128:
+    vpermq               m0, m0, q3120
+    mova        [dstq+32*0], m0
+    W_MASK                0, 5, 2, 3
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermq               m0, m0, q3120
+    vpermd               m5, m10, m5
+    mova        [dstq+32*1], m0
+    mova       [maskq+32*0], m5
+    W_MASK                0, 4, 4, 5
+    vpermq               m0, m0, q3120
+    mova        [dstq+32*2], m0
+    W_MASK                0, 5, 6, 7
+    packuswb             m4, m5
+    psubb                m5, m8, m4
+    pavgb                m5, m9
+    vpermq               m0, m0, q3120
+    vpermd               m5, m10, m5
+    mova        [dstq+32*3], m0
+    mova       [maskq+32*1], m5
+    dec                  hd
+    jg .w128_loop
+    RET
+
 INIT_ZMM avx512icl
 PREP_BILIN
 PREP_8TAP
@@ -5504,7 +5511,7 @@ cglobal w_mask_420, 4, 8, 16, dst, stride, tmp1, tmp2, w, h, mask, stride3
     vpbroadcastd         m7, [base+pw_2048]
     vpbroadcastd         m9, [base+pb_m64]             ; -1 << 6
     mova               ym10, [base+wm_420_mask+32]
-    vpbroadcastd         m8, [base+wm_sign_avx512+r6*4] ; (258 - sign) << 6
+    vpbroadcastd         m8, [base+wm_sign_avx512+r6*8] ; (258 - sign) << 6
     add                  wq, r7
     mov               maskq, maskmp
     lea            stride3q, [strideq*3]
@@ -5683,6 +5690,179 @@ cglobal w_mask_420, 4, 8, 16, dst, stride, tmp1, tmp2, w, h, mask, stride3
     mova [dstq+strideq*1+64*1], m1
     lea                dstq, [dstq+strideq*2]
     sub                  hd, 2
+    jg .w128_loop
+    RET
+
+cglobal w_mask_422, 4, 8, 14, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_422_avx512icl_table
+    lea                  r7, [w_mask_422_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 r6d, r7m ; sign
+    movifnidn            hd, hm
+    movsxd               wq, dword [r7+wq*4]
+    vpbroadcastd         m6, [base+pw_6903] ; ((64 - 38) << 8) + 255 - 8
+    vpbroadcastd         m7, [base+pw_2048]
+    vpbroadcastd         m9, [base+pw_m128]
+    mova                m10, [base+wm_422_mask]
+    vpbroadcastd        m11, [base+pb_127]
+    add                  wq, r7
+    vpbroadcastd         m8, [base+wm_sign_avx512+4+r6*4]
+    mov               maskq, maskmp
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    cmp                  hd, 8
+    jg .w4_h16
+    WRAP_YMM W_MASK       0, 4, 0, 1
+    movhps             xm10, [wm_422_mask+16]
+    vpdpwssd            ym8, ym4, ym9
+    vpermb              ym8, ym10, ym8
+    vextracti128       xmm1, m0, 1
+    movd   [dstq+strideq*0], xm0
+    pextrd [dstq+strideq*1], xm0, 1
+    movd   [dstq+strideq*2], xmm1
+    pextrd [dstq+stride3q ], xmm1, 1
+    jl .w4_end
+    lea                dstq, [dstq+strideq*4]
+    pextrd [dstq+strideq*0], xm0, 2
+    pextrd [dstq+strideq*1], xm0, 3
+    pextrd [dstq+strideq*2], xmm1, 2
+    pextrd [dstq+stride3q ], xmm1, 3
+.w4_end:
+    pand                xm8, xm11
+    mova            [maskq], xm8
+    RET
+.w4_h16:
+    vpbroadcastd         m5, strided
+    pmulld               m5, [bidir_sctr_w4]
+    W_MASK                0, 4, 0, 1
+    vpdpwssd             m8, m4, m9
+    kxnorw               k1, k1, k1
+    vpermb               m8, m10, m8
+    pand                ym8, ym11
+    mova            [maskq], ym8
+    vpscatterdd [dstq+m5]{k1}, m0
+    RET
+.w8:
+    cmp                  hd, 4
+    jne .w8_h8
+    WRAP_YMM W_MASK       0, 4, 0, 1
+    movhps             xm10, [wm_422_mask+16]
+    vpdpwssd            ym8, ym4, ym9
+    vpermb              ym8, ym10, ym8
+    pand                xm8, xm11
+    mova            [maskq], xm8
+    vextracti128       xmm1, ym0, 1
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xmm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+stride3q ], xmm1
+    RET
+.w8_loop:
+    add               tmp1q, 128
+    add               tmp2q, 128
+    add               maskq, 32
+    lea                dstq, [dstq+strideq*4]
+.w8_h8:
+    W_MASK                0, 4, 0, 1
+    mova                 m1, m8
+    vpdpwssd             m1, m4, m9
+    vpermb               m1, m10, m1
+    pand                ym1, ym11
+    mova            [maskq], ym1
+    vextracti32x4      xmm1, ym0, 1
+    vextracti32x4      xmm2, m0, 2
+    vextracti32x4      xmm3, m0, 3
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xmm1
+    movq   [dstq+strideq*2], xmm2
+    movq   [dstq+stride3q ], xmm3
+    lea                dstq, [dstq+strideq*4]
+    movhps [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xmm1
+    movhps [dstq+strideq*2], xmm2
+    movhps [dstq+stride3q ], xmm3
+    sub                  hd, 8
+    jg .w8_loop
+    RET
+.w16_loop:
+    add               tmp1q, 128
+    add               tmp2q, 128
+    add               maskq, 32
+    lea                dstq, [dstq+strideq*4]
+.w16:
+    W_MASK                0, 4, 0, 1
+    mova                 m1, m8
+    vpdpwssd             m1, m4, m9
+    vpermb               m1, m10, m1
+    vpermq               m0, m0, q3120
+    pand                ym1, ym11
+    mova            [maskq], ym1
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], m0, 2
+    vextracti32x4 [dstq+strideq*2], ym0, 1
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32:
+    pmovzxbq             m5, [warp_8x8_shufA]
+.w32_loop:
+    W_MASK                0, 4, 0, 1
+    mova                 m1, m8
+    vpdpwssd             m1, m4, m9
+    add               tmp1q, 128
+    add               tmp2q, 128
+    vpermb               m1, m10, m1
+    vpermq               m0, m5, m0
+    pand                ym1, ym11
+    mova            [maskq], ym1
+    add               maskq, 32
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w32_loop
+    RET
+.w64:
+    pmovzxbq             m5, [warp_8x8_shufA]
+.w64_loop:
+    W_MASK                0, 4, 0, 1
+    mova                 m1, m8
+    vpdpwssd             m1, m4, m9
+    add               tmp1q, 128
+    add               tmp2q, 128
+    vpermb               m1, m10, m1
+    vpermq               m0, m5, m0
+    pand                ym1, ym11
+    mova            [maskq], ym1
+    add               maskq, 32
+    mova             [dstq], m0
+    add                dstq, strideq
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128:
+    pmovzxbq            m13, [warp_8x8_shufA]
+.w128_loop:
+    W_MASK                0, 4, 0, 1
+    W_MASK               12, 5, 2, 3
+    mova                 m2, m8
+    vpdpwssd             m2, m4, m9
+    mova                 m3, m8
+    vpdpwssd             m3, m5, m9
+    add               tmp1q, 256
+    add               tmp2q, 256
+    vpermt2b             m2, m10, m3
+    vpermq               m0, m13, m0
+    vpermq               m1, m13, m12
+    pand                 m2, m11
+    mova            [maskq], m2
+    add               maskq, 64
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    add                dstq, strideq
+    dec                  hd
     jg .w128_loop
     RET
 
