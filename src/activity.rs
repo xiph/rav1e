@@ -185,7 +185,7 @@ impl ActivityMask {
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
         /* avg_var is inversely proportional to the scaling necessary */
-        Some(val) => return (*val * self.var_scale) * (1500f64/((self.avg_var * self.var_scale).log(2f64))),
+        Some(val) => return (*val * self.var_scale) * (1300f64/((self.avg_var * self.var_scale).log(2f64))),
         None => unreachable!(),
     }
   }
