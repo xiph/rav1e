@@ -185,7 +185,7 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
 
   let ssim_boost = (4033_f64 / 16_384_f64)
-    * (svar + svar + svar + (16_384 << (2 * coeff_shift))) as f64
+    * (svar + svar + svar + svar + (16_384 << (2 * coeff_shift))) as f64
     / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * svar) as f64);
 
   let ssim_boost = ssim_boost * 0.5423301256f64 + 0.8958917897f64;
