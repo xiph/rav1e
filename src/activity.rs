@@ -32,7 +32,7 @@ impl ActivityMask {
   #[hawktracer(activity_mask_from_plane)]
   pub fn from_plane<T: Pixel>(fi: &FrameInvariants<T>, luma_plane: &Plane<T>) -> ActivityMask {
     let granularity: usize = 3; /* Granularity of the map */
-    let act_granularity: usize = 4; /* Granularity of the activity data, if != granularity it repeats */
+    let act_granularity: usize = 3; /* Granularity of the activity data, if != granularity it repeats */
     let tot_pix: usize = (1 << granularity) * (1 << granularity);
 
     /* Aligned width and height to the activity data */
@@ -93,7 +93,7 @@ impl ActivityMask {
 
         for y in 0..(1 << act_granularity) {
             for x in 0..(1 << act_granularity) {
-                if (x < 4) && (y < 4) { continue };
+                if (x < 2) && (y < 2) { continue };
                 let coeff = freq[y*(1 << act_granularity) + x];
                 sum_f += i32::cast_from(coeff).abs() as f64;
             }
