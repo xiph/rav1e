@@ -1532,7 +1532,10 @@ pub struct BlockContextCheckpoint {
   left_coeff_context: [[u8; MIB_SIZE]; PLANES],
 }
 
-pub struct BlockContext<'a> {
+pub struct BlockContext<'a, 'b>
+where
+  'a: 'b,
+{
   pub cdef_coded: bool,
   pub code_deltas: bool,
   pub update_seg: bool,
@@ -1543,11 +1546,14 @@ pub struct BlockContext<'a> {
   left_tx_context: [u8; MIB_SIZE],
   above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
   left_coeff_context: [[u8; MIB_SIZE]; PLANES],
-  pub blocks: &'a mut TileBlocksMut<'a>,
+  pub blocks: &'b mut TileBlocksMut<'a>,
 }
 
-impl<'a> BlockContext<'a> {
-  pub fn new(blocks: &'a mut TileBlocksMut<'a>) -> Self {
+impl<'a, 'b> BlockContext<'a, 'b>
+where
+  'a: 'b,
+{
+  pub fn new(blocks: &'b mut TileBlocksMut<'a>) -> Self {
     BlockContext {
       cdef_coded: false,
       code_deltas: false,
@@ -1975,16 +1981,22 @@ pub struct ContextWriterCheckpoint {
   pub bc: BlockContextCheckpoint,
 }
 
-pub struct ContextWriter<'a> {
-  pub bc: BlockContext<'a>,
-  pub fc: &'a mut CDFContext,
+pub struct ContextWriter<'a, 'b>
+where
+  'a: 'b,
+{
+  pub bc: BlockContext<'a, 'b>,
+  pub fc: &'b mut CDFContext,
   #[cfg(feature = "desync_finder")]
   fc_map: Option<FieldMap>, // For debugging purposes
 }
 
-impl<'a> ContextWriter<'a> {
+impl<'a, 'b> ContextWriter<'a, 'b>
+where
+  'a: 'b,
+{
   #[allow(clippy::let_and_return)]
-  pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
+  pub fn new(fc: &'b mut CDFContext, bc: BlockContext<'a, 'b>) -> Self {
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       fc,
