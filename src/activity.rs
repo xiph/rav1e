@@ -131,11 +131,11 @@ impl ActivityMask {
 
             let temporal_act =
                 if intra_cost == 0. {
-                    1.0f64
+                    0.0f64
                 } else {
                     let strength = 1.0; // empirical, see comment above
                     let frac = (intra_cost + propagate_cost) / intra_cost;
-                    frac.powf(strength / 3.0) * old_avg_var
+                    frac.powf(strength / 3.0) * old_avg_var * 1.5
                 };
 
             let element = variances.get_mut(y * (width >> granularity) + x);
@@ -185,7 +185,7 @@ impl ActivityMask {
     let res = self.variances.get((x >> self.granularity) + dec_width * (y >> self.granularity));
     match res {
         /* avg_var is inversely proportional to the scaling necessary */
-        Some(val) => return (*val * self.var_scale) * (1300f64/((self.avg_var * self.var_scale).log(2f64))),
+        Some(val) => return (*val * self.var_scale) * (1400f64/((self.avg_var * self.var_scale).log(2f64))),
         None => unreachable!(),
     }
   }
