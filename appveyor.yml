@@ -1,4 +1,13 @@
 image: Visual Studio 2019
+skip_commits:
+  files:
+    - '.github/*'
+    - '.travis/*'
+    - 'doc/*'
+    - '.travis.yml'
+    - '.gitlab-ci.yml'
+    - '.gitignore'
+    - '*.md'
 
 environment:
   host: x86_64-pc-windows-msvc
