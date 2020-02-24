@@ -143,8 +143,8 @@ function lpf_8_wd\wd\()_neon
         vaddw.s8        q1,  q1,  d4
         vmov.i8         d7,  #3
         vqmovn.s16      d2,  q1       // f
-        vqadd.s8        d4,  d6,  d2  // imin(f + 4, 128)
-        vqadd.s8        d5,  d7,  d2  // imin(f + 3, 128)
+        vqadd.s8        d4,  d6,  d2  // imin(f + 4, 127)
+        vqadd.s8        d5,  d7,  d2  // imin(f + 3, 127)
         vshr.s8         d4,  d4,  #3  // f1
         vshr.s8         d5,  d5,  #3  // f2
         vmovl.u8        q1,  d23      // p0
