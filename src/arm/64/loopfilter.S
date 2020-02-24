@@ -151,8 +151,8 @@ function lpf_16_wd\wd\()_neon
         movi            v7.16b,  #3
         sqxtn           v2.8b,   v2.8h            // f
         sqxtn2          v2.16b,  v3.8h
-        sqadd           v4.16b,  v6.16b,  v2.16b  // imin(f + 4, 128)
-        sqadd           v5.16b,  v7.16b,  v2.16b  // imin(f + 3, 128)
+        sqadd           v4.16b,  v6.16b,  v2.16b  // imin(f + 4, 127)
+        sqadd           v5.16b,  v7.16b,  v2.16b  // imin(f + 3, 127)
         sshr            v4.16b,  v4.16b,  #3      // f1
         sshr            v5.16b,  v5.16b,  #3      // f2
         uxtl            v2.8h,   v23.8b           // p0
