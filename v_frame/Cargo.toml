@@ -5,6 +5,7 @@ description = "Video Frame data structures, part of rav1e"
 license = "BSD-2-Clause"
 authors = ["Luca Barbato <lu_zero@gentoo.org>"]
 edition = "2018"
+repository = "https://github.com/xiph/rav1e/"
 
 [features]
 serialize = ["serde"]
