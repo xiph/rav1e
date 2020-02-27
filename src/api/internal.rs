@@ -1091,11 +1091,12 @@ impl<T: Pixel> ContextInner<T> {
         false,
         false,
       );
-      let rec = if frame_data.fi.show_frame {
-        Some(frame_data.fs.rec.clone())
+      let (rec, source) = if frame_data.fi.show_frame {
+        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
       } else {
-        None
+        (None, None)
       };
+
       self.output_frameno += 1;
 
       let input_frameno = frame_data.fi.input_frameno;
@@ -1105,6 +1106,7 @@ impl<T: Pixel> ContextInner<T> {
       let enc_stats = frame_data.fs.enc_stats.clone();
       self.finalize_packet(
         rec,
+        source,
         input_frameno,
         frame_type,
         bit_depth,
@@ -1173,10 +1175,10 @@ impl<T: Pixel> ContextInner<T> {
         .pad(frame_data.fi.width, frame_data.fi.height);
 
       // TODO avoid the clone by having rec Arc.
-      let rec = if frame_data.fi.show_frame {
-        Some(frame_data.fs.rec.clone())
+      let (rec, source) = if frame_data.fi.show_frame {
+        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
       } else {
-        None
+        (None, None)
       };
 
       update_rec_buffer(
@@ -1224,6 +1226,7 @@ impl<T: Pixel> ContextInner<T> {
         let qp = fi.base_q_idx;
         self.finalize_packet(
           rec,
+          source,
           input_frameno,
           frame_type,
           bit_depth,
@@ -1279,8 +1282,9 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   fn finalize_packet(
-    &mut self, rec: Option<Arc<Frame<T>>>, input_frameno: u64,
-    frame_type: FrameType, bit_depth: usize, qp: u8, enc_stats: EncoderStats,
+    &mut self, rec: Option<Arc<Frame<T>>>, source: Option<Arc<Frame<T>>>,
+    input_frameno: u64, frame_type: FrameType, bit_depth: usize, qp: u8,
+    enc_stats: EncoderStats,
   ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
     self.packet_data.clear();
@@ -1297,7 +1301,16 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.frames_processed += 1;
-    Ok(Packet { data, rec, input_frameno, frame_type, psnr, qp, enc_stats })
+    Ok(Packet {
+      data,
+      rec,
+      source,
+      input_frameno,
+      frame_type,
+      psnr,
+      qp,
+      enc_stats,
+    })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {
