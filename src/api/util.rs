@@ -160,6 +160,8 @@ pub struct Packet<T: Pixel> {
   pub data: Vec<u8>,
   /// The reconstruction of the shown frame.
   pub rec: Option<Arc<Frame<T>>>,
+  /// The Reference Frame
+  pub source: Option<Arc<Frame<T>>>,
   /// The number of the input frame corresponding to the one shown frame in the
   /// TU stored in this packet. Since AV1 does not explicitly reorder frames,
   /// these will increase sequentially.
