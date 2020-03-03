@@ -534,7 +534,7 @@ L(blend_tbl):
 endfunc
 
 function blend_h_8bpc_neon, export=1
-        adr             x6, L(blend_h_tbl)
+        adr             x6,  L(blend_h_tbl)
         movrel          x5,  X(obmc_masks)
         add             x5,  x5,  w4,  uxtw
         sub             w4,  w4,  w4,  lsr #2
