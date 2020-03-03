@@ -241,6 +241,438 @@ bidir_fn w_avg, w7
 bidir_fn mask, w7
 
 
+function blend_16bpc_neon, export=1
+        adr             x6,  L(blend_tbl)
+        clz             w3,  w3
+        sub             w3,  w3,  #26
+        ldrh            w3,  [x6,  x3,  lsl #1]
+        sub             x6,  x6,  w3,  uxtw
+        add             x8,  x0,  x1
+        br              x6
+40:
+        lsl             x1,  x1,  #1
+4:
+        ld1             {v2.8b},   [x5], #8
+        ld1             {v1.8h},   [x2], #16
+        ld1             {v0.d}[0], [x0]
+        neg             v2.8b,   v2.8b            // -m
+        subs            w4,  w4,  #2
+        ld1             {v0.d}[1], [x8]
+        sxtl            v2.8h,   v2.8b
+        shl             v2.8h,   v2.8h,   #9      // -m << 9
+        sub             v1.8h,   v0.8h,   v1.8h   // a - b
+        sqrdmulh        v1.8h,   v1.8h,   v2.8h   // ((a-b)*-m + 32) >> 6
+        add             v0.8h,   v0.8h,   v1.8h
+        st1             {v0.d}[0], [x0], x1
+        st1             {v0.d}[1], [x8], x1
+        b.gt            4b
+        ret
+80:
+        lsl             x1,  x1,  #1
+8:
+        ld1             {v4.16b},       [x5], #16
+        ld1             {v2.8h, v3.8h}, [x2], #32
+        neg             v5.16b,  v4.16b           // -m
+        ld1             {v0.8h},   [x0]
+        ld1             {v1.8h},   [x8]
+        sxtl            v4.8h,   v5.8b
+        sxtl2           v5.8h,   v5.16b
+        shl             v4.8h,   v4.8h,   #9      // -m << 9
+        shl             v5.8h,   v5.8h,   #9
+        sub             v2.8h,   v0.8h,   v2.8h   // a - b
+        sub             v3.8h,   v1.8h,   v3.8h
+        subs            w4,  w4,  #2
+        sqrdmulh        v2.8h,   v2.8h,   v4.8h   // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v3.8h,   v3.8h,   v5.8h
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v1.8h,   v1.8h,   v3.8h
+        st1             {v0.8h}, [x0], x1
+        st1             {v1.8h}, [x8], x1
+        b.gt            8b
+        ret
+160:
+        lsl             x1,  x1,  #1
+16:
+        ld1             {v16.16b, v17.16b},           [x5], #32
+        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x2], #64
+        subs            w4,  w4,  #2
+        neg             v18.16b, v16.16b          // -m
+        neg             v19.16b, v17.16b
+        ld1             {v0.8h, v1.8h}, [x0]
+        sxtl            v16.8h,  v18.8b
+        sxtl2           v17.8h,  v18.16b
+        sxtl            v18.8h,  v19.8b
+        sxtl2           v19.8h,  v19.16b
+        ld1             {v2.8h, v3.8h}, [x8]
+        shl             v16.8h,  v16.8h,  #9      // -m << 9
+        shl             v17.8h,  v17.8h,  #9
+        shl             v18.8h,  v18.8h,  #9
+        shl             v19.8h,  v19.8h,  #9
+        sub             v4.8h,   v0.8h,   v4.8h   // a - b
+        sub             v5.8h,   v1.8h,   v5.8h
+        sub             v6.8h,   v2.8h,   v6.8h
+        sub             v7.8h,   v3.8h,   v7.8h
+        sqrdmulh        v4.8h,   v4.8h,   v16.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v5.8h,   v5.8h,   v17.8h
+        sqrdmulh        v6.8h,   v6.8h,   v18.8h
+        sqrdmulh        v7.8h,   v7.8h,   v19.8h
+        add             v0.8h,   v0.8h,   v4.8h
+        add             v1.8h,   v1.8h,   v5.8h
+        add             v2.8h,   v2.8h,   v6.8h
+        add             v3.8h,   v3.8h,   v7.8h
+        st1             {v0.8h, v1.8h}, [x0], x1
+        st1             {v2.8h, v3.8h}, [x8], x1
+        b.gt            16b
+        ret
+32:
+        ld1             {v16.16b, v17.16b},           [x5], #32
+        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x2], #64
+        subs            w4,  w4,  #1
+        neg             v18.16b, v16.16b          // -m
+        neg             v19.16b, v17.16b
+        sxtl            v16.8h,  v18.8b
+        sxtl2           v17.8h,  v18.16b
+        sxtl            v18.8h,  v19.8b
+        sxtl2           v19.8h,  v19.16b
+        ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
+        shl             v16.8h,  v16.8h,  #9      // -m << 9
+        shl             v17.8h,  v17.8h,  #9
+        shl             v18.8h,  v18.8h,  #9
+        shl             v19.8h,  v19.8h,  #9
+        sub             v4.8h,   v0.8h,   v4.8h   // a - b
+        sub             v5.8h,   v1.8h,   v5.8h
+        sub             v6.8h,   v2.8h,   v6.8h
+        sub             v7.8h,   v3.8h,   v7.8h
+        sqrdmulh        v4.8h,   v4.8h,   v16.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v5.8h,   v5.8h,   v17.8h
+        sqrdmulh        v6.8h,   v6.8h,   v18.8h
+        sqrdmulh        v7.8h,   v7.8h,   v19.8h
+        add             v0.8h,   v0.8h,   v4.8h
+        add             v1.8h,   v1.8h,   v5.8h
+        add             v2.8h,   v2.8h,   v6.8h
+        add             v3.8h,   v3.8h,   v7.8h
+        st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], x1
+        b.gt            32b
+        ret
+L(blend_tbl):
+        .hword L(blend_tbl) -  32b
+        .hword L(blend_tbl) - 160b
+        .hword L(blend_tbl) -  80b
+        .hword L(blend_tbl) -  40b
+endfunc
+
+function blend_h_16bpc_neon, export=1
+        adr             x6,  L(blend_h_tbl)
+        movrel          x5,  X(obmc_masks)
+        add             x5,  x5,  w4,  uxtw
+        sub             w4,  w4,  w4,  lsr #2
+        clz             w7,  w3
+        add             x8,  x0,  x1
+        lsl             x1,  x1,  #1
+        sub             w7,  w7,  #24
+        ldrh            w7,  [x6,  x7,  lsl #1]
+        sub             x6,  x6,  w7, uxtw
+        br              x6
+2:
+        ld2r            {v2.8b, v3.8b}, [x5], #2
+        ld1             {v1.4h},        [x2], #8
+        ext             v2.8b,   v2.8b,   v3.8b,   #6
+        subs            w4,  w4,  #2
+        neg             v2.8b,   v2.8b            // -m
+        ld1             {v0.s}[0], [x0]
+        ld1             {v0.s}[1], [x8]
+        sxtl            v2.8h,   v2.8b
+        shl             v2.4h,   v2.4h,   #9      // -m << 9
+        sub             v1.4h,   v0.4h,   v1.4h   // a - b
+        sqrdmulh        v1.4h,   v1.4h,   v2.4h   // ((a-b)*-m + 32) >> 6
+        add             v0.4h,   v0.4h,   v1.4h
+        st1             {v0.s}[0], [x0], x1
+        st1             {v0.s}[1], [x8], x1
+        b.gt            2b
+        ret
+4:
+        ld2r            {v2.8b, v3.8b}, [x5], #2
+        ld1             {v1.8h},        [x2], #16
+        ext             v2.8b,   v2.8b,   v3.8b,   #4
+        subs            w4,  w4,  #2
+        neg             v2.8b,   v2.8b            // -m
+        ld1             {v0.d}[0],   [x0]
+        ld1             {v0.d}[1],   [x8]
+        sxtl            v2.8h,   v2.8b
+        shl             v2.8h,   v2.8h,   #9      // -m << 9
+        sub             v1.8h,   v0.8h,   v1.8h   // a - b
+        sqrdmulh        v1.8h,   v1.8h,   v2.8h   // ((a-b)*-m + 32) >> 6
+        add             v0.8h,   v0.8h,   v1.8h
+        st1             {v0.d}[0], [x0], x1
+        st1             {v0.d}[1], [x8], x1
+        b.gt            4b
+        ret
+8:
+        ld2r            {v4.8b, v5.8b}, [x5], #2
+        ld1             {v2.8h, v3.8h}, [x2], #32
+        neg             v4.8b,   v4.8b            // -m
+        neg             v5.8b,   v5.8b
+        ld1             {v0.8h}, [x0]
+        subs            w4,  w4,  #2
+        sxtl            v4.8h,   v4.8b
+        sxtl            v5.8h,   v5.8b
+        ld1             {v1.8h}, [x8]
+        shl             v4.8h,   v4.8h,   #9      // -m << 9
+        shl             v5.8h,   v5.8h,   #9
+        sub             v2.8h,   v0.8h,   v2.8h   // a - b
+        sub             v3.8h,   v1.8h,   v3.8h
+        sqrdmulh        v2.8h,   v2.8h,   v4.8h   // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v3.8h,   v3.8h,   v5.8h
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v1.8h,   v1.8h,   v3.8h
+        st1             {v0.8h}, [x0], x1
+        st1             {v1.8h}, [x8], x1
+        b.gt            8b
+        ret
+16:
+        ld2r            {v16.8b, v17.8b}, [x5], #2
+        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x2], #64
+        neg             v16.8b,  v16.8b           // -m
+        neg             v17.8b,  v17.8b
+        ld1             {v0.8h, v1.8h},  [x0]
+        ld1             {v2.8h, v3.8h},  [x8]
+        subs            w4,  w4,  #2
+        sxtl            v16.8h,  v16.8b
+        sxtl            v17.8h,  v17.8b
+        shl             v16.8h,  v16.8h,  #9      // -m << 9
+        shl             v17.8h,  v17.8h,  #9
+        sub             v4.8h,   v0.8h,   v4.8h   // a - b
+        sub             v5.8h,   v1.8h,   v5.8h
+        sub             v6.8h,   v2.8h,   v6.8h
+        sub             v7.8h,   v3.8h,   v7.8h
+        sqrdmulh        v4.8h,   v4.8h,   v16.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v5.8h,   v5.8h,   v16.8h
+        sqrdmulh        v6.8h,   v6.8h,   v17.8h
+        sqrdmulh        v7.8h,   v7.8h,   v17.8h
+        add             v0.8h,   v0.8h,   v4.8h
+        add             v1.8h,   v1.8h,   v5.8h
+        add             v2.8h,   v2.8h,   v6.8h
+        add             v3.8h,   v3.8h,   v7.8h
+        st1             {v0.8h, v1.8h}, [x0], x1
+        st1             {v2.8h, v3.8h}, [x8], x1
+        b.gt            16b
+        ret
+1280:
+640:
+320:
+        sub             x1,  x1,  w3,  uxtw #1
+        add             x7,  x2,  w3,  uxtw #1
+321:
+        ld2r            {v24.8b, v25.8b}, [x5], #2
+        mov             w6,  w3
+        neg             v24.8b,  v24.8b           // -m
+        neg             v25.8b,  v25.8b
+        sxtl            v24.8h,  v24.8b
+        sxtl            v25.8h,  v25.8b
+        shl             v24.8h,  v24.8h,  #9      // -m << 9
+        shl             v25.8h,  v25.8h,  #9
+32:
+        ld1             {v16.8h, v17.8h, v18.8h, v19.8h}, [x2], #64
+        ld1             {v0.8h,  v1.8h,  v2.8h,  v3.8h},  [x0]
+        subs            w6,  w6,  #32
+        sub             v16.8h,  v0.8h,   v16.8h  // a - b
+        sub             v17.8h,  v1.8h,   v17.8h
+        sub             v18.8h,  v2.8h,   v18.8h
+        sub             v19.8h,  v3.8h,   v19.8h
+        ld1             {v20.8h, v21.8h, v22.8h, v23.8h}, [x7], #64
+        ld1             {v4.8h,  v5.8h,  v6.8h,  v7.8h},  [x8]
+        sqrdmulh        v16.8h,  v16.8h,  v24.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v17.8h,  v17.8h,  v24.8h
+        sqrdmulh        v18.8h,  v18.8h,  v24.8h
+        sqrdmulh        v19.8h,  v19.8h,  v24.8h
+        sub             v20.8h,  v4.8h,   v20.8h  // a - b
+        sub             v21.8h,  v5.8h,   v21.8h
+        sub             v22.8h,  v6.8h,   v22.8h
+        sub             v23.8h,  v7.8h,   v23.8h
+        add             v0.8h,   v0.8h,   v16.8h
+        add             v1.8h,   v1.8h,   v17.8h
+        add             v2.8h,   v2.8h,   v18.8h
+        add             v3.8h,   v3.8h,   v19.8h
+        sqrdmulh        v20.8h,  v20.8h,  v25.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v21.8h,  v21.8h,  v25.8h
+        sqrdmulh        v22.8h,  v22.8h,  v25.8h
+        sqrdmulh        v23.8h,  v23.8h,  v25.8h
+        st1             {v0.8h,  v1.8h,  v2.8h,  v3.8h},  [x0], #64
+        add             v4.8h,   v4.8h,   v20.8h
+        add             v5.8h,   v5.8h,   v21.8h
+        add             v6.8h,   v6.8h,   v22.8h
+        add             v7.8h,   v7.8h,   v23.8h
+        st1             {v4.8h,  v5.8h,  v6.8h,  v7.8h},  [x8], #64
+        b.gt            32b
+        subs            w4,  w4,  #2
+        add             x0,  x0,  x1
+        add             x8,  x8,  x1
+        add             x2,  x2,  w3,  uxtw #1
+        add             x7,  x7,  w3,  uxtw #1
+        b.gt            321b
+        ret
+L(blend_h_tbl):
+        .hword L(blend_h_tbl) - 1280b
+        .hword L(blend_h_tbl) -  640b
+        .hword L(blend_h_tbl) -  320b
+        .hword L(blend_h_tbl) -   16b
+        .hword L(blend_h_tbl) -    8b
+        .hword L(blend_h_tbl) -    4b
+        .hword L(blend_h_tbl) -    2b
+endfunc
+
+function blend_v_16bpc_neon, export=1
+        adr             x6,  L(blend_v_tbl)
+        movrel          x5,  X(obmc_masks)
+        add             x5,  x5,  w3,  uxtw
+        clz             w3,  w3
+        add             x8,  x0,  x1
+        lsl             x1,  x1,  #1
+        sub             w3,  w3,  #26
+        ldrh            w3,  [x6,  x3,  lsl #1]
+        sub             x6,  x6,  w3,  uxtw
+        br              x6
+20:
+        ld1r            {v2.8b}, [x5]
+        neg             v2.8b,   v2.8b            // -m
+        sxtl            v2.8h,   v2.8b
+        shl             v2.4h,   v2.4h,   #9      // -m << 9
+2:
+        ld1             {v1.s}[0], [x2], #4
+        ld1             {v0.h}[0], [x0]
+        subs            w4,  w4,  #2
+        ld1             {v1.h}[1], [x2]
+        ld1             {v0.h}[1], [x8]
+        add             x2,  x2,  #4
+        sub             v1.4h,   v0.4h,   v1.4h   // a - b
+        sqrdmulh        v1.4h,   v1.4h,   v2.4h   // ((a-b)*-m + 32) >> 6
+        add             v0.4h,   v0.4h,   v1.4h
+        st1             {v0.h}[0], [x0],  x1
+        st1             {v0.h}[1], [x8],  x1
+        b.gt            2b
+        ret
+40:
+        ld1r            {v2.2s}, [x5]
+        sub             x1,  x1,  #4
+        neg             v2.8b,   v2.8b            // -m
+        sxtl            v2.8h,   v2.8b
+        shl             v2.8h,   v2.8h,   #9      // -m << 9
+4:
+        ld1             {v1.8h},   [x2], #16
+        ld1             {v0.d}[0], [x0]
+        ld1             {v0.d}[1], [x8]
+        subs            w4,  w4,  #2
+        sub             v1.8h,   v0.8h,   v1.8h   // a - b
+        sqrdmulh        v1.8h,   v1.8h,   v2.8h   // ((a-b)*-m + 32) >> 6
+        add             v0.8h,   v0.8h,   v1.8h
+        st1             {v0.s}[0], [x0], #4
+        st1             {v0.s}[2], [x8], #4
+        st1             {v0.h}[2], [x0], x1
+        st1             {v0.h}[6], [x8], x1
+        b.gt            4b
+        ret
+80:
+        ld1             {v4.8b}, [x5]
+        sub             x1,  x1,  #8
+        neg             v4.8b,   v4.8b            // -m
+        sxtl            v4.8h,   v4.8b
+        shl             v4.8h,   v4.8h,   #9      // -m << 9
+8:
+        ld1             {v2.8h, v3.8h}, [x2], #32
+        ld1             {v0.8h}, [x0]
+        ld1             {v1.8h}, [x8]
+        subs            w4,  w4,  #2
+        sub             v2.8h,   v0.8h,   v2.8h   // a - b
+        sub             v3.8h,   v1.8h,   v3.8h
+        sqrdmulh        v2.8h,   v2.8h,   v4.8h   // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v3.8h,   v3.8h,   v4.8h
+        add             v0.8h,   v0.8h,   v2.8h
+        add             v1.8h,   v1.8h,   v3.8h
+        st1             {v0.d}[0], [x0], #8
+        st1             {v1.d}[0], [x8], #8
+        st1             {v0.s}[2], [x0], x1
+        st1             {v1.s}[2], [x8], x1
+        b.gt            8b
+        ret
+160:
+        ld1             {v16.8b, v17.8b}, [x5]
+        sub             x1,  x1,  #16
+        neg             v16.8b,  v16.8b           // -m
+        neg             v17.8b,  v17.8b
+        sxtl            v16.8h,  v16.8b
+        sxtl            v17.8h,  v17.8b
+        shl             v16.8h,  v16.8h,  #9      // -m << 9
+        shl             v17.4h,  v17.4h,  #9
+16:
+        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x2], #64
+        ld1             {v0.8h, v1.8h}, [x0]
+        subs            w4,  w4,  #2
+        ld1             {v2.8h, v3.8h}, [x8]
+        sub             v4.8h,   v0.8h,   v4.8h   // a - b
+        sub             v5.4h,   v1.4h,   v5.4h
+        sub             v6.8h,   v2.8h,   v6.8h
+        sub             v7.4h,   v3.4h,   v7.4h
+        sqrdmulh        v4.8h,   v4.8h,   v16.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v5.4h,   v5.4h,   v17.4h
+        sqrdmulh        v6.8h,   v6.8h,   v16.8h
+        sqrdmulh        v7.4h,   v7.4h,   v17.4h
+        add             v0.8h,   v0.8h,   v4.8h
+        add             v1.4h,   v1.4h,   v5.4h
+        add             v2.8h,   v2.8h,   v6.8h
+        add             v3.4h,   v3.4h,   v7.4h
+        st1             {v0.8h}, [x0], #16
+        st1             {v2.8h}, [x8], #16
+        st1             {v1.4h}, [x0], x1
+        st1             {v3.4h}, [x8], x1
+        b.gt            16b
+        ret
+320:
+        ld1             {v24.16b, v25.16b},  [x5]
+        neg             v26.16b, v24.16b          // -m
+        neg             v27.8b,  v25.8b
+        sxtl            v24.8h,  v26.8b
+        sxtl2           v25.8h,  v26.16b
+        sxtl            v26.8h,  v27.8b
+        shl             v24.8h,  v24.8h,  #9      // -m << 9
+        shl             v25.8h,  v25.8h,  #9
+        shl             v26.8h,  v26.8h,  #9
+32:
+        ld1             {v16.8h, v17.8h, v18.8h, v19.8h}, [x2], #64
+        ld1             {v0.8h, v1.8h, v2.8h}, [x0]
+        ld1             {v20.8h, v21.8h, v22.8h, v23.8h}, [x2], #64
+        ld1             {v4.8h, v5.8h, v6.8h}, [x8]
+        subs            w4,  w4,  #2
+        sub             v16.8h,  v0.8h,   v16.8h  // a - b
+        sub             v17.8h,  v1.8h,   v17.8h
+        sub             v18.8h,  v2.8h,   v18.8h
+        sub             v20.8h,  v4.8h,   v20.8h
+        sub             v21.8h,  v5.8h,   v21.8h
+        sub             v22.8h,  v6.8h,   v22.8h
+        sqrdmulh        v16.8h,  v16.8h,  v24.8h  // ((a-b)*-m + 32) >> 6
+        sqrdmulh        v17.8h,  v17.8h,  v25.8h
+        sqrdmulh        v18.8h,  v18.8h,  v26.8h
+        sqrdmulh        v20.8h,  v20.8h,  v24.8h
+        sqrdmulh        v21.8h,  v21.8h,  v25.8h
+        sqrdmulh        v22.8h,  v22.8h,  v26.8h
+        add             v0.8h,   v0.8h,   v16.8h
+        add             v1.8h,   v1.8h,   v17.8h
+        add             v2.8h,   v2.8h,   v18.8h
+        add             v4.8h,   v4.8h,   v20.8h
+        add             v5.8h,   v5.8h,   v21.8h
+        add             v6.8h,   v6.8h,   v22.8h
+        st1             {v0.8h, v1.8h, v2.8h}, [x0], x1
+        st1             {v4.8h, v5.8h, v6.8h}, [x8], x1
+        b.gt            32b
+        ret
+L(blend_v_tbl):
+        .hword L(blend_v_tbl) - 320b
+        .hword L(blend_v_tbl) - 160b
+        .hword L(blend_v_tbl) -  80b
+        .hword L(blend_v_tbl) -  40b
+        .hword L(blend_v_tbl) -  20b
+endfunc
+
+
 // This has got the same signature as the put_8tap functions,
 // and assumes that x9 is set to (clz(w)-24).
 function put_neon
