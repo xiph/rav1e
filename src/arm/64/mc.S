@@ -431,7 +431,7 @@ function blend_8bpc_neon, export=1
         sub             x6,  x6,  w3,  uxtw
         movi            v4.16b,  #64
         add             x8,  x0,  x1
-        lsl             w1,  w1,  #1
+        lsl             x1,  x1,  #1
         br              x6
 4:
         ld1             {v2.8b},     [x5],  #8
