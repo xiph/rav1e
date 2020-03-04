@@ -709,8 +709,8 @@ function blend_v_8bpc_neon, export=1
         ret
 40:
         ld1r            {v0.2s},   [x5]
+        sub             x1,  x1,  #2
         sub             v1.8b,   v4.8b,   v0.8b
-        sub             x1,  x1,  #3
 4:
         ld1             {v2.8b},   [x2],  #8
         ld1             {v3.s}[0],   [x0]
@@ -721,16 +721,14 @@ function blend_v_8bpc_neon, export=1
         rshrn           v5.8b,   v5.8h,   #6
         st1             {v5.h}[0],   [x0],  #2
         st1             {v5.h}[2],   [x8],  #2
-        st1             {v5.b}[2],   [x0],  #1
-        st1             {v5.b}[6],   [x8],  #1
-        add             x0,  x0,  x1
-        add             x8,  x8,  x1
+        st1             {v5.b}[2],   [x0],  x1
+        st1             {v5.b}[6],   [x8],  x1
         b.gt            4b
         ret
 80:
         ld1r            {v0.2d},   [x5]
+        sub             x1,  x1,  #4
         sub             v1.16b,  v4.16b,  v0.16b
-        sub             x1,  x1,  #6
 8:
         ld1             {v2.16b},  [x2],  #16
         ld1             {v3.d}[0],   [x0]
@@ -744,16 +742,14 @@ function blend_v_8bpc_neon, export=1
         rshrn2          v7.16b, v6.8h,  #6
         st1             {v7.s}[0],   [x0],  #4
         st1             {v7.s}[2],   [x8],  #4
-        st1             {v7.h}[2],   [x0],  #2
-        st1             {v7.h}[6],   [x8],  #2
-        add             x0,  x0,  x1
-        add             x8,  x8,  x1
+        st1             {v7.h}[2],   [x0],  x1
+        st1             {v7.h}[6],   [x8],  x1
         b.gt            8b
         ret
 160:
         ld1             {v0.16b},  [x5]
+        sub             x1,  x1,  #8
         sub             v2.16b,  v4.16b,  v0.16b
-        sub             x1,  x1,  #12
 16:
         ld1             {v5.16b,  v6.16b},  [x2],  #32
         ld1             {v7.16b},  [x0]
@@ -773,17 +769,15 @@ function blend_v_8bpc_neon, export=1
         rshrn2          v22.16b, v21.8h,  #6
         st1             {v19.8b},  [x0],  #8
         st1             {v22.8b},  [x8],  #8
-        st1             {v19.s}[2],  [x0],  #4
-        st1             {v22.s}[2],  [x8],  #4
-        add             x0,  x0,  x1
-        add             x8,  x8,  x1
+        st1             {v19.s}[2],  [x0],  x1
+        st1             {v22.s}[2],  [x8],  x1
         b.gt            16b
         ret
 320:
         ld1             {v0.16b,  v1.16b},  [x5]
+        sub             x1,  x1,  #16
         sub             v2.16b,  v4.16b,  v0.16b
-        sub             v3.16b,  v4.16b,  v1.16b
-        sub             x1,  x1,  #24
+        sub             v3.8b,   v4.8b,   v1.8b
 32:
         ld1             {v16.16b, v17.16b, v18.16b, v19.16b}, [x2],  #64
         ld1             {v5.16b,  v6.16b},  [x0]
@@ -795,30 +789,22 @@ function blend_v_8bpc_neon, export=1
         umlal2          v23.8h,  v5.16b,  v2.16b
         umull           v28.8h,  v17.8b,  v1.8b
         umlal           v28.8h,  v6.8b,   v3.8b
-        umull2          v29.8h,  v17.16b, v1.16b
-        umlal2          v29.8h,  v6.16b,  v3.16b
         umull           v30.8h,  v18.8b,  v0.8b
         umlal           v30.8h,  v20.8b,  v2.8b
         umull2          v31.8h,  v18.16b, v0.16b
         umlal2          v31.8h,  v20.16b, v2.16b
         umull           v25.8h,  v19.8b,  v1.8b
         umlal           v25.8h,  v21.8b,  v3.8b
-        umull2          v26.8h,  v19.16b, v1.16b
-        umlal2          v26.8h,  v21.16b, v3.16b
         rshrn           v24.8b,  v22.8h,  #6
         rshrn2          v24.16b, v23.8h,  #6
         rshrn           v28.8b,  v28.8h,  #6
-        rshrn2          v28.16b, v29.8h,  #6
         rshrn           v30.8b,  v30.8h,  #6
         rshrn2          v30.16b, v31.8h,  #6
         rshrn           v27.8b,  v25.8h,  #6
-        rshrn2          v27.16b, v26.8h,  #6
         st1             {v24.16b}, [x0],  #16
         st1             {v30.16b}, [x8],  #16
-        st1             {v28.8b},  [x0],  #8
-        st1             {v27.8b},  [x8],  #8
-        add             x0,  x0,  x1
-        add             x8,  x8,  x1
+        st1             {v28.8b},  [x0],  x1
+        st1             {v27.8b},  [x8],  x1
         b.gt            32b
         ret
 L(blend_v_tbl):
