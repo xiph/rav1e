@@ -447,7 +447,7 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     PUSH           r11
 %if %2 == 4
  %assign regs_used 12
- %if WIN64
+ %if STACK_ALIGNMENT < 32
     PUSH  r%+regs_used
   %assign regs_used regs_used+1
  %endif
@@ -459,24 +459,24 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     movu    [rsp+0x10], m0
     movu    [rsp+0x28], m1
     movu    [rsp+0x40], m2
-%else
+%elif %1 == 4
     PUSH           r12
- %if %1 == 4
-  %assign regs_used 13
-  %if WIN64
+ %assign regs_used 13
+ %if STACK_ALIGNMENT < 32
     PUSH  r%+regs_used
    %assign regs_used regs_used+1
-  %endif
+ %endif
     ALLOC_STACK 8*2+%1*%2*1, 16
     pmovzxwd        m0, [leftq]
     mova    [rsp+0x10], m0
- %else
+%else
+    PUSH           r12
     PUSH           r13
-  %assign regs_used 14
-  %if WIN64
+ %assign regs_used 14
+ %if STACK_ALIGNMENT < 32
     PUSH  r%+regs_used
-   %assign regs_used regs_used+1
-  %endif
+  %assign regs_used regs_used+1
+ %endif
     ALLOC_STACK 8*2+%1*%2*2+32, 16
     lea            r11, [strideq*3]
     movu           xm4, [dstq+strideq*2]
@@ -490,7 +490,6 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     mova    [rsp+0x50], m2
     mova    [rsp+0x70], m3
     mova    [rsp+0x90], m4
- %endif
 %endif
 
  DEFINE_ARGS dst, stride, left, top, pri, secdmp, zero, pridmp, damping
@@ -1256,7 +1255,7 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
 %else
  %assign regs_used 9
 %endif
-%if WIN64
+%if STACK_ALIGNMENT < 32
     PUSH  r%+regs_used
  %assign regs_used regs_used+1
 %endif
