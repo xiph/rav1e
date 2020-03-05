@@ -8,17 +8,15 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::error::Error;
-
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum CliError {
-  #[error(display = "{}: {}", msg, io)]
+  #[error("{msg}: {io}")]
   Io { msg: String, io: std::io::Error },
-  #[error(display = "{}: {:?}", msg, status)]
+  #[error("{msg}: {status:?}")]
   Enc { msg: String, status: rav1e::EncoderStatus },
-  #[error(display = "{}: {}", msg, status)]
+  #[error("{msg}: {status}")]
   Config { msg: String, status: rav1e::InvalidConfig },
-  #[error(display = "Cannot parse option `{}`: {}", opt, err)]
+  #[error("Cannot parse option `{opt}`: {err}")]
   ParseInt { opt: String, err: std::num::ParseIntError },
 }
 
@@ -50,7 +48,7 @@ impl ToError for std::num::ParseIntError {
   }
 }
 
-pub fn print_error(e: &dyn Error) {
+pub fn print_error(e: &dyn std::error::Error) {
   error!("{}", e);
   let mut cause = e.source();
   while let Some(e) = cause {

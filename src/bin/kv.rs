@@ -1,5 +1,4 @@
 #![allow(unused_variables)]
-use err_derive::Error;
 use serde::{ser, Serialize, Serializer};
 
 use std::fmt;
@@ -10,7 +9,7 @@ struct KVString {
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Error)]
 enum Error {
-  #[error(display = "unsupported")]
+  #[error("unsupported")]
   Unsupported,
 }
 

@@ -15,7 +15,7 @@ use crate::util::Pixel;
 use std::fmt;
 use std::sync::Arc;
 
-use err_derive::*;
+use thiserror::*;
 
 // TODO: use the num crate?
 /// A rational number.
@@ -116,7 +116,7 @@ pub enum EncoderStatus {
   /// enabled.
   ///
   /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
-  #[error(display = "need more data")]
+  #[error("need more data")]
   NeedMoreData,
   /// There are enough frames in the queue.
   ///
@@ -124,7 +124,7 @@ pub enum EncoderStatus {
   /// after the encoder has been flushed.
   ///
   /// [`Context::send_frame()`]: struct.Context.html#method.send_frame
-  #[error(display = "enough data")]
+  #[error("enough data")]
   EnoughData,
   /// The encoder has already produced the number of frames requested.
   ///
@@ -132,13 +132,13 @@ pub enum EncoderStatus {
   /// been processed or the frame limit had been reached.
   ///
   /// [`Context::receive_packet()`]: struct.Context.html#method.receive_packet
-  #[error(display = "limit reached")]
+  #[error("limit reached")]
   LimitReached,
   /// A frame had been encoded but not emitted yet.
-  #[error(display = "encoded")]
+  #[error("encoded")]
   Encoded,
   /// Generic fatal error.
-  #[error(display = "failure")]
+  #[error("failure")]
   Failure,
   /// A frame was encoded in the first pass of a 2-pass encode, but its stats
   /// data was not retrieved with [`Context::twopass_out()`], or not enough
@@ -146,7 +146,7 @@ pub enum EncoderStatus {
   /// the next frame.
   ///
   /// [`Context::twopass_out()`]: struct.Context.html#method.twopass_out
-  #[error(display = "not ready")]
+  #[error("not ready")]
   NotReady,
 }
 
