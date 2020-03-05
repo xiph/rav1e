@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use err_derive::Error;
 use itertools::Itertools;
 use num_derive::*;
+use thiserror::Error;
 
 use crate::api::color::*;
 use crate::api::Rational;
@@ -622,17 +622,13 @@ impl fmt::Display for SGRComplexityLevel {
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
 pub enum InvalidConfig {
   /// The width is invalid.
-  #[error(display = "invalid width {} (expected >= 16, <= 32767)", _0)]
+  #[error("invalid width {0} (expected >= 16, <= 32767)")]
   InvalidWidth(usize),
   /// The height is invalid.
-  #[error(display = "invalid height {} (expected >= 16, <= 32767)", _0)]
+  #[error("invalid height {0} (expected >= 16, <= 32767)")]
   InvalidHeight(usize),
   /// RDO lookahead frame count is invalid.
-  #[error(
-    display = "invalid rdo lookahead frames {} (expected <= {})",
-    actual,
-    max
-  )]
+  #[error("invalid rdo lookahead frames {actual} (expected <= {max})")]
   InvalidRdoLookaheadFrames {
     /// The actual value.
     actual: usize,
@@ -640,11 +636,7 @@ pub enum InvalidConfig {
     max: usize,
   },
   /// Maximal keyframe interval is invalid.
-  #[error(
-    display = "invalid max keyframe interval {} (expected <= {})",
-    actual,
-    max
-  )]
+  #[error("invalid max keyframe interval {actual} (expected <= {max})")]
   InvalidMaxKeyFrameInterval {
     /// The actual value.
     actual: u64,
@@ -652,17 +644,13 @@ pub enum InvalidConfig {
     max: u64,
   },
   /// Tile columns is invalid.
-  #[error(display = "invalid tile cols {} (expected power of 2)", _0)]
+  #[error("invalid tile cols {0} (expected power of 2)")]
   InvalidTileCols(usize),
   /// Tile rows is invalid.
-  #[error(display = "invalid tile rows {} (expected power of 2)", _0)]
+  #[error("invalid tile rows {0} (expected power of 2)")]
   InvalidTileRows(usize),
   /// Framerate numerator is invalid.
-  #[error(
-    display = "invalid framerate numerator {} (expected > 0, <= {})",
-    actual,
-    max
-  )]
+  #[error("invalid framerate numerator {actual} (expected > 0, <= {max})")]
   InvalidFrameRateNum {
     /// The actual value.
     actual: u64,
@@ -670,11 +658,7 @@ pub enum InvalidConfig {
     max: u64,
   },
   /// Framerate denominator is invalid.
-  #[error(
-    display = "invalid framerate denominator {} (expected > 0, <= {})",
-    actual,
-    max
-  )]
+  #[error("invalid framerate denominator {actual} (expected > 0, <= {max})")]
   InvalidFrameRateDen {
     /// The actual value.
     actual: u64,
@@ -682,15 +666,11 @@ pub enum InvalidConfig {
     max: u64,
   },
   /// Reservoir frame delay is invalid.
-  #[error(
-    display = "invalid reservoir frame delay {} (expected >= 12, <= 131072)",
-    _0
-  )]
+  #[error("invalid reservoir frame delay {0} (expected >= 12, <= 131072)")]
   InvalidReservoirFrameDelay(i32),
   /// Reservoir frame delay is invalid.
   #[error(
-    display = "invalid switch frame interval {} (must only be used with low latency mode)",
-    _0
+    "invalid switch frame interval {0} (must only be used with low latency mode)"
   )]
   InvalidSwitchFrameInterval(u64),
 
@@ -699,7 +679,7 @@ pub enum InvalidConfig {
   // This can be replaced with #[non_exhaustive] when it's stable:
   // https://github.com/rust-lang/rust/issues/44109
   #[doc(hidden)]
-  #[error(display = "")]
+  #[error("")]
   __NonExhaustive,
 }
 
