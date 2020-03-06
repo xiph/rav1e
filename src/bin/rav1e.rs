@@ -95,14 +95,15 @@ impl<D: Decoder> Source<D> {
 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
+//
+// `Ok(None)` indicates that the encode is finished.
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
   buffer: &mut [u8], buf_pos: &mut usize,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
-) -> Result<Option<Vec<FrameSummary>>, CliError> {
+) -> Result<Option<FrameSummary>, CliError> {
   let y4m_details = source.input.get_video_details();
-  let mut frame_summaries = Vec::new();
   let mut pass1file = pass1file;
   let mut pass2file = pass2file;
   // Submit first pass data to pass 2.
@@ -142,54 +143,60 @@ fn process_frame<T: Pixel, D: Decoder>(
     }
   }
 
-  let pkt_wrapped = ctx.receive_packet();
-  match pkt_wrapped {
-    Ok(pkt) => {
-      output_file.write_frame(
-        pkt.input_frameno as u64,
-        pkt.data.as_ref(),
-        pkt.frame_type,
-      );
-      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
-        (y4m_enc.as_mut(), &pkt.rec)
-      {
-        write_y4m_frame(y4m_enc_uw, rec, y4m_details);
-      }
-      frame_summaries.push(pkt.into());
-    }
-    Err(EncoderStatus::NeedMoreData) => {
-      source.read_frame(ctx, y4m_details);
-    }
-    Err(EncoderStatus::EnoughData) => {
-      unreachable!();
-    }
-    Err(EncoderStatus::LimitReached) => {
-      if let Some(passfile) = pass1file.as_mut() {
-        if let Some(outbuf) = ctx.twopass_out() {
-          // The last block of data we get is the summary data that needs to go
-          //  at the start of the pass file.
-          // Seek to the start so we can write it there.
-          passfile
-            .seek(std::io::SeekFrom::Start(0))
-            .expect("Unable to seek in two-pass data file.");
-          passfile
-            .write_all(outbuf)
-            .expect("Unable to write to two-pass data file.");
+  loop {
+    let pkt_wrapped = ctx.receive_packet();
+    match pkt_wrapped {
+      Ok(pkt) => {
+        output_file.write_frame(
+          pkt.input_frameno as u64,
+          pkt.data.as_ref(),
+          pkt.frame_type,
+        );
+        if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+          (y4m_enc.as_mut(), &pkt.rec)
+        {
+          write_y4m_frame(y4m_enc_uw, rec, y4m_details);
         }
+        return Ok(Some(pkt.into()));
       }
-      return Ok(None);
+      Err(EncoderStatus::NeedMoreData) => {
+        // Read another frame then try receive_packet again
+        source.read_frame(ctx, y4m_details);
+        continue;
+      }
+      Err(EncoderStatus::EnoughData) => {
+        unreachable!();
+      }
+      Err(EncoderStatus::LimitReached) => {
+        if let Some(passfile) = pass1file.as_mut() {
+          if let Some(outbuf) = ctx.twopass_out() {
+            // The last block of data we get is the summary data that needs to go
+            //  at the start of the pass file.
+            // Seek to the start so we can write it there.
+            passfile
+              .seek(std::io::SeekFrom::Start(0))
+              .expect("Unable to seek in two-pass data file.");
+            passfile
+              .write_all(outbuf)
+              .expect("Unable to write to two-pass data file.");
+          }
+        }
+        // Indicate that we are finished with the encode
+        return Ok(None);
+      }
+      e @ Err(EncoderStatus::Failure) => {
+        let _ = e.map_err(|e| e.context("Failed to encode video"))?;
+      }
+      e @ Err(EncoderStatus::NotReady) => {
+        let _ = e.map_err(|e| {
+          e.context("Mismanaged handling of two-pass stats data")
+        })?;
+      }
+      Err(EncoderStatus::Encoded) => {
+        // Safely skip to the next attempt of receive_packet
+      }
     }
-    e @ Err(EncoderStatus::Failure) => {
-      let _ = e.map_err(|e| e.context("Failed to encode video"))?;
-    }
-    e @ Err(EncoderStatus::NotReady) => {
-      let _ = e.map_err(|e| {
-        e.context("Mismanaged handling of two-pass stats data")
-      })?;
-    }
-    Err(EncoderStatus::Encoded) => {}
   }
-  Ok(Some(frame_summaries))
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
@@ -226,15 +233,13 @@ fn do_encode<T: Pixel, D: Decoder>(
     y4m_enc.as_mut(),
   )? {
     if verbose != Verbose::Quiet {
-      for frame in frame_info {
-        progress.add_frame(frame.clone());
-        if verbose == Verbose::Verbose {
-          info!("{} - {}", frame, progress);
-        } else {
-          // Print a one-line progress indicator that overrides itself with every update
-          eprint!("\r{}                    ", progress);
-        };
-      }
+      progress.add_frame(frame_info.clone());
+      if verbose == Verbose::Verbose {
+        info!("{} - {}", frame_info, progress);
+      } else {
+        // Print a one-line progress indicator that overrides itself with every update
+        eprint!("\r{}                    ", progress);
+      };
 
       output.flush().unwrap();
     }
