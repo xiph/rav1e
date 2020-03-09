@@ -92,6 +92,11 @@ version = "0.7.0"
 features = ["profiling_enabled"]
 optional = true
 
+[dependencies.mimalloc]
+version = "0.1"
+default-features = false
+optional = true
+
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
 # Vendored to remove the dependency on `failure`,
