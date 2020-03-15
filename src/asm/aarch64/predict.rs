@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -33,16 +33,16 @@ macro_rules! decl_angular_ipred_fn {
 }
 
 decl_angular_ipred_fn! {
-  rav1e_ipred_dc_neon,
-  rav1e_ipred_dc_128_neon,
-  rav1e_ipred_dc_left_neon,
-  rav1e_ipred_dc_top_neon,
-  rav1e_ipred_v_neon,
-  rav1e_ipred_h_neon,
-  rav1e_ipred_smooth_neon,
-  rav1e_ipred_smooth_v_neon,
-  rav1e_ipred_smooth_h_neon,
-  rav1e_ipred_paeth_neon
+  rav1e_ipred_dc_8bpc_neon,
+  rav1e_ipred_dc_128_8bpc_neon,
+  rav1e_ipred_dc_left_8bpc_neon,
+  rav1e_ipred_dc_top_8bpc_neon,
+  rav1e_ipred_v_8bpc_neon,
+  rav1e_ipred_h_8bpc_neon,
+  rav1e_ipred_smooth_8bpc_neon,
+  rav1e_ipred_smooth_v_8bpc_neon,
+  rav1e_ipred_smooth_h_8bpc_neon,
+  rav1e_ipred_paeth_8bpc_neon
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -60,10 +60,10 @@ macro_rules! decl_cfl_pred_fn {
 }
 
 decl_cfl_pred_fn! {
-  rav1e_ipred_cfl_neon,
-  rav1e_ipred_cfl_128_neon,
-  rav1e_ipred_cfl_left_neon,
-  rav1e_ipred_cfl_top_neon
+  rav1e_ipred_cfl_8bpc_neon,
+  rav1e_ipred_cfl_128_8bpc_neon,
+  rav1e_ipred_cfl_left_8bpc_neon,
+  rav1e_ipred_cfl_top_8bpc_neon
 }
 
 #[inline(always)]
@@ -97,37 +97,41 @@ pub fn dispatch_predict_intra<T: Pixel>(
       match mode {
         PredictionMode::DC_PRED => {
           (match variant {
-            PredictionVariant::NONE => rav1e_ipred_dc_128_neon,
-            PredictionVariant::LEFT => rav1e_ipred_dc_left_neon,
-            PredictionVariant::TOP => rav1e_ipred_dc_top_neon,
-            PredictionVariant::BOTH => rav1e_ipred_dc_neon,
+            PredictionVariant::NONE => rav1e_ipred_dc_128_8bpc_neon,
+            PredictionVariant::LEFT => rav1e_ipred_dc_left_8bpc_neon,
+            PredictionVariant::TOP => rav1e_ipred_dc_top_8bpc_neon,
+            PredictionVariant::BOTH => rav1e_ipred_dc_8bpc_neon,
           })(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::V_PRED if angle == 90 => {
-          rav1e_ipred_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_v_8bpc_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::H_PRED if angle == 180 => {
-          rav1e_ipred_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_h_8bpc_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::SMOOTH_PRED => {
-          rav1e_ipred_smooth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_smooth_8bpc_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::SMOOTH_V_PRED => {
-          rav1e_ipred_smooth_v_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_smooth_v_8bpc_neon(
+            dst_ptr, stride, edge_ptr, w, h, angle,
+          );
         }
         PredictionMode::SMOOTH_H_PRED => {
-          rav1e_ipred_smooth_h_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_smooth_h_8bpc_neon(
+            dst_ptr, stride, edge_ptr, w, h, angle,
+          );
         }
         PredictionMode::PAETH_PRED => {
-          rav1e_ipred_paeth_neon(dst_ptr, stride, edge_ptr, w, h, angle);
+          rav1e_ipred_paeth_8bpc_neon(dst_ptr, stride, edge_ptr, w, h, angle);
         }
         PredictionMode::UV_CFL_PRED => {
           let ac_ptr = ac.as_ptr() as *const _;
           (match variant {
-            PredictionVariant::NONE => rav1e_ipred_cfl_128_neon,
-            PredictionVariant::LEFT => rav1e_ipred_cfl_left_neon,
-            PredictionVariant::TOP => rav1e_ipred_cfl_top_neon,
-            PredictionVariant::BOTH => rav1e_ipred_cfl_neon,
+            PredictionVariant::NONE => rav1e_ipred_cfl_128_8bpc_neon,
+            PredictionVariant::LEFT => rav1e_ipred_cfl_left_8bpc_neon,
+            PredictionVariant::TOP => rav1e_ipred_cfl_top_8bpc_neon,
+            PredictionVariant::BOTH => rav1e_ipred_cfl_8bpc_neon,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
         _ => call_rust(dst),
