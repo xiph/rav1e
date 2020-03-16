@@ -765,10 +765,6 @@ L(ipred_dc_h64):
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w64):
-        vmov.8          q1,  q0
-        vmov.8          q2,  q0
-        vmov.8          q3,  q0
-2:
         add             r2,  r2,  #1
         vld1.8          {d2,  d3,  d4,  d5},  [r2]!
         vadd.s16        d0,  d0,  d30

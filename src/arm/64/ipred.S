@@ -640,10 +640,6 @@ L(ipred_dc_h64):
         add             v0.4h,   v0.4h,   v2.4h
         br              x3
 L(ipred_dc_w64):
-        mov             v1.16b,  v0.16b
-        mov             v2.16b,  v0.16b
-        mov             v3.16b,  v0.16b
-2:
         add             x2,  x2,  #1
         ld1             {v1.16b, v2.16b, v3.16b, v4.16b}, [x2]
         add             v0.4h,   v0.4h,   v16.4h
