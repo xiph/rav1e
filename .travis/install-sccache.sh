@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-SCCACHE_VERSION="0.2.10"
+SCCACHE_VERSION="0.2.13"
 
 export RUSTC_WRAPPER=sccache
 
