@@ -34,7 +34,7 @@ use crate::util::*;
 
 use arrayvec::*;
 use std::default::Default;
-use std::ops::{Index, IndexMut};
+use std::ops::{Add, Index, IndexMut};
 use std::*;
 
 pub const PLANES: usize = 3;
@@ -1244,6 +1244,17 @@ impl SuperBlockOffset {
   }
 }
 
+impl Add for SuperBlockOffset {
+  type Output = Self;
+  #[inline]
+  fn add(self, rhs: Self) -> Self::Output {
+    Self {
+      x: self.x + rhs.x,
+      y: self.y + rhs.y,
+    }
+  }
+}
+
 impl PlaneSuperBlockOffset {
   /// Offset of a block inside the current superblock.
   #[inline]
@@ -1260,6 +1271,14 @@ impl PlaneSuperBlockOffset {
   }
 }
 
+impl Add for PlaneSuperBlockOffset {
+  type Output = Self;
+  #[inline]
+  fn add(self, rhs: Self) -> Self::Output {
+    PlaneSuperBlockOffset ( self.0 + rhs.0 )
+  }
+}
+
 impl TileSuperBlockOffset {
   /// Offset of a block inside the current superblock.
   #[inline]
@@ -1273,6 +1292,14 @@ impl TileSuperBlockOffset {
   #[inline]
   pub const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     self.0.plane_offset(plane)
+  }
+}
+
+impl Add for TileSuperBlockOffset {
+  type Output = Self;
+  #[inline]
+  fn add(self, rhs: Self) -> Self::Output {
+    TileSuperBlockOffset ( self.0 + rhs.0 )
   }
 }
 
