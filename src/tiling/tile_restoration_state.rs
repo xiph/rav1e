@@ -212,6 +212,20 @@ macro_rules! tile_restoration_plane_common {
           None
         }
       }
+      
+      pub fn restoration_unit_offset(&self, base: TileSuperBlockOffset,
+                                     offset: TileSuperBlockOffset, stretch: bool)
+        -> Option<(usize, usize)> {
+        let base_option = self.restoration_unit_index(base, stretch);
+        let delta_option = self.restoration_unit_index(base + offset, stretch);
+        if let (Some((base_x, base_y)), Some((delta_x, delta_y))) =
+          (base_option, delta_option)
+        {
+          Some ((delta_x - base_x, delta_y - base_y))
+        } else {
+          None
+        }
+      }
 
       pub const fn restoration_unit_countable(&self, x: usize, y: usize) -> usize {
         y * self.units.cols + x
