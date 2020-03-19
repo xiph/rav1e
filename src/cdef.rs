@@ -331,73 +331,97 @@ pub fn cdef_analyze_superblock<T: Pixel>(
   dir
 }
 
-pub fn cdef_sb_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, sb_w: usize, sb_h: usize, tile: &Tile<'_, T>,
+// Allocates and returns a new Frame with its own memory that is
+// patterned on the decimation of the Frame backing the passed-in
+// Tile.  The width and hight are in units of 8-pixel (undecimated)
+// blocks, the minimum working unit of the CDEF filters.
+pub fn cdef_block8_frame<T: Pixel>(
+  w_8: usize, h_8: usize, pattern_tile: &Tile<'_, T>,
 ) -> Frame<u16> {
-  let sb_h_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_w;
-  let sb_v_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_h;
-
   Frame {
     planes: [
       {
-        let &PlaneConfig { xdec, ydec, .. } = tile.planes[0].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
+        let &PlaneConfig { xdec, ydec, .. } = pattern_tile.planes[0].plane_cfg;
+        Plane::new(w_8 << 3 >> xdec, h_8 << 3 >> ydec, xdec, ydec, 0, 0)
       },
       {
-        let &PlaneConfig { xdec, ydec, .. } = tile.planes[1].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
+        let &PlaneConfig { xdec, ydec, .. } = pattern_tile.planes[1].plane_cfg;
+        Plane::new(w_8 << 3 >> xdec, h_8 << 3 >> ydec, xdec, ydec, 0, 0)
       },
       {
-        let &PlaneConfig { xdec, ydec, .. } = tile.planes[2].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, 0, 0)
+        let &PlaneConfig { xdec, ydec, .. } = pattern_tile.planes[2].plane_cfg;
+        Plane::new(w_8 << 3 >> xdec, h_8 << 3 >> ydec, xdec, ydec, 0, 0)
       },
     ],
   }
 }
 
-pub fn cdef_sb_padded_frame_copy<T: Pixel, U: Pixel>(
-  fi: &FrameInvariants<T>, sbo: TileSuperBlockOffset, sb_w: usize,
-  sb_h: usize, tile: &Tile<'_, U>, pad: usize,
+// Allocates and returns a new Frame with its own memory that is
+// patterned on the decimation of the Frame backing the passed-in
+// Tile.  The width and hight are in units of 8-pixel (undecimated)
+// blocks, the minimum working unit of the CDEF filters, and the
+// padding is in units of individual pixels.  The full padding is
+// applied even to decimated planes.  The contents of the tile,
+// beginning at the passed in superblock offset, are copied into the
+// new Frame.  The padding is also filled from the passed in Tile,
+// where pixels are available.  Those portions of the new Frame that
+// do not overlap visible pixels int he passed in tile are filled with
+// the CDEF_VERY_LARGE flag.
+pub fn cdef_padded_tile_copy<T: Pixel>(
+  tile: &Tile<'_, T>,
+  sbo: TileSuperBlockOffset,
+  w_8: usize,
+  h_8: usize,
+  pad: usize,
 ) -> Frame<u16> {
   let ipad = pad as isize;
-  let sb_h_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_w;
-  let sb_v_size =
-    if fi.sequence.use_128x128_superblock { 128 } else { 64 } * sb_h;
-  let mut out = Frame {
-    planes: {
-      let new_plane = |pli: usize| {
-        let &PlaneConfig { xdec, ydec, .. } = tile.planes[pli].plane_cfg;
-        Plane::new(sb_h_size >> xdec, sb_v_size >> ydec, xdec, ydec, pad, pad)
-      };
-      [new_plane(0), new_plane(1), new_plane(2)]
-    },
+  let mut out = {
+    Frame {
+      planes: {
+        let new_plane = |pli: usize| {
+          let &PlaneConfig { xdec, ydec, .. } = tile.planes[pli].plane_cfg;
+          Plane::new(
+            w_8 << 3 >> xdec,
+            h_8 << 3 >> ydec,
+            xdec,
+            ydec,
+            pad,
+            pad,)
+        };
+        [new_plane(0), new_plane(1), new_plane(2)]
+      },
+    }
   };
   // Copy data into padded frame
-  for p in 0..3 {
-    let &PlaneConfig { xdec, ydec, .. } = tile.planes[p].plane_cfg;
-    let &Rect { width, height, .. } = tile.planes[p].rect();
-    let offset = sbo.plane_offset(tile.planes[p].plane_cfg);
+  for pli in 0..3 {
+    let PlaneOffset{x, y} = sbo.plane_offset(&tile.planes[pli].plane_cfg);
+    let in_width = tile.planes[pli].rect().width as isize;
+    let in_height = tile.planes[pli].rect().height as isize;
+    let out_width = out.planes[pli].cfg.width;
+    let out_height = out.planes[pli].cfg.height;
+    // we copy pixels from the input tile for padding, but don't
+    // exceed the bounds of the tile (do not contend with other
+    // threads!)
     let mut out_region =
-      out.planes[p].region_mut(Area::StartingAt { x: -ipad, y: -ipad });
-    for y in 0..((sb_v_size >> ydec) + pad * 2) as isize {
-      let out_row = &mut out_region[y as usize];
-      if offset.y + y < ipad || offset.y + y >= height as isize + ipad {
-        // above or below the frame, fill with flag
-        for x in 0..(sb_h_size >> xdec) + pad * 2 {
-          out_row[x] = CDEF_VERY_LARGE;
+      out.planes[pli].region_mut(Area::StartingAt { x: -ipad, y: -ipad });
+    for yi in 0..(out_height + pad * 2) as isize {
+      let out_row = &mut out_region[yi as usize];
+      if y + yi - ipad < 0 || y + yi - ipad >= in_height as isize {
+        // above or below the visible frame, fill with flag.
+        // This flag needs to go away (since it forces us to use a 16-bit range)
+        // but that requires some deep changes to the filtering code
+        // and buffer offsetting in loop filter RDO
+        for xi in 0..out_width + pad * 2 {
+          out_row[xi] = CDEF_VERY_LARGE;
         }
       } else {
-        let in_plane_region = &tile.planes[p];
-        let in_row = &in_plane_region[(offset.y - ipad + y) as usize];
-        for x in 0..(sb_h_size >> xdec) as isize + ipad * 2 {
-          if offset.x + x >= ipad && offset.x + x < width as isize + ipad {
-            out_row[x as usize] =
-              u16::cast_from(in_row[(offset.x + x - ipad) as usize]);
+        let in_row = &tile.planes[pli][(y + yi - ipad) as usize];
+        for xi in 0..out_width as isize + ipad * 2 {
+          if x + xi - ipad >= 0 && x + xi - ipad < in_width as isize {
+            out_row[xi as usize] =
+              u16::cast_from(in_row[(x + xi - ipad) as usize]);
           } else {
-            out_row[x as usize] = CDEF_VERY_LARGE;
+            out_row[xi as usize] = CDEF_VERY_LARGE;
           }
         }
       }
@@ -534,8 +558,8 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
   }
 }
 
-// Input to this process is the array CurrFrame of reconstructed samples.
-// Output from this process is the array CdefFrame containing deringed samples.
+// Input to this process is the Frame rec of reconstructed samples.
+// Output from this process is the Frame rec containing deringed samples.
 // The purpose of CDEF is to perform deringing based on the detected direction of blocks.
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
@@ -685,12 +709,17 @@ mod test {
 
   #[test]
   fn test_padded_frame_copy() {
-    let (frame, fi) = create_frame();
+    let (frame, _fi) = create_frame();
     let tile = frame.as_tile();
     // a super-block in the middle (not near frame borders)
-    let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 1, y: 2 });
     let pad = 2;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, 1, &tile, pad);
+    let padded_frame = cdef_padded_tile_copy(
+      &tile,
+      TileSuperBlockOffset(SuperBlockOffset{x: 1, y: 2}),
+      64 >> 3,
+      64 >> 3,
+      pad,
+    );
 
     // index (0, 0) of padded_frame should match index (64, 128) of the source
     // frame, have 2 cols and rows padding from the source frame on all sides,
@@ -716,12 +745,17 @@ mod test {
 
   #[test]
   fn test_padded_frame_copy_outside_input() {
-    let (frame, fi) = create_frame();
+    let (frame, _fi) = create_frame();
     let tile = frame.as_tile();
     // the top-right super-block (near top and right frame borders)
-    let sbo = TileSuperBlockOffset(SuperBlockOffset { x: 7, y: 0 });
     let pad = 2;
-    let padded_frame = cdef_sb_padded_frame_copy(&fi, sbo, 1, 1, &tile, pad);
+    let padded_frame = cdef_padded_tile_copy(
+      &tile,
+      TileSuperBlockOffset(SuperBlockOffset{x: 7, y: 0}),
+      64 >> 3,
+      64 >> 3,
+      pad,
+    );
 
     // index (0, 0) of padded_frame should match index (448, 0) of the source
     // frame, have 2 cols/rows from the source frame left and below, 2

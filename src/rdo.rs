@@ -44,7 +44,6 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
-use std::cmp;
 use std::fmt;
 use std::vec::Vec;
 
@@ -1907,15 +1906,26 @@ pub fn rdo_loop_decision<T: Pixel>(
     lru_h[pli] = sb_h / (1 << sb_v_shift);
   }
 
-  // The width/height determinations may be calling for us to compute
-  // over superblocks that do not actually exist in the frame (off the
-  // right or lower edge).  Trim sb width/height down to actual
-  // superblocks.  Note that these last superblocks on the
+  // The superblock width/height determinations may be calling for us
+  // to compute over superblocks that do not actually exist in the
+  // frame (off the right or lower edge).  Trim sb width/height down
+  // to actual superblocks.  Note that these last superblocks on the
   // right/bottom may themselves still span the edge of the frame, but
   // they do hold at least some visible pixels.
 
   sb_w = sb_w.min(ts.sb_width - tile_sbo.0.x);
   sb_h = sb_h.min(ts.sb_height - tile_sbo.0.y);
+
+  // We have need to know the Y visible pixel limits as well (the
+  // sb_w/sb_h figures above can be used to determine how many
+  // allocated pixels, possibly beyond the visible frame, exist).
+
+  let crop_w = fi.width - ((ts.sbo.0.x + tile_sbo.0.x) <<
+                           SUPERBLOCK_TO_PLANE_SHIFT);
+  let crop_h = fi.height - ((ts.sbo.0.y + tile_sbo.0.y) <<
+                            SUPERBLOCK_TO_PLANE_SHIFT);
+  let pixel_w = crop_w.min(sb_w << SUPERBLOCK_TO_PLANE_SHIFT);
+  let pixel_h = crop_h.min(sb_h << SUPERBLOCK_TO_PLANE_SHIFT);
 
   let mut best_index = vec![-1; sb_w * sb_h];
   let mut best_lrf = ArrayVec::<[Vec<RestorationFilter>; 3]>::new();
@@ -1949,7 +1959,13 @@ pub fn rdo_loop_decision<T: Pixel>(
     // a padding of 8 gets us a full block of border.  CDEF
     // only needs 2 pixels, but deblocking is happier with full
     // blocks.
-    cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &const_rec, 8)
+    cdef_padded_tile_copy(
+      &const_rec,
+      tile_sbo,
+      pixel_w + 7 >> 3,
+      pixel_h + 7 >> 3,
+      8,
+    )
   };
 
   // sub-setted region of the TileBlocks for our working frame area
@@ -1967,7 +1983,13 @@ pub fn rdo_loop_decision<T: Pixel>(
   // that over the additional temp buffer (after doing the work needed
   // to allow CDEF opt to work on 8 bit).
   let src_subset = {
-    cdef_sb_padded_frame_copy(fi, tile_sbo, sb_w, sb_h, &ts.input_tile, 0)
+    cdef_padded_tile_copy(
+      &ts.input_tile,
+      tile_sbo,
+      pixel_w + 7 >> 3,
+      pixel_h + 7 >> 3,
+      0,
+    )
   };
   
   if deblock_p {
@@ -1979,7 +2001,9 @@ pub fn rdo_loop_decision<T: Pixel>(
       &rec_subset.as_tile(),
       &src_subset.as_tile(),
       &tileblocks_subset,
-      fi.width, fi.height, fi.sequence.bit_depth
+      crop_w,
+      crop_h,
+      fi.sequence.bit_depth
     );
 
     // Deblock the contents of our reconstruction copy.
@@ -1987,22 +2011,30 @@ pub fn rdo_loop_decision<T: Pixel>(
       // copy ts.deblock because we need to set some of our own values here
       let mut deblock_copy = ts.deblock.clone();
       deblock_copy.levels = deblock_levels;
-      
+
       // finally, deblock the temp frame
       deblock_filter_frame(&mut deblock_copy,
                            &mut rec_subset.as_tile_mut(),
                            &tileblocks_subset,
-                           fi.width, fi.height, fi.sequence.bit_depth);
+                           crop_w,
+                           crop_h,
+                           fi.sequence.bit_depth);
     }
   }
   
   let mut cdef_work = if fi.sequence.enable_cdef {
-    Some(cdef_sb_padded_frame_copy(fi, TileSuperBlockOffset(SuperBlockOffset {x: 0, y: 0}), sb_w, sb_h, &rec_subset.as_tile(), 0))
+    Some(cdef_padded_tile_copy(
+      &rec_subset.as_tile(),
+      TileSuperBlockOffset(SuperBlockOffset{x: 0, y: 0}),
+      pixel_w + 7 >> 3,
+      pixel_h + 7 >> 3,
+      0,
+    ))
   } else {
     None
   };
   let mut lrf_work = if fi.sequence.enable_restoration {
-    Some (cdef_sb_frame(fi, sb_w, sb_h, &ts.rec.as_const()))
+    Some (cdef_block8_frame(pixel_w + 7 >> 3, pixel_h + 7 >> 3, &ts.rec.as_const()))
   } else {
     None
   };
@@ -2043,14 +2075,18 @@ pub fn rdo_loop_decision<T: Pixel>(
       for sby in 0..sb_h {
         for sbx in 0..sb_w {
           let prev_best_index = best_index[sby * sb_w + sbx];
+          let mut best_cost = -1.;
+          let mut best_new_index = -1i8;
+
+          /* SuperBlockOffset of the area we're analyzing relative to the full visible frame */
           let loop_sbo =
             TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+
+          /* SuperBlockOffset of the area we're analyzing relative to the current tile frame */
           let loop_tile_sbo = TileSuperBlockOffset(SuperBlockOffset {
             x: tile_sbo.0.x + sbx,
             y: tile_sbo.0.y + sby,
           });
-          let mut best_cost = -1.;
-          let mut best_new_index = -1i8;
 
           for cdef_index in 0..(1 << fi.cdef_bits) {
             let mut err = ScaledDistortion::zero();
@@ -2071,14 +2107,10 @@ pub fn rdo_loop_decision<T: Pixel>(
                 if fi.sequence.use_128x128_superblock { 128 } else { 64 };
               let xdec = cdef_ref.planes[pli].cfg.xdec;
               let ydec = cdef_ref.planes[pli].cfg.ydec;
-              let width =
-                cmp::min((wh + (1 << xdec >> 1)) >> xdec,
-                         (fi.width>>xdec) -
-                         loop_tile_sbo.plane_offset(&cdef_ref.planes[pli].cfg).x as usize);
-              let height =
-                cmp::min((wh + (1 << ydec >> 1)) >> ydec,
-                         (fi.height>>ydec) -
-                         loop_tile_sbo.plane_offset(&cdef_ref.planes[pli].cfg).y as usize);
+              let width = (wh >> xdec).min((crop_w >> xdec) -
+                                 loop_sbo.plane_offset(&cdef_ref.planes[pli].cfg).x as usize);
+              let height = (wh >> ydec).min((crop_h >> ydec) -
+                                  loop_sbo.plane_offset(&cdef_ref.planes[pli].cfg).y as usize);
              // which LRU are we currently testing against?
               if let (
                 Some((tile_lru_x, tile_lru_y)),
