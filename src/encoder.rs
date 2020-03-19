@@ -2950,7 +2950,7 @@ fn encode_tile_group<T: Pixel>(
       &rec.as_const(),
       &ts.input.as_tile(),
       &blocks.as_tile_blocks(),
-      fi.width, fi.height, fi.sequence.bit_depth);
+      fi.width, fi.height);
   }
   fs.deblock.levels = levels;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
@@ -3530,8 +3530,7 @@ fn encode_tile<'a, T: Pixel>(
       &ts.input_tile,
       &cw.bc.blocks.as_const(),
       fi.width,
-      fi.height,
-      fi.sequence.bit_depth);
+      fi.height);
 
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
 
