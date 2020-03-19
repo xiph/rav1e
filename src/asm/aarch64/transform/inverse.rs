@@ -39,7 +39,7 @@ pub fn inverse_transform_add<T: Pixel>(
     PixelType::U16 => {}
   };
 
-  native::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
+  rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
 }
 
 macro_rules! decl_itx_fns {

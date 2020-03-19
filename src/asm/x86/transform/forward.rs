@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::cpu_features::CpuFeatureLevel;
-use crate::transform::forward::native;
+use crate::transform::forward::rust;
 use crate::transform::forward_shared::*;
 use crate::transform::*;
 use crate::util::*;
@@ -466,7 +466,7 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
     // this size.
     match row_class {
       SizeClass1D::X8UP => {
-        // Store output in at most 32x32 chunks. See native code for details.
+        // Store output in at most 32x32 chunks. See rust code for details.
 
         // Output is grouped into 32x32 chunks so a stride of at most 32 is
         // used for each chunk
@@ -536,9 +536,7 @@ pub fn forward_transform<T: Coefficient>(
       forward_transform_avx2(input, output, stride, tx_size, tx_type, bd);
     }
   } else {
-    native::forward_transform(
-      input, output, stride, tx_size, tx_type, bd, cpu,
-    );
+    rust::forward_transform(input, output, stride, tx_size, tx_type, bd, cpu);
   }
 }
 
@@ -548,7 +546,7 @@ mod test {
   use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
   use rand::Rng;
 
-  // Ensure that the simd results match the native code
+  // Ensure that the simd results match the rust code
   #[test]
   fn test_forward_transform_avx2() {
     test_forward_transform_simd(CpuFeatureLevel::AVX2);
@@ -589,7 +587,7 @@ mod test {
           tx_size,
           tx_type,
           8,
-          CpuFeatureLevel::NATIVE,
+          CpuFeatureLevel::RUST,
         );
         forward_transform(
           &input[..],

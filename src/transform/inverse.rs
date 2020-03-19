@@ -13,14 +13,14 @@ cfg_if::cfg_if! {
   } else if #[cfg(asm_neon)] {
     pub use crate::asm::aarch64::transform::inverse::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
 
-// TODO: move 1d txfm code to native module.
+// TODO: move 1d txfm code to rust module.
 
 use super::clamp_value;
 use super::consts::*;
@@ -1581,7 +1581,7 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
   ],
 ];
 
-pub(crate) mod native {
+pub(crate) mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::util::clamp;

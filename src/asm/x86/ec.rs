@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::ec::native;
+use crate::ec::rust;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
@@ -18,7 +18,7 @@ pub fn update_cdf(cdf: &mut [u16], val: u32) {
     };
   }
 
-  native::update_cdf(cdf, val);
+  rust::update_cdf(cdf, val);
 }
 
 #[target_feature(enable = "sse2")]
@@ -88,14 +88,14 @@ unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
 
 #[cfg(test)]
 mod test {
-  use crate::ec::native;
+  use crate::ec::rust;
 
   #[test]
   fn update_cdf_4_sse2() {
     let mut cdf = [7296, 3819, 1616, 0, 0];
     let mut cdf2 = [7296, 3819, 1616, 0, 0];
     for i in 0..4 {
-      native::update_cdf(&mut cdf, i);
+      rust::update_cdf(&mut cdf, i);
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }
@@ -105,7 +105,7 @@ mod test {
     let mut cdf = [7297, 3820, 1617, 0, 0];
     let mut cdf2 = cdf.clone();
     for i in 0..4 {
-      native::update_cdf(&mut cdf, i);
+      rust::update_cdf(&mut cdf, i);
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }

@@ -13,7 +13,7 @@ cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::quantize::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
@@ -332,7 +332,7 @@ impl QuantizationContext {
   }
 }
 
-pub mod native {
+pub mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
 

@@ -16,11 +16,11 @@ cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::transform::forward::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
-pub mod native {
+pub mod rust {
   use super::*;
 
   use crate::transform::av1_round_shift_array;

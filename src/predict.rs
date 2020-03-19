@@ -17,7 +17,7 @@ cfg_if::cfg_if! {
   } else if #[cfg(asm_neon)] {
     pub use crate::asm::aarch64::predict::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
@@ -491,7 +491,7 @@ fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
-pub(crate) mod native {
+pub(crate) mod rust {
   use super::*;
   use crate::context::MAX_TX_SIZE;
   use crate::cpu_features::CpuFeatureLevel;
@@ -1265,7 +1265,7 @@ pub(crate) mod native {
 mod test {
   use super::*;
   use crate::frame::AsRegion;
-  use crate::predict::native::*;
+  use crate::predict::rust::*;
   use num_traits::*;
 
   #[test]
