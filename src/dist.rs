@@ -11,11 +11,11 @@ cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::dist::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
-pub(crate) mod native {
+pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::partition::BlockSize;
   use crate::tiling::*;

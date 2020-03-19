@@ -46,8 +46,8 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
   bit_depth: usize, xdec: usize, ydec: usize, cpu: CpuFeatureLevel,
 ) {
-  let call_native = |dst: &mut PlaneRegionMut<T>| {
-    native::cdef_filter_block(
+  let call_rust = |dst: &mut PlaneRegionMut<T>| {
+    rust::cdef_filter_block(
       dst,
       src,
       src_stride,
@@ -64,7 +64,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   #[cfg(feature = "check_asm")]
   let ref_dst = {
     let mut copy = dst.scratch_copy();
-    call_native(&mut copy.as_region_mut());
+    call_rust(&mut copy.as_region_mut());
     copy
   };
   match T::type_enum() {
@@ -82,7 +82,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             damping,
           );
         }
-        None => call_native(dst),
+        None => call_rust(dst),
       }
     }
     PixelType::U16 => {
@@ -100,7 +100,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             bit_depth as i32,
           );
         }
-        None => call_native(dst),
+        None => call_rust(dst),
       }
     }
   }
@@ -162,13 +162,13 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
   img: &PlaneSlice<'_, u16>, var: &mut u32, coeff_shift: usize,
   cpu: CpuFeatureLevel,
 ) -> i32 {
-  let call_native =
-    |var: &mut u32| native::cdef_find_dir::<T>(img, var, coeff_shift, cpu);
+  let call_rust =
+    |var: &mut u32| rust::cdef_find_dir::<T>(img, var, coeff_shift, cpu);
 
   #[cfg(feature = "check_asm")]
   let (ref_dir, ref_var) = {
     let mut var: u32 = 0;
-    let dir = call_native(&mut var);
+    let dir = call_rust(&mut var);
     (dir, var)
   };
 
@@ -186,10 +186,10 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
           )
         }
       } else {
-        call_native(var)
+        call_rust(var)
       }
     }
-    PixelType::U16 => call_native(var),
+    PixelType::U16 => call_rust(var),
   };
 
   #[cfg(feature = "check_asm")]
@@ -250,7 +250,7 @@ mod test {
               *s = random::<u8>() as u16;
               *d = random::<u8>();
             }
-            let mut native_dst = dst.clone();
+            let mut rust_dst = dst.clone();
 
             let src_stride = width as isize;
             let pri_strength = 1;
@@ -260,8 +260,8 @@ mod test {
 
             unsafe {
               cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              cdef_filter_block(&mut native_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::NATIVE);
-              assert_eq!(native_dst.data_origin(), dst.data_origin());
+              cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::RUST);
+              assert_eq!(rust_dst.data_origin(), dst.data_origin());
             }
           }
         }

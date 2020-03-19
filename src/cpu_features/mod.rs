@@ -17,7 +17,7 @@ cfg_if::cfg_if! {
     mod aarch64;
     pub use aarch64::*;
   } else {
-    mod native;
-    pub use native::*;
+    mod rust;
+    pub use rust::*;
   }
 }

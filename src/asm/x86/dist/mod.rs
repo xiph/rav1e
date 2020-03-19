@@ -122,11 +122,10 @@ pub fn get_sad<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> u32 {
-  let call_native =
-    || -> u32 { native::get_sad(dst, src, bsize, bit_depth, cpu) };
+  let call_rust = || -> u32 { rust::get_sad(dst, src, bsize, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
-  let ref_dist = call_native();
+  let ref_dist = call_rust();
 
   let dist = match T::type_enum() {
     PixelType::U8 => match SAD_FNS[cpu.as_index()][to_index(bsize)] {
@@ -138,7 +137,7 @@ pub fn get_sad<T: Pixel>(
           T::to_asm_stride(dst.plane_cfg.stride),
         )
       },
-      None => call_native(),
+      None => call_rust(),
     },
     PixelType::U16 => match SAD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
       Some(func) => unsafe {
@@ -149,7 +148,7 @@ pub fn get_sad<T: Pixel>(
           T::to_asm_stride(dst.plane_cfg.stride),
         )
       },
-      None => call_native(),
+      None => call_rust(),
     },
   };
 
@@ -165,11 +164,11 @@ pub fn get_satd<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> u32 {
-  let call_native =
-    || -> u32 { native::get_satd(dst, src, bsize, bit_depth, cpu) };
+  let call_rust =
+    || -> u32 { rust::get_satd(dst, src, bsize, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
-  let ref_dist = call_native();
+  let ref_dist = call_rust();
 
   let dist = match T::type_enum() {
     PixelType::U8 => match SATD_FNS[cpu.as_index()][to_index(bsize)] {
@@ -181,7 +180,7 @@ pub fn get_satd<T: Pixel>(
           T::to_asm_stride(dst.plane_cfg.stride),
         )
       },
-      None => call_native(),
+      None => call_rust(),
     },
     PixelType::U16 => match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
       // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
@@ -193,7 +192,7 @@ pub fn get_satd<T: Pixel>(
           dst.plane_cfg.stride as isize,
         )
       },
-      None => call_native(),
+      None => call_rust(),
     },
   };
 
@@ -501,9 +500,9 @@ mod test {
                 *d = random::<u8>() as u16 * $BD / 8;
               }
               let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let native_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::NATIVE);
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::RUST);
 
-              assert_eq!(native_result, result);
+              assert_eq!(rust_result, result);
             } else {
               // dynamic allocation: test
               let mut src = Plane::from_slice(&vec![0u8; $W * $H], $W);
@@ -514,9 +513,9 @@ mod test {
                 *d = random::<u8>();
               }
               let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let native_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::NATIVE);
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::RUST);
 
-              assert_eq!(native_result, result);
+              assert_eq!(rust_result, result);
             }
           }
         }

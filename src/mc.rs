@@ -13,7 +13,7 @@ cfg_if::cfg_if! {
   } else if #[cfg(asm_neon)] {
     pub use crate::asm::aarch64::mc::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
@@ -180,7 +180,7 @@ const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [
   ],
 ];
 
-pub(crate) mod native {
+pub(crate) mod rust {
   use super::*;
   use num_traits::*;
 

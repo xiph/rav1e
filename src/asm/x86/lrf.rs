@@ -9,7 +9,7 @@
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::PlaneSlice;
-use crate::lrf::native;
+use crate::lrf::rust;
 use crate::lrf::*;
 use crate::util::Pixel;
 #[cfg(target_arch = "x86")]
@@ -41,7 +41,7 @@ pub fn sgrproj_box_ab_r1(
     };
   }
 
-  native::sgrproj_box_ab_r1(
+  rust::sgrproj_box_ab_r1(
     af,
     bf,
     iimg,
@@ -78,7 +78,7 @@ pub fn sgrproj_box_ab_r2(
     };
   }
 
-  native::sgrproj_box_ab_r2(
+  rust::sgrproj_box_ab_r2(
     af,
     bf,
     iimg,
@@ -103,7 +103,7 @@ pub fn sgrproj_box_f_r0<T: Pixel>(
     };
   }
 
-  native::sgrproj_box_f_r0(f, y, w, cdeffed, cpu);
+  rust::sgrproj_box_f_r0(f, y, w, cdeffed, cpu);
 }
 
 #[inline]
@@ -117,7 +117,7 @@ pub fn sgrproj_box_f_r1<T: Pixel>(
     };
   }
 
-  native::sgrproj_box_f_r1(af, bf, f, y, w, cdeffed, cpu);
+  rust::sgrproj_box_f_r1(af, bf, f, y, w, cdeffed, cpu);
 }
 
 #[inline]
@@ -131,7 +131,7 @@ pub fn sgrproj_box_f_r2<T: Pixel>(
     };
   }
 
-  native::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed, cpu);
+  rust::sgrproj_box_f_r2(af, bf, f0, f1, y, w, cdeffed, cpu);
 }
 
 static X_BY_XPLUS1: [u32; 256] = [
@@ -254,7 +254,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       );
     } else {
       // finish using scalar
-      native::sgrproj_box_ab_internal(
+      rust::sgrproj_box_ab_internal(
         1,
         af,
         bf,
@@ -274,7 +274,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    native::sgrproj_box_ab_internal(
+    rust::sgrproj_box_ab_internal(
       1,
       &mut af_ref,
       &mut bf_ref,
@@ -313,7 +313,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       );
     } else {
       // finish using scalar
-      native::sgrproj_box_ab_internal(
+      rust::sgrproj_box_ab_internal(
         2,
         af,
         bf,
@@ -333,7 +333,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    native::sgrproj_box_ab_internal(
+    rust::sgrproj_box_ab_internal(
       2,
       &mut af_ref,
       &mut bf_ref,
@@ -382,14 +382,14 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
       sgrproj_box_f_r0_8_avx2(f, x, y, cdeffed);
     } else {
       // finish using scalar
-      native::sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
+      rust::sgrproj_box_f_r0_internal(f, x, y, w, cdeffed);
     }
   }
 
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
-    native::sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
+    rust::sgrproj_box_f_r0_internal(&mut f_ref, 0, y, w, cdeffed);
     assert_eq!(&f[..w], &f_ref[..]);
   }
 }
@@ -505,14 +505,14 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
       sgrproj_box_f_r1_8_avx2(af, bf, f, x, y, cdeffed);
     } else {
       // finish using scalar
-      native::sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
+      rust::sgrproj_box_f_r1_internal(af, bf, f, x, y, w, cdeffed);
     }
   }
 
   #[cfg(feature = "check_asm")]
   {
     let mut f_ref: Vec<u32> = vec![0; w];
-    native::sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
+    rust::sgrproj_box_f_r1_internal(af, bf, &mut f_ref, 0, y, w, cdeffed);
     assert_eq!(&f[..w], &f_ref[..]);
   }
 }
@@ -627,7 +627,7 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
       sgrproj_box_f_r2_8_avx2(af, bf, f0, f1, x, y, cdeffed);
     } else {
       // finish using scalar
-      native::sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
+      rust::sgrproj_box_f_r2_internal(af, bf, f0, f1, x, y, w, cdeffed);
     }
   }
 
@@ -635,7 +635,7 @@ pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
   {
     let mut f0_ref: Vec<u32> = vec![0; w];
     let mut f1_ref: Vec<u32> = vec![0; w];
-    native::sgrproj_box_f_r2_internal(
+    rust::sgrproj_box_f_r2_internal(
       af,
       bf,
       &mut f0_ref,

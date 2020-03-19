@@ -128,11 +128,11 @@ pub mod test {
         tx_size,
         tx_type,
         8,
-        CpuFeatureLevel::NATIVE,
+        CpuFeatureLevel::RUST,
       );
 
       let eob: usize = pick_eob(freq, tx_size, tx_type, sub_h);
-      let mut native_dst = dst.clone();
+      let mut rust_dst = dst.clone();
 
       inverse_transform_add(
         freq,
@@ -145,14 +145,14 @@ pub mod test {
       );
       inverse_transform_add(
         freq,
-        &mut native_dst.as_region_mut(),
+        &mut rust_dst.as_region_mut(),
         eob,
         tx_size,
         tx_type,
         8,
-        CpuFeatureLevel::NATIVE,
+        CpuFeatureLevel::RUST,
       );
-      assert_eq!(native_dst.data_origin(), dst.data_origin());
+      assert_eq!(rust_dst.data_origin(), dst.data_origin());
     }
   }
 }
