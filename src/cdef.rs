@@ -259,26 +259,20 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 
 pub fn cdef_analyze_superblock_range<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, blocks: &TileBlocks<'_>,
-  sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset, sb_w: usize,
-  sb_h: usize
+  sb_w: usize, sb_h: usize
 ) -> Vec<CdefDirections> {
   let mut ret = Vec::<CdefDirections>::with_capacity(sb_h * sb_w);
   for sby in 0..sb_h {
     for sbx in 0..sb_w {
-      let local_sbo = TileSuperBlockOffset(SuperBlockOffset {
-        x: sbo.0.x + sbx,
-        y: sbo.0.y + sby,
-      });
-      let toplevel_sbo = TileSuperBlockOffset(SuperBlockOffset {
-        x: sbo_global.0.x + sbx,
-        y: sbo_global.0.y + sby,
+      let sbo = TileSuperBlockOffset(SuperBlockOffset {
+        x: sbx,
+        y: sby,
       });
       ret.push(cdef_analyze_superblock(
         fi,
         in_frame,
         blocks,
-        local_sbo,
-        toplevel_sbo,
+        sbo,
       ));
     }
   }
@@ -291,7 +285,7 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
 
 pub fn cdef_analyze_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, blocks: &TileBlocks<'_>,
-  sbo: TileSuperBlockOffset, sbo_global: TileSuperBlockOffset
+  sbo: TileSuperBlockOffset
 ) -> CdefDirections {
   let coeff_shift = fi.sequence.bit_depth as usize - 8;
   let mut dir: CdefDirections =
@@ -299,18 +293,14 @@ pub fn cdef_analyze_superblock<T: Pixel>(
   // Each direction block is 8x8 in y, and direction computation only looks at y
   for by in 0..8 {
     for bx in 0..8 {
-      // The blocks and global SBO are only to determine frame
-      // boundaries and skips in the event we're passing in a
-      // single-SB copy 'frame' that represents some superblock
-      // in the main frame.
-      let global_block_offset = sbo_global.block_offset(bx << 1, by << 1);
-      if global_block_offset.0.x < blocks.cols()
-        && global_block_offset.0.y < blocks.rows()
+      let block_offset = sbo.block_offset(bx << 1, by << 1);
+      if block_offset.0.x < blocks.cols()
+        && block_offset.0.y < blocks.rows()
       {
-        let skip = blocks[global_block_offset].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by)].skip
-          & blocks[sbo_global.block_offset(2 * bx, 2 * by + 1)].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by + 1)].skip;
+        let skip = blocks[block_offset].skip
+          & blocks[sbo.block_offset(2 * bx + 1, 2 * by)].skip
+          & blocks[sbo.block_offset(2 * bx, 2 * by + 1)].skip
+          & blocks[sbo.block_offset(2 * bx + 1, 2 * by + 1)].skip;
 
         if !skip {
           let mut var: u32 = 0;
@@ -436,8 +426,7 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
 pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<u16>, out_frame: &mut Frame<U>,
   blocks: &TileBlocks<'_>, sbo: TileSuperBlockOffset,
-  sbo_global: TileSuperBlockOffset, cdef_index: u8,
-  cdef_dirs: &CdefDirections,
+  cdef_index: u8, cdef_dirs: &CdefDirections,
 ) {
   let bit_depth = fi.sequence.bit_depth;
   let coeff_shift = fi.sequence.bit_depth as i32 - 8;
@@ -459,14 +448,14 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   for by in 0..8 {
     for bx in 0..8 {
-      let global_block_offset = sbo_global.block_offset(bx << 1, by << 1);
-      if global_block_offset.0.x < blocks.cols()
-        && global_block_offset.0.y < blocks.rows()
+      let block_offset = sbo.block_offset(bx << 1, by << 1);
+      if block_offset.0.x < blocks.cols()
+        && block_offset.0.y < blocks.rows()
       {
-        let skip = blocks[global_block_offset].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by)].skip
-          & blocks[sbo_global.block_offset(2 * bx, 2 * by + 1)].skip
-          & blocks[sbo_global.block_offset(2 * bx + 1, 2 * by + 1)].skip;
+        let skip = blocks[block_offset].skip
+          & blocks[sbo.block_offset(2 * bx + 1, 2 * by)].skip
+          & blocks[sbo.block_offset(2 * bx, 2 * by + 1)].skip
+          & blocks[sbo.block_offset(2 * bx + 1, 2 * by + 1)].skip;
         let dir = cdef_dirs.dir[bx][by];
         let var = cdef_dirs.var[bx][by];
         for p in 0..3 {
@@ -650,7 +639,6 @@ pub fn cdef_filter_frame<T: Pixel>(
         &cdef_frame,
         &tb,
         sbo,
-        sbo,
       );
       
       cdef_filter_superblock(
@@ -658,7 +646,6 @@ pub fn cdef_filter_frame<T: Pixel>(
         &cdef_frame,
         rec,
         &tb,
-        sbo,
         sbo,
         cdef_index,
         &cdef_dirs,
