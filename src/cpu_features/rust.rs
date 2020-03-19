@@ -11,11 +11,11 @@ use arg_enum_proc_macro::ArgEnum;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
-  NATIVE,
+  RUST,
 }
 
 impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
-    CpuFeatureLevel::NATIVE
+    CpuFeatureLevel::RUST
   }
 }

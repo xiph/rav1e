@@ -11,7 +11,7 @@ cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     use crate::asm::x86::lrf::*;
   } else {
-    use self::native::*;
+    use self::rust::*;
   }
 }
 
@@ -175,7 +175,7 @@ impl RestorationFilter {
   }
 }
 
-pub(crate) mod native {
+pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::PlaneSlice;
   use crate::lrf::{

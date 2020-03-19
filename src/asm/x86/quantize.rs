@@ -39,8 +39,8 @@ pub fn dequantize<T: Coefficient>(
   qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
   bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, cpu: CpuFeatureLevel,
 ) {
-  let call_native = |rcoeffs: &mut [T]| {
-    crate::quantize::native::dequantize(
+  let call_rust = |rcoeffs: &mut [T]| {
+    crate::quantize::rust::dequantize(
       qindex, coeffs, eob, rcoeffs, tx_size, bit_depth, dc_delta_q,
       ac_delta_q, cpu,
     );
@@ -51,7 +51,7 @@ pub fn dequantize<T: Coefficient>(
     let area = av1_get_coded_tx_size(tx_size).area();
     let mut copy = vec![T::cast_from(0); area];
     copy[..].copy_from_slice(&rcoeffs[..area]);
-    call_native(&mut copy);
+    call_rust(&mut copy);
     copy
   };
 
@@ -71,10 +71,10 @@ pub fn dequantize<T: Coefficient>(
           )
         }
       } else {
-        call_native(rcoeffs)
+        call_rust(rcoeffs)
       }
     }
-    PixelType::U16 => call_native(rcoeffs),
+    PixelType::U16 => call_rust(rcoeffs),
   }
 
   #[cfg(any(feature = "check_asm", test))]

@@ -13,8 +13,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
-  #[arg_enum(alias = "rust")]
-  NATIVE,
+  RUST,
   SSE2,
   SSSE3,
   #[arg_enum(alias = "sse4.1")]
@@ -68,7 +67,7 @@ impl Default for CpuFeatureLevel {
     } else if is_x86_feature_detected!("sse2") {
       CpuFeatureLevel::SSE2
     } else {
-      CpuFeatureLevel::NATIVE
+      CpuFeatureLevel::RUST
     };
     let manual: CpuFeatureLevel = match env::var("RAV1E_CPU_TARGET") {
       Ok(feature) => CpuFeatureLevel::from_str(&feature).unwrap_or(detected),

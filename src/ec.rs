@@ -14,7 +14,7 @@ cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::ec::*;
   } else {
-    pub use self::native::*;
+    pub use self::rust::*;
   }
 }
 
@@ -863,7 +863,7 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   }
 }
 
-pub(crate) mod native {
+pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
   pub fn update_cdf(cdf: &mut [u16], val: u32) {
     let nsymbs = cdf.len() - 1;

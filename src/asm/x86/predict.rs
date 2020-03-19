@@ -10,7 +10,7 @@
 use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::predict::{
-  native, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
+  rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
 };
 use crate::tiling::PlaneRegionMut;
 use crate::transform::TxSize;
@@ -99,15 +99,15 @@ pub fn dispatch_predict_intra<T: Pixel>(
   ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
   edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
 ) {
-  let call_native = |dst: &mut PlaneRegionMut<'_, T>| {
-    native::dispatch_predict_intra(
+  let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
+    rust::dispatch_predict_intra(
       mode, variant, dst, tx_size, bit_depth, ac, angle, ief_params, edge_buf,
       cpu,
     );
   };
 
   if size_of::<T>() != 1 {
-    return call_native(dst);
+    return call_rust(dst);
   }
 
   unsafe {
@@ -196,7 +196,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_cfl_avx2,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
-        _ => call_native(dst),
+        _ => call_rust(dst),
       }
     } else if cpu >= CpuFeatureLevel::SSSE3 {
       match mode {
@@ -235,10 +235,10 @@ pub fn dispatch_predict_intra<T: Pixel>(
             PredictionVariant::BOTH => rav1e_ipred_cfl_ssse3,
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
-        _ => call_native(dst),
+        _ => call_rust(dst),
       }
     } else {
-      call_native(dst);
+      call_rust(dst);
     }
   }
 }
@@ -247,7 +247,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
 mod test {
   use super::*;
   use crate::frame::{AsRegion, Plane};
-  use crate::predict::native;
+  use crate::predict::rust;
   use num_traits::*;
 
   #[test]
@@ -305,7 +305,7 @@ mod test {
       for angle in angles {
         let expected = {
           let mut plane = Plane::from_slice(&vec![0u8; 4 * 4], 4);
-          native::dispatch_predict_intra(
+          rust::dispatch_predict_intra(
             *mode,
             *variant,
             &mut plane.as_region_mut(),

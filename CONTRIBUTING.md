@@ -118,3 +118,13 @@ tail -n+2 dec.y4m > dec
 ```
 cmp rec dec
 ```
+
+## Setting Assembly Optimization Level
+
+rav1e defaults to using the highest assembly optimization level supported on the current machine.
+You can disable assembly or use a lower assembly target at runtime by setting the environment variable `RAV1E_CPU_TARGET`.
+
+For example, `RAV1E_CPU_TARGET=rust` will disable all hand-written assembly optimizations.
+`RAV1E_CPU_TARGET=sse2` will enable SSE2 code but disable any newer assembly.
+
+A full list of options can be found in the `CpuFeatureLevel` enum in `src/cpu_features` for your platform.

@@ -13,8 +13,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
 pub enum CpuFeatureLevel {
-  #[arg_enum(alias = "rust")]
-  NATIVE,
+  RUST,
   NEON,
 }
 
