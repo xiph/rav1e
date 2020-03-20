@@ -90,7 +90,7 @@ macro_rules! tile_blocks_common {
           phantom: PhantomData,
         }
       }
-      
+
       #[inline(always)]
       pub const fn x(&self) -> usize {
         self.x
