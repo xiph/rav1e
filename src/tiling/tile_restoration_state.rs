@@ -212,7 +212,7 @@ macro_rules! tile_restoration_plane_common {
           None
         }
       }
-      
+
       pub fn restoration_unit_offset(&self, base: TileSuperBlockOffset,
                                      offset: TileSuperBlockOffset, stretch: bool)
         -> Option<(usize, usize)> {
