@@ -313,7 +313,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 
 // Allocates and returns a new Frame with its own memory that is
 // patterned on the decimation of the Frame backing the passed-in
-// Tile.  The width and hight are in units of 8-pixel (undecimated)
+// Tile.  The width and height are in units of 8-pixel (undecimated)
 // blocks, the minimum working unit of the CDEF filters.
 pub fn cdef_block8_frame<T: Pixel>(
   w_8: usize, h_8: usize, pattern_tile: &Tile<'_, T>,
@@ -338,7 +338,7 @@ pub fn cdef_block8_frame<T: Pixel>(
 
 // Allocates and returns a new Frame with its own memory that is
 // patterned on the decimation of the Frame backing the passed-in
-// Tile.  The width and hight are in units of 8-pixel (undecimated)
+// Tile.  The width and height are in units of 8-pixel (undecimated)
 // blocks, the minimum working unit of the CDEF filters, and the
 // padding is in units of individual pixels.  The full padding is
 // applied even to decimated planes.  The contents of the tile,
