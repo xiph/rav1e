@@ -1956,8 +1956,8 @@ pub fn rdo_loop_decision<T: Pixel>(
     cdef_padded_tile_copy(
       &const_rec,
       base_sbo,
-      pixel_w + 7 >> 3,
-      pixel_h + 7 >> 3,
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
       8,
     )
   };
@@ -1980,8 +1980,8 @@ pub fn rdo_loop_decision<T: Pixel>(
     cdef_padded_tile_copy(
       &ts.input_tile,
       base_sbo,
-      pixel_w + 7 >> 3,
-      pixel_h + 7 >> 3,
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
       0,
     )
   };
@@ -2002,12 +2002,12 @@ pub fn rdo_loop_decision<T: Pixel>(
     // Deblock the contents of our reconstruction copy.
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
       // copy ts.deblock because we need to set some of our own values here
-      let mut deblock_copy = ts.deblock.clone();
+      let mut deblock_copy = *ts.deblock;
       deblock_copy.levels = deblock_levels;
 
       // finally, deblock the temp frame
       deblock_filter_frame(
-        &mut deblock_copy,
+        &deblock_copy,
         &mut rec_subset.as_tile_mut(),
         &tileblocks_subset.as_const(),
         crop_w,
@@ -2021,8 +2021,8 @@ pub fn rdo_loop_decision<T: Pixel>(
     Some(cdef_padded_tile_copy(
       &rec_subset.as_tile(),
       TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 }),
-      pixel_w + 7 >> 3,
-      pixel_h + 7 >> 3,
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
       0,
     ))
   } else {
@@ -2030,8 +2030,8 @@ pub fn rdo_loop_decision<T: Pixel>(
   };
   let mut lrf_work = if fi.sequence.enable_restoration {
     Some(cdef_block8_frame(
-      pixel_w + 7 >> 3,
-      pixel_h + 7 >> 3,
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
       &ts.rec.as_const(),
     ))
   } else {
@@ -2127,7 +2127,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       ts,
                       &tileblocks_subset.as_const(),
-                      &cdef_ref,
+                      cdef_ref,
                       &src_subset,
                       pli,
                     );
@@ -2182,7 +2182,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       ts,
                       &tileblocks_subset.as_const(),
-                      &lrf_ref,
+                      lrf_ref,
                       &src_subset,
                       pli,
                     );
@@ -2205,7 +2205,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &tileblocks_subset.as_const(),
-                  &cdef_ref,
+                  cdef_ref,
                   &src_subset,
                   pli,
                 );
@@ -2233,7 +2233,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           // both below and above (padding)
           cdef_filter_superblock(
             fi,
-            &rec_copy,
+            rec_copy,
             cdef_ref,
             &tileblocks_subset.as_const(),
             loop_sbo,
@@ -2298,7 +2298,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &tileblocks_subset.as_const(),
-                  &lrf_input,
+                  lrf_input,
                   &src_subset,
                   pli,
                 );
@@ -2380,7 +2380,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &tileblocks_subset.as_const(),
-                  &lrf_ref,
+                  lrf_ref,
                   &src_subset,
                   pli,
                 );
