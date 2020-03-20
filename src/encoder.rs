@@ -253,7 +253,7 @@ impl Sequence {
         && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
       enable_large_lru: true,
-      enable_delayed_loopfilter_rdo: false,
+      enable_delayed_loopfilter_rdo: true,
       operating_points_cnt_minus_1: 0,
       operating_point_idc,
       display_model_info_present_flag: false,
