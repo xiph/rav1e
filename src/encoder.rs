@@ -2958,7 +2958,7 @@ fn encode_tile_group<T: Pixel>(
     let ts = &mut fs.as_tile_state_mut();
     let rec = &mut ts.rec;
     deblock_filter_frame(
-      &ts.deblock,
+      ts.deblock,
       rec,
       &blocks.as_tile_blocks(),
       fi.width,
@@ -3551,12 +3551,12 @@ fn encode_tile<'a, T: Pixel>(
       };
 
       // copy ts.deblock because we need to set some of our own values here
-      let mut deblock_copy = ts.deblock.clone();
+      let mut deblock_copy = *ts.deblock;
       deblock_copy.levels = deblock_levels;
 
       // temporarily deblock the reference
       deblock_filter_frame(
-        &mut deblock_copy,
+        &deblock_copy,
         &mut ts.rec,
         &cw.bc.blocks.as_const(),
         fi.width,
