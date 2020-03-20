@@ -1111,7 +1111,7 @@ fn filter_v_edge<T: Pixel>(
     if filter_size > 0 {
       let level = deblock_level(deblock, block, prev_block, pli, true);
       if level > 0 {
-        let po = bo.plane_offset(&p.plane_cfg);
+        let po = bo.plane_offset(p.plane_cfg);
         let mut plane_region = p.subregion_mut(Area::Rect {
           x: po.x - (filter_size >> 1) as isize,
           y: po.y,
@@ -1156,7 +1156,7 @@ fn sse_v_edge<T: Pixel>(
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {
-      let po = bo.plane_offset(&rec_plane.plane_cfg); // rec and src have identical subsampling
+      let po = bo.plane_offset(rec_plane.plane_cfg); // rec and src have identical subsampling
       let rec_region = rec_plane.subregion(Area::Rect {
         x: po.x - (filter_size >> 1) as isize,
         y: po.y,
@@ -1207,7 +1207,7 @@ fn filter_h_edge<T: Pixel>(
     if filter_size > 0 {
       let level = deblock_level(deblock, block, prev_block, pli, false);
       if level > 0 {
-        let po = bo.plane_offset(&p.plane_cfg);
+        let po = bo.plane_offset(p.plane_cfg);
         let mut plane_region = p.subregion_mut(Area::Rect {
           x: po.x,
           y: po.y - (filter_size >> 1) as isize,
@@ -1252,7 +1252,7 @@ fn sse_h_edge<T: Pixel>(
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {
-      let po = bo.plane_offset(&rec_plane.plane_cfg); // rec and src have identical subsampling
+      let po = bo.plane_offset(rec_plane.plane_cfg); // rec and src have identical subsampling
       let rec_region = rec_plane.subregion(Area::Rect {
         x: po.x,
         y: po.y - (filter_size >> 1) as isize,
