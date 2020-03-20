@@ -416,7 +416,6 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
-
   #[inline(always)]
   pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
@@ -2944,22 +2943,28 @@ fn encode_tile_group<T: Pixel>(
   let levels;
   {
     let ts = &mut fs.as_tile_state_mut();
-    let rec = &mut ts.rec; 
+    let rec = &mut ts.rec;
     levels = deblock_filter_optimize(
       fi,
       &rec.as_const(),
       &ts.input.as_tile(),
       &blocks.as_tile_blocks(),
-      fi.width, fi.height);
+      fi.width,
+      fi.height,
+    );
   }
   fs.deblock.levels = levels;
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     let ts = &mut fs.as_tile_state_mut();
-    let rec = &mut ts.rec; 
-    deblock_filter_frame(&ts.deblock,
-                         rec,
-                         &blocks.as_tile_blocks(),
-                         fi.width, fi.height, fi.sequence.bit_depth);
+    let rec = &mut ts.rec;
+    deblock_filter_frame(
+      &ts.deblock,
+      rec,
+      &blocks.as_tile_blocks(),
+      fi.width,
+      fi.height,
+      fi.sequence.bit_depth,
+    );
   }
 
   if fi.sequence.enable_restoration {
@@ -3331,16 +3336,12 @@ pub struct SBSQueueEntry {
 }
 
 fn check_lf_queue<T: Pixel>(
-  fi: &FrameInvariants<T>,
-  ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter,
-  w: &mut WriterBase<WriterEncoder>,
-  sbs_q: &mut VecDeque<SBSQueueEntry>,
-  last_lru_ready: &mut [i32; 3],
-  last_lru_rdoed: &mut [i32; 3],
-  last_lru_coded: &mut [i32; 3],
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  cw: &mut ContextWriter, w: &mut WriterBase<WriterEncoder>,
+  sbs_q: &mut VecDeque<SBSQueueEntry>, last_lru_ready: &mut [i32; 3],
+  last_lru_rdoed: &mut [i32; 3], last_lru_coded: &mut [i32; 3],
   deblock_p: bool,
-){
+) {
   let mut check_queue = true;
 
   // Walk queue from the head, see if anything is ready for RDO and flush
@@ -3511,11 +3512,17 @@ fn encode_tile<'a, T: Pixel>(
         sbs_q.push_back(sbs_qe);
 
         if check_queue && !fi.sequence.enable_delayed_loopfilter_rdo {
-          check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
-                         &mut last_lru_ready,
-                         &mut last_lru_rdoed,
-                         &mut last_lru_coded,
-                         true);
+          check_lf_queue(
+            fi,
+            ts,
+            &mut cw,
+            &mut w,
+            &mut sbs_q,
+            &mut last_lru_ready,
+            &mut last_lru_rdoed,
+            &mut last_lru_coded,
+            true,
+          );
         }
       }
     }
@@ -3530,34 +3537,46 @@ fn encode_tile<'a, T: Pixel>(
       &ts.input_tile,
       &cw.bc.blocks.as_const(),
       fi.width,
-      fi.height);
+      fi.height,
+    );
 
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
-
       // copy reconstruction to a temp frame to restore it later
       let rec_copy = Frame {
-        planes: [ts.rec.planes[0].scratch_copy(),
-                 ts.rec.planes[1].scratch_copy(),
-                 ts.rec.planes[2].scratch_copy()],
+        planes: [
+          ts.rec.planes[0].scratch_copy(),
+          ts.rec.planes[1].scratch_copy(),
+          ts.rec.planes[2].scratch_copy(),
+        ],
       };
-  
+
       // copy ts.deblock because we need to set some of our own values here
       let mut deblock_copy = ts.deblock.clone();
       deblock_copy.levels = deblock_levels;
-    
+
       // temporarily deblock the reference
-      deblock_filter_frame(&mut deblock_copy,
-                           &mut ts.rec,
-                           &cw.bc.blocks.as_const(),
-                           fi.width, fi.height, fi.sequence.bit_depth);
+      deblock_filter_frame(
+        &mut deblock_copy,
+        &mut ts.rec,
+        &cw.bc.blocks.as_const(),
+        fi.width,
+        fi.height,
+        fi.sequence.bit_depth,
+      );
 
       // rdo lf and write
-      check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
-                     &mut last_lru_ready,
-                     &mut last_lru_rdoed,
-                     &mut last_lru_coded,
-                     false);
-      
+      check_lf_queue(
+        fi,
+        ts,
+        &mut cw,
+        &mut w,
+        &mut sbs_q,
+        &mut last_lru_ready,
+        &mut last_lru_rdoed,
+        &mut last_lru_coded,
+        false,
+      );
+
       // copy original reference back in
       for pli in 0..PLANES {
         let dst = &mut ts.rec.planes[pli];
@@ -3568,13 +3587,19 @@ fn encode_tile<'a, T: Pixel>(
           }
         }
       }
-    } else {      
+    } else {
       // rdo lf and write
-      check_lf_queue(fi, ts, &mut cw, &mut w, &mut sbs_q,
-                     &mut last_lru_ready,
-                     &mut last_lru_rdoed,
-                     &mut last_lru_coded,
-                     false);
+      check_lf_queue(
+        fi,
+        ts,
+        &mut cw,
+        &mut w,
+        &mut sbs_q,
+        &mut last_lru_ready,
+        &mut last_lru_rdoed,
+        &mut last_lru_coded,
+        false,
+      );
     }
   }
 
