@@ -1717,19 +1717,19 @@ function ipred_cfl_top_neon, export=1
 4:
         ld1r            {v0.2s},  [x2]
         uaddlv          h0,      v0.8b
-        urshr           v0.8h,   v0.8h,   #3
+        urshr           v0.4h,   v0.4h,   #3
         dup             v0.8h,   v0.h[0]
         b               L(ipred_cfl_splat_w4)
 8:
         ld1             {v0.8b},  [x2]
         uaddlv          h0,      v0.8b
-        urshr           v0.8h,   v0.8h,   #3
+        urshr           v0.4h,   v0.4h,   #3
         dup             v0.8h,   v0.h[0]
         b               L(ipred_cfl_splat_w8)
 16:
         ld1             {v0.16b}, [x2]
         uaddlv          h0,      v0.16b
-        urshr           v0.8h,   v0.8h,   #4
+        urshr           v0.4h,   v0.4h,   #4
         dup             v0.8h,   v0.h[0]
         b               L(ipred_cfl_splat_w16)
 32:
@@ -1737,7 +1737,7 @@ function ipred_cfl_top_neon, export=1
         uaddlv          h2,      v2.16b
         uaddlv          h3,      v3.16b
         add             v2.4h,   v2.4h,   v3.4h
-        urshr           v2.8h,   v2.8h,   #5
+        urshr           v2.4h,   v2.4h,   #5
         dup             v0.8h,   v2.h[0]
         b               L(ipred_cfl_splat_w16)
 
@@ -1772,21 +1772,21 @@ function ipred_cfl_left_neon, export=1
 L(ipred_cfl_left_h4):
         ld1r            {v0.2s},  [x2]
         uaddlv          h0,      v0.8b
-        urshr           v0.8h,   v0.8h,   #3
+        urshr           v0.4h,   v0.4h,   #3
         dup             v0.8h,   v0.h[0]
         br              x9
 
 L(ipred_cfl_left_h8):
         ld1             {v0.8b},  [x2]
         uaddlv          h0,      v0.8b
-        urshr           v0.8h,   v0.8h,   #3
+        urshr           v0.4h,   v0.4h,   #3
         dup             v0.8h,   v0.h[0]
         br              x9
 
 L(ipred_cfl_left_h16):
         ld1             {v0.16b}, [x2]
         uaddlv          h0,      v0.16b
-        urshr           v0.8h,   v0.8h,   #4
+        urshr           v0.4h,   v0.4h,   #4
         dup             v0.8h,   v0.h[0]
         br              x9
 
@@ -1795,7 +1795,7 @@ L(ipred_cfl_left_h32):
         uaddlv          h2,      v2.16b
         uaddlv          h3,      v3.16b
         add             v2.4h,   v2.4h,   v3.4h
-        urshr           v2.8h,   v2.8h,   #5
+        urshr           v2.4h,   v2.4h,   #5
         dup             v0.8h,   v2.h[0]
         br              x9
 
