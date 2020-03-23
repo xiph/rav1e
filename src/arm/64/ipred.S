@@ -1962,14 +1962,11 @@ function ipred_cfl_ac_420_neon, export=1
         clz             w9,  w9              // ctz(width)
         clz             w10, w10             // ctz(height)
         add             w9,  w9,  w10        // log2sz
-        movi            v16.4s,  #1
         add             x10, x1,  x2
         lsl             x2,  x2,  #1
-        dup             v17.4s,  w9
-        sshl            v16.4s,  v16.4s,  v17.4s // 1 << log2sz
-        neg             v17.4s,  v17.4s          // -log2sz
-        ushr            v16.4s,  v16.4s,  #1     // 1 << (log2sz - 1)
+        dup             v31.4s,  w9
         mov             w9,  w6
+        neg             v31.4s,  v31.4s      // -log2sz
         br              x7
 
 L(ipred_cfl_ac_420_w4):
@@ -2009,8 +2006,7 @@ L(ipred_cfl_ac_420_w4_hpad):
         add             v0.8h,   v0.8h,   v1.8h
         uaddlv          s0,  v0.8h                // sum
         sub             x0,  x0,  w9, uxtw #3
-        add             v0.2s,   v0.2s,   v16.2s  // sum += 1 << (log2sz - 1)
-        ushl            v4.2s,   v0.2s,   v17.2s  // sum >>= log2sz
+        urshl           v4.2s,   v0.2s,   v31.2s  // (sum + (1 << (log2sz - 1))) >>= log2sz
         dup             v4.8h,   v4.h[0]
 6:      // Subtract dc from ac
         ld1             {v0.8h, v1.8h}, [x0]
@@ -2092,8 +2088,7 @@ L(ipred_cfl_ac_420_w8_calc_subtract_dc):
         add             v0.4s,   v0.4s,   v2.4s
         addv            s0,  v0.4s                // sum
         sub             x0,  x0,  w9, uxtw #4
-        add             v0.2s,   v0.2s,   v16.2s  // sum += 1 << (log2sz - 1)
-        ushl            v4.2s,   v0.2s,   v17.2s  // sum >>= log2sz
+        urshl           v4.2s,   v0.2s,   v31.2s  // (sum + (1 << (log2sz - 1))) >>= log2sz
         dup             v4.8h,   v4.h[0]
 6:      // Subtract dc from ac
         ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
@@ -2269,14 +2264,11 @@ function ipred_cfl_ac_422_neon, export=1
         clz             w9,  w9              // ctz(width)
         clz             w10, w10             // ctz(height)
         add             w9,  w9,  w10        // log2sz
-        movi            v16.4s,  #1
         add             x10, x1,  x2
         lsl             x2,  x2,  #1
-        dup             v17.4s,  w9
-        sshl            v16.4s,  v16.4s,  v17.4s // 1 << log2sz
-        neg             v17.4s,  v17.4s          // -log2sz
-        ushr            v16.4s,  v16.4s,  #1     // 1 << (log2sz - 1)
+        dup             v31.4s,  w9
         mov             w9,  w6
+        neg             v31.4s,  v31.4s      // -log2sz
         br              x7
 
 L(ipred_cfl_ac_422_w4):
