@@ -109,10 +109,6 @@ pub struct EncoderConfig {
   pub tiles: usize,
   /// Number of frames to read ahead for the RDO lookahead computation.
   pub rdo_lookahead_frames: usize,
-  /// If enabled, computes the PSNR values and stores them in [`Packet`].
-  ///
-  /// [`Packet`]: struct.Packet.html#structfield.psnr
-  pub show_psnr: bool,
 
   /// Settings which affect the enconding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
@@ -171,7 +167,6 @@ impl EncoderConfig {
       tiles: 0,
       rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
-      show_psnr: false,
     }
   }
 
