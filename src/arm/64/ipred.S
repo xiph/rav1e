@@ -1955,6 +1955,10 @@ function ipred_cfl_ac_420_neon, export=1
         adr             x7,  L(ipred_cfl_ac_420_tbl)
         sub             w8,  w8,  #27
         ldrh            w8,  [x7, w8, uxtw #1]
+        movi            v16.8h,  #0
+        movi            v17.8h,  #0
+        movi            v18.8h,  #0
+        movi            v19.8h,  #0
         sub             x7,  x7,  w8, uxtw
         sub             w8,  w6,  w4         // height - h_pad
         rbit            w9,  w5              // rbit(width)
@@ -1963,9 +1967,8 @@ function ipred_cfl_ac_420_neon, export=1
         clz             w10, w10             // ctz(height)
         add             w9,  w9,  w10        // log2sz
         add             x10, x1,  x2
-        lsl             x2,  x2,  #1
         dup             v31.4s,  w9
-        mov             w9,  w6
+        lsl             x2,  x2,  #1
         neg             v31.4s,  v31.4s      // -log2sz
         br              x7
 
@@ -1981,6 +1984,7 @@ L(ipred_cfl_ac_420_w4):
         shl             v0.8h,   v0.8h,   #1
         subs            w8,  w8,  #2
         st1             {v0.8h}, [x0], #16
+        add             v16.8h,  v16.8h,  v0.8h
         b.gt            1b
         trn2            v1.2d,   v0.2d,   v0.2d
         trn2            v0.2d,   v0.2d,   v0.2d
@@ -1989,28 +1993,19 @@ L(ipred_cfl_ac_420_w4_hpad):
 2:      // Vertical padding (h_pad > 0)
         subs            w4,  w4,  #4
         st1             {v0.8h, v1.8h}, [x0], #32
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
         b.gt            2b
 3:
-        sub             x0,  x0,  w6, uxtw #3
-        // Sum the produced ac values
-        subs            w6,  w6,  #4
-        ld1             {v0.8h, v1.8h}, [x0], #32
-        b.le            5f
-4:
-        ld1             {v2.8h, v3.8h}, [x0], #32
-        subs            w6,  w6,  #4
-        add             v0.8h,   v0.8h,   v2.8h
-        add             v1.8h,   v1.8h,   v3.8h
-        b.gt            4b
-5:
-        add             v0.8h,   v0.8h,   v1.8h
+        // Aggregate the sums
+        add             v0.8h,   v16.8h,  v17.8h
         uaddlv          s0,  v0.8h                // sum
-        sub             x0,  x0,  w9, uxtw #3
+        sub             x0,  x0,  w6, uxtw #3
         urshl           v4.2s,   v0.2s,   v31.2s  // (sum + (1 << (log2sz - 1))) >>= log2sz
         dup             v4.8h,   v4.h[0]
 6:      // Subtract dc from ac
         ld1             {v0.8h, v1.8h}, [x0]
-        subs            w9,  w9,  #4
+        subs            w6,  w6,  #4
         sub             v0.8h,   v0.8h,   v4.8h
         sub             v1.8h,   v1.8h,   v4.8h
         st1             {v0.8h, v1.8h}, [x0], #32
@@ -2034,6 +2029,8 @@ L(ipred_cfl_ac_420_w8):
         shl             v1.8h,   v2.8h,   #1
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h}, [x0], #32
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
         b.gt            1b
         mov             v0.16b,  v1.16b
         b               L(ipred_cfl_ac_420_w8_hpad)
@@ -2053,6 +2050,10 @@ L(ipred_cfl_ac_420_w8_wpad):
         trn2            v2.2d,   v0.2d,   v0.2d
         subs            w8,  w8,  #2
         st1             {v0.4h, v1.4h, v2.4h, v3.4h}, [x0], #32
+        add             v16.4h,  v16.4h,  v0.4h
+        add             v17.4h,  v17.4h,  v1.4h
+        add             v18.4h,  v18.4h,  v2.4h
+        add             v19.4h,  v19.4h,  v3.4h
         b.gt            1b
         trn1            v0.2d,   v2.2d,   v3.2d
         trn1            v1.2d,   v2.2d,   v3.2d
@@ -2062,37 +2063,28 @@ L(ipred_cfl_ac_420_w8_hpad):
 2:      // Vertical padding (h_pad > 0)
         subs            w4,  w4,  #4
         st1             {v0.8h, v1.8h}, [x0], #32
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
         st1             {v0.8h, v1.8h}, [x0], #32
+        add             v18.8h,  v18.8h,  v0.8h
+        add             v19.8h,  v19.8h,  v1.8h
         b.gt            2b
 3:
 
 L(ipred_cfl_ac_420_w8_calc_subtract_dc):
-        sub             x0,  x0,  w6, uxtw #4
-        // Sum the produced ac values
-        subs            w6,  w6,  #4
-        ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
-        b.le            5f
-4:
-        ld1             {v4.8h, v5.8h, v6.8h, v7.8h}, [x0], #64
-        subs            w6,  w6,  #4
-        add             v0.8h,   v0.8h,   v4.8h
-        add             v1.8h,   v1.8h,   v5.8h
-        add             v2.8h,   v2.8h,   v6.8h
-        add             v3.8h,   v3.8h,   v7.8h
-        b.gt            4b
-5:
-        add             v0.8h,   v0.8h,   v1.8h
-        add             v2.8h,   v2.8h,   v3.8h
+        // Aggregate the sums
+        add             v0.8h,   v16.8h,  v17.8h
+        add             v2.8h,   v18.8h,  v19.8h
         uaddlp          v0.4s,   v0.8h
         uaddlp          v2.4s,   v2.8h
         add             v0.4s,   v0.4s,   v2.4s
         addv            s0,  v0.4s                // sum
-        sub             x0,  x0,  w9, uxtw #4
+        sub             x0,  x0,  w6, uxtw #4
         urshl           v4.2s,   v0.2s,   v31.2s  // (sum + (1 << (log2sz - 1))) >>= log2sz
         dup             v4.8h,   v4.h[0]
 6:      // Subtract dc from ac
         ld1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0]
-        subs            w9,  w9,  #4
+        subs            w6,  w6,  #4
         sub             v0.8h,   v0.8h,   v4.8h
         sub             v1.8h,   v1.8h,   v4.8h
         sub             v2.8h,   v2.8h,   v4.8h
@@ -2131,6 +2123,10 @@ L(ipred_cfl_ac_420_w16_wpad0):
         shl             v3.8h,   v5.8h,   #1
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2168,6 +2164,10 @@ L(ipred_cfl_ac_420_w16_wpad1):
         trn1            v3.2d,   v3.2d,   v5.2d
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2191,6 +2191,10 @@ L(ipred_cfl_ac_420_w16_wpad2):
         dup             v3.8h,   v2.h[7]
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2216,6 +2220,10 @@ L(ipred_cfl_ac_420_w16_wpad3):
         trn1            v2.2d,   v2.2d,   v3.2d
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2226,7 +2234,15 @@ L(ipred_cfl_ac_420_w16_hpad):
 2:      // Vertical padding (h_pad > 0)
         subs            w4,  w4,  #4
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            2b
 3:
 
@@ -2257,6 +2273,10 @@ function ipred_cfl_ac_422_neon, export=1
         adr             x7,  L(ipred_cfl_ac_422_tbl)
         sub             w8,  w8,  #27
         ldrh            w8,  [x7, w8, uxtw #1]
+        movi            v16.8h,  #0
+        movi            v17.8h,  #0
+        movi            v18.8h,  #0
+        movi            v19.8h,  #0
         sub             x7,  x7,  w8, uxtw
         sub             w8,  w6,  w4         // height - h_pad
         rbit            w9,  w5              // rbit(width)
@@ -2265,9 +2285,8 @@ function ipred_cfl_ac_422_neon, export=1
         clz             w10, w10             // ctz(height)
         add             w9,  w9,  w10        // log2sz
         add             x10, x1,  x2
-        lsl             x2,  x2,  #1
         dup             v31.4s,  w9
-        mov             w9,  w6
+        lsl             x2,  x2,  #1
         neg             v31.4s,  v31.4s      // -log2sz
         br              x7
 
@@ -2282,6 +2301,8 @@ L(ipred_cfl_ac_422_w4):
         shl             v0.8h,   v0.8h,   #2
         shl             v1.8h,   v1.8h,   #2
         subs            w8,  w8,  #4
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
         st1             {v0.8h, v1.8h}, [x0], #32
         b.gt            1b
         trn2            v0.2d,   v1.2d,   v1.2d
@@ -2305,6 +2326,10 @@ L(ipred_cfl_ac_422_w8):
         shl             v3.8h,   v3.8h,   #2
         subs            w8,  w8,  #4
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v3.16b
         mov             v1.16b,  v3.16b
@@ -2330,6 +2355,10 @@ L(ipred_cfl_ac_422_w8_wpad):
         trn1            v2.2d,   v2.2d,   v6.2d
         subs            w8,  w8,  #4
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v3.16b
         mov             v1.16b,  v3.16b
@@ -2355,6 +2384,10 @@ L(ipred_cfl_ac_422_w16_wpad0):
         shl             v3.8h,   v3.8h,   #2
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2380,6 +2413,10 @@ L(ipred_cfl_ac_422_w16_wpad1):
         trn1            v3.2d,   v3.2d,   v5.2d
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2397,6 +2434,10 @@ L(ipred_cfl_ac_422_w16_wpad2):
         dup             v3.8h,   v2.h[7]
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
@@ -2416,6 +2457,10 @@ L(ipred_cfl_ac_422_w16_wpad3):
         trn1            v2.2d,   v2.2d,   v3.2d
         subs            w8,  w8,  #2
         st1             {v0.8h, v1.8h, v2.8h, v3.8h}, [x0], #64
+        add             v16.8h,  v16.8h,  v0.8h
+        add             v17.8h,  v17.8h,  v1.8h
+        add             v18.8h,  v18.8h,  v2.8h
+        add             v19.8h,  v19.8h,  v3.8h
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
