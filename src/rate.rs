@@ -1365,10 +1365,7 @@ impl RCState {
     Ok(RCFrameMetrics { log_scale_q24, fti, show_frame })
   }
 
-  pub(crate) fn twopass_in(
-    &mut self, maybe_buf: Option<&[u8]>,
-  ) -> Result<usize, ()> {
-    let mut consumed = 0;
+  pub(crate) fn twopass_init(&mut self) {
     if self.twopass_state == PASS_SINGLE || self.twopass_state == PASS_1 {
       // Initialize the second pass.
       self.twopass_state += PASS_2;
@@ -1391,93 +1388,127 @@ impl RCState {
         self.frame_metrics.resize(nmetrics, RCFrameMetrics::new());
       }
     }
+  }
+
+
+  // Parse the rate control summary
+  //
+  // It returns the amount of data consumed in the process or
+  // an empty error on parsing failure.
+  pub(crate) fn twopass_parse_summary(
+    &mut self, buf: &[u8],
+  ) -> Result<usize, ()> {
+    let consumed = self.buffer_fill(buf, 0, TWOPASS_HEADER_SZ);
+    if self.pass2_buffer_fill >= TWOPASS_HEADER_SZ {
+      self.pass2_buffer_pos = 0;
+      // Read the summary header data.
+      // check the magic value and version number.
+      if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
+        || self.unbuffer_val(4) != TWOPASS_VERSION as i64
+      {
+        return Err(());
+      }
+      let ntus_total = self.unbuffer_val(4) as i32;
+      // Make sure the file claims to have at least one TU.
+      // Otherwise we probably got the placeholder data from an aborted
+      //  pass 1.
+      if ntus_total < 1 {
+        return Err(());
+      }
+      let mut maybe_nframes_total_total: Option<i32> = Some(0);
+      let mut nframes_total: [i32; FRAME_NSUBTYPES + 1] =
+        [0; FRAME_NSUBTYPES + 1];
+      for fti in 0..=FRAME_NSUBTYPES {
+        nframes_total[fti] = self.unbuffer_val(4) as i32;
+        if nframes_total[fti] < 0 {
+          return Err(());
+        }
+        maybe_nframes_total_total = maybe_nframes_total_total
+          .and_then(|n| n.checked_add(nframes_total[fti]));
+      }
+      if let Some(nframes_total_total) = maybe_nframes_total_total {
+        // We can't have more TUs than frames.
+        if ntus_total > nframes_total_total {
+          return Err(());
+        }
+        let mut exp: [u8; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
+        for fti in 0..FRAME_NSUBTYPES {
+          exp[fti] = self.unbuffer_val(1) as u8;
+        }
+        let mut scale_sum: [i64; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
+        for fti in 0..FRAME_NSUBTYPES {
+          scale_sum[fti] = self.unbuffer_val(8);
+          if scale_sum[fti] < 0 {
+            return Err(());
+          }
+        }
+        // Got a valid header.
+        // Set up pass 2.
+        self.ntus_total = ntus_total;
+        self.ntus_left = ntus_total;
+        self.nframes_total = nframes_total;
+        self.nframes_left = nframes_total;
+        self.nframes_total_total = nframes_total_total;
+        if self.frame_metrics.is_empty() {
+          self.reservoir_frame_delay = ntus_total;
+          self.scale_window_nframes = self.nframes_total;
+          self.scale_window_sum = scale_sum;
+          self.reservoir_max =
+            self.bits_per_tu * (self.reservoir_frame_delay as i64);
+          self.reservoir_target = (self.reservoir_max + 1) >> 1;
+          self.reservoir_fullness = self.reservoir_target;
+        } else {
+          self.reservoir_frame_delay =
+            self.reservoir_frame_delay.min(ntus_total);
+        }
+        self.exp = exp;
+        // Clear the header data from the buffer to make room for the
+        //  packet data.
+        self.pass2_buffer_fill = 0;
+      } else {
+        // The sum of the frame counts for each type overflowed a 32-bit
+        //  integer.
+        return Err(());
+      }
+    }
+    Ok(consumed)
+  }
+
+  // Return the size of the first buffer twopass_in expects
+  //
+  // It is the summary size (constant) + the number of frame data packets
+  // (variable depending on the configuration) it needs to starts encoding.
+  pub(crate) fn twopass_first_packet_size(&self) -> usize {
+    let frames_needed = if !self.frame_metrics.is_empty() {
+      // If we're not using whole-file buffering, we need at least one
+      //  frame per buffer slot.
+      self.reservoir_frame_delay as usize
+    } else {
+      // Otherwise we need just one.
+      1
+    };
+
+    TWOPASS_HEADER_SZ + frames_needed * TWOPASS_PACKET_SZ
+  }
+
+  // If called without a buffer it will return the size of the next
+  // buffer it expects.
+  //
+  // If called with a buffer it will consume it fully.
+  // It returns Ok(0) if the buffer had been parsed or Err(())
+  // if the buffer hadn't been enough or other errors happened.
+  pub(crate) fn twopass_in(
+    &mut self, maybe_buf: Option<&[u8]>,
+  ) -> Result<usize, ()> {
+    let mut consumed = 0;
+    self.twopass_init();
     // If we haven't got a valid summary header yet, try to parse one.
     if self.nframes_total[FRAME_SUBTYPE_I] == 0 {
       self.pass2_data_ready = false;
       if let Some(buf) = maybe_buf {
-        consumed = self.buffer_fill(buf, consumed, TWOPASS_HEADER_SZ);
-        if self.pass2_buffer_fill >= TWOPASS_HEADER_SZ {
-          self.pass2_buffer_pos = 0;
-          // Read the summary header data.
-          // check the magic value and version number.
-          if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
-            || self.unbuffer_val(4) != TWOPASS_VERSION as i64
-          {
-            return Err(());
-          }
-          let ntus_total = self.unbuffer_val(4) as i32;
-          // Make sure the file claims to have at least one TU.
-          // Otherwise we probably got the placeholder data from an aborted
-          //  pass 1.
-          if ntus_total < 1 {
-            return Err(());
-          }
-          let mut maybe_nframes_total_total: Option<i32> = Some(0);
-          let mut nframes_total: [i32; FRAME_NSUBTYPES + 1] =
-            [0; FRAME_NSUBTYPES + 1];
-          for fti in 0..=FRAME_NSUBTYPES {
-            nframes_total[fti] = self.unbuffer_val(4) as i32;
-            if nframes_total[fti] < 0 {
-              return Err(());
-            }
-            maybe_nframes_total_total = maybe_nframes_total_total
-              .and_then(|n| n.checked_add(nframes_total[fti]));
-          }
-          if let Some(nframes_total_total) = maybe_nframes_total_total {
-            // We can't have more TUs than frames.
-            if ntus_total > nframes_total_total {
-              return Err(());
-            }
-            let mut exp: [u8; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
-            for fti in 0..FRAME_NSUBTYPES {
-              exp[fti] = self.unbuffer_val(1) as u8;
-            }
-            let mut scale_sum: [i64; FRAME_NSUBTYPES] = [0; FRAME_NSUBTYPES];
-            for fti in 0..FRAME_NSUBTYPES {
-              scale_sum[fti] = self.unbuffer_val(8);
-              if scale_sum[fti] < 0 {
-                return Err(());
-              }
-            }
-            // Got a valid header.
-            // Set up pass 2.
-            self.ntus_total = ntus_total;
-            self.ntus_left = ntus_total;
-            self.nframes_total = nframes_total;
-            self.nframes_left = nframes_total;
-            self.nframes_total_total = nframes_total_total;
-            if self.frame_metrics.is_empty() {
-              self.reservoir_frame_delay = ntus_total;
-              self.scale_window_nframes = self.nframes_total;
-              self.scale_window_sum = scale_sum;
-              self.reservoir_max =
-                self.bits_per_tu * (self.reservoir_frame_delay as i64);
-              self.reservoir_target = (self.reservoir_max + 1) >> 1;
-              self.reservoir_fullness = self.reservoir_target;
-            } else {
-              self.reservoir_frame_delay =
-                self.reservoir_frame_delay.min(ntus_total);
-            }
-            self.exp = exp;
-            // Clear the header data from the buffer to make room for the
-            //  packet data.
-            self.pass2_buffer_fill = 0;
-          } else {
-            // The sum of the frame counts for each type overflowed a 32-bit
-            //  integer.
-            return Err(());
-          }
-        }
+        consumed = self.twopass_parse_summary(buf)?
       } else {
-        let frames_needed = if !self.frame_metrics.is_empty() {
-          // If we're not using whole-file buffering, we need at least one
-          //  frame per buffer slot.
-          self.reservoir_frame_delay as usize
-        } else {
-          // Otherwise we need just one.
-          1
-        };
-        return Ok(TWOPASS_HEADER_SZ + frames_needed * TWOPASS_PACKET_SZ);
+        return Ok(self.twopass_first_packet_size());
       }
     }
     if self.nframes_total[FRAME_SUBTYPE_I] > 0 {
