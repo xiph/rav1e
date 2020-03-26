@@ -1850,6 +1850,8 @@ DECLARE_REG_TMP 8, 5
 ; 4e 4f 40 41 42 43 44 45
 ; 5e 5f 50 51 52 53 54 55
 
+%if HAVE_AVX512ICL
+
 INIT_ZMM avx512icl
 cglobal cdef_filter_4x4, 4, 8, 13, dst, stride, left, top, pri, sec, dir, damping, edge
 %define base r7-edge_mask
@@ -1998,5 +2000,7 @@ ALIGN function_align
     pminub         m5, m12
     vpdpbusd       m0, m5, m9
     ret
+
+%endif ; HAVE_AVX512ICL
 
 %endif ; ARCH_X86_64
