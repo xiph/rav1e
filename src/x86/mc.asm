@@ -240,6 +240,7 @@ BIDIR_JMP_TABLE blend_avx2,           4, 8, 16, 32
 BIDIR_JMP_TABLE blend_v_avx2,      2, 4, 8, 16, 32
 BIDIR_JMP_TABLE blend_h_avx2,      2, 4, 8, 16, 32, 32, 32
 
+%if HAVE_AVX512ICL
 BASE_JMP_TABLE prep, avx512icl,            4, 8, 16, 32, 64, 128
 HV_JMP_TABLE prep, bilin, avx512icl, 7,    4, 8, 16, 32, 64, 128
 HV_JMP_TABLE prep, 8tap,  avx512icl, 7,    4, 8, 16, 32, 64, 128
@@ -249,6 +250,7 @@ BIDIR_JMP_TABLE mask_avx512icl,            4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420_avx512icl,      4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_422_avx512icl,      4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_444_avx512icl,      4, 8, 16, 32, 64, 128
+%endif ; HAVE_AVX512ICL
 
 SECTION .text
 
@@ -5501,6 +5503,7 @@ cglobal w_mask_444, 4, 8, 8, dst, stride, tmp1, tmp2, w, h, mask, stride3
     jg .w128_loop
     RET
 
+%if HAVE_AVX512ICL
 INIT_ZMM avx512icl
 PREP_BILIN
 PREP_8TAP
@@ -6022,5 +6025,7 @@ cglobal w_mask_444, 4, 8, 12, dst, stride, tmp1, tmp2, w, h, mask, stride3
     dec                  hd
     jg .w128_loop
     RET
+
+%endif ; HAVE_AVX512ICL
 
 %endif ; ARCH_X86_64
