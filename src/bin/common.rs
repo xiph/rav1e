@@ -9,6 +9,7 @@
 
 use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
+use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{App, AppSettings, Arg, ArgMatches, Shell, SubCommand};
 use rav1e::prelude::*;
@@ -42,6 +43,7 @@ pub struct CliOptions {
   pub verbose: Verbose,
   pub benchmark: bool,
   pub threads: usize,
+  pub metrics_enabled: MetricsEnabled,
   pub pass1file_name: Option<String>,
   pub pass2file_name: Option<String>,
   pub save_config: Option<String>,
@@ -74,6 +76,8 @@ fn build_speed_long_help() -> String {
 }
 
 #[allow(unused_mut)]
+/// Only call this once at the start of the app,
+/// otherwise bad things will happen.
 pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = version::short();
   let ver_long = version::full();
@@ -341,6 +345,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("psnr")
     )
     .arg(
+      Arg::with_name("METRICS")
+        .help("Calulate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
+        .long("metrics")
+    )
+    .arg(
       Arg::with_name("RECONSTRUCTION")
         .help("Outputs a Y4M file containing the output from the decoder")
         .long("reconstruction")
@@ -448,6 +457,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     Verbose::Normal
   };
 
+  let metrics_enabled = if matches.is_present("METRICS") {
+    MetricsEnabled::All
+  } else if matches.is_present("PSNR") {
+    MetricsEnabled::Psnr
+  } else {
+    MetricsEnabled::None
+  };
+
   Ok(CliOptions {
     io,
     enc,
@@ -456,6 +473,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     // if a parameter has a default value.
     color_range_specified: matches.occurrences_of("PIXEL_RANGE") > 0,
     override_time_base: matches.is_present("FRAME_RATE"),
+    metrics_enabled,
     skip: matches.value_of("SKIP").unwrap().parse().unwrap(),
     benchmark: matches.is_present("BENCHMARK"),
     verbose,
@@ -615,7 +633,6 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     .map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());
   cfg.rdo_lookahead_frames =
     matches.value_of("RDO_LOOKAHEAD_FRAMES").unwrap_or("40").parse().unwrap();
-  cfg.show_psnr = matches.is_present("PSNR");
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   if cfg.tune == Tune::Psychovisual {

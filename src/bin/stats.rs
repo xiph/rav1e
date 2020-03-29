@@ -7,7 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use av_metrics::video::*;
 use rav1e::data::EncoderStats;
+use rav1e::prelude::Rational;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
 use std::fmt;
@@ -19,24 +21,34 @@ pub struct FrameSummary {
   pub size: usize,
   pub input_frameno: u64,
   pub frame_type: FrameType,
-  /// PSNR for Y, U, and V planes
-  pub psnr: Option<(f64, f64, f64)>,
+  /// Contains metrics such as PSNR, SSIM, etc.
+  pub metrics: QualityMetrics,
   /// QP selected for the frame.
   pub qp: u8,
   /// Block-level encoding stats for the frame
   pub enc_stats: EncoderStats,
 }
 
-impl<T: Pixel> From<Packet<T>> for FrameSummary {
-  fn from(packet: Packet<T>) -> Self {
-    Self {
-      size: packet.data.len(),
-      input_frameno: packet.input_frameno,
-      frame_type: packet.frame_type,
-      psnr: packet.psnr,
-      qp: packet.qp,
-      enc_stats: packet.enc_stats,
-    }
+pub fn build_frame_summary<T: Pixel>(
+  packets: Packet<T>, bit_depth: usize, chroma_sampling: ChromaSampling,
+  metrics_cli: MetricsEnabled,
+) -> FrameSummary {
+  let metrics_input_frame: &Frame<T> = packets.source.as_ref().unwrap();
+  let metrics_output_frame: &Frame<T> = packets.rec.as_ref().unwrap();
+  let encode_metrics: QualityMetrics = calculate_frame_metrics(
+    metrics_input_frame,
+    metrics_output_frame,
+    bit_depth,
+    chroma_sampling,
+    metrics_cli,
+  );
+  FrameSummary {
+    size: packets.data.len(),
+    input_frameno: packets.input_frameno,
+    frame_type: packets.frame_type,
+    metrics: encode_metrics,
+    qp: packets.qp,
+    enc_stats: packets.enc_stats,
   }
 }
 
@@ -48,10 +60,10 @@ impl fmt::Display for FrameSummary {
       self.input_frameno,
       self.frame_type,
       self.size,
-      if let Some(psnr) = self.psnr {
+      if let Some(psnr) = self.metrics.psnr {
         format!(
           " - PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
-          psnr.0, psnr.1, psnr.2
+          psnr.y, psnr.u, psnr.v
         )
       } else {
         String::new()
@@ -75,13 +87,14 @@ pub struct ProgressInfo {
   // This value will be updated in the CLI very frequently, so we cache the previous value
   // to reduce the overall complexity.
   encoded_size: usize,
-  // Whether to display PSNR statistics during and at end of encode
-  show_psnr: bool,
+  // Which Metrics to display during and at end of encode
+  metrics_enabled: MetricsEnabled,
 }
 
 impl ProgressInfo {
   pub fn new(
-    frame_rate: Rational, total_frames: Option<usize>, show_psnr: bool,
+    frame_rate: Rational, total_frames: Option<usize>,
+    metrics_enabled: MetricsEnabled,
   ) -> Self {
     Self {
       frame_rate,
@@ -89,7 +102,7 @@ impl ProgressInfo {
       time_started: Instant::now(),
       frame_info: Vec::with_capacity(total_frames.unwrap_or_default()),
       encoded_size: 0,
-      show_psnr,
+      metrics_enabled,
     }
   }
 
@@ -309,8 +322,13 @@ impl ProgressInfo {
       self.print_transform_type_summary();
       self.print_prediction_modes_summary();
     }
-    if self.show_psnr {
-      self.print_video_psnr();
+    match self.metrics_enabled {
+      MetricsEnabled::None => info!("----"),
+      MetricsEnabled::Psnr => self.print_video_psnr(),
+      MetricsEnabled::All => {
+        self.print_video_psnr();
+        self.print_video_all();
+      }
     }
   }
 
@@ -329,22 +347,28 @@ impl ProgressInfo {
 
   fn print_video_psnr(&self) {
     info!("----------");
-    let psnr_y =
-      self.frame_info.iter().map(|fi| fi.psnr.unwrap().0).sum::<f64>()
-        / self.frame_info.len() as f64;
-    let psnr_u =
-      self.frame_info.iter().map(|fi| fi.psnr.unwrap().1).sum::<f64>()
-        / self.frame_info.len() as f64;
-    let psnr_v =
-      self.frame_info.iter().map(|fi| fi.psnr.unwrap().2).sum::<f64>()
-        / self.frame_info.len() as f64;
+    let psnr_y = sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().y);
+    let psnr_u = sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().u);
+    let psnr_v = sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().v);
+    let psnr_avg =
+      sum_metric(&self.frame_info, |fi| fi.metrics.psnr.unwrap().avg);
     info!(
-      "Mean PSNR: Y: {:.4}  Cb: {:.4}  Cr: {:.4}  Avg: {:.4}",
-      psnr_y,
-      psnr_u,
-      psnr_v,
-      (psnr_y + psnr_u + psnr_v) / 3.0
-    )
+      "Mean PSNR: Avg: {:.4}  Y: {:.4}  Cb: {:.4}  Cr: {:.4}",
+      psnr_avg, psnr_y, psnr_u, psnr_v
+    );
+  }
+  fn print_video_all(&self) {
+    info!("----------");
+    let psnr_hvs =
+      sum_metric(&self.frame_info, |fi| fi.metrics.psnr_hvs.unwrap().avg);
+    let ssim = sum_metric(&self.frame_info, |fi| fi.metrics.ssim.unwrap().avg);
+    let ms_ssim =
+      sum_metric(&self.frame_info, |fi| fi.metrics.ms_ssim.unwrap().avg);
+    let ciede = sum_metric(&self.frame_info, |fi| fi.metrics.ciede.unwrap());
+    info!("PSNR HVS: {:.4}", psnr_hvs);
+    info!("SSIM: {:.4}  MS SSIM: {:.4}", ssim, ms_ssim);
+    info!("CIEDE2000: {:.4}", ciede);
+    info!("----------");
   }
 
   fn print_block_type_summary(&self) {
@@ -571,6 +595,12 @@ impl ProgressInfo {
   }
 }
 
+fn sum_metric<F: FnMut(&FrameSummary) -> f64>(
+  frame_info: &[FrameSummary], map_fn: F,
+) -> f64 {
+  frame_info.iter().map(map_fn).sum::<f64>() / frame_info.len() as f64
+}
+
 impl fmt::Display for ProgressInfo {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     if let Some(total_frames) = self.total_frames {
@@ -607,5 +637,79 @@ fn secs_to_human_time(mut secs: u64) -> String {
     format!("{}m {}s", mins, secs)
   } else {
     format!("{}s", secs)
+  }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct QualityMetrics {
+  /// Peak Signal-to-Noise Ratio for Y, U, and V planes
+  pub psnr: Option<PlanarMetrics>,
+  /// Peak Signal-to-Noise Ratio as perceived by the Human Visual System--
+  /// taking into account Contrast Sensitivity Function (CSF)
+  pub psnr_hvs: Option<PlanarMetrics>,
+  /// Structural Similarity
+  pub ssim: Option<PlanarMetrics>,
+  /// Multi-Scale Structural Similarity
+  pub ms_ssim: Option<PlanarMetrics>,
+  /// CIEDE 2000 color difference algorithm: https://en.wikipedia.org/wiki/Color_difference#CIEDE2000
+  pub ciede: Option<f64>,
+  /// Aligned Peak Signal-to-Noise Ratio for Y, U, and V planes
+  pub apsnr: Option<PlanarMetrics>,
+  /// Netflix's Video Multimethod Assessment Fusion
+  pub vmaf: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MetricsEnabled {
+  /// Don't calculate any metrics.
+  None,
+  /// Calculate the PSNR of each plane, but no other metrics.
+  Psnr,
+  /// Calculate all implemented metrics. Currently implemented metrics match what is available via AWCY.
+  All,
+}
+
+pub fn calculate_frame_metrics<T: Pixel>(
+  frame1: &Frame<T>, frame2: &Frame<T>, bit_depth: usize, cs: ChromaSampling,
+  metrics: MetricsEnabled,
+) -> QualityMetrics {
+  let frame1_info = FrameInfo {
+    planes: frame1.planes.clone(),
+    bit_depth,
+    chroma_sampling: cs,
+  };
+
+  let frame2_info = FrameInfo {
+    planes: frame2.planes.clone(),
+    bit_depth,
+    chroma_sampling: cs,
+  };
+
+  match metrics {
+    MetricsEnabled::None => QualityMetrics::default(),
+    MetricsEnabled::Psnr => {
+      let mut metrics = QualityMetrics::default();
+      metrics.psnr =
+        Some(psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap());
+      metrics
+    }
+    MetricsEnabled::All => {
+      let mut metrics = QualityMetrics::default();
+      metrics.psnr =
+        Some(psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap());
+      metrics.psnr_hvs = Some(
+        psnr_hvs::calculate_frame_psnr_hvs(&frame1_info, &frame2_info)
+          .unwrap(),
+      );
+      let ssim = ssim::calculate_frame_ssim(&frame1_info, &frame2_info);
+      metrics.ssim = Some(ssim.unwrap());
+      let ms_ssim = ssim::calculate_frame_msssim(&frame1_info, &frame2_info);
+      metrics.ms_ssim = Some(ms_ssim.unwrap());
+      let ciede = ciede::calculate_frame_ciede(&frame1_info, &frame2_info);
+      metrics.ciede = Some(ciede.unwrap());
+      // TODO APSNR
+      // TODO VMAF
+      metrics
+    }
   }
 }

@@ -100,6 +100,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
   buffer: &mut [u8], buf_pos: &mut usize,
   mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
+  metrics_cli: MetricsEnabled,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
   let y4m_details = source.input.get_video_details();
   let mut frame_summaries = Vec::new();
@@ -155,7 +156,12 @@ fn process_frame<T: Pixel, D: Decoder>(
       {
         write_y4m_frame(y4m_enc_uw, rec, y4m_details);
       }
-      frame_summaries.push(pkt.into());
+      frame_summaries.push(build_frame_summary(
+        pkt,
+        y4m_details.bit_depth,
+        y4m_details.chroma_sampling,
+        metrics_cli,
+      ));
     }
     Err(EncoderStatus::NeedMoreData) => {
       source.read_frame(ctx, y4m_details);
@@ -197,6 +203,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   output: &mut dyn Muxer, source: &mut Source<D>,
   pass1file_name: Option<&String>, pass2file_name: Option<&String>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
+  metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
   let mut ctx: Context<T> =
     cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
@@ -224,6 +231,7 @@ fn do_encode<T: Pixel, D: Decoder>(
     &mut buffer,
     &mut buf_pos,
     y4m_enc.as_mut(),
+    metrics_enabled,
   )? {
     if verbose != Verbose::Quiet {
       for frame in frame_info {
@@ -419,7 +427,7 @@ fn run() -> Result<(), error::CliError> {
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
     if cli.limit == 0 { None } else { Some(cli.limit) },
-    cfg.enc.show_psnr,
+    cli.metrics_enabled,
   );
 
   for _ in 0..cli.skip {
@@ -467,6 +475,7 @@ fn run() -> Result<(), error::CliError> {
       cli.pass1file_name.as_ref(),
       cli.pass2file_name.as_ref(),
       y4m_enc,
+      cli.metrics_enabled,
     )?
   } else {
     do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
@@ -478,6 +487,7 @@ fn run() -> Result<(), error::CliError> {
       cli.pass1file_name.as_ref(),
       cli.pass2file_name.as_ref(),
       y4m_enc,
+      cli.metrics_enabled,
     )?
   }
   if cli.benchmark {

@@ -16,7 +16,6 @@ use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
 use crate::hawktracer::*;
-use crate::metrics::calculate_frame_psnr;
 use crate::partition::*;
 use crate::rate::RCState;
 use crate::rate::FRAME_NSUBTYPES;
@@ -349,18 +348,6 @@ impl<T: Pixel> ContextInner<T> {
     self.compute_frame_invariants();
 
     Ok(())
-  }
-
-  fn get_frame(&self, input_frameno: u64) -> Arc<Frame<T>> {
-    // Clones only the arc, so low cost overhead
-    self
-      .frame_q
-      .get(&input_frameno)
-      .as_ref()
-      .unwrap()
-      .as_ref()
-      .unwrap()
-      .clone()
   }
 
   /// Indicates whether more frames need to be read into the frame queue
@@ -1101,7 +1088,6 @@ impl<T: Pixel> ContextInner<T> {
 
       let input_frameno = frame_data.fi.input_frameno;
       let frame_type = frame_data.fi.frame_type;
-      let bit_depth = frame_data.fi.sequence.bit_depth;
       let qp = frame_data.fi.base_q_idx;
       let enc_stats = frame_data.fs.enc_stats.clone();
       self.finalize_packet(
@@ -1109,7 +1095,6 @@ impl<T: Pixel> ContextInner<T> {
         source,
         input_frameno,
         frame_type,
-        bit_depth,
         qp,
         enc_stats,
       )
@@ -1222,14 +1207,12 @@ impl<T: Pixel> ContextInner<T> {
       if fi.show_frame {
         let input_frameno = fi.input_frameno;
         let frame_type = fi.frame_type;
-        let bit_depth = fi.sequence.bit_depth;
         let qp = fi.base_q_idx;
         self.finalize_packet(
           rec,
           source,
           input_frameno,
           frame_type,
-          bit_depth,
           qp,
           enc_stats,
         )
@@ -1283,7 +1266,7 @@ impl<T: Pixel> ContextInner<T> {
 
   fn finalize_packet(
     &mut self, rec: Option<Arc<Frame<T>>>, source: Option<Arc<Frame<T>>>,
-    input_frameno: u64, frame_type: FrameType, bit_depth: usize, qp: u8,
+    input_frameno: u64, frame_type: FrameType, qp: u8,
     enc_stats: EncoderStats,
   ) -> Result<Packet<T>, EncoderStatus> {
     let data = self.packet_data.clone();
@@ -1292,25 +1275,8 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::Failure);
     }
 
-    let mut psnr = None;
-    if self.config.show_psnr {
-      if let Some(ref rec) = rec {
-        let original_frame = self.get_frame(input_frameno);
-        psnr = Some(calculate_frame_psnr(&*original_frame, rec, bit_depth));
-      }
-    }
-
     self.frames_processed += 1;
-    Ok(Packet {
-      data,
-      rec,
-      source,
-      input_frameno,
-      frame_type,
-      psnr,
-      qp,
-      enc_stats,
-    })
+    Ok(Packet { data, rec, source, input_frameno, frame_type, qp, enc_stats })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {

@@ -1710,7 +1710,6 @@ fn log_q_exp_overflow() {
         non_square_partition: false,
         ..Default::default()
       },
-      show_psnr: false,
     },
     threads: 1,
   };
@@ -1778,7 +1777,6 @@ fn guess_frame_subtypes_assert() {
         non_square_partition: false,
         ..Default::default()
       },
-      show_psnr: false,
     },
     threads: 1,
   };

@@ -170,8 +170,6 @@ pub struct Packet<T: Pixel> {
   pub input_frameno: u64,
   /// Type of the shown frame.
   pub frame_type: FrameType,
-  /// PSNR for Y, U, and V planes for the shown frame.
-  pub psnr: Option<(f64, f64, f64)>,
   /// QP selected for the frame.
   pub qp: u8,
   /// Block-level encoding stats for the frame

@@ -180,7 +180,6 @@ mod entropymode;
 mod lrf;
 mod mc;
 mod me;
-mod metrics;
 mod rate;
 mod recon_intra;
 mod scan_order;
