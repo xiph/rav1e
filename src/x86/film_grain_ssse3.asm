@@ -1492,13 +1492,11 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 %if ARCH_X86_32
     mov            srcq, r1mp
     add            srcq, r4mp
-    xor            r8mp, 4
-    test           r8mp, 4
 %else
     lea            srcq, [src_bakq+wq]
-    test           srcq, 16             ; this relies on buffer alignment...
 %endif
-    jz .next_blk
+    btc       dword r8m, 2
+    jc .next_blk
 
     add          offxyd, 16
     test      dword r8m, 2              ; r8m & 2 = have_top_overlap
@@ -1640,11 +1638,10 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 %if ARCH_X86_32
     mov            srcq, r1m
     add            srcq, r4m
-    xor            r8mp, 4
 %else
     lea            srcq, [src_bakq+wq]
 %endif
-    ; assert(srcq & 16) != 0
+    xor       dword r8m, 4
     add          offxyd, 16
 
     ; since this half-block had left-overlap, the next does not
@@ -1845,9 +1842,8 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     jz .end_y_v_overlap
     ; 2 lines get vertical overlap, then fall back to non-overlap code for
     ; remaining (up to) 30 lines
-    xor              hd, 0x10000
-    test             hd, 0x10000
-    jnz .loop_y_v_overlap
+    btc              hd, 16
+    jnc .loop_y_v_overlap
     jmp .loop_y
 
 .end_y_v_overlap:
@@ -1860,13 +1856,11 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 %if ARCH_X86_32
     mov            srcq, r1mp
     add            srcq, r4mp
-    xor            r8mp, 4
-    test           r8mp, 4
 %else
     lea            srcq, [src_bakq+wq]
-    test           srcq, 16
 %endif
-    jz .loop_x_hv_overlap
+    btc       dword r8m, 2
+    jc .loop_x_hv_overlap
     add          offxyd, 16
 %if ARCH_X86_32
     add dword [rsp+6*mmsize+1*gprsize], 16
@@ -2048,9 +2042,8 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     jz .end_y_hv_overlap
     ; 2 lines get vertical overlap, then fall back to non-overlap code for
     ; remaining (up to) 30 lines
-    xor              hd, 0x10000
-    test             hd, 0x10000
-    jnz .loop_y_hv_overlap
+    btc              hd, 16
+    jnc .loop_y_hv_overlap
     jmp .loop_y_h_overlap
 
 .end_y_hv_overlap:
@@ -2063,11 +2056,10 @@ cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
 %if ARCH_X86_32
     mov            srcq, r1m
     add            srcq, r4m
-    xor            r8mp, 4
 %else
     lea            srcq, [src_bakq+wq]
 %endif
-    ; assert(srcq & 16) != 0
+    xor       dword r8m, 4
     add          offxyd, 16
 %if ARCH_X86_32
     add dword [rsp+6*mmsize+1*gprsize], 16
