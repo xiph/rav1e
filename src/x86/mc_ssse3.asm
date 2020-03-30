@@ -57,7 +57,15 @@ subpel_h_shufC: db 8,  9, 10, 11,  9, 10, 11, 12, 10, 11, 12, 13, 11, 12, 13, 14
 bilin_h_shuf4:  db 1,  0,  2,  1,  3,  2,  4,  3,  9,  8, 10,  9, 11, 10, 12, 11
 bilin_h_shuf8:  db 1,  0,  2,  1,  3,  2,  4,  3,  5,  4,  6,  5,  7,  6,  8,  7
 
+pb_8x0_8x8: times 8 db 0
+            times 8 db 8
+resize_mul: dd 0, 1, 2, 3
+resize_shuf: times 5 db 0
+             db 1, 2, 3, 4, 5, 6
+             times 5+16 db 7
+
 pb_64:    times 16 db 64
+pw_m256:  times 8 dw -256
 pw_8:     times 8 dw 8
 pw_26:    times 8 dw 26
 pw_34:    times 8 dw 34
@@ -67,6 +75,7 @@ pw_2048:  times 8 dw 2048
 pw_6903:  times 8 dw 6903
 pw_8192:  times 8 dw 8192
 pd_32:    times 4 dd 32
+pd_63:    times 4 dd 63
 pd_512:   times 4 dd 512
 pd_16384: times 4 dd 16484
 pd_32768: times 4 dd 32768
@@ -5081,3 +5090,218 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
 %undef reg_dstride
 %undef reg_blkm
 %undef reg_tmp
+
+cextern resize_filter
+
+%macro SCRATCH 3
+%if ARCH_X86_32
+    mova [rsp+%3*mmsize], m%1
+%define m%2 [rsp+%3*mmsize]
+%else
+    SWAP             %1, %2
+%endif
+%endmacro
+
+INIT_XMM ssse3
+%if ARCH_X86_64
+cglobal resize, 0, 14, 16, dst, dst_stride, src, src_stride, \
+                           dst_w, h, src_w, dx, mx0
+%elif STACK_ALIGNMENT >= 16
+cglobal resize, 0, 7, 8, 3 * 16, dst, dst_stride, src, src_stride, \
+                                 dst_w, h, src_w, dx, mx0
+%else
+cglobal resize, 0, 6, 8, 3 * 16, dst, dst_stride, src, src_stride, \
+                                 dst_w, h, src_w, dx, mx0
+%endif
+    movifnidn          dstq, dstmp
+    movifnidn          srcq, srcmp
+%if STACK_ALIGNMENT >= 16
+    movifnidn        dst_wd, dst_wm
+%endif
+%if ARCH_X86_64
+    movifnidn            hd, hm
+%endif
+    sub          dword mx0m, 4<<14
+    sub        dword src_wm, 8
+    movd                 m7, dxm
+    movd                 m6, mx0m
+    movd                 m5, src_wm
+    pshufd               m7, m7, q0000
+    pshufd               m6, m6, q0000
+    pshufd               m5, m5, q0000
+
+%if ARCH_X86_64
+    DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, h, x, picptr
+    LEA                  r7, $$
+%define base r7-$$
+%else
+    DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, x
+%if STACK_ALIGNMENT >= 16
+    LEA                  r6, $$
+%define base r6-$$
+%else
+    LEA                  r4, $$
+%define base r4-$$
+%endif
+%endif
+
+%if ARCH_X86_64
+    mova                m12, [base+pw_m256]
+    mova                m11, [base+pd_63]
+    mova                m10, [base+pb_8x0_8x8]
+%else
+%define m12 [base+pw_m256]
+%define m11 [base+pd_63]
+%define m10 [base+pb_8x0_8x8]
+%endif
+    pmaddwd              m4, m7, [base+resize_mul]  ; dx*[0,1,2,3]
+    pslld                m7, 2                      ; dx*4
+    pslld                m5, 14
+    paddd                m6, m4                     ; mx+[0..3]*dx
+    SCRATCH               7, 15, 0
+    SCRATCH               6, 14, 1
+    SCRATCH               5, 13, 2
+
+    ; m2 = 0, m3 = pmulhrsw constant for x=(x+64)>>7
+    ; m8 = mx+[0..3]*dx, m5 = dx*4, m6 = src_w, m7 = 0x3f, m15=0,8
+
+.loop_y:
+    xor                  xd, xd
+    mova                 m0, m14                    ; per-line working version of mx
+
+.loop_x:
+    pxor                 m1, m1
+    pcmpgtd              m1, m0
+    pandn                m1, m0
+    psrad                m2, m0, 8                  ; filter offset (unmasked)
+    pcmpgtd              m3, m13, m1
+    pand                 m1, m3
+    pandn                m3, m13
+    por                  m1, m3
+    psubd                m3, m0, m1                 ; pshufb offset
+    psrad                m1, 14                     ; clipped src_x offset
+    psrad                m3, 14                     ; pshufb edge_emu offset
+    pand                 m2, m11                    ; filter offset (masked)
+
+    ; load source pixels
+%if ARCH_X86_64
+    movd                r8d, xm1
+    pshuflw             xm1, xm1, q3232
+    movd                r9d, xm1
+    punpckhqdq          xm1, xm1
+    movd               r10d, xm1
+    psrlq               xm1, 32
+    movd               r11d, xm1
+    movq                xm4, [srcq+r8]
+    movq                xm5, [srcq+r10]
+    movhps              xm4, [srcq+r9]
+    movhps              xm5, [srcq+r11]
+%else
+    movd                r3d, xm1
+    pshufd              xm1, xm1, q3312
+    movd                r1d, xm1
+    pshuflw             xm1, xm1, q3232
+    movq                xm4, [srcq+r3]
+    movq                xm5, [srcq+r1]
+    movd                r3d, xm1
+    punpckhqdq          xm1, xm1
+    movd                r1d, xm1
+    movhps              xm4, [srcq+r3]
+    movhps              xm5, [srcq+r1]
+%endif
+
+    ; if no emulation is required, we don't need to shuffle or emulate edges
+    ; this also saves 2 quasi-vpgatherdqs
+    vptest               m3, m3
+    jz .filter
+
+%if ARCH_X86_64
+    movd                r8d, xm3
+    pshuflw             xm3, xm3, q3232
+    movd                r9d, xm3
+    punpckhqdq          xm3, xm3
+    movd               r10d, xm3
+    psrlq               xm3, 32
+    movd               r11d, xm3
+    movsxd               r8, r8d
+    movsxd               r9, r9d
+    movsxd              r10, r10d
+    movsxd              r11, r11d
+    movq                xm6, [base+resize_shuf+4+r8]
+    movq                xm7, [base+resize_shuf+4+r10]
+    movhps              xm6, [base+resize_shuf+4+r9]
+    movhps              xm7, [base+resize_shuf+4+r11]
+%else
+    movd                r3d, xm3
+    pshufd              xm3, xm3, q3312
+    movd                r1d, xm3
+    pshuflw             xm3, xm3, q3232
+    movq                xm6, [base+resize_shuf+4+r3]
+    movq                xm7, [base+resize_shuf+4+r1]
+    movd                r3d, xm3
+    punpckhqdq          xm3, xm3
+    movd                r1d, xm3
+    movhps              xm6, [base+resize_shuf+4+r3]
+    movhps              xm7, [base+resize_shuf+4+r1]
+%endif
+
+    paddb                m6, m10
+    paddb                m7, m10
+    pshufb               m4, m6
+    pshufb               m5, m7
+
+.filter:
+%if ARCH_X86_64
+    movd                r8d, xm2
+    pshuflw             xm2, xm2, q3232
+    movd                r9d, xm2
+    punpckhqdq          xm2, xm2
+    movd               r10d, xm2
+    psrlq               xm2, 32
+    movd               r11d, xm2
+    movq                xm6, [base+resize_filter+r8*8]
+    movq                xm7, [base+resize_filter+r10*8]
+    movhps              xm6, [base+resize_filter+r9*8]
+    movhps              xm7, [base+resize_filter+r11*8]
+%else
+    movd                r3d, xm2
+    pshufd              xm2, xm2, q3312
+    movd                r1d, xm2
+    pshuflw             xm2, xm2, q3232
+    movq                xm6, [base+resize_filter+r3*8]
+    movq                xm7, [base+resize_filter+r1*8]
+    movd                r3d, xm2
+    punpckhqdq          xm2, xm2
+    movd                r1d, xm2
+    movhps              xm6, [base+resize_filter+r3*8]
+    movhps              xm7, [base+resize_filter+r1*8]
+%endif
+
+    pmaddubsw            m4, m6
+    pmaddubsw            m5, m7
+    phaddw               m4, m5
+    phaddsw              m4, m4
+    pmulhrsw             m4, m12                    ; x=(x+64)>>7
+    packuswb             m4, m4
+    movd          [dstq+xq], m4
+
+    paddd                m0, m15
+    add                  xd, 4
+%if STACK_ALIGNMENT >= 16
+    cmp                  xd, dst_wd
+%else
+    cmp                  xd, dst_wm
+%endif
+    jl .loop_x
+
+%if ARCH_X86_64
+    add                dstq, dst_strideq
+    add                srcq, src_strideq
+    dec                  hd
+%else
+    add                dstq, dst_stridem
+    add                srcq, src_stridem
+    dec           dword r5m
+%endif
+    jg .loop_y
+    RET
