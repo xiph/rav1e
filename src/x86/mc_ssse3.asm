@@ -5212,8 +5212,16 @@ cglobal resize, 0, 6, 8, 3 * 16, dst, dst_stride, src, src_stride, \
 
     ; if no emulation is required, we don't need to shuffle or emulate edges
     ; this also saves 2 quasi-vpgatherdqs
-    vptest               m3, m3
-    jz .filter
+    pxor                 m6, m6
+    pcmpeqb              m6, m3
+%if ARCH_X86_64
+    pmovmskb            r8d, m6
+    cmp                 r8d, 0xffff
+%else
+    pmovmskb            r3d, m6
+    cmp                 r3d, 0xffff
+%endif
+    je .filter
 
 %if ARCH_X86_64
     movd                r8d, xm3
