@@ -508,9 +508,9 @@ mod test {
             }
 
             // dynamic allocation: test
-            let mut dst1 = Aligned::<[i16; 128 * 128]>::uninitialized();
+            let mut dst1 = Aligned::new([0i16; 128 * 128]);
             // dynamic allocation: test
-            let mut dst2 = Aligned::<[i16; 128 * 128]>::uninitialized();
+            let mut dst2 = Aligned::new([0i16; 128 * 128]);
             let test_mvs = [MotionVector { row: 0, col: 0 }, MotionVector { row: 4, col: 0 }, MotionVector { row: 0, col: 4 }, MotionVector { row: 4, col: 4 }];
 
             if $BD > 8 {
