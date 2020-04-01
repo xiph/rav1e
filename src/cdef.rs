@@ -401,6 +401,71 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
   out
 }
 
+// Allocates and returns a new Frame with its own memory that is
+// padded with the input frame
+pub fn cdef_padded_frame_copy<T: Pixel>(in_frame: &Frame<T>) -> Frame<u16> {
+  let mut out: Frame<u16> = Frame {
+    planes: {
+      let new_plane = |pli: usize| {
+        Plane::new(
+          in_frame.planes[pli].cfg.width,
+          in_frame.planes[pli].cfg.height,
+          in_frame.planes[pli].cfg.xdec,
+          in_frame.planes[pli].cfg.ydec,
+          2,
+          2,
+        )
+      };
+      [new_plane(0), new_plane(1), new_plane(2)]
+    },
+  };
+
+  for p in 0..3 {
+    let rec_w = in_frame.planes[p].cfg.width;
+    let rec_h = in_frame.planes[p].cfg.height;
+    let mut out_region = out.planes[p].region_mut(Area::Rect {
+      x: -2,
+      y: -2,
+      width: rec_w + 4,
+      height: rec_h + 4,
+    });
+    for row in 0..out_region.rect().height {
+      // pad first two elements of current row
+      {
+        let out_row = &mut out_region[row][..2];
+        out_row[0] = CDEF_VERY_LARGE;
+        out_row[1] = CDEF_VERY_LARGE;
+      }
+      // pad out end of current row
+      {
+        let out_row = &mut out_region[row][rec_w + 2..];
+        for x in out_row {
+          *x = CDEF_VERY_LARGE;
+        }
+      }
+      // copy current row from input frame if we're in data, or pad if we're in first two rows/last N rows
+      {
+        let out_row = &mut out_region[row][2..rec_w + 2];
+        if row < 2 || row >= rec_h + 2 {
+          for x in out_row {
+            *x = CDEF_VERY_LARGE;
+          }
+        } else {
+          let in_stride = in_frame.planes[p].cfg.stride;
+          for (x, y) in out_row.iter_mut().zip(
+            in_frame.planes[p].data_origin()
+              [(row - 2) * in_stride..(row - 1) * in_stride]
+              .iter(),
+          ) {
+            *x = u16::cast_from(*y);
+          }
+        }
+      }
+    }
+  }
+  out
+}
+
 // We assume in is padded, and the area we'll write out is at least as
 // large as the unpadded area of in
 // cdef_index is taken from the block context
@@ -542,6 +607,7 @@ pub fn cdef_filter_frame<T: Pixel>(
   let fb_height = (rec.planes[0].cfg.height + 63) / 64;
 
   // Construct a padded copy of the reconstructed frame.
+  let in_padded_frame = cdef_padded_frame_copy(rec);
   let mut cdef_frame: Frame<u16> = Frame {
     planes: {
       let new_plane = |pli: usize| {
@@ -567,38 +633,18 @@ pub fn cdef_filter_frame<T: Pixel>(
       width: rec_w + 4,
       height: rec_h + 4,
     });
+
+    let in_padded_region = in_padded_frame.planes[p].region(Area::Rect {
+      x: -2,
+      y: -2,
+      width: rec_w + 4,
+      height: rec_h + 4,
+    });
+
     for row in 0..cdef_region.rect().height {
-      // pad first two elements of current row
-      {
-        let cdef_row = &mut cdef_region[row][..2];
-        cdef_row[0] = CDEF_VERY_LARGE;
-        cdef_row[1] = CDEF_VERY_LARGE;
-      }
-      // pad out end of current row
-      {
-        let cdef_row = &mut cdef_region[row][rec_w + 2..];
-        for x in cdef_row {
-          *x = CDEF_VERY_LARGE;
-        }
-      }
-      // copy current row from rec if we're in data, or pad if we're in first two rows/last N rows
-      {
-        let cdef_row = &mut cdef_region[row][2..rec_w + 2];
-        if row < 2 || row >= rec_h + 2 {
-          for x in cdef_row {
-            *x = CDEF_VERY_LARGE;
-          }
-        } else {
-          let rec_stride = rec.planes[p].cfg.stride;
-          for (x, y) in cdef_row.iter_mut().zip(
-            rec.planes[p].data_origin()
-              [(row - 2) * rec_stride..(row - 1) * rec_stride]
-              .iter(),
-          ) {
-            *x = u16::cast_from(*y);
-          }
-        }
-      }
+      let cdef_row = &mut cdef_region[row][..];
+      let in_padded_row = &in_padded_region[row];
+      cdef_row.copy_from_slice(in_padded_row);
     }
   }
 
@@ -669,7 +715,7 @@ mod test {
   }
 
   #[test]
-  fn test_padded_frame_copy() {
+  fn test_padded_tile_copy() {
     let (frame, _fi) = create_frame();
     let tile = frame.as_tile();
     // a super-block in the middle (not near frame borders)
@@ -705,7 +751,7 @@ mod test {
   }
 
   #[test]
-  fn test_padded_frame_copy_outside_input() {
+  fn test_padded_tile_copy_outside_input() {
     let (frame, _fi) = create_frame();
     let tile = frame.as_tile();
     // the top-right super-block (near top and right frame borders)
@@ -751,6 +797,37 @@ mod test {
       for col in 0..68 {
         let out_pixel = out_luma_slice[row][col];
         assert_eq!(out_pixel, CDEF_VERY_LARGE);
+      }
+    }
+  }
+
+  #[test]
+  fn test_padded_frame_copy() {
+    let (frame, _fi) = create_frame();
+    let padded_frame = cdef_padded_frame_copy(&frame);
+
+    let rec_w = padded_frame.planes[0].cfg.width;
+    let rec_h = padded_frame.planes[0].cfg.height;
+
+    assert_eq!(rec_w, 512);
+    assert_eq!(rec_h, 512);
+
+    let po = PlaneOffset { x: 0, y: 0 };
+    let in_luma_slice = frame.planes[0].slice(po);
+    let out_luma_region =
+      padded_frame.planes[0].region(Area::StartingAt { x: -2, y: -2 });
+
+    for row in 0..padded_frame.planes[0].cfg.width + 4 {
+      for col in 0..padded_frame.planes[0].cfg.height + 4 {
+        let out_pixel = out_luma_region[row][col];
+        if row < 2 || col < 2 || row >= rec_h + 2 || col >= rec_w + 2 {
+          // padding region
+          assert_eq!(out_pixel, CDEF_VERY_LARGE);
+        } else {
+          // values from the input frame
+          let in_pixel = in_luma_slice[row - 2][col - 2];
+          assert_eq!(in_pixel, out_pixel);
+        }
       }
     }
   }
