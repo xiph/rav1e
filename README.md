@@ -120,16 +120,7 @@ https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/an
 
 ## Design
 
-* src/context.rs - High-level functions that write symbols to the bitstream, and maintain context.
-* src/ec.rs - Low-level implementation of the entropy coder, which directly writes the bitstream.
-* src/lib.rs - The top level library, contains code to write headers, manage buffers, and iterate through each superblock.
-* src/partition.rs - Functions and enums to manage partitions (subdivisions of a superblock).
-* src/predict.rs - Intra prediction implementations.
-* src/quantize.rs - Quantization and dequantization functions for coefficients.
-* src/rdo.rs - RDO-related structures and distortion computation functions.
-* src/transform/*.rs - Implementations of DCT and ADST transforms.
-* src/util.rs - Misc utility code.
-* src/bin/rav1e.rs - rav1e command line tool.
+The File Structure and design of the encoder is explained more in the [Structure](doc/STRUCTURE.md) document.
 
 ## Contributing
 
