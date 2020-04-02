@@ -29,7 +29,6 @@ use crate::rdo::rdo;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
-use std::sync::Arc;
 use std::time::Duration;
 
 fn write_b(c: &mut Criterion) {
@@ -139,8 +138,12 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
+  let in_padded_frame = cdef_padded_frame_copy(&fs.rec);
+  let mut ts = fs.as_tile_state_mut();
 
-  b.iter(|| cdef_filter_frame(&fi, Arc::make_mut(&mut fs.rec), &fb));
+  b.iter(|| {
+    cdef_filter_tile(&fi, &mut ts.rec, &fb.as_tile_blocks(), &in_padded_frame)
+  });
 }
 
 fn cfl_rdo(c: &mut Criterion) {
