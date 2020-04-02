@@ -2973,17 +2973,19 @@ fn encode_tile_group<T: Pixel>(
     let pre_cdef_frame = fs.rec.clone();
 
     /* TODO: Don't apply if lossless */
-    let rec = Arc::make_mut(&mut fs.rec);
     if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, rec, &blocks);
+      cdef_filter_tile_group(fi, fs, &mut blocks);
     }
     /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(rec, &pre_cdef_frame, fi);
+    fs.restoration.lrf_filter_frame(
+      Arc::make_mut(&mut fs.rec),
+      &pre_cdef_frame,
+      fi,
+    );
   } else {
     /* TODO: Don't apply if lossless */
-    let rec = Arc::make_mut(&mut fs.rec);
     if fi.sequence.enable_cdef {
-      cdef_filter_frame(fi, rec, &blocks);
+      cdef_filter_tile_group(fi, fs, &mut blocks);
     }
   }
 
