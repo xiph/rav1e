@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::context::*;
-use crate::encoder::FrameInvariants;
+use crate::encoder::{FrameInvariants, FrameState};
 use crate::frame::Frame;
 use crate::frame::*;
 use crate::hawktracer::*;
@@ -16,6 +16,7 @@ use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
 use crate::cpu_features::CpuFeatureLevel;
+use crate::rayon::iter::*;
 use std::cmp;
 
 cfg_if::cfg_if! {
@@ -470,7 +471,7 @@ pub fn cdef_padded_frame_copy<T: Pixel>(in_frame: &Frame<T>) -> Frame<u16> {
 // large as the unpadded area of in
 // cdef_index is taken from the block context
 pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
-  fi: &FrameInvariants<T>, in_frame: &Frame<u16>, out_frame: &mut Frame<U>,
+  fi: &FrameInvariants<T>, in_frame: &Frame<u16>, out: &mut TileMut<'_, U>,
   blocks: &TileBlocks<'_>, sbo: TileSuperBlockOffset, cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
@@ -503,16 +504,17 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
         let dir = cdef_dirs.dir[bx][by];
         let var = cdef_dirs.var[bx][by];
         for p in 0..3 {
-          let out_plane = &mut out_frame.planes[p];
+          let out_plane = &mut out.planes[p];
           let in_plane = &in_frame.planes[p];
           let in_po = sbo.plane_offset(&in_plane.cfg);
           let xdec = in_plane.cfg.xdec;
           let ydec = in_plane.cfg.ydec;
           let in_stride = in_plane.cfg.stride;
           let in_slice = &in_plane.slice(in_po);
-          let out_region = &mut out_plane.region_mut(Area::BlockStartingAt {
-            bo: sbo.block_offset(0, 0).0,
-          });
+          let out_region =
+            &mut out_plane.subregion_mut(Area::BlockStartingAt {
+              bo: sbo.block_offset(0, 0).0,
+            });
           let xsize = 8 >> xdec;
           let ysize = 8 >> ydec;
 
@@ -591,31 +593,61 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
   }
 }
 
-// Input to this process is the Frame rec of reconstructed samples.
-// Output from this process is the Frame rec containing deringed samples.
+#[hawktracer(cdef_filter_tile_group)]
+pub fn cdef_filter_tile_group<T: Pixel>(
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, blocks: &mut FrameBlocks,
+) {
+  let tile_size = SB_SIZE * 8;
+  let tile_cols = (fi.config.width + tile_size - 1) / tile_size;
+  let tile_rows = (fi.config.height + tile_size - 1) / tile_size;
+
+  let ti = TilingInfo::from_target_tiles(
+    fi.sequence.sb_size_log2(),
+    fi.config.width,
+    fi.config.height,
+    fi.config.frame_rate(),
+    TilingInfo::tile_log2(1, tile_cols).unwrap(),
+    TilingInfo::tile_log2(1, tile_rows).unwrap(),
+  );
+
+  let in_padded_frame = cdef_padded_frame_copy(&fs.rec);
+  ti.tile_iter_mut(fs, blocks).collect::<Vec<_>>().into_par_iter().for_each(
+    |mut ctx| {
+      cdef_filter_tile(
+        fi,
+        &mut ctx.ts.rec,
+        &ctx.tb.as_const(),
+        &in_padded_frame,
+      );
+    },
+  );
+}
+
+// Input to this process is the array CurrFrame of reconstructed samples and padded input Frame.
+// Output from this process is the array CdefFrame containing deringed samples.
 // The purpose of CDEF is to perform deringing based on the detected direction of blocks.
 // CDEF parameters are stored for each 64 by 64 block of pixels.
 // The CDEF filter is applied on each 8 by 8 block of pixels.
 // Reference: http://av1-spec.argondesign.com/av1-spec/av1-spec.html#cdef-process
-#[hawktracer(cdef_filter_frame)]
-pub fn cdef_filter_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, rec: &mut Frame<T>, blocks: &FrameBlocks,
+#[hawktracer(cdef_filter_tile)]
+pub fn cdef_filter_tile<T: Pixel>(
+  fi: &FrameInvariants<T>, rec: &mut TileMut<'_, T>, tb: &TileBlocks,
+  in_padded_frame: &Frame<u16>,
 ) {
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
-  let fb_width = (rec.planes[0].cfg.width + 63) / 64;
-  let fb_height = (rec.planes[0].cfg.height + 63) / 64;
+  let fb_width = (rec.planes[0].rect().width + 63) / 64;
+  let fb_height = (rec.planes[0].rect().height + 63) / 64;
 
-  // Construct a padded copy of the reconstructed frame.
-  let in_padded_frame = cdef_padded_frame_copy(rec);
+  // Construct a padded copy of part of the input tile
   let mut cdef_frame: Frame<u16> = Frame {
     planes: {
       let new_plane = |pli: usize| {
         Plane::new(
-          (fb_width * 64) >> rec.planes[pli].cfg.xdec,
-          (fb_height * 64) >> rec.planes[pli].cfg.ydec,
-          rec.planes[pli].cfg.xdec,
-          rec.planes[pli].cfg.ydec,
+          (fb_width * 64) >> rec.planes[pli].plane_cfg.xdec,
+          (fb_height * 64) >> rec.planes[pli].plane_cfg.ydec,
+          rec.planes[pli].plane_cfg.xdec,
+          rec.planes[pli].plane_cfg.ydec,
           2,
           2,
         )
@@ -625,8 +657,8 @@ pub fn cdef_filter_frame<T: Pixel>(
   };
 
   for p in 0..3 {
-    let rec_w = rec.planes[p].cfg.width;
-    let rec_h = rec.planes[p].cfg.height;
+    let rec_w = rec.planes[p].rect().width;
+    let rec_h = rec.planes[p].rect().height;
     let mut cdef_region = cdef_frame.planes[p].region_mut(Area::Rect {
       x: -2,
       y: -2,
@@ -635,8 +667,8 @@ pub fn cdef_filter_frame<T: Pixel>(
     });
 
     let in_padded_region = in_padded_frame.planes[p].region(Area::Rect {
-      x: -2,
-      y: -2,
+      x: rec.planes[p].rect().x - 2,
+      y: rec.planes[p].rect().y - 2,
       width: rec_w + 4,
       height: rec_h + 4,
     });
@@ -648,24 +680,18 @@ pub fn cdef_filter_frame<T: Pixel>(
     }
   }
 
-  let tb = blocks.as_tile_blocks();
-
   // Perform actual CDEF, using the padded copy as source, and the input rec vector as destination.
   for fby in 0..fb_height {
     for fbx in 0..fb_width {
-      let sbo = PlaneSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
-      let cdef_index = blocks[sbo.block_offset(0, 0)].cdef_index;
-
-      // In this particular instance CDEF application operates on the whole
-      // frame as if it were one tile.
-      let sbo = TileSuperBlockOffset(sbo.0);
-      let cdef_dirs = cdef_analyze_superblock(fi, &cdef_frame, &tb, sbo);
+      let sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
+      let cdef_index = tb.get_cdef(sbo);
+      let cdef_dirs = cdef_analyze_superblock(fi, &cdef_frame, tb, sbo);
 
       cdef_filter_superblock(
         fi,
         &cdef_frame,
         rec,
-        &tb,
+        tb,
         sbo,
         cdef_index,
         &cdef_dirs,
