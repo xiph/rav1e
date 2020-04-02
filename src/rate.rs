@@ -1365,6 +1365,7 @@ impl RCState {
     Ok(RCFrameMetrics { log_scale_q24, fti, show_frame })
   }
 
+  // Initialize the rate control for second pass encoding
   pub(crate) fn twopass_init(&mut self) {
     if self.twopass_state == PASS_SINGLE || self.twopass_state == PASS_1 {
       // Initialize the second pass.
@@ -1389,7 +1390,6 @@ impl RCState {
       }
     }
   }
-
 
   // Parse the rate control summary
   //
@@ -1491,6 +1491,114 @@ impl RCState {
     TWOPASS_HEADER_SZ + frames_needed * TWOPASS_PACKET_SZ
   }
 
+  // Return the number of frame data packets to be parsed before
+  // the encoding process can continue.
+  fn twopass_in_frames_needed(&self) -> i32 {
+    let mut cur_scale_window_nframes = 0;
+    let mut cur_nframes_left = 0;
+    for fti in 0..=FRAME_NSUBTYPES {
+      cur_scale_window_nframes += self.scale_window_nframes[fti];
+      cur_nframes_left += self.nframes_left[fti];
+    }
+
+    (self.reservoir_frame_delay - self.scale_window_ntus)
+      .max(0)
+      .min(cur_nframes_left - cur_scale_window_nframes)
+  }
+  // Parse the rate control per-frame data
+  //
+  // If no buffer is passed return the amount of data it expects
+  // to consume next.
+  //
+  // If a properly sized buffer is passed it returns the amount of data
+  // consumed in the process or an empty error on parsing failure.
+  fn twopass_parse_frame_data(
+    &mut self, maybe_buf: Option<&[u8]>, mut consumed: usize,
+  ) -> Result<usize, ()> {
+    {
+      if self.frame_metrics.is_empty() {
+        // We're using a whole-file buffer.
+        if let Some(buf) = maybe_buf {
+          consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
+          if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
+            self.pass2_buffer_pos = 0;
+            // Read metrics for the next frame.
+            self.cur_metrics = self.parse_metrics()?;
+            // Clear the buffer for the next frame.
+            self.pass2_buffer_fill = 0;
+            self.pass2_data_ready = true;
+          }
+        } else {
+          return Ok(TWOPASS_PACKET_SZ - self.pass2_buffer_fill);
+        }
+      } else {
+        // We're using a finite buffer.
+        let mut cur_scale_window_nframes = 0;
+        let mut cur_nframes_left = 0;
+
+        for fti in 0..=FRAME_NSUBTYPES {
+          cur_scale_window_nframes += self.scale_window_nframes[fti];
+          cur_nframes_left += self.nframes_left[fti];
+        }
+
+        let mut frames_needed = self.twopass_in_frames_needed();
+        while frames_needed > 0 {
+          if let Some(buf) = maybe_buf {
+            consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
+            if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
+              self.pass2_buffer_pos = 0;
+              // Read the metrics for the next frame.
+              let m = self.parse_metrics()?;
+              // Add them to the circular buffer.
+              if self.nframe_metrics >= self.frame_metrics.len() {
+                // We read too many frames without finding enough TUs.
+                return Err(());
+              }
+              let mut fmi = self.frame_metrics_head + self.nframe_metrics;
+              if fmi >= self.frame_metrics.len() {
+                fmi -= self.frame_metrics.len();
+              }
+              self.nframe_metrics += 1;
+              self.frame_metrics[fmi] = m;
+              // And accumulate the statistics over the window.
+              self.scale_window_nframes[m.fti] += 1;
+              cur_scale_window_nframes += 1;
+              if m.fti < FRAME_NSUBTYPES {
+                self.scale_window_sum[m.fti] += bexp_q24(m.log_scale_q24);
+              }
+              if m.show_frame {
+                self.scale_window_ntus += 1;
+              }
+              frames_needed = (self.reservoir_frame_delay
+                - self.scale_window_ntus)
+                .max(0)
+                .min(cur_nframes_left - cur_scale_window_nframes);
+              // Clear the buffer for the next frame.
+              self.pass2_buffer_fill = 0;
+            } else {
+              // Go back for more data.
+              break;
+            }
+          } else {
+            return Ok(
+              TWOPASS_PACKET_SZ * (frames_needed as usize)
+                - self.pass2_buffer_fill,
+            );
+          }
+        }
+        // If we've got all the frames we need, fill in the current metrics.
+        // We're ready to go.
+        if frames_needed <= 0 {
+          self.cur_metrics = self.frame_metrics[self.frame_metrics_head];
+          // Mark us ready for the next frame.
+          self.pass2_data_ready = true;
+        }
+      }
+    }
+
+    Ok(consumed)
+  }
+
   // If called without a buffer it will return the size of the next
   // buffer it expects.
   //
@@ -1519,85 +1627,7 @@ impl RCState {
         //  to allow any more frames to be encoded.
         self.pass2_data_ready = false;
       } else if !self.pass2_data_ready {
-        if self.frame_metrics.is_empty() {
-          // We're using a whole-file buffer.
-          if let Some(buf) = maybe_buf {
-            consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
-            if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
-              self.pass2_buffer_pos = 0;
-              // Read metrics for the next frame.
-              self.cur_metrics = self.parse_metrics()?;
-              // Clear the buffer for the next frame.
-              self.pass2_buffer_fill = 0;
-              self.pass2_data_ready = true;
-            }
-          } else {
-            return Ok(TWOPASS_PACKET_SZ - self.pass2_buffer_fill);
-          }
-        } else {
-          // We're using a finite buffer.
-          let mut cur_scale_window_nframes = 0;
-          let mut cur_nframes_left = 0;
-          for fti in 0..=FRAME_NSUBTYPES {
-            cur_scale_window_nframes += self.scale_window_nframes[fti];
-            cur_nframes_left += self.nframes_left[fti];
-          }
-          let mut frames_needed = (self.reservoir_frame_delay
-            - self.scale_window_ntus)
-            .max(0)
-            .min(cur_nframes_left - cur_scale_window_nframes);
-          while frames_needed > 0 {
-            if let Some(buf) = maybe_buf {
-              consumed = self.buffer_fill(buf, consumed, TWOPASS_PACKET_SZ);
-              if self.pass2_buffer_fill >= TWOPASS_PACKET_SZ {
-                self.pass2_buffer_pos = 0;
-                // Read the metrics for the next frame.
-                let m = self.parse_metrics()?;
-                // Add them to the circular buffer.
-                if self.nframe_metrics >= self.frame_metrics.len() {
-                  // We read too many frames without finding enough TUs.
-                  return Err(());
-                }
-                let mut fmi = self.frame_metrics_head + self.nframe_metrics;
-                if fmi >= self.frame_metrics.len() {
-                  fmi -= self.frame_metrics.len();
-                }
-                self.nframe_metrics += 1;
-                self.frame_metrics[fmi] = m;
-                // And accumulate the statistics over the window.
-                self.scale_window_nframes[m.fti] += 1;
-                cur_scale_window_nframes += 1;
-                if m.fti < FRAME_NSUBTYPES {
-                  self.scale_window_sum[m.fti] += bexp_q24(m.log_scale_q24);
-                }
-                if m.show_frame {
-                  self.scale_window_ntus += 1;
-                }
-                frames_needed = (self.reservoir_frame_delay
-                  - self.scale_window_ntus)
-                  .max(0)
-                  .min(cur_nframes_left - cur_scale_window_nframes);
-                // Clear the buffer for the next frame.
-                self.pass2_buffer_fill = 0;
-              } else {
-                // Go back for more data.
-                break;
-              }
-            } else {
-              return Ok(
-                TWOPASS_PACKET_SZ * (frames_needed as usize)
-                  - self.pass2_buffer_fill,
-              );
-            }
-          }
-          // If we've got all the frames we need, fill in the current metrics.
-          // We're ready to go.
-          if frames_needed <= 0 {
-            self.cur_metrics = self.frame_metrics[self.frame_metrics_head];
-            // Mark us ready for the next frame.
-            self.pass2_data_ready = true;
-          }
-        }
+        return self.twopass_parse_frame_data(maybe_buf, consumed);
       }
     }
     Ok(consumed)
