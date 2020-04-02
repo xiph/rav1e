@@ -4881,8 +4881,6 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     mov                  r1, r1m
   %endif
 %if %1
-    test           leftextq, leftextq
-    jz .body_%3
     ; left extension
   %if ARCH_X86_64
     movd                 m0, [srcq]
@@ -4898,7 +4896,6 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     cmp                  r3, leftextq
     jl .left_loop_%3
     ; body
-.body_%3:
     lea             reg_tmp, [dstq+leftextq]
 %endif
     xor                  r3, r3
@@ -4919,13 +4916,6 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     jl .body_loop_%3
 %if %2
     ; right extension
-  %if ARCH_X86_64
-    test          rightextq, rightextq
-  %else
-    mov                  r1, r3m
-    test                 r1, r1
-  %endif
-    jz .body_loop_end_%3
 %if %1
     add             reg_tmp, centerwq
 %else
@@ -4948,7 +4938,6 @@ cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
     cmp                  r3, r3m
   %endif
     jl .right_loop_%3
-.body_loop_end_%3:
 %endif
   %if ARCH_X86_64
     add                dstq, dstrideq

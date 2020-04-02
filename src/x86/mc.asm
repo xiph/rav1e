@@ -4883,9 +4883,6 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
 %macro v_loop 3 ; need_left_ext, need_right_ext, suffix
 .v_loop_%3:
 %if %1
-    test           leftextq, leftextq
-    jz .body_%3
-
     ; left extension
     xor                  r3, r3
     vpbroadcastb         m0, [srcq]
@@ -4896,7 +4893,6 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
     jl .left_loop_%3
 
     ; body
-.body_%3:
     lea                 r12, [dstq+leftextq]
 %endif
     xor                  r3, r3
@@ -4913,8 +4909,6 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
 
 %if %2
     ; right extension
-    test          rightextq, rightextq
-    jz .body_loop_end_%3
 %if %1
     add                 r12, centerwq
 %else
@@ -4928,7 +4922,6 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
     cmp                  r3, rightextq
     jl .right_loop_%3
 
-.body_loop_end_%3:
 %endif
     add                dstq, dstrideq
     add                srcq, sstrideq
