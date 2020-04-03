@@ -359,8 +359,8 @@ cglobal wiener_filter_h, 5, 7, 8, -84, dst, left, src, stride, fh, w, h, edge
     paddw         m2, m4
     paddw         m0, m3
     paddw         m2, m5
-    paddsw        m0, m8
-    paddsw        m2, m6
+    paddsw        m0, m8 ; see the avx2 for an explanation
+    paddsw        m2, m6 ; of how the clipping works here
     psraw         m0, 3
     psraw         m2, 3
     paddw         m0, m11

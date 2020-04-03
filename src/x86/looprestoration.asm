@@ -169,14 +169,21 @@ cglobal wiener_filter_h, 8, 12, 16, dst, left, src, stride, fh, w, h, edge
     paddw         m2, m4
     paddw         m0, m6
     paddw         m2, m5
-    paddsw        m0, m8
+    ; for a signed overflow to happen we need filter and pixels as follow:
+    ; filter => -5,-23,-17,90,-17,-23,-5
+    ; pixels => 255,255,255,0,255,255,255 or 0,0,0,255,0,0,0
+    ; m0 would fall in the range [-59A6;+59A6] = [A65A;59A6]
+    ; m8 would fall in the range [-3FFC;+3F84] = [C004;3F84]
+    ;  32-bit arithmetic m0+m8 = [-99A2;+992A] = [FFFF665E;992A]
+    ; => signed 16-bit overflow occurs
+    paddsw        m0, m8  ; paddsw clips this range to [-8000;+7FFF]
     paddsw        m2, m3
-    psraw         m0, 3
+    psraw         m0, 3   ; shift changes the range to [-1000;+FFF]
     psraw         m2, 3
-    paddw         m0, m11
-    paddw         m2, m11
-    mova   [dstptrq], xm0
-    mova [dstptrq+16], xm2
+    paddw         m0, m11 ; adding back 800 (removed in m8) changes the
+    paddw         m2, m11 ; range to [-800;+17FF] as defined in the spec
+    mova   [dstptrq], xm0 ; (note that adding another 800 would give us
+    mova [dstptrq+16], xm2;  the same range as in the C code => [0;1FFF])
     vextracti128 [dstptrq+32], m0, 1
     vextracti128 [dstptrq+48], m2, 1
     vextracti128 xm0, m1, 1
