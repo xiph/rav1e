@@ -1927,6 +1927,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   const MAX_SB_SIZE: usize = 1 << MAX_SB_SHIFT;
   const MAX_LRU_SIZE: usize = MAX_SB_SIZE;
 
+  // Static allocation relies on the "minimal LRU area for all 3 planes" invariant.
   let mut best_index = [-1; MAX_SB_SIZE * MAX_SB_SIZE];
   let mut best_lrf =
     [[RestorationFilter::None; MAX_LRU_SIZE * MAX_LRU_SIZE]; PLANES];
