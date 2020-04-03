@@ -90,4 +90,39 @@ mod binary {
       .assert()
       .success();
   }
+  #[test]
+  fn two_pass_bitrate_based_constrained() {
+    let outfile = get_tempfile_path("ivf");
+    let passfile = get_tempfile_path("pass");
+
+    let mut cmd1 = Command::cargo_bin("rav1e").unwrap();
+    cmd1
+      .arg("--reservoir-frame-delay")
+      .arg("14")
+      .arg("--bitrate")
+      .arg("1000")
+      .arg("-o")
+      .arg(&outfile)
+      .arg("--first-pass")
+      .arg(&passfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+
+    let mut cmd2 = Command::cargo_bin("rav1e").unwrap();
+    cmd2
+      .arg("--reservoir-frame-delay")
+      .arg("14")
+      .arg("--bitrate")
+      .arg("1000")
+      .arg("-o")
+      .arg(&outfile)
+      .arg("--second-pass")
+      .arg(&passfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+  }
 }
