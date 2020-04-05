@@ -1929,7 +1929,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   // Static allocation relies on the "minimal LRU area for all 3 planes" invariant.
   let mut best_index = [-1; MAX_SB_SIZE * MAX_SB_SIZE];
   let mut best_lrf =
-    [[RestorationFilter::None; MAX_LRU_SIZE * MAX_LRU_SIZE]; PLANES];
+    [[RestorationFilter::None; PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
 
   // due to imprecision in the reconstruction parameter solver, we
   // need to make sure we don't fall into a limit cycle.  Track our
