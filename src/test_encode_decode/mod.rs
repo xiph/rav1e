@@ -782,3 +782,65 @@ pub(crate) fn get_decoder<T: Pixel>(
     _ => unimplemented!(),
   }
 }
+
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
+fn rdo_loop_decision_lrf_sanity(decoder: &str) {
+  let limit = 2;
+  let w = 936;
+  let h = 1404;
+  let speed = 9;
+  let q = 240;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    w,
+    h,
+    speed,
+    q,
+    limit,
+    8,
+    Default::default(),
+    6,
+    6,
+    0,
+    true,
+    false,
+    0,
+    0,
+    0,
+    false,
+  );
+}
+
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
+fn rdo_loop_decision_cdef_sanity(decoder: &str) {
+  let limit = 2;
+  let w = 1404;
+  let h = 936;
+  let speed = 9;
+  let q = 240;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    w,
+    h,
+    speed,
+    q,
+    limit,
+    8,
+    Default::default(),
+    6,
+    6,
+    0,
+    true,
+    false,
+    0,
+    0,
+    0,
+    false,
+  );
+}
