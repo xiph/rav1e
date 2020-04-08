@@ -181,10 +181,10 @@ pub fn fuzz_encode_decode(data: &[u8]) {
 
   let mut g = create_generator!(data);
 
-  let w = g.g::<u8>() as usize + 1;
-  let h = g.g::<u8>() as usize + 1;
+  let w = g.g::<u8>() as usize + 16;
+  let h = g.g::<u8>() as usize + 16;
   let speed = 10;
-  let q = g.g();
+  let q = g.g::<u8>() as usize;
   let limit = (g.g::<u8>() % 3) as usize + 1;
   let min_keyint = g.g::<u64>() % 4;
   let max_keyint = g.g::<u64>() % 4 + 1;
