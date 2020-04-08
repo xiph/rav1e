@@ -86,8 +86,6 @@ pub fn fuzz_construct_context(data: &[u8]) {
   config.enc.tiles = g.g();
   config.enc.rdo_lookahead_frames = g.g();
   config.enc.speed_settings = SpeedSettings::from_preset(g.g());
-  config.enc.show_psnr = g.g();
-  config.enc.train_rdo = g.g();
 
   debug!("config = {:#?}", config);
 
@@ -190,8 +188,11 @@ pub fn fuzz_encode_decode(data: &[u8]) {
   let limit = (g.g::<u8>() % 3) as usize + 1;
   let min_keyint = g.g::<u64>() % 4;
   let max_keyint = g.g::<u64>() % 4 + 1;
+  let switch_frame_interval = 0;
   let low_latency = g.g();
+  let error_resilient = false;
   let bitrate = g.g();
+  let still_picture = false;
 
   debug!(
     "w = {:#?}\n\
@@ -217,9 +218,12 @@ pub fn fuzz_encode_decode(data: &[u8]) {
     Default::default(),
     min_keyint,
     max_keyint,
+    switch_frame_interval,
     low_latency,
+    error_resilient,
     bitrate,
     1,
     1,
+    still_picture,
   );
 }
