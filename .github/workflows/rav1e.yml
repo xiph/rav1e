@@ -57,6 +57,7 @@ jobs:
          - cargo-c
          - check-no-default
          - check-extra-feats
+         - fuzz
         include:
          - conf: 1.36.0-tests
            toolchain: 1.36.0
@@ -76,6 +77,8 @@ jobs:
            toolchain: stable
          - conf: check-extra-feats
            toolchain: stable
+         - conf: fuzz
+           toolchain: nightly-2019-12-02
 
     env:
       RUST_BACKTRACE: 1
@@ -126,7 +129,7 @@ jobs:
     - name: Add dav1d
       if: >
         matrix.conf == '1.36.0-tests' || matrix.conf == 'dav1d-tests' ||
-        matrix.conf == 'grcov-coveralls'
+        matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz'
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
         DAV1D_VERSION: 0.6.0-dmo1
@@ -232,6 +235,14 @@ jobs:
       if: matrix.conf == 'cargo-c'
       run: |
         cargo cbuild
+    - name: Install cargo-fuzz
+      if: matrix.conf == 'fuzz'
+      run: |
+        cargo install cargo-fuzz
+    - name: Run cargo-fuzz
+      if: matrix.conf == 'fuzz'
+      run: |
+        cargo fuzz build
     - name: Run cargo clean
       if: matrix.conf == 'grcov-coveralls'
       uses: actions-rs/cargo@v1
