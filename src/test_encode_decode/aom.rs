@@ -131,7 +131,9 @@ fn compare_img<T: Pixel>(
   let img = unsafe { *img };
   let img_iter = img.planes.iter().zip(img.stride.iter());
 
-  for (img_plane, frame_plane) in img_iter.zip(frame.planes.iter()) {
+  for (pli, (img_plane, frame_plane)) in
+    img_iter.zip(frame.planes.iter()).enumerate()
+  {
     let w = width >> frame_plane.cfg.xdec;
     let h = height >> frame_plane.cfg.ydec;
     let rec_stride = frame_plane.cfg.stride;
@@ -149,7 +151,7 @@ fn compare_img<T: Pixel>(
       let rec: Vec<u16> =
         frame_plane.data_origin().iter().map(|&v| u16::cast_from(v)).collect();
 
-      compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h);
+      compare_plane::<u16>(&rec[..], rec_stride, dec, dec_stride, w, h, pli);
     } else {
       let dec_stride = *img_plane.1 as usize;
 
@@ -163,7 +165,7 @@ fn compare_img<T: Pixel>(
       let rec: Vec<u8> =
         frame_plane.data_origin().iter().map(|&v| u8::cast_from(v)).collect();
 
-      compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h);
+      compare_plane::<u8>(&rec[..], rec_stride, dec, dec_stride, w, h, pli);
     }
   }
 }
