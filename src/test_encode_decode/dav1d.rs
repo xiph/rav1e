@@ -138,7 +138,7 @@ fn compare_pic<T: Pixel>(
 ) {
   use crate::frame::Plane;
 
-  let cmp_plane = |data, stride, frame_plane: &Plane<T>| {
+  let cmp_plane = |data, stride, frame_plane: &Plane<T>, pli| {
     let w = width >> frame_plane.cfg.xdec;
     let h = height >> frame_plane.cfg.ydec;
     let rec_stride = frame_plane.cfg.stride;
@@ -155,7 +155,7 @@ fn compare_pic<T: Pixel>(
       let rec: Vec<u16> =
         frame_plane.data_origin().iter().map(|&v| u16::cast_from(v)).collect();
 
-      compare_plane::<u16>(&rec[..], rec_stride, dec, stride, w, h);
+      compare_plane::<u16>(&rec[..], rec_stride, dec, stride, w, h, pli);
     } else {
       let dec = unsafe {
         let data = data as *const u8;
@@ -167,14 +167,14 @@ fn compare_pic<T: Pixel>(
       let rec: Vec<u8> =
         frame_plane.data_origin().iter().map(|&v| u8::cast_from(v)).collect();
 
-      compare_plane::<u8>(&rec[..], rec_stride, dec, stride, w, h);
+      compare_plane::<u8>(&rec[..], rec_stride, dec, stride, w, h, pli);
     }
   };
 
   let lstride = pic.stride[0] as usize;
   let cstride = pic.stride[1] as usize;
 
-  cmp_plane(pic.data[0], lstride, &frame.planes[0]);
-  cmp_plane(pic.data[1], cstride, &frame.planes[1]);
-  cmp_plane(pic.data[2], cstride, &frame.planes[2]);
+  cmp_plane(pic.data[0], lstride, &frame.planes[0], 0);
+  cmp_plane(pic.data[1], cstride, &frame.planes[1], 1);
+  cmp_plane(pic.data[2], cstride, &frame.planes[2], 2);
 }
