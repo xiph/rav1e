@@ -146,10 +146,18 @@ pub(crate) trait TestDecoder<T: Pixel> {
 
 pub fn compare_plane<T: Ord + std::fmt::Debug>(
   rec: &[T], rec_stride: usize, dec: &[T], dec_stride: usize, width: usize,
-  height: usize,
+  height: usize, pli: usize,
 ) {
-  for line in rec.chunks(rec_stride).zip(dec.chunks(dec_stride)).take(height) {
-    assert_eq!(&line.0[..width], &line.1[..width]);
+  for (row, line) in
+    rec.chunks(rec_stride).zip(dec.chunks(dec_stride)).take(height).enumerate()
+  {
+    assert_eq!(
+      &line.0[..width],
+      &line.1[..width],
+      "at row {} of plane {}",
+      row,
+      pli
+    );
   }
 }
 
