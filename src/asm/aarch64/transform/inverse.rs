@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -52,7 +52,7 @@ macro_rules! decl_itx_fns {
         $(
           extern {
             // Note: type1 and type2 are flipped
-            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT_LOWER>](
+            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _8bpc_$OPT_LOWER>](
               dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
               eob: i32
             );
@@ -64,7 +64,7 @@ macro_rules! decl_itx_fns {
         let mut out: [Option<InvTxfmFunc>; 16] = [None; 16];
         $(
           $(
-            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _$OPT_LOWER>]);
+            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _8bpc_$OPT_LOWER>]);
           )*
         )*
         out

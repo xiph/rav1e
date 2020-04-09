@@ -600,7 +600,7 @@ endfunc
 .endr
 .endm
 
-function inv_txfm_add_wht_wht_4x4_neon, export=1
+function inv_txfm_add_wht_wht_4x4_8bpc_neon, export=1
         mov             x15, x30
         movi            v31.8h,  #0
         ld1             {v16.4h,v17.4h,v18.4h,v19.4h}, [x2]
@@ -664,7 +664,7 @@ L(itx_4x4_end):
 endfunc
 
 .macro def_fn_4x4 txfm1, txfm2
-function inv_txfm_add_\txfm1\()_\txfm2\()_4x4_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_4x4_8bpc_neon, export=1
         mov             x15, x30
 
 .ifc \txfm1\()_\txfm2, dct_dct
@@ -905,7 +905,7 @@ def_fn_8x8_base
 def_fn_8x8_base identity_
 
 .macro def_fn_8x8 txfm1, txfm2
-function inv_txfm_add_\txfm1\()_\txfm2\()_8x8_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_8x8_8bpc_neon, export=1
         mov             x15, x30
 
 .ifc \txfm1\()_\txfm2, dct_dct
@@ -992,7 +992,7 @@ function inv_txfm_add_4x8_neon
 endfunc
 
 .macro def_fn_48 w, h, txfm1, txfm2
-function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_8bpc_neon, export=1
         mov             x15, x30
 
 .ifc \txfm1\()_\txfm2, dct_dct
@@ -1457,7 +1457,7 @@ function inv_txfm_add_16x16_neon
 endfunc
 
 .macro def_fn_16x16 txfm1, txfm2, eob_half
-function inv_txfm_add_\txfm1\()_\txfm2\()_16x16_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_16x16_8bpc_neon, export=1
 .ifc \txfm1\()_\txfm2, dct_dct
         idct_dc         16,  16,  2
 .endif
@@ -1629,7 +1629,7 @@ def_fn_416_base
 def_fn_416_base identity_
 
 .macro def_fn_416 w, h, txfm1, txfm2, eob_half
-function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_8bpc_neon, export=1
 .ifc \txfm1\()_\txfm2, dct_dct
         idct_dc         \w,  \h,  1
 .endif
@@ -1812,7 +1812,7 @@ def_fn_816_base
 def_fn_816_base identity_
 
 .macro def_fn_816 w, h, txfm1, txfm2, eob_half
-function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_neon, export=1
+function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_8bpc_neon, export=1
 .ifc \txfm1\()_\txfm2, dct_dct
         idct_dc         \w,  \h,  1
 .endif
@@ -2182,7 +2182,7 @@ const eob_8x32
         .short 43, 107, 171, 256
 endconst
 
-function inv_txfm_add_identity_identity_32x32_neon, export=1
+function inv_txfm_add_identity_identity_32x32_8bpc_neon, export=1
         movi            v0.8h,  #0
         movrel          x13, eob_32x32
 
@@ -2225,7 +2225,7 @@ endfunc
 .endm
 
 .macro def_identity_1632 w, h, wshort, hshort
-function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
+function inv_txfm_add_identity_identity_\w\()x\h\()_8bpc_neon, export=1
         mov             w16, #2896*8
         mov             w17, #2*(5793-4096)*8
         dup             v1.4h,   w16
@@ -2285,7 +2285,7 @@ def_identity_1632 16, 32, _shortside,
 def_identity_1632 32, 16, , _shortside
 
 .macro def_identity_832 w, h
-function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
+function inv_txfm_add_identity_identity_\w\()x\h\()_8bpc_neon, export=1
         movi            v0.8h,  #0
         movrel          x13, eob_8x32
 
@@ -2329,7 +2329,7 @@ endfunc
 def_identity_832 8, 32
 def_identity_832 32, 8
 
-function inv_txfm_add_dct_dct_32x32_neon, export=1
+function inv_txfm_add_dct_dct_32x32_8bpc_neon, export=1
         idct_dc         32,  32,  2
 
         mov             x15, x30
@@ -2377,7 +2377,7 @@ function inv_txfm_add_dct_dct_32x32_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_16x32_neon, export=1
+function inv_txfm_add_dct_dct_16x32_8bpc_neon, export=1
         idct_dc         16,  32,  1
 
         mov             x15, x30
@@ -2426,7 +2426,7 @@ function inv_txfm_add_dct_dct_16x32_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_32x16_neon, export=1
+function inv_txfm_add_dct_dct_32x16_8bpc_neon, export=1
         idct_dc         32,  16,  1
 
         mov             x15, x30
@@ -2471,7 +2471,7 @@ function inv_txfm_add_dct_dct_32x16_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_8x32_neon, export=1
+function inv_txfm_add_dct_dct_8x32_8bpc_neon, export=1
         idct_dc         8,   32, 2
 
         mov             x15, x30
@@ -2528,7 +2528,7 @@ function inv_txfm_add_dct_dct_8x32_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_32x8_neon, export=1
+function inv_txfm_add_dct_dct_32x8_8bpc_neon, export=1
         idct_dc         32,  8,   2
 
         mov             x15, x30
@@ -3023,7 +3023,7 @@ endfunc
 #endif
 .endm
 
-function inv_txfm_add_dct_dct_64x64_neon, export=1
+function inv_txfm_add_dct_dct_64x64_8bpc_neon, export=1
         idct_dc         64,  64,  2
 
         mov             x15, x30
@@ -3077,7 +3077,7 @@ function inv_txfm_add_dct_dct_64x64_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_64x32_neon, export=1
+function inv_txfm_add_dct_dct_64x32_8bpc_neon, export=1
         idct_dc         64,  32,  1
 
         mov             x15, x30
@@ -3130,7 +3130,7 @@ function inv_txfm_add_dct_dct_64x32_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_32x64_neon, export=1
+function inv_txfm_add_dct_dct_32x64_8bpc_neon, export=1
         idct_dc         32,  64,  1
 
         mov             x15, x30
@@ -3180,7 +3180,7 @@ function inv_txfm_add_dct_dct_32x64_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_64x16_neon, export=1
+function inv_txfm_add_dct_dct_64x16_8bpc_neon, export=1
         idct_dc         64,  16,  2
 
         mov             x15, x30
@@ -3234,7 +3234,7 @@ function inv_txfm_add_dct_dct_64x16_neon, export=1
         br              x15
 endfunc
 
-function inv_txfm_add_dct_dct_16x64_neon, export=1
+function inv_txfm_add_dct_dct_16x64_8bpc_neon, export=1
         idct_dc         16,  64,  2
 
         mov             x15, x30
