@@ -226,7 +226,7 @@ jobs:
     - name: Check extra features
       if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
       run: |
-        cargo check --features=capi,dump_lookahead_data
+        cargo check --features=capi,dump_lookahead_data,serialize
     - name: Install cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
