@@ -134,13 +134,6 @@ endconst
 .endif
 .endm
 
-.macro smull_sz d0, d1, s0, c, sz
-        smull           \d0\().4s, \s0\().4h, \c
-.ifc \sz, .8h
-        smull2          \d1\().4s, \s0\().8h, \c
-.endif
-.endm
-
 .macro rshrn_sz d0, s0, s1, shift, sz
         rshrn           \d0\().4h, \s0\().4s, \shift
 .ifc \sz, .8h
