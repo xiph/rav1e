@@ -18,6 +18,14 @@ pub enum CliError {
   Config { msg: String, status: rav1e::InvalidConfig },
   #[error("Cannot parse option `{opt}`: {err}")]
   ParseInt { opt: String, err: std::num::ParseIntError },
+  #[error("{msg}")]
+  Generic { msg: String },
+}
+
+impl CliError {
+  pub fn new(msg: &str) -> CliError {
+    CliError::Generic { msg: msg.to_owned() }
+  }
 }
 
 pub trait ToError {
