@@ -63,17 +63,17 @@ struct Source<D: Decoder> {
 impl<D: Decoder> Source<D> {
   fn read_frame<T: Pixel>(
     &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
-  ) {
+  ) -> Result<(), CliError> {
     if self.limit != 0 && self.count == self.limit {
       ctx.flush();
-      return;
+      return Ok(());
     }
 
     #[cfg(all(unix, feature = "signal-hook"))]
     {
       if self.exit_requested.load(std::sync::atomic::Ordering::SeqCst) {
         ctx.flush();
-        return;
+        return Ok(());
       }
     }
 
@@ -81,7 +81,7 @@ impl<D: Decoder> Source<D> {
       Ok(frame) => {
         match video_info.bit_depth {
           8 | 10 | 12 => {}
-          _ => panic!("unknown input bit depth!"),
+          _ => return Err(CliError::new("Unsupported bit depth")),
         }
         self.count += 1;
         let _ = ctx.send_frame(Some(Arc::new(frame)));
@@ -90,6 +90,7 @@ impl<D: Decoder> Source<D> {
         ctx.flush();
       }
     };
+    Ok(())
   }
 }
 
@@ -116,14 +117,15 @@ fn process_frame<T: Pixel, D: Decoder>(
       // Read in some more bytes, if necessary.
       bytes = bytes.min(buffer.len() - *buf_pos);
       if bytes > 0 {
-        passfile
-          .read_exact(&mut buffer[*buf_pos..*buf_pos + bytes])
-          .expect("Could not read frame data from two-pass data file!");
+        passfile.read_exact(&mut buffer[*buf_pos..*buf_pos + bytes]).map_err(
+          |e| e.context("Could not read frame data from two-pass data file!"),
+        )?;
       }
       // And pass them off.
-      let consumed = ctx
-        .twopass_in(&buffer[*buf_pos..*buf_pos + bytes])
-        .expect("Error submitting pass data in second pass.");
+      let consumed =
+        ctx.twopass_in(&buffer[*buf_pos..*buf_pos + bytes]).map_err(|e| {
+          e.context("Error submitting pass data in second pass.")
+        })?;
       // If the encoder consumed the whole buffer, reset it.
       if consumed >= bytes {
         *buf_pos = 0;
@@ -139,7 +141,7 @@ fn process_frame<T: Pixel, D: Decoder>(
     if let Some(outbuf) = ctx.twopass_out() {
       passfile
         .write_all(outbuf)
-        .expect("Unable to write to two-pass data file.");
+        .map_err(|e| e.context("Unable to write to two-pass data file."))?;
     }
   }
 
@@ -164,7 +166,7 @@ fn process_frame<T: Pixel, D: Decoder>(
       ));
     }
     Err(EncoderStatus::NeedMoreData) => {
-      source.read_frame(ctx, y4m_details);
+      source.read_frame(ctx, y4m_details)?;
     }
     Err(EncoderStatus::EnoughData) => {
       unreachable!();
@@ -177,10 +179,10 @@ fn process_frame<T: Pixel, D: Decoder>(
           // Seek to the start so we can write it there.
           passfile
             .seek(std::io::SeekFrom::Start(0))
-            .expect("Unable to seek in two-pass data file.");
-          passfile
-            .write_all(outbuf)
-            .expect("Unable to write to two-pass data file.");
+            .map_err(|e| e.context("Unable to seek in two-pass data file."))?;
+          passfile.write_all(outbuf).map_err(|e| {
+            e.context("Unable to write to two-pass data file.")
+          })?;
         }
       }
       return Ok(None);
@@ -208,16 +210,19 @@ fn do_encode<T: Pixel, D: Decoder>(
   let mut ctx: Context<T> =
     cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
 
-  let mut pass2file = pass2file_name.map(|f| {
-    File::open(f).unwrap_or_else(|_| {
-      panic!("Unable to open \"{}\" for reading two-pass data.", f)
-    })
-  });
-  let mut pass1file = pass1file_name.map(|f| {
-    File::create(f).unwrap_or_else(|_| {
-      panic!("Unable to open \"{}\" for writing two-pass data.", f)
-    })
-  });
+  let mut pass2file = match pass2file_name {
+    Some(f) => Some(File::open(f).map_err(|e| {
+      e.context("Unable to open file for reading two-pass data")
+    })?),
+    None => None,
+  };
+  // panic!(, f)
+  let mut pass1file = match pass1file_name {
+    Some(f) => Some(File::create(f).map_err(|e| {
+      e.context("Unable to open file for writing two-pass data")
+    })?),
+    None => None,
+  };
 
   let mut buffer: [u8; 80] = [0; 80];
   let mut buf_pos = 0;
@@ -260,7 +265,6 @@ fn do_encode<T: Pixel, D: Decoder>(
 fn main() {
   #[cfg(feature = "tracing")]
   use rust_hawktracer::*;
-  better_panic::install();
   init_logger();
 
   #[cfg(feature = "tracing")]
@@ -356,8 +360,13 @@ fn run() -> Result<(), error::CliError> {
       .saturating_mul(2304)
       .saturating_add(1024),
   };
-  let mut y4m_dec = y4m::Decoder::new_with_limits(&mut cli.io.input, limit)
-    .expect("cannot decode the input");
+  let mut y4m_dec =
+    match y4m::Decoder::new_with_limits(&mut cli.io.input, limit) {
+      Err(_) => {
+        return Err(CliError::new("Could not input video. Is it a y4m file?"))
+      }
+      Ok(d) => d,
+    };
   let video_info = y4m_dec.get_video_details();
   let y4m_enc = match cli.io.rec.as_mut() {
     Some(rec) => Some(
@@ -431,7 +440,12 @@ fn run() -> Result<(), error::CliError> {
   );
 
   for _ in 0..cli.skip {
-    y4m_dec.read_frame().expect("Skipped more frames than in the input");
+    match y4m_dec.read_frame() {
+      Ok(f) => f,
+      Err(_) => {
+        return Err(CliError::new("Skipped more frames than in the input"))
+      }
+    };
   }
 
   #[cfg(all(unix, feature = "signal-hook"))]
