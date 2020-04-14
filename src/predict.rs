@@ -62,6 +62,7 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::NEAREST_NEWMV,
   PredictionMode::NEW_NEARESTMV,
   PredictionMode::NEAR_NEAR0MV,
+  PredictionMode::NEAR_NEAR1MV,
 ];
 
 // There are more modes than in the spec because every allowed
@@ -182,6 +183,22 @@ impl PredictionMode {
       || self == PredictionMode::NEW_NEAR0MV
       || self == PredictionMode::NEW_NEAR1MV
       || self == PredictionMode::NEW_NEAR2MV
+  }
+  #[inline]
+  pub fn ref_mv_idx(self) -> usize {
+    if self == PredictionMode::NEAR0MV
+      || self == PredictionMode::NEAR1MV
+      || self == PredictionMode::NEAR2MV
+    {
+      self as usize - PredictionMode::NEAR0MV as usize + 1
+    } else if self == PredictionMode::NEAR_NEAR0MV
+      || self == PredictionMode::NEAR_NEAR1MV
+      || self == PredictionMode::NEAR_NEAR2MV
+    {
+      self as usize - PredictionMode::NEAR_NEAR0MV as usize + 1
+    } else {
+      1
+    }
   }
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,

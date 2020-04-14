@@ -1124,7 +1124,14 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
           true,
         ));
         for &x in RAV1E_INTER_COMPOUND_MODES {
-          inter_mode_set.push((x, ref_frames_set.len() - 1));
+          // exclude any NEAR mode based on speed setting
+          if fi.config.speed_settings.include_near_mvs || !x.has_nearmv() {
+            let mv_stack_idx = ref_frames_set.len() - 1;
+            // exclude NEAR modes if the mv_stack is too short
+            if !(x.has_nearmv() && x.ref_mv_idx() >= mv_stack.len()) {
+              inter_mode_set.push((x, mv_stack_idx));
+            }
+          }
         }
         mv_stacks.push(mv_stack);
       }
@@ -1156,13 +1163,11 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
           [MotionVector::default(); 2]
         }
       }
-      PredictionMode::NEAR1MV | PredictionMode::NEAR2MV => [
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .this_mv,
-        mv_stacks[i]
-          [luma_mode as usize - PredictionMode::NEAR0MV as usize + 1]
-          .comp_mv,
+      PredictionMode::NEAR1MV
+      | PredictionMode::NEAR2MV
+      | PredictionMode::NEAR_NEAR1MV => [
+        mv_stacks[i][luma_mode.ref_mv_idx()].this_mv,
+        mv_stacks[i][luma_mode.ref_mv_idx()].comp_mv,
       ],
       PredictionMode::NEAREST_NEWMV => {
         [mv_stacks[i][0].this_mv, mvs_from_me[i][1]]
