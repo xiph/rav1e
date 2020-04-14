@@ -2570,12 +2570,7 @@ impl<'a> ContextWriter<'a> {
           mv_stack.push(mv_cand);
         }
 
-        if blk.mode == PredictionMode::NEW_NEWMV
-          || blk.mode == PredictionMode::NEAREST_NEWMV
-          || blk.mode == PredictionMode::NEW_NEARESTMV
-          || blk.mode == PredictionMode::NEAR_NEWMV
-          || blk.mode == PredictionMode::NEW_NEARMV
-        {
+        if blk.mode.has_newmv() {
           *newmv_count += 1;
         }
 
@@ -2601,13 +2596,7 @@ impl<'a> ContextWriter<'a> {
             mv_stack.push(mv_cand);
           }
 
-          if blk.mode == PredictionMode::NEW_NEWMV
-            || blk.mode == PredictionMode::NEAREST_NEWMV
-            || blk.mode == PredictionMode::NEW_NEARESTMV
-            || blk.mode == PredictionMode::NEAR_NEWMV
-            || blk.mode == PredictionMode::NEW_NEARMV
-            || blk.mode == PredictionMode::NEWMV
-          {
+          if blk.mode.has_newmv() {
             *newmv_count += 1;
           }
 
@@ -3534,7 +3523,23 @@ impl<'a> ContextWriter<'a> {
     };
 
     assert!(mode >= PredictionMode::NEAREST_NEARESTMV);
-    let val = mode as u32 - PredictionMode::NEAREST_NEARESTMV as u32;
+    let val = match mode {
+      PredictionMode::NEAREST_NEARESTMV => 0,
+      PredictionMode::NEAR_NEAR0MV
+      | PredictionMode::NEAR_NEAR1MV
+      | PredictionMode::NEAR_NEAR2MV => 1,
+      PredictionMode::NEAREST_NEWMV => 2,
+      PredictionMode::NEW_NEARESTMV => 3,
+      PredictionMode::NEAR_NEW0MV
+      | PredictionMode::NEAR_NEW1MV
+      | PredictionMode::NEAR_NEW2MV => 4,
+      PredictionMode::NEW_NEAR0MV
+      | PredictionMode::NEW_NEAR1MV
+      | PredictionMode::NEW_NEAR2MV => 5,
+      PredictionMode::GLOBAL_GLOBALMV => 6,
+      PredictionMode::NEW_NEWMV => 7,
+      _ => unreachable!(),
+    };
     symbol_with_update!(self, w, val, &mut self.fc.compound_mode_cdf[ctx]);
   }
 

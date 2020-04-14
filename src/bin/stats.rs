@@ -497,18 +497,47 @@ impl ProgressInfo {
       );
     } else if frame_type == FrameType::INTER {
       info!(
-        "y modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear: {:.1}%",
+        "y modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear0: {:.1}% | NearNear1: {:.1}% | NearNear2: {:.1}%",
         type_label,
         self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEARESTMV, frame_type),
         self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR0MV, frame_type),
         self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR1MV, frame_type),
-        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEARMV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR0MV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR1MV, frame_type),
+        self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR2MV, frame_type),
       );
-      info!("           New: {:.1}% | NewNew: {:.1}% | NearestNearest: {:.1}% | GlobalGlobal: {:.1}%",
-            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEWMV, frame_type),
-            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEW_NEWMV, frame_type),
-            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::NEAREST_NEARESTMV, frame_type),
-            self.get_luma_pred_mode_pct_by_frame_type(PredictionMode::GLOBAL_GLOBALMV, frame_type),);
+      info!(
+        "y modes {}: NearNew0: {:.1}% | NearNew1: {:.1}% | NearNew2: {:.1}%",
+        type_label,
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW0MV,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW1MV,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW2MV,
+          frame_type
+        ),
+      );
+      info!(
+        "y modes {}: NewNear0: {:.1}% | NewNear1: {:.1}% | NewNear2: {:.1}%",
+        type_label,
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR0MV,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR1MV,
+          frame_type
+        ),
+        self.get_luma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR2MV,
+          frame_type
+        ),
+      );
     }
   }
 
@@ -555,12 +584,46 @@ impl ProgressInfo {
       );
     } else if frame_type == FrameType::INTER {
       info!(
-        "uv modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear: {:.1}%",
+        "uv modes {}: Nearest: {:.1}% | Near0: {:.1}% | Near1: {:.1}% | NearNear0: {:.1}% | NearNear1: {:.1}% | NearNear2: {:.1}%",
         type_label,
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEARESTMV, frame_type),
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR0MV, frame_type),
         self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR1MV, frame_type),
-        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEARMV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR0MV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR1MV, frame_type),
+        self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEAR_NEAR2MV, frame_type),
+      );
+      info!(
+        "uv modes {}: NearNew0: {:.1}% | NearNew1: {:.1}% | NearNew2: {:.1}%",
+        type_label,
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW0MV,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW1MV,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEAR_NEW2MV,
+          frame_type
+        ),
+      );
+      info!(
+        "uv modes {}: NewNear0: {:.1}% | NewNear1: {:.1}% | NewNear2: {:.1}%",
+        type_label,
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR0MV,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR1MV,
+          frame_type
+        ),
+        self.get_chroma_pred_mode_pct_by_frame_type(
+          PredictionMode::NEW_NEAR2MV,
+          frame_type
+        ),
       );
       info!("            New: {:.1}% | NewNew: {:.1}% | NearestNearest: {:.1}% | GlobalGlobal: {:.1}%",
             self.get_chroma_pred_mode_pct_by_frame_type(PredictionMode::NEWMV, frame_type),
