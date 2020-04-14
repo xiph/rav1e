@@ -1638,7 +1638,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
         cw.write_mv(w, mvs[1], ref_mvs[1], mv_precision);
       }
 
-      if luma_mode.has_near() {
+      if luma_mode.has_nearmv() {
         let ref_mv_idx = if luma_mode >= PredictionMode::NEAR0MV
           && luma_mode <= PredictionMode::NEAR2MV
         {
@@ -2693,7 +2693,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           mode_luma = if match0 && match1 {
             PredictionMode::NEAREST_NEARESTMV
           } else if match2 && match3 {
-            PredictionMode::NEAR_NEARMV
+            PredictionMode::NEAR_NEAR0MV
           } else if match0 {
             PredictionMode::NEAREST_NEWMV
           } else if match1 {

@@ -1114,7 +1114,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
           [MotionVector::default(); 2]
         }
       }
-      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEARMV => {
+      PredictionMode::NEAR0MV | PredictionMode::NEAR_NEAR0MV => {
         if mv_stacks[i].len() > 1 {
           [mv_stacks[i][1].this_mv, mv_stacks[i][1].comp_mv]
         } else {

@@ -439,8 +439,7 @@ impl fmt::Display for BlockSize {
 pub const NEWMV_MODE_CONTEXTS: usize = 7;
 pub const GLOBALMV_MODE_CONTEXTS: usize = 2;
 pub const REFMV_MODE_CONTEXTS: usize = 6;
-pub const INTER_COMPOUND_MODES: usize = 1 + PredictionMode::NEW_NEWMV as usize
-  - PredictionMode::NEAREST_NEARESTMV as usize;
+pub const INTER_COMPOUND_MODES: usize = 8;
 
 pub const REFMV_OFFSET: usize = 4;
 pub const GLOBALMV_OFFSET: usize = 3;
