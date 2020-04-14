@@ -110,6 +110,8 @@ fn build_nasm_files() {
       &[&config_include_arg, "-Isrc/"],
     );
     std::fs::write(hash_path, &hash[..]).unwrap();
+  } else {
+    println!("cargo:rustc-link-search={}", out_dir);
   }
   println!("cargo:rustc-link-lib=static=rav1easm");
   rerun_dir("src/x86");
@@ -148,6 +150,9 @@ fn build_asm_files() {
       .compile("rav1e-aarch64");
 
     std::fs::write(hash_path, &hash[..]).unwrap();
+  } else {
+    println!("cargo:rustc-link-search={}", out_dir);
+    println!("cargo:rustc-link-lib=static=rav1e-aarch64");
   }
   rerun_dir("src/arm");
 }
