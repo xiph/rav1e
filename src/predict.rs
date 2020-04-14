@@ -61,9 +61,11 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::NEW_NEWMV,
   PredictionMode::NEAREST_NEWMV,
   PredictionMode::NEW_NEARESTMV,
-  PredictionMode::NEAR_NEARMV,
+  PredictionMode::NEAR_NEAR0MV,
 ];
 
+// There are more modes than in the spec because every allowed
+// drl index for NEAR modes is considered its own mode.
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub enum PredictionMode {
   DC_PRED,     // Average of above and left pixels
@@ -88,16 +90,24 @@ pub enum PredictionMode {
   NEWMV,
   // Compound ref compound modes
   NEAREST_NEARESTMV,
-  NEAR_NEARMV,
+  NEAR_NEAR0MV,
+  NEAR_NEAR1MV,
+  NEAR_NEAR2MV,
   NEAREST_NEWMV,
   NEW_NEARESTMV,
-  NEAR_NEWMV,
-  NEW_NEARMV,
+  NEAR_NEW0MV,
+  NEAR_NEW1MV,
+  NEAR_NEW2MV,
+  NEW_NEAR0MV,
+  NEW_NEAR1MV,
+  NEW_NEAR2MV,
   GLOBAL_GLOBALMV,
   NEW_NEWMV,
 }
 
-pub const PREDICTION_MODES: usize = 28;
+// This is a higher number than in the spec and cannot be used
+// for bitstream writing purposes.
+pub const PREDICTION_MODES: usize = 34;
 
 #[derive(Copy, Clone, Debug)]
 pub enum PredictionVariant {
@@ -142,11 +152,31 @@ impl PredictionMode {
   pub fn is_compound(self) -> bool {
     self >= PredictionMode::NEAREST_NEARESTMV
   }
-  pub fn has_near(self) -> bool {
-    (self >= PredictionMode::NEAR0MV && self <= PredictionMode::NEAR2MV)
-      || self == PredictionMode::NEAR_NEARMV
-      || self == PredictionMode::NEAR_NEWMV
-      || self == PredictionMode::NEW_NEARMV
+  pub fn has_nearmv(self) -> bool {
+    self == PredictionMode::NEAR0MV
+      || self == PredictionMode::NEAR1MV
+      || self == PredictionMode::NEAR2MV
+      || self == PredictionMode::NEAR_NEAR0MV
+      || self == PredictionMode::NEAR_NEAR1MV
+      || self == PredictionMode::NEAR_NEAR2MV
+      || self == PredictionMode::NEAR_NEW0MV
+      || self == PredictionMode::NEAR_NEW1MV
+      || self == PredictionMode::NEAR_NEW2MV
+      || self == PredictionMode::NEW_NEAR0MV
+      || self == PredictionMode::NEW_NEAR1MV
+      || self == PredictionMode::NEW_NEAR2MV
+  }
+  pub fn has_newmv(self) -> bool {
+    self == PredictionMode::NEWMV
+      || self == PredictionMode::NEW_NEWMV
+      || self == PredictionMode::NEAREST_NEWMV
+      || self == PredictionMode::NEW_NEARESTMV
+      || self == PredictionMode::NEAR_NEW0MV
+      || self == PredictionMode::NEAR_NEW1MV
+      || self == PredictionMode::NEAR_NEW2MV
+      || self == PredictionMode::NEW_NEAR0MV
+      || self == PredictionMode::NEW_NEAR1MV
+      || self == PredictionMode::NEW_NEAR2MV
   }
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
