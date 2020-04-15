@@ -183,24 +183,33 @@ pub struct DecodeTestParameters {
 
 impl Arbitrary for DecodeTestParameters {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    Ok(Self {
+    let mut p = Self {
       w: u.int_in_range(16..=16 + 255)?,
       h: u.int_in_range(16..=16 + 255)?,
-      speed: 10,
+      speed: u.int_in_range(0..=10)?,
       q: u8::arbitrary(u)?.into(),
       limit: u.int_in_range(1..=3)?,
       bit_depth: 8,
-      chroma_sampling: Default::default(),
+      chroma_sampling: *u.choose(&[
+        ChromaSampling::Cs420,
+        ChromaSampling::Cs422,
+        ChromaSampling::Cs444,
+        ChromaSampling::Cs400,
+      ])?,
       min_keyint: u.int_in_range(0..=3)?,
       max_keyint: u.int_in_range(1..=4)?,
       switch_frame_interval: 0,
       low_latency: bool::arbitrary(u)?,
-      error_resilient: false,
-      bitrate: i32::arbitrary(u)?,
-      tile_cols_log2: 1,
-      tile_rows_log2: 1,
-      still_picture: false,
-    })
+      error_resilient: bool::arbitrary(u)?,
+      bitrate: u16::arbitrary(u)?.into(),
+      tile_cols_log2: u.int_in_range(0..=2)?,
+      tile_rows_log2: u.int_in_range(0..=2)?,
+      still_picture: bool::arbitrary(u)?,
+    };
+    if p.still_picture {
+      p.limit = 1
+    }
+    Ok(p)
   }
 }
 
