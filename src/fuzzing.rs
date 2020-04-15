@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
+use libfuzzer_sys::arbitrary::{Arbitrary, Error, Unstructured};
 
 use crate::prelude::*;
 
@@ -17,19 +17,16 @@ use crate::prelude::*;
 //
 // 1. Add a function to this file which looks like this:
 //
-//    pub fn fuzz_something(data: &[u8]) {
-//      let mut g = create_generator!();
-//
+//    pub fn fuzz_something(data: Data) {
 //      // Invoke everything you need.
 //      //
-//      // You should use g.g() to get an arbitrary value of any type that
-//      // implements Arbitrary [1]. This is how fuzzer affects the
-//      // execution—by feeding in different bytes, which result in different
+//      // Your function may accept a value of any type that implements
+//      // Arbitrary [1]. This is how fuzzer affects the execution—by
+//      // feeding in different bytes, which result in different
 //      // arbitrary values being generated.
 //      // [1]: https://docs.rs/arbitrary/0.2.0/arbitrary/trait.Arbitrary.html
 //      //
-//      // Print out the structures you create with arbitrary data with
-//      // debug!().
+//      // Derive Debug for the structures you create with arbitrary data
 //    }
 //
 // 2. cargo fuzz add something
@@ -39,53 +36,40 @@ use crate::prelude::*;
 //
 // Now you can fuzz the new target with cargo fuzz.
 
-// A helper for generating arbitrary data.
-struct Generator<'a> {
-  buffer: Unstructured<'a>,
+#[derive(Debug)]
+pub struct ArbitraryConfig {
+  config: Config,
 }
 
-impl<'a> Generator<'a> {
-  fn new(data: &'a [u8]) -> Self {
-    Self { buffer: Unstructured::new(data) }
+impl Arbitrary for ArbitraryConfig {
+  fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
+    let mut config = Config::default();
+    config.threads = 1;
+    config.enc.width = Arbitrary::arbitrary(u)?;
+    config.enc.height = Arbitrary::arbitrary(u)?;
+    config.enc.bit_depth = (u8::arbitrary(u)? % 17) as usize;
+    config.enc.still_picture = Arbitrary::arbitrary(u)?;
+    config.enc.time_base =
+      Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
+    config.enc.min_key_frame_interval = Arbitrary::arbitrary(u)?;
+    config.enc.max_key_frame_interval = Arbitrary::arbitrary(u)?;
+    config.enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
+    config.enc.low_latency = Arbitrary::arbitrary(u)?;
+    config.enc.quantizer = Arbitrary::arbitrary(u)?;
+    config.enc.min_quantizer = Arbitrary::arbitrary(u)?;
+    config.enc.bitrate = Arbitrary::arbitrary(u)?;
+    config.enc.tile_cols = Arbitrary::arbitrary(u)?;
+    config.enc.tile_rows = Arbitrary::arbitrary(u)?;
+    config.enc.tiles = Arbitrary::arbitrary(u)?;
+    config.enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
+    config.enc.speed_settings =
+      SpeedSettings::from_preset(Arbitrary::arbitrary(u)?);
+    Ok(Self { config })
   }
-
-  fn g<T: Arbitrary>(&mut self) -> T {
-    <T as Arbitrary>::arbitrary(&mut self.buffer).unwrap()
-  }
 }
 
-macro_rules! create_generator {
-  ($data:expr) => {{
-    Generator::new($data)
-  }};
-}
-
-pub fn fuzz_construct_context(data: &[u8]) {
-  let mut g = create_generator!(data);
-
-  let mut config = Config::default();
-  config.threads = 1;
-  config.enc.width = g.g();
-  config.enc.height = g.g();
-  config.enc.bit_depth = (g.g::<u8>() % 17) as usize;
-  config.enc.still_picture = g.g();
-  config.enc.time_base = Rational::new(g.g(), g.g());
-  config.enc.min_key_frame_interval = g.g();
-  config.enc.max_key_frame_interval = g.g();
-  config.enc.reservoir_frame_delay = g.g();
-  config.enc.low_latency = g.g();
-  config.enc.quantizer = g.g();
-  config.enc.min_quantizer = g.g();
-  config.enc.bitrate = g.g();
-  config.enc.tile_cols = g.g();
-  config.enc.tile_rows = g.g();
-  config.enc.tiles = g.g();
-  config.enc.rdo_lookahead_frames = g.g();
-  config.enc.speed_settings = SpeedSettings::from_preset(g.g());
-
-  debug!("config = {:#?}", config);
-
-  let _: Result<Context<u16>, _> = config.new_context();
+pub fn fuzz_construct_context(arbitrary: ArbitraryConfig) {
+  let _: Result<Context<u16>, _> = arbitrary.config.new_context();
 }
 
 fn encode_frames(
@@ -119,43 +103,21 @@ fn encode_frames(
   Ok(())
 }
 
-pub fn fuzz_encode(data: &[u8]) {
-  let mut g = create_generator!(data);
-
-  let mut config = Config::default();
-  config.threads = 1;
-  config.enc.width = g.g::<u8>() as usize + 1;
-  config.enc.height = g.g::<u8>() as usize + 1;
-  config.enc.still_picture = g.g();
-  config.enc.time_base = Rational::new(g.g(), g.g());
-  config.enc.min_key_frame_interval = (g.g::<u8>() % 4) as u64;
-  config.enc.max_key_frame_interval = (g.g::<u8>() % 4) as u64 + 1;
-  config.enc.low_latency = g.g();
-  config.enc.quantizer = g.g();
-  config.enc.min_quantizer = g.g();
-  config.enc.bitrate = g.g();
-  // config.enc.tile_cols = g.g();
-  // config.enc.tile_rows = g.g();
-  // config.enc.tiles = g.g();
-  config.enc.rdo_lookahead_frames = g.g();
-  config.enc.speed_settings = SpeedSettings::from_preset(10);
-
-  debug!("config = {:#?}", config);
-
-  let res = config.new_context();
+pub fn fuzz_encode(arbitrary: ArbitraryConfig) {
+  let res = arbitrary.config.new_context();
   if res.is_err() {
     return;
   }
   let mut context: Context<u8> = res.unwrap();
 
-  let frame_count = g.g::<u8>() % 3 + 1;
+  let frame_count = 3; // g.g::<u8>() % 3 + 1;
   let mut frame = context.new_frame();
   let frames = (0..frame_count).map(|_| {
     for plane in &mut frame.planes {
       let stride = plane.cfg.stride;
       for row in plane.data_origin_mut().chunks_mut(stride) {
         for pixel in row {
-          *pixel = g.g();
+          *pixel = 42; // g.g();
         }
       }
     }
@@ -166,57 +128,75 @@ pub fn fuzz_encode(data: &[u8]) {
   let _ = encode_frames(&mut context, frames);
 }
 
+#[derive(Debug)]
+pub struct DecodeTestParameters {
+  w: usize,
+  h: usize,
+  speed: usize,
+  q: usize,
+  limit: usize,
+  bit_depth: usize,
+  chroma_sampling: ChromaSampling,
+  min_keyint: u64,
+  max_keyint: u64,
+  switch_frame_interval: u64,
+  low_latency: bool,
+  error_resilient: bool,
+  bitrate: i32,
+  tile_cols_log2: usize,
+  tile_rows_log2: usize,
+  still_picture: bool,
+  seed: [u8; 32],
+}
+
+impl Arbitrary for DecodeTestParameters {
+  fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
+    let valid_samplings =
+      [ChromaSampling::Cs420, ChromaSampling::Cs422, ChromaSampling::Cs444];
+    Ok(Self {
+      w: u8::arbitrary(u)? as usize + 16,
+      h: u8::arbitrary(u)? as usize + 16,
+      speed: 10,
+      q: u8::arbitrary(u)? as usize,
+      limit: (u8::arbitrary(u)? % 3) as usize + 1,
+      bit_depth: 8,
+      chroma_sampling: valid_samplings[(u8::arbitrary(u)? % 3) as usize],
+      min_keyint: (u8::arbitrary(u)? % 4) as u64,
+      max_keyint: (u8::arbitrary(u)? % 4) as u64,
+      switch_frame_interval: 0,
+      low_latency: bool::arbitrary(u)?,
+      error_resilient: bool::arbitrary(u)?,
+      bitrate: u16::arbitrary(u)? as i32,
+      tile_cols_log2: bool::arbitrary(u)? as usize,
+      tile_rows_log2: bool::arbitrary(u)? as usize,
+      still_picture: bool::arbitrary(u)?,
+      seed: Arbitrary::arbitrary(u)?,
+    })
+  }
+}
+
 #[cfg(feature = "decode_test_dav1d")]
-pub fn fuzz_encode_decode(data: &[u8]) {
+pub fn fuzz_encode_decode(p: DecodeTestParameters) {
   use crate::test_encode_decode::*;
 
-  let mut g = create_generator!(data);
-
-  let w = g.g::<u8>() as usize + 16;
-  let h = g.g::<u8>() as usize + 16;
-  let speed = 10;
-  let q = g.g::<u8>() as usize;
-  let limit = (g.g::<u8>() % 3) as usize + 1;
-  let min_keyint = g.g::<u64>() % 4;
-  let max_keyint = g.g::<u64>() % 4 + 1;
-  let switch_frame_interval = 0;
-  let low_latency = g.g();
-  let error_resilient = false;
-  let bitrate = g.g();
-  let still_picture = false;
-  let seed = g.g();
-
-  debug!(
-    "w = {:#?}\n\
-     h = {:#?}\n\
-     speed = {:#?}\n\
-     q = {:#?}\n\
-     limit = {:#?}\n\
-     min_keyint = {:#?}\n\
-     max_keyint = {:#?}\n\
-     low_latency = {:#?}\n\
-     bitrate = {:#?}",
-    w, h, speed, q, limit, min_keyint, max_keyint, low_latency, bitrate
-  );
-
-  let mut dec = get_decoder::<u8>("dav1d", w, h);
+  let mut dec = get_decoder::<u8>("dav1d", p.w, p.h);
   dec.encode_decode(
-    w,
-    h,
-    speed,
-    q,
-    limit,
-    8,
-    Default::default(),
-    min_keyint,
-    max_keyint,
-    switch_frame_interval,
-    low_latency,
-    error_resilient,
-    bitrate,
-    1,
-    1,
-    still_picture,
-    seed,
+    p.w,
+    p.h,
+    p.speed,
+    p.q,
+    p.limit,
+    p.bit_depth,
+    p.chroma_sampling,
+    p.min_keyint,
+    p.max_keyint,
+    p.switch_frame_interval,
+    p.low_latency,
+    p.error_resilient,
+    p.bitrate,
+    p.tile_cols_log2,
+    p.tile_rows_log2,
+    p.still_picture,
+    p.seed,
   );
 }

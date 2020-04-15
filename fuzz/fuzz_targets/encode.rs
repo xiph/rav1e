@@ -12,7 +12,7 @@
 extern crate rav1e;
 use rav1e::fuzzing::*;
 
-fuzz_target!(|data| {
+fuzz_target!(|data: ArbitraryConfig| {
   let _ = pretty_env_logger::try_init();
 
   fuzz_encode(data)
