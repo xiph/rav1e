@@ -10,12 +10,11 @@ cargo-fuzz = true
 
 [dependencies]
 pretty_env_logger = "0.3"
+libfuzzer-sys = "0.2"
 
 [dependencies.rav1e]
 path = ".."
 features = ["decode_test_dav1d"]
-[dependencies.libfuzzer-sys]
-git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
 
 # Prevent this from interfering with workspaces
 [workspace]
