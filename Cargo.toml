@@ -21,6 +21,7 @@ autobenches = false
 autobins = false
 
 [features]
+unstable = []
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = [
