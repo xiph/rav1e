@@ -46,6 +46,15 @@ To build release binary in `target/release/rav1e` run:
 cargo build --release
 ```
 
+### Unstable features
+Experimental API and Features can be enabled by using the `unstable` feature.
+
+```sh
+cargo build --features unstable
+```
+
+Those Features and API are bound to change and evolve, do not rely on them staying the same over releases.
+
 ### Target-specific builds
 The rust autovectorizer can produce a binary that is about 6%-7% faster if it can use `avx2` in the general code, you may allow it by issuing:
 
