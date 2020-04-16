@@ -1402,7 +1402,7 @@ pub fn deblock_plane<T: Pixel>(
       );
     }
     // ..and the last two horizontal edges for the row
-    if cols > 2 << xdec {
+    if cols >= 2 << xdec {
       filter_h_edge(
         deblock,
         blocks,
@@ -1416,21 +1416,21 @@ pub fn deblock_plane<T: Pixel>(
         xdec,
         ydec,
       );
-      if cols > 1 << xdec {
-        filter_h_edge(
-          deblock,
-          blocks,
-          TileBlockOffset(BlockOffset {
-            x: cols - (1 << xdec),
-            y: y - (1 << ydec),
-          }),
-          p,
-          pli,
-          bd,
-          xdec,
-          ydec,
-        );
-      }
+    }
+    if cols >= 1 << xdec {
+      filter_h_edge(
+        deblock,
+        blocks,
+        TileBlockOffset(BlockOffset {
+          x: cols - (1 << xdec),
+          y: y - (1 << ydec),
+        }),
+        p,
+        pli,
+        bd,
+        xdec,
+        ydec,
+      );
     }
   }
 
