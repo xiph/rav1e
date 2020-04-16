@@ -63,6 +63,7 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
   PredictionMode::NEW_NEARESTMV,
   PredictionMode::NEAR_NEAR0MV,
   PredictionMode::NEAR_NEAR1MV,
+  PredictionMode::NEAR_NEAR2MV,
 ];
 
 // There are more modes than in the spec because every allowed

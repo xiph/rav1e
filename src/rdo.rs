@@ -1165,7 +1165,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       }
       PredictionMode::NEAR1MV
       | PredictionMode::NEAR2MV
-      | PredictionMode::NEAR_NEAR1MV => [
+      | PredictionMode::NEAR_NEAR1MV
+      | PredictionMode::NEAR_NEAR2MV => [
         mv_stacks[i][luma_mode.ref_mv_idx()].this_mv,
         mv_stacks[i][luma_mode.ref_mv_idx()].comp_mv,
       ],
