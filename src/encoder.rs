@@ -2704,12 +2704,17 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           let match4 = mv_stack.len() > 2 && mv_stack[2].this_mv == mvs[0];
           let match5 = mv_stack.len() > 2 && mv_stack[2].comp_mv == mvs[1];
 
+          let match6 = mv_stack.len() > 3 && mv_stack[3].this_mv == mvs[0];
+          let match7 = mv_stack.len() > 3 && mv_stack[3].comp_mv == mvs[1];
+
           mode_luma = if match0 && match1 {
             PredictionMode::NEAREST_NEARESTMV
           } else if match2 && match3 {
             PredictionMode::NEAR_NEAR0MV
           } else if match4 && match5 {
             PredictionMode::NEAR_NEAR1MV
+          } else if match6 && match7 {
+            PredictionMode::NEAR_NEAR2MV
           } else if match0 {
             PredictionMode::NEAREST_NEWMV
           } else if match1 {
