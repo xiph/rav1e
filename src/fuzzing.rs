@@ -184,6 +184,7 @@ pub fn fuzz_encode_decode(data: &[u8]) {
   let error_resilient = false;
   let bitrate = g.g();
   let still_picture = false;
+  let seed = g.g();
 
   debug!(
     "w = {:#?}\n\
@@ -216,5 +217,6 @@ pub fn fuzz_encode_decode(data: &[u8]) {
     1,
     1,
     still_picture,
+    seed,
   );
 }

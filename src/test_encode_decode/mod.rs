@@ -66,8 +66,9 @@ pub(crate) trait TestDecoder<T: Pixel> {
     min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
     low_latency: bool, error_resilient: bool, bitrate: i32,
     tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
+    seed: [u8; 32],
   ) {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
+    let mut ra = ChaChaRng::from_seed(seed);
 
     let mut ctx: Context<T> = setup_encoder(
       w,
@@ -224,6 +225,7 @@ fn speed(s: usize, decoder: &str) {
       0,
       0,
       false,
+      [0; 32],
     );
   }
 }
@@ -311,6 +313,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -339,6 +342,7 @@ fn quantizer(decoder: &str, q: usize) {
       0,
       0,
       false,
+      [0; 32],
     );
   }
 }
@@ -388,6 +392,7 @@ fn bitrate(decoder: &str) {
         0,
         0,
         false,
+        [0; 32],
       );
     }
   }
@@ -420,6 +425,7 @@ fn keyframes(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -451,6 +457,7 @@ fn reordering(decoder: &str) {
       0,
       0,
       false,
+      [0; 32],
     );
   }
 }
@@ -484,6 +491,7 @@ fn reordering_short_video(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -515,6 +523,7 @@ fn error_resilient(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -546,6 +555,7 @@ fn error_resilient_reordering(decoder: &str) {
       0,
       0,
       false,
+      [0; 32],
     );
   }
 }
@@ -578,6 +588,7 @@ fn switch_frame(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -609,6 +620,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -641,6 +653,7 @@ fn low_bit_depth(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -669,6 +682,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -699,7 +713,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
     w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
-    false,
+    false, [0; 32],
   );
 }
 
@@ -750,6 +764,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     2,
     2,
     false,
+    [0; 32],
   );
 }
 
@@ -780,6 +795,7 @@ fn still_picture_mode(decoder: &str) {
     0,
     0,
     true,
+    [0; 32],
   );
 }
 
@@ -823,6 +839,7 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
 
@@ -854,5 +871,6 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
     0,
     0,
     false,
+    [0; 32],
   );
 }
