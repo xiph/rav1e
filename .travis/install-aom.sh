@@ -1,8 +1,8 @@
 #!/bin/bash
 set -ex
 
-AOM_VERSION="1.0.0.errata1-2"
-PKG_URL="http://http.us.debian.org/debian/pool/main/a/aom"
+AOM_VERSION="1.0.0.errata1-3~18.04.york0"
+PKG_URL="http://ppa.launchpad.net/jonathonf/ffmpeg-4/ubuntu/pool/main/a/aom"
 
 case "$ARCH" in
   x86_64) ARCH=amd64 ;;
@@ -17,10 +17,10 @@ curl -O "$PKG_URL/libaom-dev_${AOM_VERSION}_$ARCH.deb" \
      -O "$PKG_URL/libaom0_${AOM_VERSION}_$ARCH.deb"
 
 sha256sum --check --ignore-missing <<EOF
-3f096b6057871c12bbdfdf8b2e18d12ed0f643b8e23fdbeddd80b860c55c53ff  libaom0_1.0.0.errata1-2_amd64.deb
-76cf5487ce1e4dccb6dc11fd59ac358181b9fe2bd6422c755f2490b712f20d34  libaom0_1.0.0.errata1-2_arm64.deb
-fd07d90dafe1512d79c1734adb1c4f33215f40856e89e9d505c7e8c8b0ae6a0f  libaom-dev_1.0.0.errata1-2_amd64.deb
-df1ec43f66bb243c7dfac70877c56033791475f91d068589e26f7ade9fd11001  libaom-dev_1.0.0.errata1-2_arm64.deb
+e1ff5093f077685e4e45ce74264f9ee7ccda4634be58e401ac180b73f4232b63  libaom0_${AOM_VERSION}_amd64.deb
+f8ca5eb6fdda1d049e26a9e7ec4976c002fac3b5adabea11765d831470594a88  libaom0_${AOM_VERSION}_arm64.deb
+93e6f64f33722cf9c80a920b3d722713869793e5e1438c05ff9331791728ca90  libaom-dev_${AOM_VERSION}_amd64.deb
+53be66aa706e6045b52aef446b9d305a718bab15252d9c0feb8753fe328301fb  libaom-dev_${AOM_VERSION}_arm64.deb
 EOF
 
 sudo dpkg -i "libaom0_${AOM_VERSION}_$ARCH.deb" \
