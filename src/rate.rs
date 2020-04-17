@@ -1363,7 +1363,7 @@ impl RCState {
   }
 
   // Initialize the rate control for second pass encoding
-  pub(crate) fn twopass_init(&mut self) {
+  pub(crate) fn init_second_pass(&mut self) {
     if self.twopass_state == PASS_SINGLE || self.twopass_state == PASS_1 {
       // Initialize the second pass.
       self.twopass_state += PASS_2;
@@ -1606,7 +1606,7 @@ impl RCState {
     &mut self, maybe_buf: Option<&[u8]>,
   ) -> Result<usize, ()> {
     let mut consumed = 0;
-    self.twopass_init();
+    self.init_second_pass();
     // If we haven't got a valid summary header yet, try to parse one.
     if self.nframes_total[FRAME_SUBTYPE_I] == 0 {
       self.pass2_data_ready = false;
