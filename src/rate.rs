@@ -1264,69 +1264,95 @@ impl RCState {
     TwoPassOutParams { pass1_log_base_q, done_processing }
   }
 
+  // Initialize the first pass and emit a placeholder summary
+  fn init_first_pass(&mut self, pass1_log_base_q: i64) {
+    if self.twopass_state == PASS_SINGLE {
+      // Pick first-pass qi for scale calculations.
+      self.pass1_log_base_q = pass1_log_base_q;
+    } else {
+      debug_assert!(self.twopass_state == PASS_2);
+    }
+    self.twopass_state += PASS_1;
+  }
+
+  // Prepare a placeholder summary
+  fn emit_placeholder_summary(&mut self) -> &[u8] {
+    // Fill in dummy summary values.
+    let mut cur_pos = 0;
+    cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
+    cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
+    cur_pos = self.buffer_val(0, TWOPASS_HEADER_SZ - 8, cur_pos);
+    debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
+    self.pass1_data_retrieved = true;
+    &self.pass1_buffer[..cur_pos]
+  }
+
+  // Frame-specific pass data
+  fn emit_frame_data(&mut self) -> Option<&[u8]> {
+    let mut cur_pos = 0;
+    let fti = self.prev_metrics.fti;
+    if fti < FRAME_NSUBTYPES {
+      self.scale_sum[fti] += bexp_q24(self.prev_metrics.log_scale_q24);
+    }
+    if self.prev_metrics.show_frame {
+      self.ntus += 1;
+    }
+    // If we have encoded too many frames, prevent us from reaching the
+    //  ready state required to encode more.
+    if self.nencoded_frames + self.nsef_frames >= std::i32::MAX as i64 {
+      None?
+    }
+    cur_pos = self.buffer_val(
+      (self.prev_metrics.show_frame as i64) << 31
+        | self.prev_metrics.fti as i64,
+      4,
+      cur_pos,
+    );
+    cur_pos =
+      self.buffer_val(self.prev_metrics.log_scale_q24 as i64, 4, cur_pos);
+    debug_assert!(cur_pos == TWOPASS_PACKET_SZ);
+    self.pass1_data_retrieved = true;
+    Some(&self.pass1_buffer[..cur_pos])
+  }
+
+  // Summary of the whole encoding process.
+  fn emit_summary(&mut self) -> &[u8] {
+    let mut cur_pos = 0;
+    cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
+    cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
+    cur_pos = self.buffer_val(self.ntus as i64, 4, cur_pos);
+    for fti in 0..=FRAME_NSUBTYPES {
+      cur_pos = self.buffer_val(self.nframes[fti] as i64, 4, cur_pos);
+    }
+    for fti in 0..FRAME_NSUBTYPES {
+      cur_pos = self.buffer_val(self.exp[fti] as i64, 1, cur_pos);
+    }
+    for fti in 0..FRAME_NSUBTYPES {
+      cur_pos = self.buffer_val(self.scale_sum[fti], 8, cur_pos);
+    }
+    debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
+    self.pass1_summary_retrieved = true;
+    &self.pass1_buffer[..cur_pos]
+  }
+
+  // Initialize the first pass, emit either summary or frame-specific data
+  // depending on the previous call
   pub(crate) fn twopass_out(
     &mut self, params: TwoPassOutParams,
   ) -> Option<&[u8]> {
-    let mut cur_pos = 0;
     if !self.pass1_data_retrieved {
       if self.twopass_state != PASS_1 && self.twopass_state != PASS_2_PLUS_1 {
-        // Initialize the first pass.
-        if self.twopass_state == PASS_SINGLE {
-          // Pick first-pass qi for scale calculations.
-          self.pass1_log_base_q = params.pass1_log_base_q;
-        } else {
-          debug_assert!(self.twopass_state == PASS_2);
-        }
-        self.twopass_state += PASS_1;
-        // Fill in dummy summary values.
-        cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
-        cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
-        cur_pos = self.buffer_val(0, TWOPASS_HEADER_SZ - 8, cur_pos);
-        debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
+        self.init_first_pass(params.pass1_log_base_q);
+        Some(self.emit_placeholder_summary())
       } else {
-        let fti = self.prev_metrics.fti;
-        if fti < FRAME_NSUBTYPES {
-          self.scale_sum[fti] += bexp_q24(self.prev_metrics.log_scale_q24);
-        }
-        if self.prev_metrics.show_frame {
-          self.ntus += 1;
-        }
-        // If we have encoded too many frames, prevent us from reaching the
-        //  ready state required to encode more.
-        if self.nencoded_frames + self.nsef_frames >= std::i32::MAX as i64 {
-          None?
-        }
-        cur_pos = self.buffer_val(
-          (self.prev_metrics.show_frame as i64) << 31
-            | self.prev_metrics.fti as i64,
-          4,
-          cur_pos,
-        );
-        cur_pos =
-          self.buffer_val(self.prev_metrics.log_scale_q24 as i64, 4, cur_pos);
-        debug_assert!(cur_pos == TWOPASS_PACKET_SZ);
+        self.emit_frame_data()
       }
-      self.pass1_data_retrieved = true;
     } else if params.done_processing && !self.pass1_summary_retrieved {
-      cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
-      cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
-      cur_pos = self.buffer_val(self.ntus as i64, 4, cur_pos);
-      for fti in 0..=FRAME_NSUBTYPES {
-        cur_pos = self.buffer_val(self.nframes[fti] as i64, 4, cur_pos);
-      }
-      for fti in 0..FRAME_NSUBTYPES {
-        cur_pos = self.buffer_val(self.exp[fti] as i64, 1, cur_pos);
-      }
-      for fti in 0..FRAME_NSUBTYPES {
-        cur_pos = self.buffer_val(self.scale_sum[fti], 8, cur_pos);
-      }
-      debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
-      self.pass1_summary_retrieved = true;
+      Some(self.emit_summary())
     } else {
       // The data for this frame has already been retrieved.
-      return None;
+      None
     }
-    Some(&self.pass1_buffer[..cur_pos])
   }
 
   fn buffer_fill(
