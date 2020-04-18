@@ -16,8 +16,7 @@ use crate::ec::*;
 use crate::frame::*;
 use crate::header::*;
 use crate::lrf::*;
-use crate::mc::FilterMode;
-use crate::mc::MotionVector;
+use crate::mc::{FilterMode, MotionVector};
 use crate::me::*;
 use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
@@ -26,12 +25,9 @@ use crate::predict::{
   AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
 };
 use crate::quantize::*;
-use crate::rate::bexp64;
-use crate::rate::q57;
-use crate::rate::QuantizerParameters;
-use crate::rate::FRAME_SUBTYPE_I;
-use crate::rate::FRAME_SUBTYPE_P;
-use crate::rate::QSCALE;
+use crate::rate::{
+  bexp64, q57, QuantizerParameters, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, QSCALE,
+};
 use crate::rdo::*;
 use crate::segmentation::*;
 use crate::serialize::{Deserialize, Serialize};

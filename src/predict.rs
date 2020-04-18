@@ -497,8 +497,7 @@ pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::tiling::PlaneRegionMut;
   use crate::transform::TxSize;
-  use crate::util::round_shift;
-  use crate::util::Aligned;
+  use crate::util::{round_shift, Aligned};
   use crate::Pixel;
   use std::mem::size_of;
 

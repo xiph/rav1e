@@ -15,8 +15,7 @@ use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
 use crate::tiling::*;
-use crate::util::Pixel;
-use crate::util::{clamp, ILog};
+use crate::util::{clamp, ILog, Pixel};
 use crate::DeblockState;
 use std::cmp;
 

@@ -43,13 +43,10 @@ use crate::error::*;
 use crate::stats::*;
 use rav1e::prelude::*;
 
-use crate::decoder::Decoder;
-use crate::decoder::VideoDetails;
+use crate::decoder::{Decoder, VideoDetails};
 use crate::muxer::*;
 use std::fs::File;
-use std::io::Read;
-use std::io::Seek;
-use std::io::Write;
+use std::io::{Read, Seek, Write};
 use std::sync::Arc;
 
 struct Source<D: Decoder> {
