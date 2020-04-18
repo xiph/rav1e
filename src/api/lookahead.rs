@@ -6,9 +6,8 @@ use crate::context::{
 };
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
-use crate::encoder::BlockPmv;
 use crate::encoder::{
-  build_coarse_pmvs, build_full_res_pmvs, build_half_res_pmvs,
+  build_coarse_pmvs, build_full_res_pmvs, build_half_res_pmvs, BlockPmv,
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
 use crate::frame::{AsRegion, PlaneOffset};

@@ -9,7 +9,6 @@
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::PlaneSlice;
-use crate::lrf::rust;
 use crate::lrf::*;
 use crate::util::Pixel;
 #[cfg(target_arch = "x86")]

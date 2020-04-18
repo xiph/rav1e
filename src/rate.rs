@@ -9,10 +9,7 @@
 
 use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
-use crate::quantize::ac_q;
-use crate::quantize::dc_q;
-use crate::quantize::select_ac_qi;
-use crate::quantize::select_dc_qi;
+use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{clamp, ILog, Pixel};
 
 // The number of frame sub-types for which we track distinct parameters.

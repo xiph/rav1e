@@ -203,12 +203,9 @@ pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 pub mod prelude {
   pub use crate::api::*;
   pub use crate::encoder::Tune;
-  pub use crate::frame::Frame;
-  pub use crate::frame::FrameAlloc;
-  pub use crate::frame::FrameParameters;
-  pub use crate::frame::FrameTypeOverride;
-  pub use crate::frame::Plane;
-  pub use crate::frame::PlaneConfig;
+  pub use crate::frame::{
+    Frame, FrameAlloc, FrameParameters, FrameTypeOverride, Plane, PlaneConfig,
+  };
   pub use crate::partition::BlockSize;
   pub use crate::predict::PredictionMode;
   pub use crate::transform::TxType;
@@ -220,8 +217,7 @@ pub mod data {
   pub use crate::api::{
     ChromaticityPoint, EncoderStatus, FrameType, Packet, Rational,
   };
-  pub use crate::frame::Frame;
-  pub use crate::frame::FrameParameters;
+  pub use crate::frame::{Frame, FrameParameters};
   pub use crate::stats::EncoderStats;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 }

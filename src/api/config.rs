@@ -12,8 +12,7 @@ use num_derive::*;
 use thiserror::Error;
 
 use crate::api::color::*;
-use crate::api::Rational;
-use crate::api::{Context, ContextInner};
+use crate::api::{Context, ContextInner, Rational};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Tune;
 use crate::partition::BlockSize;

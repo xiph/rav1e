@@ -17,11 +17,10 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::hawktracer::*;
 use crate::partition::*;
-use crate::rate::RCState;
-use crate::rate::FRAME_NSUBTYPES;
-use crate::rate::FRAME_SUBTYPE_I;
-use crate::rate::FRAME_SUBTYPE_P;
-use crate::rate::FRAME_SUBTYPE_SEF;
+use crate::rate::{
+  RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
+  FRAME_SUBTYPE_SEF,
+};
 use crate::scenechange::SceneChangeDetector;
 use crate::stats::EncoderStats;
 use crate::tiling::Area;
@@ -29,8 +28,7 @@ use crate::util::Pixel;
 use arrayvec::ArrayVec;
 use log::Level::Info;
 use std::cmp;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 /// The set of options that controls frame re-ordering and reference picture

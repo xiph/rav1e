@@ -15,21 +15,14 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::context::PLANES;
-use crate::context::SB_SIZE;
+use crate::context::{PLANES, SB_SIZE};
 use crate::encoder::FrameInvariants;
-use crate::frame::AsRegion;
-use crate::frame::Frame;
-use crate::frame::Plane;
-use crate::frame::PlaneConfig;
-use crate::frame::PlaneOffset;
-use crate::frame::PlaneSlice;
+use crate::frame::{
+  AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
+};
 use crate::hawktracer::*;
 use crate::tiling::{Area, PlaneRegionMut, Rect};
-use crate::util::clamp;
-use crate::util::CastFromPrimitive;
-use crate::util::ILog;
-use crate::util::Pixel;
+use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 
 use crate::api::SGRComplexityLevel;
 use std::cmp;

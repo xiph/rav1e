@@ -23,10 +23,8 @@ cfg_if::cfg_if! {
 pub mod rust {
   use super::*;
 
-  use crate::transform::av1_round_shift_array;
   use crate::transform::forward_shared::*;
-  use crate::transform::valid_av1_transform;
-  use crate::transform::TxSize;
+  use crate::transform::{av1_round_shift_array, valid_av1_transform, TxSize};
   use simd_helpers::cold_for_target_arch;
 
   pub trait TxOperations: Copy {

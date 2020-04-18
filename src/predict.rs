@@ -497,8 +497,7 @@ pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::tiling::PlaneRegionMut;
   use crate::transform::TxSize;
-  use crate::util::round_shift;
-  use crate::util::Aligned;
+  use crate::util::{round_shift, Aligned};
   use crate::Pixel;
   use std::mem::size_of;
 
@@ -1264,7 +1263,6 @@ pub(crate) mod rust {
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::frame::AsRegion;
   use crate::predict::rust::*;
   use num_traits::*;
 
