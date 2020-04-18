@@ -1263,7 +1263,6 @@ pub(crate) mod rust {
 #[cfg(test)]
 mod test {
   use super::*;
-  use crate::frame::AsRegion;
   use crate::predict::rust::*;
   use num_traits::*;
 
