@@ -463,9 +463,9 @@ fn run() -> Result<(), error::CliError> {
       }
     }
 
-    setup_signal(signal_hook::SIGTERM, e.clone());
-    setup_signal(signal_hook::SIGQUIT, e.clone());
-    setup_signal(signal_hook::SIGINT, e.clone());
+    setup_signal(signal_hook::SIGTERM, Arc::clone(&e));
+    setup_signal(signal_hook::SIGQUIT, Arc::clone(&e));
+    setup_signal(signal_hook::SIGINT, Arc::clone(&e));
 
     e
   };

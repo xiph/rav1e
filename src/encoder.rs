@@ -2966,7 +2966,7 @@ fn encode_tile_group<T: Pixel>(
   if fi.sequence.enable_restoration {
     // Until the loop filters are pipelined, we'll need to keep
     // around a copy of both the pre- and post-cdef frame.
-    let pre_cdef_frame = fs.rec.clone();
+    let pre_cdef_frame = Arc::clone(&fs.rec);
 
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
@@ -3695,11 +3695,11 @@ pub fn update_rec_buffer<T: Pixel>(
 ) {
   let rfs = Arc::new(ReferenceFrame {
     order_hint: fi.order_hint,
-    frame: fs.rec.clone(),
-    input_hres: fs.input_hres.clone(),
-    input_qres: fs.input_qres.clone(),
+    frame: Arc::clone(&fs.rec),
+    input_hres: Arc::clone(&fs.input_hres),
+    input_qres: Arc::clone(&fs.input_qres),
     cdfs: fs.cdfs,
-    frame_mvs: fs.frame_mvs.clone(),
+    frame_mvs: Arc::clone(&fs.frame_mvs),
     output_frameno,
     segmentation: fs.segmentation,
   });

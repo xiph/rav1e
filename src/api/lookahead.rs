@@ -129,7 +129,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
     FrameInvariants::new_inter_frame(&last_fi, &inter_cfg, 0, 1, 2, false);
 
   // Compute the motion vectors.
-  let mut fs = FrameState::new_with_frame(&fi, frame.clone());
+  let mut fs = FrameState::new_with_frame(&fi, Arc::clone(&frame));
   compute_motion_vectors(&mut fi, &mut fs, &inter_cfg);
 
   // Estimate inter costs

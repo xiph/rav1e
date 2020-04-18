@@ -322,7 +322,7 @@ impl<T: Pixel> ContextInner<T> {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
-        .filter_map(|(&_input_frameno, frame)| frame.clone())
+        .filter_map(|(&_input_frameno, frame)| frame.as_ref().map(Arc::clone))
         .collect::<Vec<_>>();
 
       if is_flushing {
@@ -421,7 +421,9 @@ impl<T: Pixel> ContextInner<T> {
 
     let frame =
       self.frame_q.get(&fi.input_frameno).as_ref().unwrap().as_ref().unwrap();
-    self.frame_data.insert(output_frameno, FrameData::new(fi, frame.clone()));
+    self
+      .frame_data
+      .insert(output_frameno, FrameData::new(fi, Arc::clone(frame)));
 
     Ok(())
   }
@@ -604,11 +606,11 @@ impl<T: Pixel> ContextInner<T> {
       let rfs = Arc::new(ReferenceFrame {
         order_hint: fi.order_hint,
         // Use the original frame contents.
-        frame: fs.input.clone(),
-        input_hres: fs.input_hres.clone(),
-        input_qres: fs.input_qres.clone(),
+        frame: Arc::clone(&fs.input),
+        input_hres: Arc::clone(&fs.input_hres),
+        input_qres: Arc::clone(&fs.input_qres),
         cdfs: fs.cdfs,
-        frame_mvs: fs.frame_mvs.clone(),
+        frame_mvs: Arc::clone(&fs.frame_mvs),
         output_frameno,
         segmentation: fs.segmentation,
       });
@@ -639,7 +641,7 @@ impl<T: Pixel> ContextInner<T> {
     compute_motion_vectors(fi, fs, &self.inter_cfg);
 
     // Save the motion vectors to FrameInvariants.
-    fi.lookahead_mvs = fs.frame_mvs.clone();
+    fi.lookahead_mvs = Arc::clone(&fs.frame_mvs);
 
     #[cfg(feature = "dump_lookahead_data")]
     {
@@ -678,11 +680,11 @@ impl<T: Pixel> ContextInner<T> {
     let rfs = Arc::new(ReferenceFrame {
       order_hint: fi.order_hint,
       // Use the original frame contents.
-      frame: fs.input.clone(),
-      input_hres: fs.input_hres.clone(),
-      input_qres: fs.input_qres.clone(),
+      frame: Arc::clone(&fs.input),
+      input_hres: Arc::clone(&fs.input_hres),
+      input_qres: Arc::clone(&fs.input_qres),
       cdfs: fs.cdfs,
-      frame_mvs: fs.frame_mvs.clone(),
+      frame_mvs: Arc::clone(&fs.frame_mvs),
       output_frameno,
       segmentation: fs.segmentation,
     });
@@ -1077,7 +1079,10 @@ impl<T: Pixel> ContextInner<T> {
         false,
       );
       let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
+        (
+          Some(Arc::clone(&frame_data.fs.rec)),
+          Some(Arc::clone(&frame_data.fs.input)),
+        )
       } else {
         (None, None)
       };
@@ -1157,9 +1162,11 @@ impl<T: Pixel> ContextInner<T> {
       Arc::make_mut(&mut frame_data.fs.rec)
         .pad(frame_data.fi.width, frame_data.fi.height);
 
-      // TODO avoid the clone by having rec Arc.
       let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
+        (
+          Some(Arc::clone(&frame_data.fs.rec)),
+          Some(Arc::clone(&frame_data.fs.input)),
+        )
       } else {
         (None, None)
       };

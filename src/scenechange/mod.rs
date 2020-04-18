@@ -98,8 +98,8 @@ impl SceneChangeDetector {
     );
 
     self.is_key_frame(
-      frame_set[0].clone(),
-      frame_set[1].clone(),
+      Arc::clone(&frame_set[0]),
+      Arc::clone(&frame_set[1]),
       input_frameno,
       previous_keyframe,
     )
@@ -160,8 +160,8 @@ impl SceneChangeDetector {
     // to enable early loop exit if we find a scene flash.
     for j in (1..=lookahead_distance).rev() {
       let result = self.has_scenecut(
-        frame_subset[0].clone(),
-        frame_subset[j].clone(),
+        Arc::clone(&frame_subset[0]),
+        Arc::clone(&frame_subset[j]),
         frameno - 1 + j as u64,
         previous_keyframe,
       );
@@ -193,8 +193,8 @@ impl SceneChangeDetector {
     // If the video ends before F, no frame becomes a scenecut.
     for i in 1..lookahead_distance {
       let result = self.has_scenecut(
-        frame_subset[i].clone(),
-        frame_subset[lookahead_distance].clone(),
+        Arc::clone(&frame_subset[i]),
+        Arc::clone(&frame_subset[lookahead_distance]),
         frameno - 1 + lookahead_distance as u64,
         previous_keyframe,
       );

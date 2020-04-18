@@ -160,10 +160,10 @@ impl EncContext {
     if let Some(frame) = frame {
       match (self, frame) {
         (EncContext::U8(ctx), FrameInternal::U8(ref f)) => {
-          ctx.send_frame((f.clone(), info))
+          ctx.send_frame((Arc::clone(f), info))
         }
         (EncContext::U16(ctx), FrameInternal::U16(ref f)) => {
-          ctx.send_frame((f.clone(), info))
+          ctx.send_frame((Arc::clone(f), info))
         }
         _ => Err(rav1e::EncoderStatus::Failure),
       }
