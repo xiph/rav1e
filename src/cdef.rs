@@ -9,7 +9,6 @@
 
 use crate::context::*;
 use crate::encoder::{FrameInvariants, FrameState};
-use crate::frame::Frame;
 use crate::frame::*;
 use crate::hawktracer::*;
 use crate::tiling::*;

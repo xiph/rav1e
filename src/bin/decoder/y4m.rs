@@ -10,9 +10,7 @@
 
 use std::io::Read;
 
-use crate::decoder::DecodeError;
-use crate::decoder::Decoder;
-use crate::decoder::VideoDetails;
+use crate::decoder::{DecodeError, Decoder, VideoDetails};
 use crate::Frame;
 use rav1e::prelude::*;
 

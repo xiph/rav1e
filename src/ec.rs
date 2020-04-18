@@ -18,8 +18,7 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::util::msb;
-use crate::util::ILog;
+use crate::util::{msb, ILog};
 use bitstream_io::{BigEndian, BitWriter};
 use std::io;
 

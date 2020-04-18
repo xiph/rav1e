@@ -13,8 +13,7 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::hawktracer::*;
-use crate::util::CastFromPrimitive;
-use crate::util::Pixel;
+use crate::util::{CastFromPrimitive, Pixel};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

@@ -11,8 +11,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-use crate::ec::Writer;
-use crate::ec::OD_BITRES;
+use crate::ec::{Writer, OD_BITRES};
 use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
 use crate::frame::*;
