@@ -742,6 +742,20 @@ impl RCState {
     }
   }
 
+  pub(crate) fn select_first_pass_qi(
+    &self, bit_depth: usize, fti: usize,
+  ) -> QuantizerParameters {
+    // Adjust the quantizer for the frame type, result is Q57:
+    let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
+      * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+    QuantizerParameters::new_from_log_q(
+      self.pass1_log_base_q,
+      log_q,
+      bit_depth,
+    )
+  }
+
   // TODO: Separate quantizers for Cb and Cr.
   pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
@@ -780,15 +794,7 @@ impl RCState {
       match self.twopass_state {
         // First pass of 2-pass mode: use a fixed base quantizer.
         PASS_1 => {
-          // Adjust the quantizer for the frame type, result is Q57:
-          let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
-            * (MQP_Q12[fti] as i64)
-            + DQP_Q57[fti];
-          return QuantizerParameters::new_from_log_q(
-            self.pass1_log_base_q,
-            log_q,
-            ctx.config.bit_depth,
-          );
+          return self.select_first_pass_qi(ctx.config.bit_depth, fti);
         }
         // Second pass of 2-pass mode: we know exactly how much of each frame
         //  type there is in the current buffer window, and have estimates for
