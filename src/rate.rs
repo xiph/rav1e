@@ -1444,7 +1444,7 @@ impl RCState {
       if ntus_total < 1 {
         return Err(());
       }
-      let mut maybe_nframes_total_total: Option<i32> = Some(0);
+      let mut nframes_total_total: i32 = 0;
       let mut nframes_total: [i32; FRAME_NSUBTYPES + 1] =
         [0; FRAME_NSUBTYPES + 1];
       for fti in 0..=FRAME_NSUBTYPES {
@@ -1452,10 +1452,11 @@ impl RCState {
         if nframes_total[fti] < 0 {
           return Err(());
         }
-        maybe_nframes_total_total = maybe_nframes_total_total
-          .and_then(|n| n.checked_add(nframes_total[fti]));
+        nframes_total_total =
+          nframes_total_total.checked_add(nframes_total[fti]).ok_or(())?;
       }
-      if let Some(nframes_total_total) = maybe_nframes_total_total {
+
+      {
         // We can't have more TUs than frames.
         if ntus_total > nframes_total_total {
           return Err(());
@@ -1494,10 +1495,6 @@ impl RCState {
         // Clear the header data from the buffer to make room for the
         //  packet data.
         self.pass2_buffer_fill = 0;
-      } else {
-        // The sum of the frame counts for each type overflowed a 32-bit
-        //  integer.
-        return Err(());
       }
     }
     Ok(consumed)
