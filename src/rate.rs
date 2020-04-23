@@ -684,7 +684,7 @@ fn chroma_offset(
   let x = log_target_q.max(0);
   // Gradient optimized for CIEDE2000+PSNR on subset3
   let y = match chroma_sampling {
-    ChromaSampling::Cs400 => unimplemented!(),
+    ChromaSampling::Cs400 => 0,
     ChromaSampling::Cs420 => (x >> 2) + (x >> 6), // 0.266
     ChromaSampling::Cs422 => (x >> 3) + (x >> 4) - (x >> 7), // 0.180
     ChromaSampling::Cs444 => (x >> 4) + (x >> 5) + (x >> 8), // 0.098
@@ -701,6 +701,7 @@ impl QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
     let quantizer = bexp64(log_target_q + scale);
     let (offset_u, offset_v) = chroma_offset(log_target_q, chroma_sampling);
+    let mono = chroma_sampling == ChromaSampling::Cs400;
     let log_target_q_u = log_target_q + offset_u;
     let log_target_q_v = log_target_q + offset_v;
     let quantizer_u = bexp64(log_target_q_u + scale);
@@ -717,13 +718,13 @@ impl QuantizerParameters {
       // TODO: Allow lossless mode; i.e. qi == 0.
       dc_qi: [
         select_dc_qi(quantizer, bit_depth).max(1),
-        select_dc_qi(quantizer_u, bit_depth).max(1),
-        select_dc_qi(quantizer_v, bit_depth).max(1),
+        if mono { 0 } else { select_dc_qi(quantizer_u, bit_depth).max(1) },
+        if mono { 0 } else { select_dc_qi(quantizer_v, bit_depth).max(1) },
       ],
       ac_qi: [
         select_ac_qi(quantizer, bit_depth).max(1),
-        select_ac_qi(quantizer_u, bit_depth).max(1),
-        select_ac_qi(quantizer_v, bit_depth).max(1),
+        if mono { 0 } else { select_ac_qi(quantizer_u, bit_depth).max(1) },
+        if mono { 0 } else { select_ac_qi(quantizer_v, bit_depth).max(1) },
       ],
       lambda,
       dist_scale: [1.0, lambda / lambda_u, lambda / lambda_v],

@@ -16,6 +16,8 @@ pub fn write_y4m_frame<T: Pixel>(
   y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &Frame<T>,
   y4m_details: VideoDetails,
 ) {
+  let planes =
+    if y4m_details.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let bytes_per_sample = if y4m_details.bit_depth > 8 { 2 } else { 1 };
   let (chroma_width, chroma_height) = y4m_details
     .chroma_sampling
@@ -52,42 +54,45 @@ pub fn write_y4m_frame<T: Pixel>(
       );
     }
   }
-  for (line, line_out) in rec.planes[1]
-    .data_origin()
-    .chunks(stride_u)
-    .zip(rec_u.chunks_mut(pitch_uv))
-  {
-    if y4m_details.bit_depth > 8 {
-      unsafe {
-        line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-          line.as_ptr() as *const u8,
-          pitch_uv,
-        ));
+
+  if planes > 1 {
+    for (line, line_out) in rec.planes[1]
+      .data_origin()
+      .chunks(stride_u)
+      .zip(rec_u.chunks_mut(pitch_uv))
+    {
+      if y4m_details.bit_depth > 8 {
+        unsafe {
+          line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+            line.as_ptr() as *const u8,
+            pitch_uv,
+          ));
+        }
+      } else {
+        line_out.copy_from_slice(
+          &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()
+            [..pitch_uv],
+        );
       }
-    } else {
-      line_out.copy_from_slice(
-        &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()
-          [..pitch_uv],
-      );
     }
-  }
-  for (line, line_out) in rec.planes[2]
-    .data_origin()
-    .chunks(stride_v)
-    .zip(rec_v.chunks_mut(pitch_uv))
-  {
-    if y4m_details.bit_depth > 8 {
-      unsafe {
-        line_out.copy_from_slice(slice::from_raw_parts::<u8>(
-          line.as_ptr() as *const u8,
-          pitch_uv,
-        ));
+    for (line, line_out) in rec.planes[2]
+      .data_origin()
+      .chunks(stride_v)
+      .zip(rec_v.chunks_mut(pitch_uv))
+    {
+      if y4m_details.bit_depth > 8 {
+        unsafe {
+          line_out.copy_from_slice(slice::from_raw_parts::<u8>(
+            line.as_ptr() as *const u8,
+            pitch_uv,
+          ));
+        }
+      } else {
+        line_out.copy_from_slice(
+          &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()
+            [..pitch_uv],
+        );
       }
-    } else {
-      line_out.copy_from_slice(
-        &line.iter().map(|&v| u8::cast_from(v)).collect::<Vec<u8>>()
-          [..pitch_uv],
-      );
     }
   }
 

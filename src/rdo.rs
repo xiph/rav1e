@@ -335,7 +335,10 @@ fn compute_distortion<T: Pixel>(
     }
 
     // Add chroma distortion only when it is available
-    if w_uv > 0 && h_uv > 0 {
+    if fi.config.chroma_sampling != ChromaSampling::Cs400
+      && w_uv > 0
+      && h_uv > 0
+    {
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
@@ -399,7 +402,10 @@ fn compute_tx_distortion<T: Pixel>(
     }
 
     // Add chroma distortion only when it is available
-    if w_uv > 0 && h_uv > 0 {
+    if fi.config.chroma_sampling != ChromaSampling::Cs400
+      && w_uv > 0
+      && h_uv > 0
+    {
       for p in 1..3 {
         let input_region = ts.input_tile.planes[p].subregion(area);
         let rec_region = ts.rec.planes[p].subregion(area);
@@ -682,7 +688,8 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
-  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
+  let is_chroma_block =
+    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {
@@ -830,7 +837,8 @@ pub fn rdo_mode_decision<T: Pixel>(
     PartitionParameters::default()
   };
 
-  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
+  let is_chroma_block =
+    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
   if !best.skip {
     best = intra_frame_rdo_mode_decision(
@@ -873,57 +881,59 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
     );
     cw.rollback(&cw_checkpoint);
-    if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
-      let wr: &mut dyn Writer = &mut WriterCounter::new();
-      let tell = wr.tell_frac();
+    if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
+      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
+        let wr: &mut dyn Writer = &mut WriterCounter::new();
+        let tell = wr.tell_frac();
 
-      encode_block_pre_cdef(
-        &fi.sequence,
-        ts,
-        cw,
-        wr,
-        bsize,
-        tile_bo,
-        best.skip,
-      );
-      let (has_coeff, _) = encode_block_post_cdef(
-        fi,
-        ts,
-        cw,
-        wr,
-        best.pred_mode_luma,
-        chroma_mode,
-        angle_delta,
-        best.ref_frames,
-        best.mvs,
-        bsize,
-        tile_bo,
-        best.skip,
-        cfl,
-        best.tx_size,
-        best.tx_type,
-        0,
-        &[],
-        rdo_type,
-        true, // For CFL, luma should be always reconstructed.
-        false,
-      );
+        encode_block_pre_cdef(
+          &fi.sequence,
+          ts,
+          cw,
+          wr,
+          bsize,
+          tile_bo,
+          best.skip,
+        );
+        let (has_coeff, _) = encode_block_post_cdef(
+          fi,
+          ts,
+          cw,
+          wr,
+          best.pred_mode_luma,
+          chroma_mode,
+          angle_delta,
+          best.ref_frames,
+          best.mvs,
+          bsize,
+          tile_bo,
+          best.skip,
+          cfl,
+          best.tx_size,
+          best.tx_type,
+          0,
+          &[],
+          rdo_type,
+          true, // For CFL, luma should be always reconstructed.
+          false,
+        );
 
-      let rate = wr.tell_frac() - tell;
+        let rate = wr.tell_frac() - tell;
 
-      // For CFL, tx-domain distortion is not an option.
-      let distortion =
-        compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
-      let rd = compute_rd_cost(fi, rate, distortion);
-      if rd < best.rd_cost {
-        best.rd_cost = rd;
-        best.pred_mode_chroma = chroma_mode;
-        best.angle_delta = angle_delta;
-        best.has_coeff = has_coeff;
-        best.pred_cfl_params = cfl;
+        // For CFL, tx-domain distortion is not an option.
+        let distortion =
+          compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
+        let rd = compute_rd_cost(fi, rate, distortion);
+        if rd < best.rd_cost {
+          best.rd_cost = rd;
+          best.pred_mode_chroma = chroma_mode;
+          best.angle_delta = angle_delta;
+          best.has_coeff = has_coeff;
+          best.pred_cfl_params = cfl;
+        }
+
+        cw.rollback(&cw_checkpoint);
       }
-
-      cw.rollback(&cw_checkpoint);
     }
   }
 
@@ -1505,7 +1515,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   let mut best_rd = std::f64::MAX;
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
+  let is_chroma_block =
+    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
   let is_inter = !mode.is_intra();
 
@@ -1934,6 +1945,11 @@ pub fn rdo_loop_decision<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut dyn Writer,
   deblock_p: bool,
 ) {
+  let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+    1
+  } else {
+    MAX_PLANES
+  };
   assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
   // Determine area of optimization: Which plane has the largest LRUs?
   // How many LRUs for each?
@@ -1941,9 +1957,9 @@ pub fn rdo_loop_decision<T: Pixel>(
                     // is/how many SBs we're processing (same thing)
   let mut sb_h = 1; // how many superblocks wide the largest LRU
                     // is/how many SBs we're processing (same thing)
-  let mut lru_w = [0; PLANES]; // how many LRUs we're processing
-  let mut lru_h = [0; PLANES]; // how many LRUs we're processing
-  for pli in 0..PLANES {
+  let mut lru_w = [0; MAX_PLANES]; // how many LRUs we're processing
+  let mut lru_h = [0; MAX_PLANES]; // how many LRUs we're processing
+  for pli in 0..planes {
     let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
     let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
     if sb_w < (1 << sb_h_shift) {
@@ -1953,7 +1969,7 @@ pub fn rdo_loop_decision<T: Pixel>(
       sb_h = 1 << sb_v_shift;
     }
   }
-  for pli in 0..PLANES {
+  for pli in 0..planes {
     let sb_h_shift = ts.restoration.planes[pli].rp_cfg.sb_h_shift;
     let sb_v_shift = ts.restoration.planes[pli].rp_cfg.sb_v_shift;
     lru_w[pli] = sb_w / (1 << sb_h_shift);
@@ -1984,16 +2000,16 @@ pub fn rdo_loop_decision<T: Pixel>(
   const MAX_SB_SIZE: usize = 1 << MAX_SB_SHIFT;
   const MAX_LRU_SIZE: usize = MAX_SB_SIZE;
 
-  // Static allocation relies on the "minimal LRU area for all 3 planes" invariant.
+  // Static allocation relies on the "minimal LRU area for all N planes" invariant.
   let mut best_index = [-1; MAX_SB_SIZE * MAX_SB_SIZE];
   let mut best_lrf =
-    [[RestorationFilter::None; PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
+    [[RestorationFilter::None; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
 
   // due to imprecision in the reconstruction parameter solver, we
   // need to make sure we don't fall into a limit cycle.  Track our
   // best cost at LRF so that we can break if we get a solution that doesn't
   // improve at the reconstruction stage.
-  let mut best_lrf_cost = [[-1.0; PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
+  let mut best_lrf_cost = [[-1.0; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
 
   // Loop filter RDO is an iterative process and we need temporary
   // scratch data to hold the results of deblocking, cdef, and the
@@ -2019,6 +2035,7 @@ pub fn rdo_loop_decision<T: Pixel>(
       (pixel_w + 7) >> 3,
       (pixel_h + 7) >> 3,
       8,
+      planes,
     )
   };
 
@@ -2043,6 +2060,7 @@ pub fn rdo_loop_decision<T: Pixel>(
       (pixel_w + 7) >> 3,
       (pixel_h + 7) >> 3,
       0,
+      planes,
     )
   };
 
@@ -2073,6 +2091,7 @@ pub fn rdo_loop_decision<T: Pixel>(
         crop_w,
         crop_h,
         fi.sequence.bit_depth,
+        planes,
       );
     }
   }
@@ -2084,6 +2103,7 @@ pub fn rdo_loop_decision<T: Pixel>(
       (pixel_w + 7) >> 3,
       (pixel_h + 7) >> 3,
       0,
+      planes,
     ))
   } else {
     None
@@ -2163,7 +2183,7 @@ pub fn rdo_loop_decision<T: Pixel>(
               &cdef_dirs[sby * sb_w + sbx],
             );
             // apply LRF if any
-            for pli in 0..PLANES {
+            for pli in 0..planes {
               // We need the cropped-to-visible-frame area of this SB
               let wh =
                 if fi.sequence.use_128x128_superblock { 128 } else { 64 };
@@ -2340,7 +2360,7 @@ pub fn rdo_loop_decision<T: Pixel>(
         // deblocked] reconstruction
         &rec_subset
       };
-      for pli in 0..PLANES {
+      for pli in 0..planes {
         // Nominal size of LRU in pixels before clipping to visible frame
         let unit_size = ts.restoration.planes[pli].rp_cfg.unit_size;
         // width, in sb, of an LRU in this plane

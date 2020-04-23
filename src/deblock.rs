@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::api::FrameType;
+use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
 use crate::encoder::FrameInvariants;
 use crate::hawktracer::*;
@@ -1538,9 +1539,9 @@ fn sse_plane<T: Pixel>(
 #[hawktracer(deblock_filter_frame)]
 pub fn deblock_filter_frame<T: Pixel>(
   deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
-  crop_w: usize, crop_h: usize, bd: usize,
+  crop_w: usize, crop_h: usize, bd: usize, planes: usize,
 ) {
-  (&mut tile.planes).par_iter_mut().enumerate().for_each(
+  (&mut tile.planes[..planes]).par_iter_mut().enumerate().for_each(
     |(pli, mut plane)| {
       deblock_plane(deblock, &mut plane, pli, blocks, crop_w, crop_h, bd);
     },
@@ -1549,7 +1550,7 @@ pub fn deblock_filter_frame<T: Pixel>(
 
 fn sse_optimize<T: Pixel>(
   rec: &Tile<T>, input: &Tile<T>, blocks: &TileBlocks, crop_w: usize,
-  crop_h: usize, bd: usize,
+  crop_h: usize, bd: usize, monochrome: bool,
 ) -> [u8; 4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
@@ -1558,8 +1559,9 @@ fn sse_optimize<T: Pixel>(
       < 35
   );
   let mut level = [0; 4];
+  let planes = if monochrome { 1 } else { MAX_PLANES };
 
-  for pli in 0..PLANES {
+  for pli in 0..planes {
     let mut v_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
     let mut h_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
 
@@ -1651,6 +1653,14 @@ pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
   } else {
     // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
     // the *crop frame* of the entire frame by 4x4 block.
-    sse_optimize(rec, input, blocks, crop_w, crop_h, fi.sequence.bit_depth)
+    sse_optimize(
+      rec,
+      input,
+      blocks,
+      crop_w,
+      crop_h,
+      fi.sequence.bit_depth,
+      fi.sequence.chroma_sampling == Cs400,
+    )
   }
 }

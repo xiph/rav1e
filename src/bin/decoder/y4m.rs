@@ -10,6 +10,7 @@
 
 use std::io::Read;
 
+use crate::color::ChromaSampling::Cs400;
 use crate::decoder::{DecodeError, Decoder, VideoDetails};
 use crate::Frame;
 use rav1e::prelude::*;
@@ -53,16 +54,18 @@ impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
           cfg.width * bytes,
           bytes,
         );
-        f.planes[1].copy_from_raw_u8(
-          frame.get_u_plane(),
-          chroma_width * bytes,
-          bytes,
-        );
-        f.planes[2].copy_from_raw_u8(
-          frame.get_v_plane(),
-          chroma_width * bytes,
-          bytes,
-        );
+        if cfg.chroma_sampling != Cs400 {
+          f.planes[1].copy_from_raw_u8(
+            frame.get_u_plane(),
+            chroma_width * bytes,
+            bytes,
+          );
+          f.planes[2].copy_from_raw_u8(
+            frame.get_v_plane(),
+            chroma_width * bytes,
+            bytes,
+          );
+        }
         f
       })
       .map_err(Into::into)
