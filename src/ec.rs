@@ -21,7 +21,6 @@ cfg_if::cfg_if! {
 use crate::util::msb;
 use crate::util::ILog;
 use bitstream_io::{BigEndian, BitWriter};
-use std;
 use std::io;
 
 pub const OD_BITRES: u8 = 3;
