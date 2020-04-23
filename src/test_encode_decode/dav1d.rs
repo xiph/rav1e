@@ -48,7 +48,7 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
 
   fn decode_packet(
     &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
-    h: usize, bit_depth: usize,
+    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize,
   ) -> DecodeResult {
     let mut corrupted_count = 0;
     let mut data = SafeDav1dData::new(packet);
@@ -72,7 +72,7 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
         }
 
         let rec = rec_fifo.pop_front().unwrap();
-        compare_pic(&pic.0, &rec, bit_depth, w, h);
+        compare_pic(&pic.0, &rec, bit_depth, w, h, chroma_sampling);
       }
     }
     if corrupted_count > 0 {
@@ -134,7 +134,7 @@ impl Drop for SafeDav1dPicture {
 
 fn compare_pic<T: Pixel>(
   pic: &Dav1dPicture, frame: &Frame<T>, bit_depth: usize, width: usize,
-  height: usize,
+  height: usize, chroma_sampling: ChromaSampling,
 ) {
   use crate::frame::Plane;
 
@@ -172,9 +172,11 @@ fn compare_pic<T: Pixel>(
   };
 
   let lstride = pic.stride[0] as usize;
-  let cstride = pic.stride[1] as usize;
-
   cmp_plane(pic.data[0], lstride, &frame.planes[0], 0);
-  cmp_plane(pic.data[1], cstride, &frame.planes[1], 1);
-  cmp_plane(pic.data[2], cstride, &frame.planes[2], 2);
+
+  if chroma_sampling != ChromaSampling::Cs400 {
+    let cstride = pic.stride[1] as usize;
+    cmp_plane(pic.data[1], cstride, &frame.planes[1], 1);
+    cmp_plane(pic.data[2], cstride, &frame.planes[2], 2);
+  }
 }

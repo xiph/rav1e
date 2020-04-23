@@ -67,13 +67,13 @@ impl<T: Pixel> FrameAlloc for Frame<T> {
 
 /// Public Trait for calulating Padding
 pub(crate) trait FramePad {
-  fn pad(&mut self, w: usize, h: usize);
+  fn pad(&mut self, w: usize, h: usize, planes: usize);
 }
 
 impl<T: Pixel> FramePad for Frame<T> {
-  fn pad(&mut self, w: usize, h: usize) {
-    for p in self.planes.iter_mut() {
-      p.pad(w, h);
+  fn pad(&mut self, w: usize, h: usize, planes: usize) {
+    for pli in 0..planes {
+      self.planes[pli].pad(w, h);
     }
   }
 }

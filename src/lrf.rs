@@ -15,7 +15,8 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::context::{PLANES, SB_SIZE};
+use crate::color::ChromaSampling::Cs400;
+use crate::context::{MAX_PLANES, SB_SIZE};
 use crate::encoder::FrameInvariants;
 use crate::frame::{
   AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
@@ -1277,7 +1278,7 @@ impl RestorationPlane {
 
 #[derive(Clone, Debug)]
 pub struct RestorationState {
-  pub planes: [RestorationPlane; PLANES],
+  pub planes: [RestorationPlane; MAX_PLANES],
 }
 
 impl RestorationState {
@@ -1434,6 +1435,8 @@ impl RestorationState {
     fi: &FrameInvariants<T>,
   ) {
     let cdeffed = out.clone();
+    let planes =
+      if fi.sequence.chroma_sampling == Cs400 { 1 } else { MAX_PLANES };
 
     // unlike the other loop filters that operate over the padded
     // frame dimensions, restoration filtering and source pixel
@@ -1447,7 +1450,7 @@ impl RestorationState {
     let mut stripe_filter_buffer =
       IntegralImageBuffer::zeroed(STRIPE_IMAGE_SIZE);
 
-    for pli in 0..PLANES {
+    for pli in 0..planes {
       let rp = &self.planes[pli];
       let xdec = out.planes[pli].cfg.xdec;
       let ydec = out.planes[pli].cfg.ydec;

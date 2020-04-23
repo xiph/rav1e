@@ -419,7 +419,7 @@ impl<T: Pixel> FrameState<T> {
 
 #[derive(Copy, Clone, Debug)]
 pub struct DeblockState {
-  pub levels: [u8; PLANES + 1], // Y vertical edges, Y horizontal, U, V
+  pub levels: [u8; MAX_PLANES + 1], // Y vertical edges, Y horizontal, U, V
   pub sharpness: u8,
   pub deltas_enabled: bool,
   pub delta_updates_enabled: bool,
@@ -1311,7 +1311,14 @@ pub fn motion_compensate<T: Pixel>(
   // Inter mode prediction can take place once for a whole partition,
   // instead of each tx-block.
   let num_planes = 1
-    + if !luma_only && has_chroma(tile_bo, bsize, u_xdec, u_ydec) {
+    + if !luma_only
+      && has_chroma(
+        tile_bo,
+        bsize,
+        u_xdec,
+        u_ydec,
+        fi.sequence.chroma_sampling,
+      ) {
       2
     } else {
       0
@@ -1550,6 +1557,8 @@ pub fn encode_block_post_cdef<T: Pixel>(
   tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, need_recon_pixel: bool, record_stats: bool,
 ) -> (bool, ScaledDistortion) {
+  let planes =
+    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let is_inter = !luma_mode.is_intra();
   if is_inter {
     assert!(luma_mode == chroma_mode);
@@ -1561,7 +1570,13 @@ pub fn encode_block_post_cdef<T: Pixel>(
   };
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   if skip {
-    cw.bc.reset_skip_context(tile_bo, bsize, xdec, ydec);
+    cw.bc.reset_skip_context(
+      tile_bo,
+      bsize,
+      xdec,
+      ydec,
+      fi.sequence.chroma_sampling,
+    );
   }
   cw.bc.blocks.set_block_size(tile_bo, bsize);
   cw.bc.blocks.set_mode(tile_bo, bsize, luma_mode);
@@ -1574,7 +1589,12 @@ pub fn encode_block_post_cdef<T: Pixel>(
     && ts.deblock.block_deltas_enabled
     && (bsize < sb_size || !skip)
   {
-    cw.write_block_deblock_deltas(w, tile_bo, ts.deblock.block_delta_multi);
+    cw.write_block_deblock_deltas(
+      w,
+      tile_bo,
+      ts.deblock.block_delta_multi,
+      planes,
+    );
   }
   cw.bc.code_deltas = false;
 
@@ -1689,7 +1709,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
     if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
       cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
-    if has_chroma(tile_bo, bsize, xdec, ydec) {
+    if has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling) {
       cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
       if chroma_mode.is_cfl() {
         assert!(bsize.cfl_allowed());
@@ -1714,6 +1734,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
         chroma_mode,
         xdec,
         ydec,
+        fi.sequence.chroma_sampling,
       );
     }
 
@@ -1888,7 +1909,8 @@ pub fn write_tx_blocks<T: Pixel>(
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
-  let do_chroma = has_chroma(tile_bo, bsize, xdec, ydec);
+  let do_chroma =
+    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
   ts.qc.update(
     qidx,
@@ -1955,7 +1977,10 @@ pub fn write_tx_blocks<T: Pixel>(
     luma_ac(&mut ac.data, ts, tile_bo, bsize);
   }
 
-  if bw_uv > 0 && bh_uv > 0 {
+  if fi.config.chroma_sampling != ChromaSampling::Cs400
+    && bw_uv > 0
+    && bh_uv > 0
+  {
     let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
       TxType::DCT_DCT
     } else {
@@ -2097,7 +2122,9 @@ pub fn write_tx_tree<T: Pixel>(
   let mut bw_uv = max_tx_size.width_mi() >> xdec;
   let mut bh_uv = max_tx_size.height_mi() >> ydec;
 
-  if (bw_uv == 0 || bh_uv == 0) && has_chroma(tile_bo, bsize, xdec, ydec) {
+  if (bw_uv == 0 || bh_uv == 0)
+    && has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
+  {
     bw_uv = 1;
     bh_uv = 1;
   }
@@ -2105,7 +2132,10 @@ pub fn write_tx_tree<T: Pixel>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  if bw_uv > 0 && bh_uv > 0 {
+  if fi.config.chroma_sampling != ChromaSampling::Cs400
+    && bw_uv > 0
+    && bh_uv > 0
+  {
     let uv_tx_type =
       if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
 
@@ -2904,6 +2934,8 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
+  let planes =
+    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   let ti = &fi.tiling;
 
@@ -2956,6 +2988,7 @@ fn encode_tile_group<T: Pixel>(
       fi.width,
       fi.height,
       fi.sequence.bit_depth,
+      planes,
     );
   }
 
@@ -3323,7 +3356,7 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
 
 pub struct SBSQueueEntry {
   pub sbo: TileSuperBlockOffset,
-  pub lru_index: [i32; PLANES],
+  pub lru_index: [i32; MAX_PLANES],
   pub cdef_coded: bool,
   pub w_pre_cdef: WriterBase<WriterRecorder>,
   pub w_post_cdef: WriterBase<WriterRecorder>,
@@ -3337,11 +3370,16 @@ fn check_lf_queue<T: Pixel>(
   deblock_p: bool,
 ) {
   let mut check_queue = true;
+  let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+    1
+  } else {
+    MAX_PLANES
+  };
 
   // Walk queue from the head, see if anything is ready for RDO and flush
   while check_queue {
     if let Some(qe) = sbs_q.front_mut() {
-      for pli in 0..PLANES {
+      for pli in 0..planes {
         if qe.lru_index[pli] > last_lru_ready[pli] {
           check_queue = false;
           break;
@@ -3367,7 +3405,7 @@ fn check_lf_queue<T: Pixel>(
           // LRU coding/rdoing decisions (but still need to rdo
           // for cdef).
           let mut already_rdoed = false;
-          for pli in 0..PLANES {
+          for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && qe.lru_index[pli] <= last_lru_rdoed[pli]
             {
@@ -3377,7 +3415,7 @@ fn check_lf_queue<T: Pixel>(
           }
           if !already_rdoed {
             rdo_loop_decision(qe.sbo, fi, ts, cw, w, deblock_p);
-            for pli in 0..PLANES {
+            for pli in 0..planes {
               if qe.lru_index[pli] != -1
                 && last_lru_rdoed[pli] < qe.lru_index[pli]
               {
@@ -3388,7 +3426,7 @@ fn check_lf_queue<T: Pixel>(
         }
         // write LRF information
         if fi.sequence.enable_restoration {
-          for pli in 0..PLANES {
+          for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && last_lru_coded[pli] < qe.lru_index[pli]
             {
@@ -3421,6 +3459,8 @@ fn encode_tile<'a, T: Pixel>(
   inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let mut w = WriterEncoder::new();
+  let planes =
+    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
 
   let bc = BlockContext::new(blocks);
   let mut cw = ContextWriter::new(fc, bc);
@@ -3431,13 +3471,13 @@ fn encode_tile<'a, T: Pixel>(
 
   // main loop
   for sby in 0..ts.sb_height {
-    cw.bc.reset_left_contexts();
+    cw.bc.reset_left_contexts(planes);
 
     for sbx in 0..ts.sb_width {
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       let mut sbs_qe = SBSQueueEntry {
         sbo: tile_sbo,
-        lru_index: [-1; PLANES],
+        lru_index: [-1; MAX_PLANES],
         cdef_coded: false,
         w_pre_cdef: WriterRecorder::new(),
         w_post_cdef: WriterRecorder::new(),
@@ -3482,7 +3522,7 @@ fn encode_tile<'a, T: Pixel>(
         let mut check_queue = false;
         // queue our superblock for when the LRU is complete
         sbs_qe.cdef_coded = cw.bc.cdef_coded;
-        for pli in 0..PLANES {
+        for pli in 0..planes {
           if let Some((lru_x, lru_y)) =
             ts.restoration.planes[pli].restoration_unit_index(tile_sbo, false)
           {
@@ -3536,12 +3576,14 @@ fn encode_tile<'a, T: Pixel>(
 
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
       // copy reconstruction to a temp frame to restore it later
-      let rec_copy = Frame {
-        planes: [
+      let rec_copy = if planes == 3 {
+        vec![
           ts.rec.planes[0].scratch_copy(),
           ts.rec.planes[1].scratch_copy(),
           ts.rec.planes[2].scratch_copy(),
-        ],
+        ]
+      } else {
+        vec![ts.rec.planes[0].scratch_copy()]
       };
 
       // copy ts.deblock because we need to set some of our own values here
@@ -3556,6 +3598,7 @@ fn encode_tile<'a, T: Pixel>(
         fi.width,
         fi.height,
         fi.sequence.bit_depth,
+        planes,
       );
 
       // rdo lf and write
@@ -3572,9 +3615,9 @@ fn encode_tile<'a, T: Pixel>(
       );
 
       // copy original reference back in
-      for pli in 0..PLANES {
+      for pli in 0..planes {
         let dst = &mut ts.rec.planes[pli];
-        let src = &rec_copy.planes[pli];
+        let src = &rec_copy[pli];
         for (dst_row, src_row) in dst.rows_iter_mut().zip(src.rows_iter()) {
           for (out, input) in dst_row.iter_mut().zip(src_row) {
             *out = *input;
@@ -3631,7 +3674,9 @@ pub fn encode_show_existing_frame<T: Pixel>(
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
     let fs_rec = Arc::make_mut(&mut fs.rec);
-    for p in 0..3 {
+    let planes =
+      if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+    for p in 0..planes {
       fs_rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
     }
   }

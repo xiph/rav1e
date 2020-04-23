@@ -54,7 +54,7 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
 
   fn decode_packet(
     &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
-    h: usize, bit_depth: usize,
+    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize,
   ) -> DecodeResult {
     let mut corrupted_count = 0;
     unsafe {
@@ -106,7 +106,7 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
           corrupted_count += corrupted;
 
           let rec = rec_fifo.pop_front().unwrap();
-          compare_img(img, &rec, bit_depth, w, h);
+          compare_img(img, &rec, bit_depth, w, h, chroma_sampling);
         }
       }
     }
@@ -126,13 +126,14 @@ impl<T: Pixel> Drop for AomDecoder<T> {
 
 fn compare_img<T: Pixel>(
   img: *const aom_image_t, frame: &Frame<T>, bit_depth: usize, width: usize,
-  height: usize,
+  height: usize, chroma_sampling: ChromaSampling,
 ) {
   let img = unsafe { *img };
   let img_iter = img.planes.iter().zip(img.stride.iter());
+  let planes = if chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
 
   for (pli, (img_plane, frame_plane)) in
-    img_iter.zip(frame.planes.iter()).enumerate()
+    img_iter.zip(frame.planes.iter()).enumerate().take(planes)
   {
     let w = width >> frame_plane.cfg.xdec;
     let h = height >> frame_plane.cfg.ydec;

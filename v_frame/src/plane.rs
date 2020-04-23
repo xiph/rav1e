@@ -856,7 +856,7 @@ pub mod test {
         yorigin: 3,
       },
     };
-    plane.pad(4, 4);
+    plane.pad(4, 4, 3);
 
     #[rustfmt::skip]
     assert_eq!(

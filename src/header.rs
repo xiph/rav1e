@@ -390,10 +390,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(monochrome)?;
     }
 
-    if monochrome {
-      unimplemented!();
-    }
-
     // color description present
     self.write_bit(seq.color_description.is_some())?;
 
@@ -705,21 +701,23 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     assert!(fi.base_q_idx > 0);
     self.write(8, fi.base_q_idx)?; // base_q_idx
     self.write_delta_q(fi.dc_delta_q[0])?;
-    assert!(fi.ac_delta_q[0] == 0);
-    let diff_uv_delta = fi.sequence.separate_uv_delta_q
-      && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
-        || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
-    if fi.sequence.separate_uv_delta_q {
-      self.write_bit(diff_uv_delta)?;
-    } else {
-      assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
-      assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
-    }
-    self.write_delta_q(fi.dc_delta_q[1])?;
-    self.write_delta_q(fi.ac_delta_q[1])?;
-    if diff_uv_delta {
-      self.write_delta_q(fi.dc_delta_q[2])?;
-      self.write_delta_q(fi.ac_delta_q[2])?;
+    if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
+      assert!(fi.ac_delta_q[0] == 0);
+      let diff_uv_delta = fi.sequence.separate_uv_delta_q
+        && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
+          || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
+      if fi.sequence.separate_uv_delta_q {
+        self.write_bit(diff_uv_delta)?;
+      } else {
+        assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
+        assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
+      }
+      self.write_delta_q(fi.dc_delta_q[1])?;
+      self.write_delta_q(fi.ac_delta_q[1])?;
+      if diff_uv_delta {
+        self.write_delta_q(fi.dc_delta_q[2])?;
+        self.write_delta_q(fi.ac_delta_q[2])?;
+      }
     }
     self.write_bit(false)?; // no qm
 
@@ -868,11 +866,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_deblock_filter_b<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState,
   ) -> io::Result<()> {
+    let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+      1
+    } else {
+      MAX_PLANES
+    };
     assert!(deblock.levels[0] < 64);
     self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
     assert!(deblock.levels[1] < 64);
     self.write(6, deblock.levels[1])?; // loop deblocking filter level 1
-    if PLANES > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
+    if planes > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
       assert!(deblock.levels[2] < 64);
       self.write(6, deblock.levels[2])?; // loop deblocking filter level 2
       assert!(deblock.levels[3] < 64);
@@ -931,7 +934,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(fi.cdef_y_strengths[i] < 64);
         assert!(fi.cdef_uv_strengths[i] < 64);
         self.write(6, fi.cdef_y_strengths[i])?; // cdef y strength
-        self.write(6, fi.cdef_uv_strengths[i])?; // cdef uv strength
+        if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
+          self.write(6, fi.cdef_uv_strengths[i])?; // cdef uv strength
+        }
       }
     }
     Ok(())
@@ -942,9 +947,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   ) -> io::Result<()> {
     if fi.sequence.enable_restoration && !fi.allow_intrabc {
       // && !self.lossless
+      let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+        1
+      } else {
+        MAX_PLANES
+      };
       let mut use_lrf = false;
       let mut use_chroma_lrf = false;
-      for i in 0..PLANES {
+      for i in 0..planes {
         self.write(2, rs.planes[i].cfg.lrf_type)?; // filter type by plane
         if rs.planes[i].cfg.lrf_type != RESTORE_NONE {
           use_lrf = true;

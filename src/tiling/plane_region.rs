@@ -140,6 +140,14 @@ macro_rules! plane_region_common {
       #[inline(always)]
       pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect:
         Rect) -> Self {
+        if cfg.width == 0 || cfg.height == 0 {
+          return Self {
+            data: unsafe { std::ptr::null_mut::<T>() },
+            plane_cfg: cfg,
+            rect,
+            phantom: PhantomData,
+          }
+        }
         assert!(rect.x >= -(cfg.xorigin as isize));
         assert!(rect.y >= -(cfg.yorigin as isize));
         assert!(cfg.xorigin as isize + rect.x + rect.width as isize <= cfg.stride as isize);

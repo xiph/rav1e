@@ -300,13 +300,13 @@ impl<'a> TileRestorationPlaneMut<'a> {
 /// Tiled view of RestorationState
 #[derive(Debug)]
 pub struct TileRestorationState<'a> {
-  pub planes: [TileRestorationPlane<'a>; PLANES],
+  pub planes: [TileRestorationPlane<'a>; MAX_PLANES],
 }
 
 /// Mutable tiled view of RestorationState
 #[derive(Debug)]
 pub struct TileRestorationStateMut<'a> {
-  pub planes: [TileRestorationPlaneMut<'a>; PLANES],
+  pub planes: [TileRestorationPlaneMut<'a>; MAX_PLANES],
 }
 
 // common impl for TileRestorationState and TileRestorationStateMut
