@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
 use crate::encoder::{FrameInvariants, FrameState};
 use crate::frame::*;
@@ -349,7 +350,7 @@ pub fn cdef_block8_frame<T: Pixel>(
 // the CDEF_VERY_LARGE flag.
 pub fn cdef_padded_tile_copy<T: Pixel>(
   tile: &Tile<'_, T>, sbo: TileSuperBlockOffset, w_8: usize, h_8: usize,
-  pad: usize,
+  pad: usize, planes: usize,
 ) -> Frame<u16> {
   let ipad = pad as isize;
   let mut out = {
@@ -364,7 +365,7 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
     }
   };
   // Copy data into padded frame
-  for pli in 0..3 {
+  for pli in 0..planes {
     let PlaneOffset { x, y } = sbo.plane_offset(tile.planes[pli].plane_cfg);
     let in_width = tile.planes[pli].rect().width as isize;
     let in_height = tile.planes[pli].rect().height as isize;
@@ -420,9 +421,15 @@ pub fn cdef_padded_frame_copy<T: Pixel>(in_frame: &Frame<T>) -> Frame<u16> {
     },
   };
 
-  for p in 0..3 {
+  for p in 0..MAX_PLANES {
     let rec_w = in_frame.planes[p].cfg.width;
     let rec_h = in_frame.planes[p].cfg.height;
+
+    /* Its a monochrome frame but we have no way to signal that */
+    if rec_w == 0 || rec_h == 0 {
+      break;
+    };
+
     let mut out_region = out.planes[p].region_mut(Area::Rect {
       x: -2,
       y: -2,
@@ -482,6 +489,7 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
   let cdef_pri_y_strength = (cdef_y_strength / CDEF_SEC_STRENGTHS) as i32;
   let mut cdef_sec_y_strength = (cdef_y_strength % CDEF_SEC_STRENGTHS) as i32;
   let cdef_pri_uv_strength = (cdef_uv_strength / CDEF_SEC_STRENGTHS) as i32;
+  let planes = if fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
   let mut cdef_sec_uv_strength =
     (cdef_uv_strength % CDEF_SEC_STRENGTHS) as i32;
   if cdef_sec_y_strength == 3 {
@@ -502,7 +510,7 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
           & blocks[sbo.block_offset(2 * bx + 1, 2 * by + 1)].skip;
         let dir = cdef_dirs.dir[bx][by];
         let var = cdef_dirs.var[bx][by];
-        for p in 0..3 {
+        for p in 0..planes {
           let out_plane = &mut out.planes[p];
           let in_plane = &in_frame.planes[p];
           let in_po = sbo.plane_offset(&in_plane.cfg);
@@ -629,6 +637,7 @@ pub fn cdef_filter_tile<T: Pixel>(
 ) {
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
+  let planes = if fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
   let fb_width = (rec.planes[0].rect().width + 63) / 64;
   let fb_height = (rec.planes[0].rect().height + 63) / 64;
 
@@ -649,7 +658,7 @@ pub fn cdef_filter_tile<T: Pixel>(
     },
   };
 
-  for p in 0..3 {
+  for p in 0..planes {
     let rec_w = rec.planes[p].rect().width;
     let rec_h = rec.planes[p].rect().height;
     let mut cdef_region = cdef_frame.planes[p].region_mut(Area::Rect {
@@ -745,6 +754,7 @@ mod test {
       64 >> 3,
       64 >> 3,
       pad,
+      3,
     );
 
     // index (0, 0) of padded_frame should match index (64, 128) of the source
@@ -781,6 +791,7 @@ mod test {
       64 >> 3,
       64 >> 3,
       pad,
+      3,
     );
 
     // index (0, 0) of padded_frame should match index (448, 0) of the source

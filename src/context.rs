@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
+use crate::color::ChromaSampling;
 use crate::ec::{Writer, OD_BITRES};
 use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
@@ -36,7 +37,7 @@ use std::default::Default;
 use std::ops::{Add, Index, IndexMut};
 use std::*;
 
-pub const PLANES: usize = 3;
+pub const MAX_PLANES: usize = 3;
 
 const PARTITION_PLOFFSET: usize = 4;
 const PARTITION_BLOCK_SIZES: usize = 4 + 1;
@@ -541,8 +542,12 @@ static mag_ref_offset_with_txclass: [[[usize; 2]; CONTEXT_MAG_POSITION_NUM];
 
 pub fn has_chroma(
   bo: TileBlockOffset, bsize: BlockSize, subsampling_x: usize,
-  subsampling_y: usize,
+  subsampling_y: usize, chroma_sampling: ChromaSampling,
 ) -> bool {
+  if chroma_sampling == ChromaSampling::Cs400 {
+    return false;
+  };
+
   let bw = bsize.width_mi();
   let bh = bsize.height_mi();
 
@@ -1551,8 +1556,8 @@ pub struct BlockContextCheckpoint {
   left_partition_context: [u8; MIB_SIZE >> 1],
   above_tx_context: [u8; COEFF_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MIB_SIZE],
-  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
-  left_coeff_context: [[u8; MIB_SIZE]; PLANES],
+  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; MAX_PLANES],
+  left_coeff_context: [[u8; MIB_SIZE]; MAX_PLANES],
 }
 
 pub struct BlockContext<'a> {
@@ -1564,8 +1569,8 @@ pub struct BlockContext<'a> {
   left_partition_context: [u8; MIB_SIZE >> 1],
   above_tx_context: [u8; COEFF_CONTEXT_MAX_WIDTH],
   left_tx_context: [u8; MIB_SIZE],
-  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; PLANES],
-  left_coeff_context: [[u8; MIB_SIZE]; PLANES],
+  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; MAX_PLANES],
+  left_coeff_context: [[u8; MIB_SIZE]; MAX_PLANES],
   pub blocks: &'a mut TileBlocksMut<'a>,
 }
 
@@ -1585,7 +1590,7 @@ impl<'a> BlockContext<'a> {
         [0; COEFF_CONTEXT_MAX_WIDTH],
         [0; COEFF_CONTEXT_MAX_WIDTH],
       ],
-      left_coeff_context: [[0; MIB_SIZE]; PLANES],
+      left_coeff_context: [[0; MIB_SIZE]; MAX_PLANES],
       blocks,
     }
   }
@@ -1682,13 +1687,14 @@ impl<'a> BlockContext<'a> {
   }
 
   pub fn reset_skip_context(
-    &mut self, bo: TileBlockOffset, bsize: BlockSize, xdec: usize, ydec: usize,
+    &mut self, bo: TileBlockOffset, bsize: BlockSize, xdec: usize,
+    ydec: usize, cs: ChromaSampling,
   ) {
-    const num_planes: usize = 3;
+    let num_planes = if cs == ChromaSampling::Cs400 { 1 } else { 3 };
     let nplanes = if bsize >= BLOCK_8X8 {
-      3
+      num_planes
     } else {
-      1 + (num_planes - 1) * has_chroma(bo, bsize, xdec, ydec) as usize
+      1 + (num_planes - 1) * has_chroma(bo, bsize, xdec, ydec, cs) as usize
     };
 
     for plane in 0..nplanes {
@@ -1714,8 +1720,8 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  pub fn reset_left_contexts(&mut self) {
-    for p in 0..3 {
+  pub fn reset_left_contexts(&mut self, planes: usize) {
+    for p in 0..planes {
       BlockContext::reset_left_coeff_context(self, p);
     }
     BlockContext::reset_left_partition_context(self);
@@ -2453,7 +2459,7 @@ impl<'a> ContextWriter<'a> {
   pub fn write_use_palette_mode(
     &mut self, w: &mut dyn Writer, enable: bool, bsize: BlockSize,
     bo: TileBlockOffset, luma_mode: PredictionMode,
-    chroma_mode: PredictionMode, xdec: usize, ydec: usize,
+    chroma_mode: PredictionMode, xdec: usize, ydec: usize, cs: ChromaSampling,
   ) {
     if enable {
       unimplemented!(); // TODO
@@ -2471,7 +2477,7 @@ impl<'a> ContextWriter<'a> {
       );
     }
 
-    if has_chroma(bo, bsize, xdec, ydec)
+    if has_chroma(bo, bsize, xdec, ydec, cs)
       && chroma_mode == PredictionMode::DC_PRED
     {
       symbol_with_update!(
@@ -3887,6 +3893,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_block_deblock_deltas(
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, multi: bool,
+    planes: usize,
   ) {
     fn write_block_delta(w: &mut dyn Writer, cdf: &mut [u16], delta: i8) {
       let abs = delta.abs() as u32;
@@ -3905,7 +3912,7 @@ impl<'a> ContextWriter<'a> {
 
     let block = &self.bc.blocks[bo];
     if multi {
-      let deltas_count = FRAME_LF_COUNT + PLANES - 3;
+      let deltas_count = FRAME_LF_COUNT + planes - 3;
       let deltas = &block.deblock_deltas[..deltas_count];
       let cdfs = &mut self.fc.deblock_delta_multi_cdf[..deltas_count];
 

@@ -122,7 +122,14 @@ pub(crate) trait TestDecoder<T: Pixel> {
           }
           let packet = pkt.data;
           debug!("Decoding frame {}", pkt.input_frameno);
-          match self.decode_packet(&packet, &mut rec_fifo, w, h, bit_depth) {
+          match self.decode_packet(
+            &packet,
+            &mut rec_fifo,
+            w,
+            h,
+            chroma_sampling,
+            bit_depth,
+          ) {
             DecodeResult::Done => {
               break;
             }
@@ -140,7 +147,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
   }
   fn decode_packet(
     &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
-    h: usize, bit_depth: usize,
+    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize,
   ) -> DecodeResult;
 }
 
@@ -715,7 +722,8 @@ macro_rules! test_chroma_sampling {
   }
 }
 
-test_chroma_sampling! {(420, ChromaSampling::Cs420), (422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
+test_chroma_sampling! {(400, ChromaSampling::Cs400), (420, ChromaSampling::Cs420),
+(422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]

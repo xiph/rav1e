@@ -11,6 +11,7 @@
 use crate::activity::ActivityMask;
 use crate::api::lookahead::*;
 use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
+use crate::color::ChromaSampling::Cs400;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
@@ -1169,8 +1170,14 @@ impl<T: Pixel> ContextInner<T> {
       );
       self.packet_data.extend(data);
 
-      Arc::make_mut(&mut frame_data.fs.rec)
-        .pad(frame_data.fi.width, frame_data.fi.height);
+      let planes =
+        if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
+
+      Arc::make_mut(&mut frame_data.fs.rec).pad(
+        frame_data.fi.width,
+        frame_data.fi.height,
+        planes,
+      );
 
       // TODO avoid the clone by having rec Arc.
       let (rec, source) = if frame_data.fi.show_frame {

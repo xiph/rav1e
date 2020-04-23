@@ -88,13 +88,13 @@ impl From<TileRect> for Rect {
 /// Tiled view of a frame
 #[derive(Debug)]
 pub struct Tile<'a, T: Pixel> {
-  pub planes: [PlaneRegion<'a, T>; PLANES],
+  pub planes: [PlaneRegion<'a, T>; MAX_PLANES],
 }
 
 /// Mutable tiled view of a frame
 #[derive(Debug)]
 pub struct TileMut<'a, T: Pixel> {
-  pub planes: [PlaneRegionMut<'a, T>; PLANES],
+  pub planes: [PlaneRegionMut<'a, T>; MAX_PLANES],
 }
 
 // common impl for Tile and TileMut
