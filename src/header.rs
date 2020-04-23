@@ -22,7 +22,6 @@ use crate::Sequence;
 
 use bitstream_io::{BigEndian, BitWriter, LittleEndian};
 
-use std;
 use std::io;
 
 pub const PRIMARY_REF_NONE: u32 = 7;

@@ -16,7 +16,6 @@ use crate::tiling::PlaneRegionMut;
 use crate::transform::TxSize;
 use crate::util::Aligned;
 use crate::Pixel;
-use libc;
 use std::mem::size_of;
 
 macro_rules! decl_angular_ipred_fn {

@@ -44,7 +44,6 @@ use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
-use std;
 use std::fmt;
 
 #[derive(Copy, Clone, PartialEq)]
