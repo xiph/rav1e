@@ -142,7 +142,7 @@ path = "benches/bench.rs"
 harness = false
 
 [profile.dev]
-opt-level = 1
+opt-level = 2
 
 [profile.release]
 debug = true
