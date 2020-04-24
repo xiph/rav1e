@@ -48,6 +48,7 @@ jobs:
     strategy:
       matrix:
         conf:
+         - beta-build
          - 1.36.0-tests
          - aom-tests
          - dav1d-tests
@@ -59,6 +60,8 @@ jobs:
          - check-extra-feats
          - fuzz
         include:
+         - conf: beta-build
+           toolchain: beta
          - conf: 1.36.0-tests
            toolchain: 1.36.0
          - conf: aom-tests
@@ -211,6 +214,10 @@ jobs:
         cargo test --verbose --release \
                    --features=decode_test_dav1d \
                    --color=always -- --color=always --ignored
+    - name: Run build
+      if: matrix.conf == 'beta-build'
+      run: |
+        cargo build --verbose
     - name: Run bench
       if: matrix.toolchain == 'stable' && matrix.conf == 'bench'
       run: |
