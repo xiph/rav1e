@@ -478,6 +478,12 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     }
   })? as usize;
   let bitrate: i32 = maybe_bitrate.unwrap_or(Ok(0))?;
+  if bitrate <= 0
+    && (matches.is_present("FIRST_PASS") || matches.is_present("SECOND_PASS"))
+  {
+    panic!("A target bitrate must be specified when using passes");
+  }
+
   if quantizer == 0 {
     unimplemented!("Lossless encoding not yet implemented");
   } else if quantizer > 255 {
