@@ -278,6 +278,78 @@ jobs:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         path-to-lcov: ${{ steps.coverage.outputs.report }}
 
+  build-macos:
+
+    strategy:
+      matrix:
+        conf:
+         - cargo-build
+         - cargo-test
+         - cargo-c
+
+    env:
+      RUST_BACKTRACE: 1
+      RUSTC_WRAPPER: sccache
+      SCCACHE_CACHE_SIZE: 300M
+      SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install sccache
+      run: |
+        brew install sccache
+    - name: Install nasm
+      run: |
+        brew install nasm
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    - name: Generate Cargo.lock and Cargo.version
+      run: |
+        cargo update
+        cargo --version > Cargo.version
+    - name: Cache cargo registry
+      uses: actions/cache@v1
+      with:
+        path: ~/.cargo/registry/cache
+        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+    - name: Cache sccache output
+      uses: actions/cache@v1
+      with:
+        path: /Users/runner/Library/Caches/Mozilla.sccache
+        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.conf }}-sccache-
+    - name: Start sccache server
+      run: |
+        sccache --start-server
+    - name: Build
+      if: matrix.conf == 'cargo-build'
+      run: |
+        cargo build --release
+    - name: Test
+      if: matrix.conf == 'cargo-test'
+      run: |
+        cargo test --verbose
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo install cargo-c
+    - name: Run cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        cargo cbuild
+    - name: Stop sccache server
+      run: |
+        sccache --stop-server
+
   build-windows:
 
     strategy:
