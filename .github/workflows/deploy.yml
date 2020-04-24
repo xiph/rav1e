@@ -13,33 +13,38 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Install nasm
       run: |
         $NASM_VERSION="nasm-2.14.02"
         curl -LO "https://people.xiph.org/~tdaede/$NASM_VERSION-win64.zip"
         7z e -y "$NASM_VERSION-win64.zip" -o"C:\nasm"
+        echo "::add-path::C:\nasm"
+
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
         toolchain: stable-x86_64-pc-windows-gnu
         override: true
+
     - name: Install cargo-c
       run: |
         cargo install cargo-c
-    - name: Set environment variables
-      run: |
-        echo "::add-path::C:\nasm"
+
     - name: Build rav1e
       run: |
         cargo build --release
+
     - name: Run cargo-c
       run: |
         cargo cinstall --release --destdir="C:\"
+
     - name: Create zip
       run: |
         $RAV1E_PATH="$Env:GITHUB_WORKSPACE\target\release"
         7z a rav1e.zip "Cargo.lock" "$RAV1E_PATH\rav1e.exe" "C:\usr\local"
+
     - name: Upload binaries
       uses: actions/upload-artifact@v1
       with:
@@ -56,24 +61,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v2
+
     - name: Download the zip
       uses: actions/download-artifact@v1
       with:
         name: rav1e-binaries
+
     - name: Unzip rav1e Windows binaries
       run: |
         unzip rav1e-binaries/rav1e.zip -d rav1e-binaries
         mv rav1e-binaries/Cargo.lock .
+
     - name: Handle binaries
       run: |
         mv rav1e-binaries/local rav1e-binaries/$FILENAME
         strip rav1e-binaries/rav1e.exe
+
     - name: Package pre-release binaries
       if: startsWith(github.ref, 'refs/tags/p')
       run: |
         cd rav1e-binaries
         zip -r rav1e-windows.zip $FILENAME
+
     - name: Package release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       id: data
@@ -82,6 +92,7 @@ jobs:
         echo "::set-output name=version::$VERSION"
         cd rav1e-binaries
         zip -r rav1e-$VERSION-windows.zip $FILENAME
+
     - name: Create a pre-release
       if: startsWith(github.ref, 'refs/tags/p')
       uses: softprops/action-gh-release@v1
@@ -94,6 +105,7 @@ jobs:
           rav1e-binaries/rav1e.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Create a release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
