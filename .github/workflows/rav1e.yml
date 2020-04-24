@@ -354,7 +354,7 @@ jobs:
     - name: Install cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
-        rustup run --install stable-msvc cargo install cargo-c
+        cargo install cargo-c
     - name: Run cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
