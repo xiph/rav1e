@@ -2317,6 +2317,7 @@ function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
 
         mov             w8,  #2*\h
 1:
+        ldrh            w12, [x13], #2
 .irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h
         ld1             {\i}, [x2]
         st1             {v0.8h}, [x2], x8
@@ -2329,14 +2330,13 @@ function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
 
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
 
+        cmp             w3,  w12
 .if \w == 8
         load_add_store_8x8 x0, x7, shiftbits=2
 .else
         load_add_store_8x8 x0, x7, shiftbits=3
 .endif
 
-        ldrh            w12, [x13], #2
-        cmp             w3,  w12
         b.lt            9f
 .if \w == 8
         sub             x2,  x2,  x8, lsl #3
@@ -2509,16 +2509,15 @@ function inv_txfm_add_dct_dct_8x32_neon, export=1
         mov             x8,  #2*32
         mov             w9,  #32
         mov             x6,  sp
-        mov             x7,  x2
 1:
 .irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        ld1             {v\i\().8h}, [x7]
-        st1             {v28.8h}, [x7], x8
+        ld1             {v\i\().8h}, [x2]
+        st1             {v28.8h}, [x2], x8
 .endr
         ldrh            w12, [x13], #2
+        sub             x2,  x2,  x8, lsl #3
         sub             w9,  w9,  #8
-        sub             x7,  x7,  x8, lsl #3
-        add             x7,  x7,  #2*8
+        add             x2,  x2,  #2*8
 
         bl              inv_dct_8x8_neon
 
@@ -2528,10 +2527,9 @@ function inv_txfm_add_dct_dct_8x32_neon, export=1
 
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v24, v25
 
+        st1             {v16.8h, v17.8h, v18.8h, v19.8h}, [x6], #64
         cmp             w3,  w12
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23
-        st1             {v\i\().8h}, [x6], #16
-.endr
+        st1             {v20.8h, v21.8h, v22.8h, v23.8h}, [x6], #64
 
         b.ge            1b
         cbz             w9,  3f
