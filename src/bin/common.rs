@@ -70,12 +70,10 @@ fn build_speed_long_help() -> String {
 pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = version::short();
   let ver_long = version::full();
-  let ver = version::full();
   let speed_long_help = build_speed_long_help();
   let mut app = App::new("rav1e")
-    .version(ver.as_str())
+    .version(ver_short.as_str())
     .long_version(ver_long.as_str())
-    .version_short(ver_short.as_str())
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
