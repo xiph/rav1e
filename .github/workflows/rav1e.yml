@@ -303,6 +303,10 @@ jobs:
     - name: Install nasm
       run: |
         brew install nasm
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        brew install cargo-c
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -338,10 +342,6 @@ jobs:
       if: matrix.conf == 'cargo-test'
       run: |
         cargo test --verbose
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo install cargo-c
     - name: Run cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
