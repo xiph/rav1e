@@ -105,7 +105,7 @@ features = ["parallel"]
 signal-hook = { version = "0.1.9", optional = true }
 
 [dev-dependencies]
-assert_cmd = "0.12"
+assert_cmd = "1.0"
 criterion = "0.3"
 pretty_assertions = "0.6"
 interpolate_name = "0.2.2"
