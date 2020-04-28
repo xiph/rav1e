@@ -417,6 +417,10 @@ pub(crate) struct RCSummary {
   scale_sum: [i64; FRAME_NSUBTYPES],
 }
 
+// Backing storage to deserialize Summary and Per-Frame pass data
+//
+// Can store up to a full header size since it is the largest of the two
+// packet kinds.
 pub(crate) struct RCDeserialize {
   // The current byte position in the frame metrics buffer.
   pass2_buffer_pos: usize,
@@ -438,6 +442,10 @@ impl Default for RCDeserialize {
 }
 
 impl RCDeserialize {
+  // Fill the backing storage by reading enough bytes from the
+  // buf slice until goal bytes are available for parsing.
+  //
+  // goal must be at most TWOPASS_HEADER_SZ.
   fn buffer_fill(
     &mut self, buf: &[u8], consumed: usize, goal: usize,
   ) -> usize {
@@ -450,8 +458,10 @@ impl RCDeserialize {
     consumed
   }
 
-  fn unbuffer_val(&mut self, bytes: usize) -> i64 {
-    let mut bytes = bytes;
+  // Read the next n bytes as i64.
+  // n must be within 1 and 8
+  fn unbuffer_val(&mut self, n: usize) -> i64 {
+    let mut bytes = n;
     let mut ret = 0;
     let mut shift = 0;
     while bytes > 0 {
@@ -477,8 +487,8 @@ impl RCDeserialize {
     Ok(RCFrameMetrics { log_scale_q24, fti, show_frame })
   }
 
+  // Read the summary header data.
   fn parse_summary(&mut self) -> Result<RCSummary, ()> {
-    // Read the summary header data.
     // check the magic value and version number.
     if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
       || self.unbuffer_val(4) != TWOPASS_VERSION as i64
