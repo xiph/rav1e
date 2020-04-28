@@ -2277,7 +2277,7 @@ function inv_txfm_add_identity_identity_\w\()x\h\()_neon, export=1
 .else
         // 32x16
         shift_8_regs    sqshl, 1
-        identity_8x8 v1.h[1]
+        identity_8x8    v1.h[1]
 .endif
 
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
