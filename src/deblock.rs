@@ -1292,6 +1292,7 @@ pub fn deblock_plane<T: Pixel>(
 ) {
   let xdec = p.plane_cfg.xdec;
   let ydec = p.plane_cfg.ydec;
+  assert!(xdec <= 1 && ydec <= 1);
 
   match pli {
     0 => {
@@ -1460,6 +1461,7 @@ fn sse_plane<T: Pixel>(
 ) {
   let xdec = rec.plane_cfg.xdec;
   let ydec = rec.plane_cfg.ydec;
+  assert!(xdec <= 1 && ydec <= 1);
   let rect = rec.rect();
   let cols = (cmp::min(
     blocks.cols(),
