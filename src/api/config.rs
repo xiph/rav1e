@@ -671,6 +671,40 @@ pub enum InvalidConfig {
   )]
   InvalidSwitchFrameInterval(u64),
 
+  /// Bit Depth is Invalid
+  #[error(display = "invalid bit depth {} (expected 8, 10 or 12)", _0)]
+  InvalidBitDepth(u8),
+
+  /// Chroma Sampling is Invalid
+  #[error(
+    display = "invalid chroma sampling {} (expected 420, 422, 444 or 400)",
+    _0
+  )]
+  InvalidChromaSampling(i32),
+
+  /// Chroma Sampling Position is Invalid
+  #[error(
+    display = "invalid chroma sampling position {} (expected 0, 1, 2)",
+    _0
+  )]
+  InvalidChromaSamplingPosition(i32),
+
+  /// Pixel Range is Invalid
+  #[error(display = "invalid pixel range {} (expected 0, 1)", _0)]
+  InvalidPixelRange(i32),
+
+  /// Color Description is Invalid
+  #[error(display = "invalid Color Description")]
+  InvalidColorDescription(),
+
+  /// Color Description is Invalid
+  #[error(display = "invalid content light")]
+  InvalidContentLight(),
+
+  /// Color Description is Invalid
+  #[error(display = "invalid mastering display")]
+  InvalidMasteringDisplay(),
+
   // This variant prevents people from exhaustively matching on this enum,
   // which allows us to add more variants without it being a breaking change.
   // This can be replaced with #[non_exhaustive] when it's stable:

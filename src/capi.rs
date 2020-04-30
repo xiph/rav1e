@@ -30,6 +30,7 @@ use libc::size_t;
 use num_derive::*;
 use num_traits::cast::FromPrimitive;
 
+use crate::api::config::InvalidConfig;
 use crate::prelude as rav1e;
 
 type PixelRange = rav1e::PixelRange;
@@ -139,6 +140,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
 /// Use rav1e_config_unref() to free its memory.
 pub struct Config {
   cfg: rav1e::Config,
+  last_err: Option<rav1e::InvalidConfig>,
 }
 
 enum EncContext {
@@ -312,7 +314,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let cfg = rav1e::Config { enc: rav1e::EncoderConfig::default(), threads: 0 };
 
-  let c = Box::new(Config { cfg });
+  let c = Box::new(Config { cfg, last_err: None });
 
   Box::into_raw(c)
 }
@@ -324,7 +326,14 @@ pub unsafe extern fn rav1e_config_default() -> *mut Config {
 pub unsafe extern fn rav1e_config_set_time_base(
   cfg: *mut Config, time_base: Rational,
 ) {
-  (*cfg).cfg.enc.time_base = time_base
+  let temp_time_base = (*cfg).cfg.enc.time_base;
+
+  (*cfg).cfg.enc.time_base = time_base;
+
+  if let Err(err) = (*cfg).cfg.validate() {
+    (*cfg).last_err = Some(err);
+    (*cfg).cfg.enc.time_base = temp_time_base;
+  }
 }
 
 /// Set pixel format of the stream.
@@ -340,6 +349,7 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
   chroma_pos: ChromaSamplePosition, pixel_range: PixelRange,
 ) -> c_int {
   if bit_depth != 8 && bit_depth != 10 && bit_depth != 12 {
+    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidBitDepth(bit_depth));
     return -1;
   }
   (*cfg).cfg.enc.bit_depth = bit_depth as usize;
@@ -347,6 +357,8 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
   let subsampling_val =
     std::mem::transmute::<ChromaSampling, i32>(subsampling);
   if ChromaSampling::from_i32(subsampling_val).is_none() {
+    (*cfg).last_err =
+      Some(rav1e::InvalidConfig::InvalidChromaSampling(subsampling_val));
     return -1;
   }
   (*cfg).cfg.enc.chroma_sampling = subsampling;
@@ -354,12 +366,17 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
   let chroma_pos_val =
     std::mem::transmute::<ChromaSamplePosition, i32>(chroma_pos);
   if ChromaSamplePosition::from_i32(chroma_pos_val).is_none() {
+    (*cfg).last_err = Some(
+      rav1e::InvalidConfig::InvalidChromaSamplingPosition(chroma_pos_val),
+    );
     return -1;
   }
   (*cfg).cfg.enc.chroma_sample_position = chroma_pos;
 
   let pixel_range_val = std::mem::transmute::<PixelRange, i32>(pixel_range);
   if PixelRange::from_i32(pixel_range_val).is_none() {
+    (*cfg).last_err =
+      Some(rav1e::InvalidConfig::InvalidPixelRange(pixel_range_val));
     return -1;
   }
   (*cfg).cfg.enc.pixel_range = pixel_range;
@@ -388,6 +405,7 @@ pub unsafe extern fn rav1e_config_set_color_description(
   if (*cfg).cfg.enc.color_description.is_some() {
     0
   } else {
+    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidColorDescription());
     -1
   }
 }
@@ -408,6 +426,7 @@ pub unsafe extern fn rav1e_config_set_content_light(
   if (*cfg).cfg.enc.content_light.is_some() {
     0
   } else {
+    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidContentLight());
     -1
   }
 }
@@ -436,6 +455,7 @@ pub unsafe extern fn rav1e_config_set_mastering_display(
   if (*cfg).cfg.enc.mastering_display.is_some() {
     0
   } else {
+    (*cfg).last_err = Some(rav1e::InvalidConfig::InvalidMasteringDisplay());
     -1
   }
 }
