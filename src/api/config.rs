@@ -625,12 +625,16 @@ pub enum InvalidConfig {
   #[error("invalid height {0} (expected >= 16, <= 32767)")]
   InvalidHeight(usize),
   /// RDO lookahead frame count is invalid.
-  #[error("invalid rdo lookahead frames {actual} (expected <= {max})")]
+  #[error(
+    "invalid rdo lookahead frames {actual} (expected <= {max} and >= {min})"
+  )]
   InvalidRdoLookaheadFrames {
     /// The actual value.
     actual: usize,
     /// The maximal supported value.
     max: usize,
+    /// The minimal supported value.
+    min: usize,
   },
   /// Maximal keyframe interval is invalid.
   #[error("invalid max keyframe interval {actual} (expected <= {max})")]
@@ -768,10 +772,13 @@ impl Config {
       return Err(InvalidHeight(config.height));
     }
 
-    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
+    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
+      || config.rdo_lookahead_frames < 1
+    {
       return Err(InvalidRdoLookaheadFrames {
         actual: config.rdo_lookahead_frames,
         max: MAX_RDO_LOOKAHEAD_FRAMES,
+        min: 1,
       });
     }
     if config.max_key_frame_interval > MAX_MAX_KEY_FRAME_INTERVAL {
