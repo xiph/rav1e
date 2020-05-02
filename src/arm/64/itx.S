@@ -2085,11 +2085,9 @@ function inv_txfm_horz\suffix\()_dct_32x8_neon
         transpose_8x8h  v31, v30, v29, v28, v27, v26, v25, v24, v4, v5
         transpose_8x8h  v23, v22, v21, v20, v19, v18, v17, v16, v4, v5
 .macro store2 r0, r1, shift
-        ld1             {v4.8h}, [x6], #16
-        ld1             {v5.8h}, [x6]
+        ld1             {v4.8h, v5.8h}, [x6]
         sqsub           v7.8h,   v4.8h,   \r0
         sqsub           v6.8h,   v5.8h,   \r1
-        sub             x6,  x6,  #16
         sqadd           v4.8h,   v4.8h,   \r0
         sqadd           v5.8h,   v5.8h,   \r1
         rev64           v6.8h,   v6.8h
@@ -2098,12 +2096,10 @@ function inv_txfm_horz\suffix\()_dct_32x8_neon
         srshr           v5.8h,   v5.8h,   #\shift
         srshr           v6.8h,   v6.8h,   #\shift
         srshr           v7.8h,   v7.8h,   #\shift
-        st1             {v4.8h}, [x6], #16
         ext             v6.16b,  v6.16b,  v6.16b,  #8
-        st1             {v5.8h}, [x6], #16
+        st1             {v4.8h, v5.8h}, [x6], #32
         ext             v7.16b,  v7.16b,  v7.16b,  #8
-        st1             {v6.8h}, [x6], #16
-        st1             {v7.8h}, [x6], #16
+        st1             {v6.8h, v7.8h}, [x6], #32
 .endm
 
         store2          v31.8h,  v23.8h, \shift
