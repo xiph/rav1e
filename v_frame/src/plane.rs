@@ -7,7 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::alloc::{alloc, dealloc, Layout};
+use std::alloc::{alloc, Layout};
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
@@ -16,9 +16,10 @@ use std::ops::{Index, IndexMut, Range};
 
 use crate::math::*;
 use crate::pixel::*;
+use crate::serialize::{Deserialize, Serialize};
 
 /// Plane-specific configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneConfig {
   /// Data stride.
   pub stride: usize,
@@ -89,52 +90,51 @@ pub struct PlaneOffset {
 /// The buffer is padded and aligned according to the architecture-specific
 /// SIMD constraints.
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(not(feature = "serialize"), derive(Serialize, Deserialize))]
 pub struct PlaneData<T: Pixel> {
-  ptr: std::ptr::NonNull<T>,
-  _marker: PhantomData<T>,
-  len: usize,
-}
-
-unsafe impl<T: Pixel + Send> Send for PlaneData<T> {}
-unsafe impl<T: Pixel + Sync> Sync for PlaneData<T> {}
-
-impl<T: Pixel> Clone for PlaneData<T> {
-  fn clone(&self) -> Self {
-    let mut pd = unsafe { Self::new_uninitialized(self.len) };
-
-    pd.copy_from_slice(self);
-
-    pd
-  }
+  data: Box<[T]>,
 }
 
 impl<T: Pixel> std::ops::Deref for PlaneData<T> {
   type Target = [T];
 
   fn deref(&self) -> &[T] {
-    unsafe {
-      let p = self.ptr.as_ptr();
-
-      std::slice::from_raw_parts(p, self.len)
-    }
+    &self.data
   }
 }
 
 impl<T: Pixel> std::ops::DerefMut for PlaneData<T> {
   fn deref_mut(&mut self) -> &mut [T] {
-    unsafe {
-      let p = self.ptr.as_ptr();
-
-      std::slice::from_raw_parts_mut(p, self.len)
-    }
+    &mut self.data
   }
 }
 
-impl<T: Pixel> std::ops::Drop for PlaneData<T> {
-  fn drop(&mut self) {
-    unsafe {
-      dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.len));
-    }
+impl<T: Pixel> Clone for PlaneData<T> {
+  fn clone(&self) -> Self {
+    Self::from_slice(&self.data)
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<T: Pixel + Serialize> Serialize for PlaneData<T> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    self.data.serialize(serializer)
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de, T: Pixel + Deserialize<'de>> Deserialize<'de> for PlaneData<T> {
+  fn deserialize<D>(
+    deserializer: D,
+  ) -> Result<Self, <D as serde::Deserializer<'de>>::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let deserialized = Vec::deserialize(deserializer)?;
+    Ok(Self::from_slice(&deserialized))
   }
 }
 
@@ -156,13 +156,11 @@ impl<T: Pixel> PlaneData<T> {
     )
   }
 
+  // Use this method internally to ensure that any new PlaneData
+  // is allocated aligned to the required layout
   unsafe fn new_uninitialized(len: usize) -> Self {
-    let ptr = {
-      let ptr = alloc(Self::layout(len)) as *mut T;
-      std::ptr::NonNull::new_unchecked(ptr)
-    };
-
-    PlaneData { ptr, len, _marker: PhantomData }
+    let ptr = alloc(Self::layout(len)) as *mut T;
+    Self { data: Vec::from_raw_parts(ptr, len, len).into_boxed_slice() }
   }
 
   pub fn new(len: usize) -> Self {
@@ -187,7 +185,7 @@ impl<T: Pixel> PlaneData<T> {
 /// One data plane of a frame.
 ///
 /// For example, a plane can be a Y luma plane or a U or V chroma plane.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plane<T: Pixel> {
   // TODO: it is used by encoder to copy by plane and by tiling, make it
   // private again once tiling is moved and a copy_plane fn is added.
