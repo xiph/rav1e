@@ -16,9 +16,10 @@ use std::ops::{Index, IndexMut, Range};
 
 use crate::math::*;
 use crate::pixel::*;
+use crate::serialize::{Deserialize, Serialize};
 
 /// Plane-specific configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaneConfig {
   /// Data stride.
   pub stride: usize,
@@ -89,6 +90,7 @@ pub struct PlaneOffset {
 /// The buffer is padded and aligned according to the architecture-specific
 /// SIMD constraints.
 #[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(not(feature = "serialize"), derive(Serialize, Deserialize))]
 pub struct PlaneData<T: Pixel> {
   ptr: std::ptr::NonNull<T>,
   _marker: PhantomData<T>,
@@ -135,6 +137,36 @@ impl<T: Pixel> std::ops::Drop for PlaneData<T> {
     unsafe {
       dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.len));
     }
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<T: Pixel + Serialize> Serialize for PlaneData<T> {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    use serde::ser::SerializeSeq;
+    use std::ops::Deref;
+
+    let mut data = serializer.serialize_seq(Some(self.len))?;
+    for byte in self.deref() {
+      data.serialize_element(&byte)?;
+    }
+    data.end()
+  }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de, T: Pixel + Deserialize<'de>> Deserialize<'de> for PlaneData<T> {
+  fn deserialize<D>(
+    deserializer: D,
+  ) -> Result<Self, <D as serde::Deserializer<'de>>::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let deserialized = Vec::deserialize(deserializer)?;
+    Ok(Self::from_slice(&deserialized))
   }
 }
 
@@ -187,7 +219,7 @@ impl<T: Pixel> PlaneData<T> {
 /// One data plane of a frame.
 ///
 /// For example, a plane can be a Y luma plane or a U or V chroma plane.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plane<T: Pixel> {
   // TODO: it is used by encoder to copy by plane and by tiling, make it
   // private again once tiling is moved and a copy_plane fn is added.

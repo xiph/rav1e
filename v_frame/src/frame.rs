@@ -10,9 +10,10 @@
 use crate::math::*;
 use crate::pixel::*;
 use crate::plane::*;
+use crate::serialize::{Deserialize, Serialize};
 
 // One video frame.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Frame<T: Pixel> {
   /// Planes constituting the frame.
   pub planes: [Plane<T>; 3],
