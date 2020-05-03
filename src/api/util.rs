@@ -9,6 +9,7 @@
 #![deny(missing_docs)]
 
 use crate::frame::*;
+use crate::serialize::{Deserialize, Serialize};
 use crate::stats::EncoderStats;
 use crate::util::Pixel;
 
@@ -69,7 +70,7 @@ impl<'a> serde::Deserialize<'a> for Rational {
 
 /// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
 #[repr(C)]
 pub enum FrameType {
   /// Key frame.
@@ -154,13 +155,15 @@ pub enum EncoderStatus {
 ///
 /// A packet contains one shown frame together with zero or more additional
 /// frames.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Packet<T: Pixel> {
   /// The packet data.
   pub data: Vec<u8>,
   /// The reconstruction of the shown frame.
+  #[cfg_attr(feature = "serialize", serde(skip))]
   pub rec: Option<Arc<Frame<T>>>,
   /// The Reference Frame
+  #[cfg_attr(feature = "serialize", serde(skip))]
   pub source: Option<Arc<Frame<T>>>,
   /// The number of the input frame corresponding to the one shown frame in the
   /// TU stored in this packet. Since AV1 does not explicitly reorder frames,
