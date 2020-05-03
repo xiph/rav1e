@@ -9,10 +9,11 @@
 
 use crate::partition::BlockSize;
 use crate::predict::PREDICTION_MODES;
+use crate::serialize::{Deserialize, Serialize};
 use crate::transform::TX_TYPES;
 use std::ops::{Add, AddAssign};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EncoderStats {
   /// Stores count of pixels belonging to each block size in this frame
   pub block_size_counts: [usize; BlockSize::BLOCK_SIZES_ALL],
