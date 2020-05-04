@@ -105,7 +105,7 @@ const iadst8_coeffs, align=4
         .short          4076, 401, 3612, 1931
         .short          2598, 3166, 1189, 3920
         // idct_coeffs
-        .short          2896, 2896*8, 1567, 3784, 0, 0, 0, 0
+        .short          2896, 0, 1567, 3784, 0, 0, 0, 0
 endconst
 
 const iadst16_coeffs, align=4
