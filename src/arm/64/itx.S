@@ -1368,71 +1368,49 @@ endfunc
 .endr
 .endm
 
-function inv_txfm_horz_16x8_neon
+.macro def_horz_16 scale=0, identity=0, shift=2, suffix
+function inv_txfm_horz\suffix\()_16x8_neon
         mov             x14, x30
         movi            v7.8h,  #0
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ld1             {v\i\().8h}, [x7]
-        st1             {v7.8h}, [x7], x8
-.endr
-        blr             x4
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        srshr           v\i\().8h,  v\i\().8h,  #2
-.endr
-        transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
-        transpose_8x8h  v24, v25, v26, v27, v28, v29, v30, v31, v4, v5
-
-.irp i, 16, 24, 17, 25, 18, 26, 19, 27, 20, 28, 21, 29, 22, 30, 23, 31
-        st1             {v\i\().8h}, [x6], #16
-.endr
-
-        br              x14
-endfunc
-
-function inv_txfm_horz_identity_16x8_neon
-        mov             x14, x30
-        movi            v7.8h,  #0
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ld1             {v\i\().8h}, [x7]
-        st1             {v7.8h}, [x7], x8
-.endr
+.if \identity
         mov             w16, #2*(5793-4096)*8
         dup             v0.4h,   w16
-        identity_8x16_shift2 v0.h[0]
-        transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
-        transpose_8x8h  v24, v25, v26, v27, v28, v29, v30, v31, v4, v5
-
-.irp i, 16, 24, 17, 25, 18, 26, 19, 27, 20, 28, 21, 29, 22, 30, 23, 31
-        st1             {v\i\().8h}, [x6], #16
-.endr
-
-        br              x14
-endfunc
-
-function inv_txfm_horz_scale_16x8_neon
-        mov             x14, x30
-        movi            v7.8h,  #0
+.elseif \scale
         mov             w16, #2896*8
         dup             v0.4h,   w16
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        ld1             {v\i\().8h}, [x7]
+.endif
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h, v24.8h, v25.8h, v26.8h, v27.8h, v28.8h, v29.8h, v30.8h, v31.8h
+        ld1             {\i}, [x7]
         st1             {v7.8h}, [x7], x8
 .endr
+.if \scale
         scale_input     .8h, v0.h[0], v16, v17, v18, v19, v20, v21, v22, v23
         scale_input     .8h, v0.h[0], v24, v25, v26, v27, v28, v29, v30, v31
+.endif
+.if \identity
+        identity_8x16_shift2 v0.h[0]
+.else
         blr             x4
-.irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
-        srshr           v\i\().8h,  v\i\().8h,  #1
+.endif
+.if \shift > 0
+.irp i, v16.8h, v17.8h, v18.8h, v19.8h, v20.8h, v21.8h, v22.8h, v23.8h, v24.8h, v25.8h, v26.8h, v27.8h, v28.8h, v29.8h, v30.8h, v31.8h
+        srshr           \i,  \i,  #\shift
 .endr
+.endif
         transpose_8x8h  v16, v17, v18, v19, v20, v21, v22, v23, v4, v5
         transpose_8x8h  v24, v25, v26, v27, v28, v29, v30, v31, v4, v5
 
-.irp i, 16, 24, 17, 25, 18, 26, 19, 27, 20, 28, 21, 29, 22, 30, 23, 31
-        st1             {v\i\().8h}, [x6], #16
+.irp i, v16.8h, v24.8h, v17.8h, v25.8h, v18.8h, v26.8h, v19.8h, v27.8h, v20.8h, v28.8h, v21.8h, v29.8h, v22.8h, v30.8h, v23.8h, v31.8h
+        st1             {\i}, [x6], #16
 .endr
 
         br              x14
 endfunc
+.endm
+
+def_horz_16 scale=0, identity=0, shift=2
+def_horz_16 scale=1, identity=0, shift=1, suffix=_scale
+def_horz_16 scale=0, identity=1, shift=0, suffix=_identity
 
 function inv_txfm_add_vert_8x16_neon
         mov             x14, x30
