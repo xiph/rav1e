@@ -3218,7 +3218,6 @@ function inv_txfm_add_dct_dct_64x16_neon, export=1
         mov             w8,  #(16 - \i)
         cmp             w3,  w12
         b.lt            1f
-        ldrh            w12, [x13], #2
 .endif
         add             x7,  x2,  #(\i*2)
         mov             x8,  #16*2
@@ -3226,6 +3225,9 @@ function inv_txfm_add_dct_dct_64x16_neon, export=1
         bl              inv_txfm_dct_clear_8x64_neon
         add             x6,  x4,  #(\i*64*2)
         bl              inv_txfm_horz_dct_64x8_neon
+.if \i < 8
+        ldrh            w12, [x13], #2
+.endif
 .endr
         b               3f
 
