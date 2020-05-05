@@ -58,7 +58,6 @@
 //   indicates only a quarter of input values are set, for idct16 and up,
 //   a significant amount of calculation can be skipped, at the cost of more
 //   code duplication and special casing.
-// - Special case functions for e.g. more combinations with identity.
 
 const idct_coeffs, align=4
         // idct4
