@@ -1,4 +1,5 @@
 # rav1e [![Travis Build Status](https://travis-ci.org/xiph/rav1e.svg?branch=master)](https://travis-ci.org/xiph/rav1e) [![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/xiph/rav1e?branch=master&svg=true)](https://ci.appveyor.com/project/tdaede/rav1e/history) [![Actions Status](https://github.com/xiph/rav1e/workflows/rav1e/badge.svg)](https://github.com/xiph/rav1e/actions) [![Coverage Status](https://coveralls.io/repos/github/xiph/rav1e/badge.svg?branch=master)](https://coveralls.io/github/xiph/rav1e?branch=master)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fxiph%2Frav1e.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fxiph%2Frav1e?ref=badge_shield)
 
 The fastest and safest AV1 encoder.
 
@@ -139,3 +140,7 @@ Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
 up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
+
+
+## License
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fxiph%2Frav1e.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fxiph%2Frav1e?ref=badge_large)
