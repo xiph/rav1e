@@ -93,6 +93,7 @@
         .global EXTERN\name
 #ifdef __ELF__
         .type   EXTERN\name, %function
+        .hidden EXTERN\name
 #endif
 #if HAVE_AS_FUNC
         .func   EXTERN\name
