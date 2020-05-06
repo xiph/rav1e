@@ -25,7 +25,7 @@ matrix:
 install:
     - call "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Auxiliary\Build\vcvars64.bat"
     - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
-    - appveyor DownloadFile https://people.xiph.org/~tdaede/nasm-2.14.02-win64.zip -FileName nasm.zip
+    - appveyor DownloadFile https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/win64/nasm-2.14.02-win64.zip -FileName nasm.zip
     - appveyor DownloadFile https://github.com/mozilla/sccache/releases/download/0.2.11/sccache-0.2.11-x86_64-pc-windows-msvc.tar.gz
     - tar xzf sccache-0.2.11-x86_64-pc-windows-msvc.tar.gz
     - 7z e -y nasm.zip
