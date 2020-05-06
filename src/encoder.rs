@@ -738,9 +738,8 @@ impl<T: Pixel> FrameInvariants<T> {
       lookahead_rec_buffer: ReferenceFramesSet::new(),
       w_in_imp_b,
       h_in_imp_b,
-      // dynamic allocation: once per frame
-      lookahead_intra_costs: vec![0; w_in_imp_b * h_in_imp_b]
-        .into_boxed_slice(),
+      // This is never used before it is assigned
+      lookahead_intra_costs: Box::new([]),
       // dynamic allocation: once per frame
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       distortion_scales: vec![
