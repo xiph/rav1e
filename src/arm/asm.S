@@ -142,4 +142,9 @@ EXTERN\name:
 
 #define X(x) CONCAT(EXTERN, x)
 
+#if ARCH_AARCH64
+#define x18 do_not_use_x18
+#define w18 do_not_use_w18
+#endif
+
 #endif /* DAV1D_SRC_ARM_ASM_S */
