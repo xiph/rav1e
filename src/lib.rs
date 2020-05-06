@@ -230,7 +230,7 @@ pub use crate::api::color;
 pub mod config {
   pub use crate::api::{
     Config, EncoderConfig, InvalidConfig, PredictionModesSetting,
-    SpeedSettings,
+    RateControlConfig, RateControlError, RateControlSummary, SpeedSettings,
   };
 }
 

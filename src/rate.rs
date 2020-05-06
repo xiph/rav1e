@@ -37,7 +37,7 @@ const TWOPASS_MAGIC: i32 = 0x50324156;
 const TWOPASS_VERSION: i32 = 1;
 // 4 byte magic + 4 byte version + 4 byte TU count + 4 byte SEF frame count
 //  + FRAME_NSUBTYPES*(4 byte frame count + 1 byte exp + 8 byte scale_sum)
-const TWOPASS_HEADER_SZ: usize = 16 + FRAME_NSUBTYPES * (4 + 1 + 8);
+pub(crate) const TWOPASS_HEADER_SZ: usize = 16 + FRAME_NSUBTYPES * (4 + 1 + 8);
 // 4 byte frame type (show_frame and fti jointly coded) + 4 byte log_scale_q24
 const TWOPASS_PACKET_SZ: usize = 8;
 
@@ -407,8 +407,12 @@ impl RCFrameMetrics {
   }
 }
 
+/// Rate control pass summary
+///
+/// It contains encoding information related to the whole previous
+/// encoding pass.
 #[derive(Debug, Default, Clone)]
-pub(crate) struct RCSummary {
+pub struct RCSummary {
   ntus: i32,
   nframes: [i32; FRAME_NSUBTYPES + 1],
   exp: [u8; FRAME_NSUBTYPES],
@@ -444,7 +448,7 @@ impl RCDeserialize {
   // buf slice until goal bytes are available for parsing.
   //
   // goal must be at most TWOPASS_HEADER_SZ.
-  fn buffer_fill(
+  pub(crate) fn buffer_fill(
     &mut self, buf: &[u8], consumed: usize, goal: usize,
   ) -> usize {
     let mut consumed = consumed;
@@ -486,7 +490,7 @@ impl RCDeserialize {
   }
 
   // Read the summary header data.
-  fn parse_summary(&mut self) -> Result<RCSummary, ()> {
+  pub(crate) fn parse_summary(&mut self) -> Result<RCSummary, ()> {
     // check the magic value and version number.
     if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
       || self.unbuffer_val(4) != TWOPASS_VERSION as i64
@@ -607,7 +611,7 @@ pub struct RCState {
   // For PASS_1 or PASS_2_PLUS_1 encoding, this is set to false after each
   //  frame is encoded, and must be set to true by calling twopass_out() before
   //  the next frame can be encoded.
-  pass1_data_retrieved: bool,
+  pub pass1_data_retrieved: bool,
   // Marks whether or not the user has retrieved the summary data at the end of
   //  the encode.
   pass1_summary_retrieved: bool,
@@ -742,7 +746,7 @@ impl QuantizerParameters {
 // There's probably a cleaner way to do this, but going with something simple
 //  for now, since this is not exposed in the public API.
 pub(crate) struct TwoPassOutParams {
-  pass1_log_base_q: i64,
+  pub pass1_log_base_q: i64,
   done_processing: bool,
 }
 
@@ -1411,7 +1415,7 @@ impl RCState {
   }
 
   // Initialize the first pass and emit a placeholder summary
-  fn init_first_pass(&mut self, pass1_log_base_q: i64) {
+  pub(crate) fn init_first_pass(&mut self, pass1_log_base_q: i64) {
     if self.twopass_state == PASS_SINGLE {
       // Pick first-pass qi for scale calculations.
       self.pass1_log_base_q = pass1_log_base_q;
@@ -1434,7 +1438,7 @@ impl RCState {
   }
 
   // Frame-specific pass data
-  fn emit_frame_data(&mut self) -> Option<&[u8]> {
+  pub(crate) fn emit_frame_data(&mut self) -> Option<&[u8]> {
     let mut cur_pos = 0;
     let fti = self.prev_metrics.fti;
     if fti < FRAME_NSUBTYPES {
@@ -1462,7 +1466,7 @@ impl RCState {
   }
 
   // Summary of the whole encoding process.
-  fn emit_summary(&mut self) -> &[u8] {
+  pub(crate) fn emit_summary(&mut self) -> &[u8] {
     let mut cur_pos = 0;
     cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
     cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
@@ -1527,38 +1531,41 @@ impl RCState {
     }
   }
 
+  pub(crate) fn setup_second_pass(&mut self, s: &RCSummary) {
+    self.ntus_total = s.ntus;
+    self.ntus_left = s.ntus;
+    self.nframes_total = s.nframes;
+    self.nframes_left = s.nframes;
+    self.nframes_total_total = s.nframes.iter().sum();
+    if self.frame_metrics.is_empty() {
+      self.reservoir_frame_delay = s.ntus;
+      self.scale_window_nframes = self.nframes_total;
+      self.scale_window_sum = s.scale_sum;
+      self.reservoir_max =
+        self.bits_per_tu * (self.reservoir_frame_delay as i64);
+      self.reservoir_target = (self.reservoir_max + 1) >> 1;
+      self.reservoir_fullness = self.reservoir_target;
+    } else {
+      self.reservoir_frame_delay = self.reservoir_frame_delay.min(s.ntus);
+    }
+    self.exp = s.exp;
+  }
+
   // Parse the rate control summary
   //
   // It returns the amount of data consumed in the process or
   // an empty error on parsing failure.
-  pub(crate) fn twopass_parse_summary(
-    &mut self, buf: &[u8],
-  ) -> Result<usize, ()> {
+  fn twopass_parse_summary(&mut self, buf: &[u8]) -> Result<usize, ()> {
     let consumed = self.des.buffer_fill(buf, 0, TWOPASS_HEADER_SZ);
     if self.des.pass2_buffer_fill >= TWOPASS_HEADER_SZ {
       self.des.pass2_buffer_pos = 0;
 
       let s = self.des.parse_summary()?;
 
+      self.setup_second_pass(&s);
+
       // Got a valid header.
       // Set up pass 2.
-      self.ntus_total = s.ntus;
-      self.ntus_left = s.ntus;
-      self.nframes_total = s.nframes;
-      self.nframes_left = s.nframes;
-      self.nframes_total_total = s.nframes.iter().sum();
-      if self.frame_metrics.is_empty() {
-        self.reservoir_frame_delay = s.ntus;
-        self.scale_window_nframes = self.nframes_total;
-        self.scale_window_sum = s.scale_sum;
-        self.reservoir_max =
-          self.bits_per_tu * (self.reservoir_frame_delay as i64);
-        self.reservoir_target = (self.reservoir_max + 1) >> 1;
-        self.reservoir_fullness = self.reservoir_target;
-      } else {
-        self.reservoir_frame_delay = self.reservoir_frame_delay.min(s.ntus);
-      }
-      self.exp = s.exp;
       // Clear the header data from the buffer to make room for the
       //  packet data.
       self.des.pass2_buffer_fill = 0;
@@ -1586,7 +1593,7 @@ impl RCState {
 
   // Return the number of frame data packets to be parsed before
   // the encoding process can continue.
-  fn twopass_in_frames_needed(&self) -> i32 {
+  pub(crate) fn twopass_in_frames_needed(&self) -> i32 {
     let mut cur_scale_window_nframes = 0;
     let mut cur_nframes_left = 0;
     for fti in 0..=FRAME_NSUBTYPES {
@@ -1598,6 +1605,55 @@ impl RCState {
       .max(0)
       .min(cur_nframes_left - cur_scale_window_nframes)
   }
+
+  pub(crate) fn parse_frame_data_packet(
+    &mut self, buf: &[u8],
+  ) -> Result<(), ()> {
+    if buf.len() != TWOPASS_PACKET_SZ {
+      return Err(());
+    }
+
+    self.des.buffer_fill(buf, 0, TWOPASS_PACKET_SZ);
+    self.des.pass2_buffer_pos = 0;
+    let m = self.des.parse_metrics()?;
+    self.des.pass2_buffer_fill = 0;
+
+    if self.frame_metrics.is_empty() {
+      // We're using a whole-file buffer.
+      self.cur_metrics = m;
+      self.pass2_data_ready = true;
+    } else {
+      // Safety check
+      let frames_needed = self.twopass_in_frames_needed();
+
+      if frames_needed > 0 {
+        if self.nframe_metrics >= self.frame_metrics.len() {
+          // We read too many frames without finding enough TUs.
+          return Err(());
+        }
+
+        let mut fmi = self.frame_metrics_head + self.nframe_metrics;
+        if fmi >= self.frame_metrics.len() {
+          fmi -= self.frame_metrics.len();
+        }
+        self.nframe_metrics += 1;
+        self.frame_metrics[fmi] = m;
+        // And accumulate the statistics over the window.
+        self.scale_window_nframes[m.fti] += 1;
+        if m.fti < FRAME_NSUBTYPES {
+          self.scale_window_sum[m.fti] += bexp_q24(m.log_scale_q24);
+        }
+        if m.show_frame {
+          self.scale_window_ntus += 1;
+        }
+      } else {
+        return Err(());
+      }
+    }
+
+    Ok(())
+  }
+
   // Parse the rate control per-frame data
   //
   // If no buffer is passed return the amount of data it expects

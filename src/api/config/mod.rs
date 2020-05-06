@@ -17,6 +17,10 @@ use crate::util::Pixel;
 mod encoder;
 pub use encoder::*;
 
+mod rate;
+pub use rate::Error as RateControlError;
+pub use rate::{RateControlConfig, RateControlSummary};
+
 mod speedsettings;
 pub use speedsettings::*;
 
@@ -80,6 +84,10 @@ pub enum InvalidConfig {
   )]
   InvalidSwitchFrameInterval(u64),
 
+  /// The rate control needs a target bitrate in order to produce results
+  #[error("The rate control requires a target bitrate")]
+  TargetBitrateNeeded,
+
   // This variant prevents people from exhaustively matching on this enum,
   // which allows us to add more variants without it being a breaking change.
   // This can be replaced with #[non_exhaustive] when it's stable:
@@ -94,6 +102,8 @@ pub enum InvalidConfig {
 pub struct Config {
   /// Settings which impact the produced bitstream.
   pub(crate) enc: EncoderConfig,
+  /// Rate control configuration
+  rate_control: RateControlConfig,
   /// The number of threads in the threadpool.
   pub(crate) threads: usize,
 }
@@ -121,6 +131,14 @@ impl Config {
   /// components in the encoder.
   pub fn with_threads(mut self, threads: usize) -> Self {
     self.threads = threads;
+    self
+  }
+
+  /// Set the rate control configuration
+  ///
+  /// The default configuration is single pass
+  pub fn with_rate_control(mut self, rate_control: RateControlConfig) -> Self {
+    self.rate_control = rate_control;
     self
   }
 }
@@ -186,7 +204,17 @@ impl Config {
       config.speed_settings.rdo_tx_decision = false;
     }
 
-    let inner = ContextInner::new(&config);
+    let mut inner = ContextInner::new(&config);
+
+    if self.rate_control.emit_pass_data {
+      let params = inner.rc_state.get_twopass_out_params(&inner, 0);
+      inner.rc_state.init_first_pass(params.pass1_log_base_q);
+    }
+
+    if let Some(ref s) = self.rate_control.summary {
+      inner.rc_state.init_second_pass();
+      inner.rc_state.setup_second_pass(s);
+    }
 
     Ok(Context { is_flushing: false, inner, pool, config })
   }
@@ -252,6 +280,13 @@ impl Config {
 
     if config.switch_frame_interval > 0 && !config.low_latency {
       return Err(InvalidSwitchFrameInterval(config.switch_frame_interval));
+    }
+
+    // TODO: add more validation
+    let rc = &self.rate_control;
+
+    if (rc.emit_pass_data || rc.summary.is_some()) && config.bitrate == 0 {
+      return Err(TargetBitrateNeeded);
     }
 
     Ok(())

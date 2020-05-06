@@ -335,3 +335,71 @@ impl<T: Pixel> Context<T> {
     sequence_header_inner(&seq).unwrap()
   }
 }
+
+/// Rate Control Data
+pub enum RcData {
+  /// A Rate Control Summary Packet
+  ///
+  /// It is emitted once, after the encoder is flushed.
+  ///
+  /// It contains a summary of the rate control information for the
+  /// encoding process that just terminated.
+  Summary(Box<[u8]>),
+  /// A Rate Control Frame-specific Packet
+  ///
+  /// It is emitted every time a frame is processed.
+  ///
+  /// The information contained is required to encode its matching
+  /// frame in a second pass encoding.
+  Frame(Box<[u8]>),
+}
+
+impl<T: Pixel> Context<T> {
+  /// Return the Rate Control Summary Packet size
+  ///
+  /// It is useful mainly to preserve space when saving
+  /// both Rate Control Summary and Frame Packets in a single file.
+  pub fn rc_summary_size(&self) -> usize {
+    crate::rate::TWOPASS_HEADER_SZ
+  }
+
+  /// Return the first pass data
+  ///
+  /// Call it before receive_packet.
+  ///
+  /// It will return a `RcData::Summary` once the encoder is flushed.
+  pub fn rc_receive_pass_data(&mut self) -> RcData {
+    if self.inner.done_processing() {
+      let data = self.inner.rc_state.emit_summary();
+      RcData::Summary(data.to_vec().into_boxed_slice())
+    } else if let Some(data) = self.inner.rc_state.emit_frame_data() {
+      RcData::Frame(data.to_vec().into_boxed_slice())
+    } else {
+      unreachable!(
+        "The encoder received more frames than its internal limit allows"
+      )
+    }
+  }
+
+  /// Number of pass data packets required to progress the encoding process.
+  ///
+  pub fn rc_second_pass_data_required(&self) -> usize {
+    self.inner.rc_state.twopass_in_frames_needed() as usize
+  }
+
+  /// Feed the first pass Rate Control data to the encoder,
+  /// Frame-specific Packets only.
+  ///
+  /// Call it before receive_packet()
+  ///
+  /// It may return `EncoderStatus::Failure` if the data provided is incorrect
+  pub fn rc_send_pass_data(
+    &mut self, data: &[u8],
+  ) -> Result<(), EncoderStatus> {
+    self
+      .inner
+      .rc_state
+      .parse_frame_data_packet(data)
+      .map_err(|_| EncoderStatus::Failure)
+  }
+}

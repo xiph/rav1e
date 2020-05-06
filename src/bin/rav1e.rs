@@ -131,7 +131,6 @@ impl<D: Decoder> Source<D> {
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
-  buffer: &mut [u8], buf_pos: &mut usize,
   mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write>>>,
   metrics_cli: MetricsEnabled,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
@@ -141,39 +140,49 @@ fn process_frame<T: Pixel, D: Decoder>(
   let mut pass2file = pass2file;
   // Submit first pass data to pass 2.
   if let Some(passfile) = pass2file.as_mut() {
-    loop {
-      let mut bytes = ctx.twopass_bytes_needed();
-      if bytes == 0 {
-        break;
-      }
-      // Read in some more bytes, if necessary.
-      bytes = bytes.min(buffer.len() - *buf_pos);
-      if bytes > 0 {
-        passfile.read_exact(&mut buffer[*buf_pos..*buf_pos + bytes]).map_err(
-          |e| e.context("Could not read frame data from two-pass data file!"),
-        )?;
-      }
-      // And pass them off.
-      let consumed =
-        ctx.twopass_in(&buffer[*buf_pos..*buf_pos + bytes]).map_err(|e| {
-          e.context("Error submitting pass data in second pass.")
-        })?;
-      // If the encoder consumed the whole buffer, reset it.
-      if consumed >= bytes {
-        *buf_pos = 0;
-      } else {
-        *buf_pos += consumed;
-      }
-    }
+    let mut buflen = [0u8; 8];
+    passfile
+      .read_exact(&mut buflen)
+      .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+    let mut data = vec![0u8; u64::from_be_bytes(buflen) as usize];
+
+    passfile
+      .read_exact(&mut data)
+      .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+
+    ctx
+      .rc_send_pass_data(&data)
+      .map_err(|e| e.context("Corrupted first pass data"))?;
   }
-  // Extract first pass data from pass 1.
-  // We call this before encoding any frames to ensure we are in 2-pass mode
-  //  and to get the placeholder header data.
+  // Save first pass data from pass 1.
   if let Some(passfile) = pass1file.as_mut() {
-    if let Some(outbuf) = ctx.twopass_out() {
-      passfile
-        .write_all(outbuf)
-        .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+    match ctx.rc_receive_pass_data() {
+      RcData::Frame(outbuf) => {
+        let len = outbuf.len() as u64;
+        passfile
+          .write_all(&len.to_be_bytes())
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+
+        passfile
+          .write_all(&outbuf)
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+      }
+      RcData::Summary(outbuf) => {
+        // The last packet of rate control data we get is the summary data.
+        // Let's put it at the start of the file.
+        passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+          e.context("Unable to seek in the two-pass data file.")
+        })?;
+        let len = outbuf.len() as u64;
+
+        passfile
+          .write_all(&len.to_be_bytes())
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+
+        passfile
+          .write_all(&outbuf)
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+      }
     }
   }
 
@@ -204,19 +213,6 @@ fn process_frame<T: Pixel, D: Decoder>(
       unreachable!();
     }
     Err(EncoderStatus::LimitReached) => {
-      if let Some(passfile) = pass1file.as_mut() {
-        if let Some(outbuf) = ctx.twopass_out() {
-          // The last block of data we get is the summary data that needs to go
-          //  at the start of the pass file.
-          // Seek to the start so we can write it there.
-          passfile
-            .seek(std::io::SeekFrom::Start(0))
-            .map_err(|e| e.context("Unable to seek in two-pass data file."))?;
-          passfile.write_all(outbuf).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-        }
-      }
       return Ok(None);
     }
     e @ Err(EncoderStatus::Failure) => {
@@ -242,8 +238,19 @@ fn do_encode<T: Pixel, D: Decoder>(
   let mut ctx: Context<T> =
     cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
 
-  let mut buffer: [u8; 80] = [0; 80];
-  let mut buf_pos = 0;
+  // Let's write down a placeholder.
+  if let Some(passfile) = pass1file.as_mut() {
+    let len = ctx.rc_summary_size();
+    let buf = vec![0u8; len];
+
+    passfile
+      .write_all(&(len as u64).to_be_bytes())
+      .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+
+    passfile
+      .write_all(&buf)
+      .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+  }
 
   while let Some(frame_info) = process_frame(
     &mut ctx,
@@ -251,8 +258,6 @@ fn do_encode<T: Pixel, D: Decoder>(
     &mut source,
     pass1file.as_mut(),
     pass2file.as_mut(),
-    &mut buffer,
-    &mut buf_pos,
     y4m_enc.as_mut(),
     metrics_enabled,
   )? {
@@ -418,22 +423,45 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
+  let mut rc = RateControlConfig::new();
+
   let pass2file = match cli.pass2file_name {
-    Some(f) => Some(File::open(f).map_err(|e| {
-      e.context("Unable to open file for reading two-pass data")
-    })?),
+    Some(f) => {
+      let mut f = File::open(f).map_err(|e| {
+        e.context("Unable to open file for reading two-pass data")
+      })?;
+      let mut buflen = [0u8; 8];
+      f.read_exact(&mut buflen)
+        .map_err(|e| e.context("Summary data too short"))?;
+      let len = i64::from_be_bytes(buflen);
+      let mut buf = vec![0u8; len as usize];
+
+      f.read_exact(&mut buf)
+        .map_err(|e| e.context("Summary data too short"))?;
+
+      rc = RateControlConfig::from_summary_slice(&buf)
+        .map_err(|e| e.context("Invalid summary"))?;
+
+      Some(f)
+    }
     None => None,
   };
 
   let pass1file = match cli.pass1file_name {
-    Some(f) => Some(File::create(f).map_err(|e| {
-      e.context("Unable to open file for writing two-pass data")
-    })?),
+    Some(f) => {
+      let f = File::create(f).map_err(|e| {
+        e.context("Unable to open file for writing two-pass data")
+      })?;
+      rc = rc.with_emit_data(true);
+      Some(f)
+    }
     None => None,
   };
 
-  let cfg =
-    Config::new().with_encoder_config(cli.enc).with_threads(cli.threads);
+  let cfg = Config::new()
+    .with_encoder_config(cli.enc)
+    .with_threads(cli.threads)
+    .with_rate_control(rc);
 
   #[cfg(feature = "serialize")]
   {
