@@ -622,6 +622,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
 
     let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY
       && fi.config.speed_settings.rdo_tx_decision
+      && !is_inter
       && !skip;
 
     if !do_rdo_tx_size && !do_rdo_tx_type {
