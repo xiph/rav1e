@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::api::color::ChromaSampling;
 use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::ac_q;
@@ -679,10 +680,18 @@ const Q57_SQUARE_EXP_SCALE: f64 =
   (2.0 * ::std::f64::consts::LN_2) / ((1i64 << 57) as f64);
 
 // Daala style log-offset for chroma quantizers
-fn chroma_offset(log_target_q: i64) -> (i64, i64) {
+// TODO: Optimal offsets for more configurations than just BT.709
+fn chroma_offset(
+  log_target_q: i64, chroma_sampling: ChromaSampling,
+) -> (i64, i64) {
   let x = log_target_q.max(0);
-  // Gradient 0.266 optimized for CIEDE2000+PSNR on subset3
-  let y = (x >> 2) + (x >> 6);
+  // Gradient optimized for CIEDE2000+PSNR on subset3
+  let y = match chroma_sampling {
+    ChromaSampling::Cs400 => unimplemented!(),
+    ChromaSampling::Cs420 => (x >> 2) + (x >> 6), // 0.266
+    ChromaSampling::Cs422 => (x >> 3) + (x >> 4) - (x >> 7), // 0.180
+    ChromaSampling::Cs444 => (x >> 4) + (x >> 5) + (x >> 8), // 0.098
+  };
   // blog64(7) - blog64(4); blog64(5) - blog64(4)
   (0x19D_5D9F_D501_0B37 - y, 0xA4_D3C2_5E68_DC58 - y)
 }
@@ -690,10 +699,11 @@ fn chroma_offset(log_target_q: i64) -> (i64, i64) {
 impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
+    chroma_sampling: ChromaSampling,
   ) -> QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
     let quantizer = bexp64(log_target_q + scale);
-    let (offset_u, offset_v) = chroma_offset(log_target_q);
+    let (offset_u, offset_v) = chroma_offset(log_target_q, chroma_sampling);
     let log_target_q_u = log_target_q + offset_u;
     let log_target_q_v = log_target_q + offset_v;
     let quantizer_u = bexp64(log_target_q_u + scale);
@@ -861,7 +871,7 @@ impl RCState {
   }
 
   pub(crate) fn select_first_pass_qi(
-    &self, bit_depth: usize, fti: usize,
+    &self, bit_depth: usize, fti: usize, chroma_sampling: ChromaSampling,
   ) -> QuantizerParameters {
     // Adjust the quantizer for the frame type, result is Q57:
     let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
@@ -871,6 +881,7 @@ impl RCState {
       self.pass1_log_base_q,
       log_q,
       bit_depth,
+      chroma_sampling,
     )
   }
 
@@ -888,6 +899,7 @@ impl RCState {
       //  parameterize a "quality" configuration parameter).
       let base_qi = ctx.config.quantizer;
       let bit_depth = ctx.config.bit_depth;
+      let chroma_sampling = ctx.config.chroma_sampling;
       // We use the AC quantizer as the source quantizer since its quantizer
       //  tables have unique entries, while the DC tables do not.
       let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
@@ -902,7 +914,12 @@ impl RCState {
       // Adjust the quantizer for the frame type, result is Q57:
       let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
         + DQP_Q57[fti];
-      QuantizerParameters::new_from_log_q(log_base_q, log_q, bit_depth)
+      QuantizerParameters::new_from_log_q(
+        log_base_q,
+        log_q,
+        bit_depth,
+        chroma_sampling,
+      )
     } else {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
       let mut log_scale: [i64; FRAME_NSUBTYPES] = self.log_scale;
@@ -912,7 +929,11 @@ impl RCState {
       match self.twopass_state {
         // First pass of 2-pass mode: use a fixed base quantizer.
         PASS_1 => {
-          return self.select_first_pass_qi(ctx.config.bit_depth, fti);
+          return self.select_first_pass_qi(
+            ctx.config.bit_depth,
+            fti,
+            ctx.config.chroma_sampling,
+          );
         }
         // Second pass of 2-pass mode: we know exactly how much of each frame
         //  type there is in the current buffer window, and have estimates for
@@ -1067,6 +1088,7 @@ impl RCState {
       //  rate = exp2(log2(scale) - log2(quantizer)*exp)
       // There's no easy closed form solution, so we bisection searh for it.
       let bit_depth = ctx.config.bit_depth;
+      let chroma_sampling = ctx.config.chroma_sampling;
       // TODO: Proper handling of lossless.
       let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth) as i64)
         - q57(QSCALE + bit_depth as i32 - 8);
@@ -1176,7 +1198,12 @@ impl RCState {
           // If that target is unreasonable, oh well; we'll have to drop.
         }
       }
-      QuantizerParameters::new_from_log_q(log_base_q, log_q, bit_depth)
+      QuantizerParameters::new_from_log_q(
+        log_base_q,
+        log_q,
+        bit_depth,
+        chroma_sampling,
+      )
     }
   }
 
