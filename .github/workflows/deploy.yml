@@ -66,8 +66,6 @@ jobs:
 
     - name: Download the zip
       uses: actions/download-artifact@v2
-      with:
-        name: rav1e-binaries
 
     - name: Unzip rav1e Windows binaries
       run: |
