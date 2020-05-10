@@ -460,14 +460,14 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     movifnidn     prid, prim
     sub       dampingd, 31
     movifnidn  secdmpd, secdmpm
-    or            prid, 0
+    test          prid, prid
     jz .sec_only
     movd           xm0, prid
     lzcnt      pridmpd, prid
     add        pridmpd, dampingd
     cmovs      pridmpd, zerod
     mov        [rsp+0], pridmpq                 ; pri_shift
-    or         secdmpd, 0
+    test       secdmpd, secdmpd
     jz .pri_only
     movd           xm1, secdmpd
     lzcnt      secdmpd, secdmpd
@@ -1469,14 +1469,14 @@ cglobal cdef_filter_%1x%2, 4, 9, 0, dst, stride, left, top, \
     movifnidn     prid, prim
     sub       dampingd, 31
     movifnidn  secdmpd, secdmpm
-    or            prid, 0
+    test          prid, prid
     jz .border_sec_only
     movd           xm0, prid
     lzcnt      pridmpd, prid
     add        pridmpd, dampingd
     cmovs      pridmpd, zerod
     mov        [rsp+0], pridmpq                 ; pri_shift
-    or         secdmpd, 0
+    test       secdmpd, secdmpd
     jz .border_pri_only
     movd           xm1, secdmpd
     lzcnt      secdmpd, secdmpd
