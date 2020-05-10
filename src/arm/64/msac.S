@@ -216,7 +216,7 @@ L(renorm2):
         lsl             x7,  x7,  x5           // (~dif + (v << 48)) << d
         str             w4,  [x0, #RNG]
         mvn             x7,  x7                // ~dif
-        b.ge            9f
+        b.hs            9f
 
         // refill
         ldp             x3,  x4,  [x0]         // BUF_POS, BUF_END
