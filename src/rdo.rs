@@ -1067,6 +1067,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
 
   let sz = bsize.width_mi().min(bsize.height_mi());
 
+  // To use non single reference modes, block width and height must be greater than 4.
   if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
     // Adding compound candidate
     if let Some(r0) = fwdref {
