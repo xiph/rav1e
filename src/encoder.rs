@@ -242,9 +242,7 @@ impl Sequence {
       enable_ref_frame_mvs: false,
       enable_warped_motion: false,
       enable_superres: false,
-      enable_cdef: config.speed_settings.cdef
-        && config.chroma_sampling != ChromaSampling::Cs422
-        && enable_restoration_filters,
+      enable_cdef: config.speed_settings.cdef && enable_restoration_filters,
       enable_restoration: config.speed_settings.lrf
         && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
