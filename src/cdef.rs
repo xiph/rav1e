@@ -522,6 +522,8 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
             let local_pri_strength;
             let local_sec_strength;
             let mut local_damping: i32 = cdef_damping + coeff_shift;
+            // See `Cdef_Uv_Dir` constant lookup table in Section 7.15.1
+            // <https://aomediacodec.github.io/av1-spec/#cdef-block-process>
             let local_dir = if p == 0 {
               local_pri_strength =
                 adjust_strength(cdef_pri_y_strength << coeff_shift, var);
@@ -536,7 +538,11 @@ pub fn cdef_filter_superblock<T: Pixel, U: Pixel>(
               local_sec_strength = cdef_sec_uv_strength << coeff_shift;
               local_damping -= 1;
               if cdef_pri_uv_strength != 0 {
-                dir as usize
+                if xdec != ydec {
+                  [7, 0, 2, 4, 5, 6, 6, 6][dir as usize]
+                } else {
+                  dir as usize
+                }
               } else {
                 0
               }
