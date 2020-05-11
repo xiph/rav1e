@@ -244,7 +244,6 @@ impl Sequence {
       enable_superres: false,
       enable_cdef: config.speed_settings.cdef && enable_restoration_filters,
       enable_restoration: config.speed_settings.lrf
-        && config.chroma_sampling != ChromaSampling::Cs422
         && enable_restoration_filters,
       enable_large_lru: true,
       enable_delayed_loopfilter_rdo: true,
