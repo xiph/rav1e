@@ -64,8 +64,9 @@ impl<T: Pixel> Context<T> {
   ///
   /// # Errors
   ///
-  /// If this method is called with a frame after the encoder has been flushed,
-  /// the [`EncoderStatus::EnoughData`] error is returned.
+  /// If this method is called with a frame after the encoder has been flushed
+  /// or the encoder internal limit is hit (`std::i32::MAX` frames) the
+  /// [`EncoderStatus::EnoughData`] error is returned.
   ///
   /// # Examples
   ///
@@ -109,7 +110,12 @@ impl<T: Pixel> Context<T> {
       self.is_flushing = true;
     } else if self.is_flushing {
       return Err(EncoderStatus::EnoughData);
+    // The rate control can process at most std::i32::MAX frames
+    } else if self.inner.frame_count == std::i32::MAX as u64 - 1 {
+      self.inner.limit = Some(self.inner.frame_count);
+      self.is_flushing = true;
     }
+
     let inner = &mut self.inner;
     let pool = &mut self.pool;
 
