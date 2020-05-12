@@ -133,7 +133,7 @@ impl SpeedSettings {
   /// - 8: min block size 8x8, reduced TX set, fast deblock.
   /// - 7: min block size 8x8, reduced TX set.
   /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
-  /// - 5: min block size 8x8, complex pred modes for keyframes, reduced TX set, RDO TX decision.
+  /// - 5: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
   /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, full SGR search.
   /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
   ///        full SGR search.
@@ -197,7 +197,7 @@ impl SpeedSettings {
   }
 
   const fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 5
+    speed >= 6
   }
 
   /// TX domain distortion is always faster, with no significant quality change
