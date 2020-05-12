@@ -134,11 +134,15 @@ impl SpeedSettings {
   /// - 7: min block size 8x8, reduced TX set.
   /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
   /// - 5: min block size 8x8, complex pred modes for keyframes, reduced TX set, RDO TX decision.
-  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
-  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs.
-  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs.
-  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding.
-  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs, bottom-up encoding with non-square partitions everywhere
+  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, full SGR search.
+  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
+  ///        full SGR search.
+  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  ///        full SGR search.
+  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  ///        bottom-up encoding, full SGR search.
+  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  ///        bottom-up encoding with non-square partitions everywhere, full SGR search.
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       partition_range: Self::partition_range_preset(speed),
@@ -252,7 +256,7 @@ impl SpeedSettings {
   }
 
   fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
-    if speed <= 8 {
+    if speed <= 4 {
       SGRComplexityLevel::Full
     } else {
       SGRComplexityLevel::Reduced
