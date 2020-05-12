@@ -989,6 +989,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   assert!(!ref_frames_set.is_empty());
 
   let mut inter_mode_set = ArrayVec::<[(PredictionMode, usize); 20]>::new();
+  let mut mvs_set = ArrayVec::<[[MotionVector; 2]; 20]>::new();
+  let mut satds = ArrayVec::<[u32; 20]>::new();
   let mut mv_stacks = ArrayVec::<[_; 20]>::new();
   let mut mode_contexts = ArrayVec::<[_; 7]>::new();
   let pmvs = ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1];
@@ -1094,6 +1096,14 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
+  let num_modes_rdo = if fi.config.speed_settings.prediction_modes
+    >= PredictionModesSetting::ComplexAll
+  {
+    inter_mode_set.len()
+  } else {
+    9 // This number is determined by AWCY test
+  };
+
   inter_mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
       PredictionMode::NEWMV | PredictionMode::NEW_NEWMV => mvs_from_me[i],
@@ -1132,27 +1142,74 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         unimplemented!();
       }
     };
-    let mode_set_chroma = ArrayVec::from([luma_mode]);
+    mvs_set.push(mvs);
 
-    luma_chroma_mode_rdo(
-      luma_mode,
-      fi,
-      bsize,
-      tile_bo,
-      ts,
-      cw,
-      rdo_type,
-      cw_checkpoint,
-      &mut best,
-      mvs,
-      ref_frames_set[i],
-      &mode_set_chroma,
-      false,
-      mode_contexts[i],
-      &mv_stacks[i],
-      AngleDelta::default(),
-    );
+    // Calculate SATD for each mode
+    if num_modes_rdo != inter_mode_set.len() {
+      let tile_rect = ts.tile_rect();
+      let rec = &mut ts.rec.planes[0];
+      let po = tile_bo.plane_offset(rec.plane_cfg);
+      let mut rec_region =
+        rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
+
+      luma_mode.predict_inter(
+        fi,
+        tile_rect,
+        0,
+        po,
+        &mut rec_region,
+        bsize.width(),
+        bsize.height(),
+        ref_frames_set[i],
+        mvs,
+      );
+
+      let plane_org = ts.input_tile.planes[0]
+        .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+      let plane_ref = rec_region.as_const();
+
+      let satd = get_satd(
+        &plane_org,
+        &plane_ref,
+        bsize,
+        fi.sequence.bit_depth,
+        fi.cpu_feature_level,
+      );
+      satds.push(satd);
+    } else {
+      satds.push(0);
+    }
   });
+
+  let mut sorted = izip!(inter_mode_set, mvs_set, satds).collect::<Vec<_>>();
+  if num_modes_rdo != sorted.len() {
+    sorted.sort_by_key(|((_mode, _i), _mvs, satd)| *satd);
+  }
+
+  sorted.iter().take(num_modes_rdo).for_each(
+    |&((luma_mode, i), mvs, _satd)| {
+      let mode_set_chroma = ArrayVec::from([luma_mode]);
+
+      luma_chroma_mode_rdo(
+        luma_mode,
+        fi,
+        bsize,
+        tile_bo,
+        ts,
+        cw,
+        rdo_type,
+        cw_checkpoint,
+        &mut best,
+        mvs,
+        ref_frames_set[i],
+        &mode_set_chroma,
+        false,
+        mode_contexts[i],
+        &mv_stacks[i],
+        AngleDelta::default(),
+      );
+    },
+  );
 
   best
 }
