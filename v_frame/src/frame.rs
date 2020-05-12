@@ -17,6 +17,7 @@ use crate::serialize::{Deserialize, Serialize};
 pub struct Frame<T: Pixel> {
   /// Planes constituting the frame.
   pub planes: [Plane<T>; 3],
+  pub timestamp: u64,
 }
 
 impl<T: Pixel> Frame<T> {
@@ -25,7 +26,7 @@ impl<T: Pixel> Frame<T> {
   /// Allocates data for the planes.
   pub fn new_with_padding(
     width: usize, height: usize, chroma_sampling: ChromaSampling,
-    luma_padding: usize,
+    luma_padding: usize, timestamp: u64,
   ) -> Self {
     let luma_width = width.align_power_of_two(3);
     let luma_height = height.align_power_of_two(3);
@@ -57,6 +58,7 @@ impl<T: Pixel> Frame<T> {
           chroma_padding_y,
         ),
       ],
+      timestamp,
     }
   }
 }
