@@ -7,7 +7,7 @@ on:
       - 'p*'
 
 jobs:
-  create-binaries:
+  deploy-windows-binaries:
 
     runs-on: windows-latest
 
@@ -37,60 +37,36 @@ jobs:
       run: |
         cargo build --release
 
+    - name: Strip rav1e binary
+      run: |
+        strip target/release/rav1e.exe
+
     - name: Run cargo-c
       run: |
         cargo cinstall --release --destdir="C:\"
 
-    - name: Create zip
+    - name: Rename cargo-c folder
       run: |
-        $RAV1E_PATH="$Env:GITHUB_WORKSPACE\target\release"
-        7z a rav1e.zip "Cargo.lock" "$RAV1E_PATH\rav1e.exe" "C:\usr\local"
+        Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-sdk"
 
-    - name: Upload binaries
-      uses: actions/upload-artifact@v2
-      with:
-        name: rav1e-binaries
-        path: rav1e.zip
-
-  deploy:
-
-    needs: create-binaries
-
-    env:
-      FILENAME: rav1e-windows-sdk
-
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Download the zip
-      uses: actions/download-artifact@v2
-
-    - name: Unzip rav1e Windows binaries
+    - name: Get the version
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: bash
+      id: tagName
       run: |
-        unzip rav1e-binaries/rav1e.zip -d rav1e-binaries
-        mv rav1e-binaries/Cargo.lock .
-
-    - name: Handle binaries
-      run: |
-        mv rav1e-binaries/local rav1e-binaries/$FILENAME
-        strip rav1e-binaries/rav1e.exe
+        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+        echo "::set-output name=version::$VERSION"
 
     - name: Package pre-release binaries
       if: startsWith(github.ref, 'refs/tags/p')
       run: |
-        cd rav1e-binaries
-        zip -r rav1e-windows.zip $FILENAME
+        7z a rav1e-windows.zip "C:\usr\rav1e-windows-sdk"
 
     - name: Package release binaries
       if: startsWith(github.ref, 'refs/tags/v')
-      id: data
       run: |
-        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "::set-output name=version::$VERSION"
-        cd rav1e-binaries
-        zip -r rav1e-$VERSION-windows.zip $FILENAME
+        7z a rav1e-${{ steps.tagName.outputs.version }}-windows.zip `
+             "C:\usr\rav1e-windows-sdk"
 
     - name: Create a pre-release
       if: startsWith(github.ref, 'refs/tags/p')
@@ -100,8 +76,8 @@ jobs:
         prerelease: true
         files: |
           Cargo.lock
-          rav1e-binaries/rav1e-windows.zip
-          rav1e-binaries/rav1e.exe
+          rav1e-windows.zip
+          target/release/rav1e.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,10 +85,10 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
       with:
-        name: v${{ steps.data.outputs.version }}
+        name: v${{ steps.tagName.outputs.version }}
         files: |
           Cargo.lock
-          rav1e-binaries/rav1e-${{ steps.data.outputs.version }}-windows.zip
-          rav1e-binaries/rav1e.exe
+          rav1e-${{ steps.tagName.outputs.version }}-windows.zip
+          target/release/rav1e.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
