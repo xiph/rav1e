@@ -79,7 +79,8 @@ impl<T: Pixel> Context<T> {
   /// let f1 = ctx.new_frame();
   /// let f2 = f1.clone();
   /// let info = FrameParameters {
-  ///   frame_type_override: FrameTypeOverride::Key
+  ///   frame_type_override: FrameTypeOverride::Key,
+  ///   opaque: None,
   /// };
   ///
   /// // Send the plain frame data

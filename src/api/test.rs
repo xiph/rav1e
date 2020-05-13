@@ -1084,9 +1084,46 @@ fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
   let frame_type_override =
     if keyframe { FrameTypeOverride::Key } else { FrameTypeOverride::No };
 
-  let fp = FrameParameters { frame_type_override };
+  let opaque = Some(Box::new(keyframe) as Box<dyn std::any::Any + Send>);
+
+  let fp = FrameParameters { frame_type_override, opaque };
 
   let _ = ctx.send_frame((input, fp));
+}
+
+#[test]
+fn test_opaque_delivery() {
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    100,
+    8,
+    ChromaSampling::Cs420,
+    0,
+    5,
+    0,
+    false,
+    0,
+    false,
+    10,
+  );
+
+  let kf_at = 3;
+
+  let limit = 5;
+  for i in 0..limit {
+    send_frame_kf(&mut ctx, kf_at == i);
+  }
+  ctx.flush();
+
+  while let Ok(pkt) = ctx.receive_packet() {
+    let Packet { opaque, input_frameno, .. } = pkt;
+    if let Some(opaque) = opaque {
+      let kf = opaque.downcast::<bool>().unwrap();
+      assert_eq!(kf, Box::new(input_frameno == kf_at));
+    }
+  }
 }
 
 #[interpolate_test(0, 0)]

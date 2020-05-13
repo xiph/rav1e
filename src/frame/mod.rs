@@ -34,10 +34,12 @@ pub enum FrameTypeOverride {
 }
 
 /// Optional per-frame encoder parameters
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
 pub struct FrameParameters {
   /// Force emitted frame to be of the type selected
   pub frame_type_override: FrameTypeOverride,
+  /// Output the provided data in the matching encoded Packet
+  pub opaque: Option<Box<dyn std::any::Any + Send>>,
 }
 
 pub use v_frame::frame::Frame;

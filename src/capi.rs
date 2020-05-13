@@ -23,6 +23,7 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
+use std::os::raw::c_void;
 
 use libc::ptrdiff_t;
 use libc::size_t;
@@ -40,6 +41,7 @@ type ColorPrimaries = rav1e::ColorPrimaries;
 type TransferCharacteristics = rav1e::TransferCharacteristics;
 type Rational = rav1e::Rational;
 type FrameTypeOverride = rav1e::FrameTypeOverride;
+type FrameOpaqueCb = Option<extern fn(*mut c_void)>;
 
 #[derive(Clone)]
 enum FrameInternal {
@@ -59,6 +61,28 @@ impl From<rav1e::Frame<u16>> for FrameInternal {
   }
 }
 
+struct FrameOpaque {
+  opaque: *mut c_void,
+  cb: FrameOpaqueCb,
+}
+
+unsafe impl Send for FrameOpaque {}
+
+impl Default for FrameOpaque {
+  fn default() -> Self {
+    FrameOpaque { opaque: std::ptr::null_mut(), cb: None }
+  }
+}
+
+impl Drop for FrameOpaque {
+  fn drop(&mut self) {
+    let FrameOpaque { opaque, cb } = self;
+    if let Some(cb) = cb {
+      cb(*opaque);
+    }
+  }
+}
+
 /// Raw video Frame
 ///
 /// It can be allocated through rav1e_frame_new(), populated using rav1e_frame_fill_plane()
@@ -66,11 +90,12 @@ impl From<rav1e::Frame<u16>> for FrameInternal {
 pub struct Frame {
   fi: FrameInternal,
   frame_type: FrameTypeOverride,
+  opaque: Option<FrameOpaque>,
 }
 
 /// Status that can be returned by encoder functions.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, FromPrimitive)]
+#[derive(Copy, Clone, Debug, FromPrimitive, PartialEq)]
 pub enum EncoderStatus {
   /// Normal operation.
   Success = 0,
@@ -155,8 +180,10 @@ impl EncContext {
   }
   fn send_frame(
     &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride,
+    opaque: Option<Box<dyn std::any::Any + Send>>,
   ) -> Result<(), rav1e::EncoderStatus> {
-    let info = rav1e::FrameParameters { frame_type_override: frame_type };
+    let info =
+      rav1e::FrameParameters { frame_type_override: frame_type, opaque };
     if let Some(frame) = frame {
       match (self, frame) {
         (EncContext::U8(ctx), FrameInternal::U8(ref f)) => {
@@ -180,10 +207,20 @@ impl EncContext {
       ctx: &mut rav1e::Context<T>,
     ) -> Result<Packet, rav1e::EncoderStatus> {
       ctx.receive_packet().map(|p| {
+        let mut p = std::mem::ManuallyDrop::new(p);
+        let opaque = p.opaque.take().map_or_else(
+          || std::ptr::null_mut(),
+          |o| {
+            let mut opaque = o.downcast::<FrameOpaque>().unwrap();
+            opaque.cb = None;
+            opaque.opaque
+          },
+        );
+        let p = std::mem::ManuallyDrop::into_inner(p);
         let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
         let len = data.len();
         let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
-        Packet { data, len, input_frameno, frame_type }
+        Packet { data, len, input_frameno, frame_type, opaque }
       })
     }
     match self {
@@ -249,6 +286,8 @@ pub struct Packet {
   pub input_frameno: u64,
   /// Frame type
   pub frame_type: FrameType,
+  /// User provided opaque data
+  pub opaque: *mut c_void,
 }
 
 /// Version information as presented in `[package]` `version`.
@@ -621,7 +660,7 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
   let frame_type = rav1e::FrameTypeOverride::No;
-  let f = Frame { fi, frame_type };
+  let f = Frame { fi, frame_type, opaque: None };
   let frame = Box::new(f.into());
 
   Box::into_raw(frame)
@@ -650,6 +689,24 @@ pub unsafe extern fn rav1e_frame_set_type(
   (*frame).frame_type = frame_type;
 
   0
+}
+
+/// Register an opaque data and a destructor to the frame
+///
+/// It takes the ownership of its memory:
+/// - it will relinquish the ownership to the context if
+///   rav1e_send_frame is called.
+/// - it will call the destructor if rav1e_frame_unref is called
+///   otherwise.
+#[no_mangle]
+pub unsafe extern fn rav1e_frame_set_opaque(
+  frame: *mut Frame, opaque: *mut c_void, cb: FrameOpaqueCb,
+) {
+  if opaque.is_null() {
+    (*frame).opaque = None;
+  } else {
+    (*frame).opaque = Some(FrameOpaque { opaque, cb });
+  }
 }
 
 /// Retrieve the first-pass data of a two-pass encode for the frame that was
@@ -717,7 +774,12 @@ pub unsafe extern fn rav1e_twopass_in(
 /// Send the frame for encoding
 ///
 /// The function increases the frame internal reference count and it can be passed multiple
-/// times to different rav1e_send_frame().
+/// times to different rav1e_send_frame() with a caveat:
+///
+/// The opaque data, if present, will be moved from the Frame to the context
+/// and returned by rav1e_receive_packet in the Packet opaque field or
+/// the destructor will be called on rav1e_context_unref if the frame is
+/// still pending in the encoder.
 ///
 /// Returns:
 /// - `0` on success,
@@ -725,7 +787,7 @@ pub unsafe extern fn rav1e_twopass_in(
 /// - `< 0` on unrecoverable failure
 #[no_mangle]
 pub unsafe extern fn rav1e_send_frame(
-  ctx: *mut Context, frame: *const Frame,
+  ctx: *mut Context, frame: *mut Frame,
 ) -> EncoderStatus {
   let frame_internal =
     if frame.is_null() { None } else { Some((*frame).fi.clone()) };
@@ -735,9 +797,18 @@ pub unsafe extern fn rav1e_send_frame(
     (*frame).frame_type
   };
 
+  let maybe_opaque = if frame.is_null() {
+    None
+  } else {
+    (*frame)
+      .opaque
+      .take()
+      .map(|o| Box::new(o) as Box<dyn std::any::Any + Send>)
+  };
+
   let ret = (*ctx)
     .ctx
-    .send_frame(frame_internal, frame_type)
+    .send_frame(frame_internal, frame_type, maybe_opaque)
     .map(|_v| None)
     .unwrap_or_else(|e| Some(e));
 
@@ -857,6 +928,69 @@ pub unsafe extern fn rav1e_frame_fill_plane(
     }
     FrameInternal::U16(ref mut f) => {
       rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth)
+    }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  use std::ffi::CString;
+
+  #[test]
+  fn forward_opaque() {
+    unsafe {
+      let rac = rav1e_config_default();
+      let w = CString::new("width").unwrap();
+      rav1e_config_parse_int(rac, w.as_ptr(), 64);
+      let h = CString::new("height").unwrap();
+      rav1e_config_parse_int(rac, h.as_ptr(), 64);
+      let s = CString::new("speed").unwrap();
+      rav1e_config_parse_int(rac, s.as_ptr(), 10);
+
+      let rax = rav1e_context_new(rac);
+
+      let f = rav1e_frame_new(rax);
+
+      for i in 0..30 {
+        let v = Box::new(i as u8);
+        extern fn cb(o: *mut c_void) {
+          let v = unsafe { Box::from_raw(o as *mut u8) };
+          eprintln!("Would free {}", v);
+        }
+        rav1e_frame_set_opaque(f, Box::into_raw(v) as *mut c_void, Some(cb));
+        rav1e_send_frame(rax, f);
+      }
+
+      rav1e_send_frame(rax, std::ptr::null_mut());
+
+      for _ in 0..15 {
+        let mut p: *mut Packet = std::ptr::null_mut();
+        let ret = rav1e_receive_packet(rax, &mut p);
+
+        if ret == EncoderStatus::Success {
+          let v = Box::from_raw((*p).opaque as *mut u8);
+          eprintln!("Opaque {}", v);
+        }
+
+        if ret == EncoderStatus::LimitReached {
+          break;
+        }
+      }
+
+      let v = Box::new(42u64);
+      extern fn cb(o: *mut c_void) {
+        let v = unsafe { Box::from_raw(o as *mut u64) };
+        eprintln!("Would free {}", v);
+      }
+      rav1e_frame_set_opaque(f, Box::into_raw(v) as *mut c_void, Some(cb));
+
+      // 42 would be freed after this
+      rav1e_frame_unref(f);
+      // 15 - reorder delay .. 29 would be freed after this
+      rav1e_context_unref(rax);
+      rav1e_config_unref(rac);
     }
   }
 }

@@ -155,7 +155,7 @@ pub enum EncoderStatus {
 ///
 /// A packet contains one shown frame together with zero or more additional
 /// frames.
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Packet<T: Pixel> {
   /// The packet data.
   pub data: Vec<u8>,
@@ -177,6 +177,18 @@ pub struct Packet<T: Pixel> {
   pub qp: u8,
   /// Block-level encoding stats for the frame
   pub enc_stats: EncoderStats,
+  /// Optional user-provided opaque data
+  #[cfg_attr(feature = "serialize", serde(skip))]
+  pub opaque: Option<Box<dyn std::any::Any + Send>>,
+}
+
+impl<T: Pixel> PartialEq for Packet<T> {
+  fn eq(&self, other: &Self) -> bool {
+    self.data == other.data
+      && self.input_frameno == other.input_frameno
+      && self.frame_type == other.frame_type
+      && self.qp == other.qp
+  }
 }
 
 impl<T: Pixel> fmt::Display for Packet<T> {
