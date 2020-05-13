@@ -138,7 +138,7 @@ impl SpeedSettings {
   /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
   ///        full SGR search.
   /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        full SGR search.
+  ///        full SGR search, coarse directions.
   /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
   ///        bottom-up encoding, full SGR search.
   /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
@@ -284,7 +284,7 @@ impl SpeedSettings {
   }
 
   fn fine_directional_intra_preset(speed: usize) -> bool {
-    speed <= 1 || speed >= 5
+    speed != 2
   }
 }
 
