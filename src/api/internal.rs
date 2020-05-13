@@ -249,6 +249,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_frame: u64,
   /// The next `output_frameno` to be computed by lookahead.
   next_lookahead_output_frameno: u64,
+  /// Optional opaque to be sent back to the user
+  opaque_q: BTreeMap<u64, Box<dyn std::any::Any + Send>>,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -296,6 +298,7 @@ impl<T: Pixel> ContextInner<T> {
       maybe_prev_log_base_q: None,
       next_lookahead_frame: 0,
       next_lookahead_output_frameno: 0,
+      opaque_q: BTreeMap::new(),
     }
   }
 
@@ -313,6 +316,9 @@ impl<T: Pixel> ContextInner<T> {
     if let Some(params) = params {
       if params.frame_type_override == FrameTypeOverride::Key {
         self.keyframes_forced.insert(input_frameno);
+      }
+      if let Some(op) = params.opaque {
+        self.opaque_q.insert(input_frameno, op);
       }
     }
 
@@ -1260,10 +1266,11 @@ impl<T: Pixel> ContextInner<T> {
 
     let cur_output_frameno = self.output_frameno;
 
-    let ret = self.encode_packet(cur_output_frameno);
+    let mut ret = self.encode_packet(cur_output_frameno);
 
-    if let Ok(ref pkt) = ret {
+    if let Ok(ref mut pkt) = ret {
       self.garbage_collect(pkt.input_frameno);
+      pkt.opaque = self.opaque_q.remove(&pkt.input_frameno);
     }
 
     ret
@@ -1281,7 +1288,16 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.frames_processed += 1;
-    Ok(Packet { data, rec, source, input_frameno, frame_type, qp, enc_stats })
+    Ok(Packet {
+      data,
+      rec,
+      source,
+      input_frameno,
+      frame_type,
+      qp,
+      enc_stats,
+      opaque: None,
+    })
   }
 
   fn garbage_collect(&mut self, cur_input_frameno: u64) {
