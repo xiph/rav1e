@@ -804,17 +804,17 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
     }
   }
   fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error> {
-    /* Encodes a value v in [0, n-1] quasi-uniformly */
-    if n <= 1 {
-      return Ok(());
-    };
-    let l = 31 ^ ((n - 1) + 1).leading_zeros();
-    let m = (1 << l) - n;
-    if v < m {
-      self.write(l - 1, v)
+    if n > 1 {
+      let l = msb(n as i32) as u8 + 1;
+      let m = (1 << l) - n;
+      if v < m {
+        self.write(l as u32 - 1, v)
+      } else {
+        self.write(l as u32 - 1, m + ((v - m) >> 1))?;
+        self.write(1, (v - m) & 1)
+      }
     } else {
-      self.write(l - 1, m + ((v - m) >> 1))?;
-      self.write_bit(((v - m) & 1) != 0)
+      Ok(())
     }
   }
   fn write_subexpfin(
