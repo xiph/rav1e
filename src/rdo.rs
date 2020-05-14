@@ -1366,75 +1366,48 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
-    let luma_angle_delta_count = best.pred_mode_luma.angle_delta_count();
-    let chroma_angle_delta_count = best.pred_mode_chroma.angle_delta_count();
+    let luma_deltas = best.pred_mode_luma.angle_delta_count();
+    let chroma_deltas = best.pred_mode_chroma.angle_delta_count();
 
     let mvs = [MotionVector::default(); 2];
     let ref_frames = [INTRA_FRAME, NONE_FRAME];
     let mode_set_chroma = [best.pred_mode_chroma];
-
-    for i in 0..luma_angle_delta_count {
-      let angle_delta_y: i8 = if luma_angle_delta_count == 1 {
-        0
-      } else {
-        i - MAX_ANGLE_DELTA as i8
-      };
-      let angle_delta_uv: i8 =
-        if chroma_angle_delta_count == 1 { 0 } else { angle_delta_y };
-      if angle_delta_y == best.angle_delta.y
-        && angle_delta_uv == best.angle_delta.uv
-      {
-        continue;
+    let mv_stack = ArrayVec::<[_; 9]>::new();
+    let mut best_angle_delta_y = best.angle_delta.y;
+    let mut angle_delta_rdo = |y, uv| -> i8 {
+      if best.angle_delta.y != y || best.angle_delta.uv != uv {
+        luma_chroma_mode_rdo(
+          best.pred_mode_luma,
+          fi,
+          bsize,
+          tile_bo,
+          ts,
+          cw,
+          rdo_type,
+          cw_checkpoint,
+          &mut best,
+          mvs,
+          ref_frames,
+          &mode_set_chroma,
+          true,
+          0,
+          &mv_stack,
+          AngleDelta { y, uv },
+        );
       }
+      best.angle_delta.y
+    };
 
-      luma_chroma_mode_rdo(
-        best.pred_mode_luma,
-        fi,
-        bsize,
-        tile_bo,
-        ts,
-        cw,
-        rdo_type,
-        cw_checkpoint,
-        &mut best,
-        mvs,
-        ref_frames,
-        &mode_set_chroma,
-        true,
-        0,
-        &ArrayVec::<[CandidateMV; 9]>::new(),
-        AngleDelta { y: angle_delta_y, uv: angle_delta_uv },
-      );
+    for i in 0..luma_deltas {
+      let angle_delta_y =
+        if luma_deltas == 1 { 0 } else { i - MAX_ANGLE_DELTA as i8 };
+      let angle_delta_uv = if chroma_deltas == 1 { 0 } else { angle_delta_y };
+      best_angle_delta_y = angle_delta_rdo(angle_delta_y, angle_delta_uv);
     }
-    for j in 0..chroma_angle_delta_count {
-      let angle_delta_y: i8 = best.angle_delta.y;
-      let angle_delta_uv: i8 = if chroma_angle_delta_count == 1 {
-        0
-      } else {
-        j - MAX_ANGLE_DELTA as i8
-      };
-      if angle_delta_uv == best.angle_delta.uv {
-        continue;
-      }
-
-      luma_chroma_mode_rdo(
-        best.pred_mode_luma,
-        fi,
-        bsize,
-        tile_bo,
-        ts,
-        cw,
-        rdo_type,
-        cw_checkpoint,
-        &mut best,
-        mvs,
-        ref_frames,
-        &mode_set_chroma,
-        true,
-        0,
-        &ArrayVec::<[CandidateMV; 9]>::new(),
-        AngleDelta { y: angle_delta_y, uv: angle_delta_uv },
-      );
+    for j in 0..chroma_deltas {
+      let angle_delta_uv =
+        if chroma_deltas == 1 { 0 } else { j - MAX_ANGLE_DELTA as i8 };
+      angle_delta_rdo(best_angle_delta_y, angle_delta_uv);
     }
   }
 
