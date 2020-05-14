@@ -307,6 +307,34 @@ fn switch_frame_interval() {
   );
 }
 
+#[test]
+fn minimum_frame_delay() {
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    100,
+    8,
+    ChromaSampling::Cs420,
+    5,
+    5,
+    0,
+    true,
+    0,
+    true,
+    1,
+  );
+
+  let limit = 4; // 4 frames in for 1 frame out (delay of 3 frames)
+  send_frames(&mut ctx, limit, 0);
+
+  let data = get_frame_invariants(ctx)
+    .map(|fi| (fi.input_frameno, fi.frame_type))
+    .collect::<Vec<_>>();
+
+  assert_eq!(&data[..], &[(0, FrameType::KEY),][..]);
+}
+
 #[interpolate_test(0, 0)]
 #[interpolate_test(1, 1)]
 fn pyramid_level_low_latency_minus(missing: u64) {
