@@ -44,12 +44,14 @@ pub struct TilingInfo {
   pub min_tile_rows_log2: usize,
   pub max_tile_rows_log2: usize,
   pub sb_size_log2: usize,
+  pub min_tiles_log2: usize,
 }
 
 impl TilingInfo {
   pub fn from_target_tiles(
     sb_size_log2: usize, frame_width: usize, frame_height: usize,
     frame_rate: f64, tile_cols_log2: usize, tile_rows_log2: usize,
+    is_422_p: bool,
   ) -> Self {
     // <https://aomediacodec.github.io/av1-spec/#tile-info-syntax>
 
@@ -87,7 +89,26 @@ impl TilingInfo {
 
     let tile_cols_log2 =
       tile_cols_log2.max(min_tile_cols_log2).min(max_tile_cols_log2);
-    let tile_width_sb = sb_cols.align_power_of_two_and_shift(tile_cols_log2);
+    let tile_width_sb_pre =
+      sb_cols.align_power_of_two_and_shift(tile_cols_log2);
+
+    // If this is 4:2:2, our UV horizontal is subsampled but not our
+    // vertical.  Loop Restoration Units must be square, so they
+    // will always have an even number of horizontal superblocks. For
+    // tiles and LRUs to align, tile_width_sb must be even in 4:2:2
+    // video.
+
+    // This is only relevant when doing loop restoration RDO inline
+    // with block/superblock encoding, that is, where tiles are
+    // relevant.  If (when) we introduce optionally delaying loop-filter
+    // encode to after the partitioning loop, we won't need to make
+    // any 4:2:2 adjustment.
+
+    let tile_width_sb = if is_422_p {
+      (tile_width_sb_pre + 1) >> 1 << 1
+    } else {
+      tile_width_sb_pre
+    };
 
     let min_tile_rows_log2 = if min_tiles_log2 > tile_cols_log2 {
       min_tiles_log2 - tile_cols_log2
@@ -123,6 +144,7 @@ impl TilingInfo {
       min_tile_rows_log2,
       max_tile_rows_log2,
       sb_size_log2,
+      min_tiles_log2,
     }
   }
 
@@ -240,6 +262,7 @@ pub mod test {
       frame_rate,
       0,
       0,
+      false,
     );
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
@@ -253,6 +276,7 @@ pub mod test {
       frame_rate,
       1,
       1,
+      false,
     );
     assert_eq!(2, ti.cols);
     assert_eq!(2, ti.rows);
@@ -266,6 +290,7 @@ pub mod test {
       frame_rate,
       2,
       2,
+      false,
     );
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
@@ -280,6 +305,7 @@ pub mod test {
       frame_rate,
       10,
       8,
+      false,
     );
     assert_eq!(3, ti.cols);
     assert_eq!(3, ti.rows);
@@ -293,6 +319,7 @@ pub mod test {
       frame_rate,
       0,
       0,
+      false,
     );
     assert_eq!(1, ti.cols);
     assert_eq!(1, ti.rows);
@@ -336,6 +363,7 @@ pub mod test {
         frame_rate,
         1,
         1,
+        false,
       );
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(4, iter.len());
@@ -359,6 +387,7 @@ pub mod test {
         frame_rate,
         2,
         2,
+        false,
       );
       let mut iter = ti.tile_iter_mut(&mut fs, &mut fb);
       assert_eq!(9, iter.len());
@@ -406,6 +435,7 @@ pub mod test {
       fi.config.frame_rate(),
       2,
       2,
+      false,
     );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
@@ -484,6 +514,7 @@ pub mod test {
       fi.config.frame_rate(),
       2,
       2,
+      false,
     );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
@@ -524,6 +555,7 @@ pub mod test {
         fi.config.frame_rate(),
         2,
         2,
+        false,
       );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
@@ -588,6 +620,7 @@ pub mod test {
       fi.config.frame_rate(),
       2,
       2,
+      false,
     );
     let iter = ti.tile_iter_mut(&mut fs, &mut fb);
     let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
@@ -628,6 +661,7 @@ pub mod test {
         fi.config.frame_rate(),
         1,
         1,
+        false,
       );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
@@ -690,6 +724,7 @@ pub mod test {
         fi.config.frame_rate(),
         2,
         2,
+        false,
       );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tile_states = iter.map(|ctx| ctx.ts).collect::<Vec<_>>();
@@ -734,6 +769,7 @@ pub mod test {
         fi.config.frame_rate(),
         2,
         2,
+        false,
       );
       let iter = ti.tile_iter_mut(&mut fs, &mut fb);
       let mut tbs = iter.map(|ctx| ctx.tb).collect::<Vec<_>>();
