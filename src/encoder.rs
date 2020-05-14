@@ -609,6 +609,7 @@ impl<T: Pixel> FrameInvariants<T> {
       frame_rate,
       TilingInfo::tile_log2(1, config.tile_cols).unwrap(),
       TilingInfo::tile_log2(1, config.tile_rows).unwrap(),
+      sequence.chroma_sampling == ChromaSampling::Cs422,
     );
 
     if config.tiles > 0 {
@@ -624,6 +625,7 @@ impl<T: Pixel> FrameInvariants<T> {
           frame_rate,
           tile_cols_log2,
           tile_rows_log2,
+          sequence.chroma_sampling == ChromaSampling::Cs422,
         );
 
         if tiling.rows * tiling.cols >= config.tiles {
@@ -2626,7 +2628,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
-
   match partition {
     PartitionType::PARTITION_NONE => {
       let part_decision = if !rdo_output.part_modes.is_empty() {
