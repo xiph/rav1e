@@ -621,7 +621,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
   let do_rdo_tx_size =
     fi.tx_mode_select && fi.config.speed_settings.rdo_tx_decision && !is_inter;
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
-  let mut cw_checkpoint = None;
+  let mut cw_checkpoint: Option<ContextWriterCheckpoint> = None;
 
   for _ in 0..=rdo_tx_depth {
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
@@ -635,18 +635,22 @@ pub fn rdo_tx_size_type<T: Pixel>(
       return (best_tx_size, best_tx_type);
     };
 
-    if cw_checkpoint.is_none() {
-      // Only runs on the first iteration of the loop.
-      // Avoids creating the checkpoint if we early exit above.
-      cw_checkpoint = Some(cw.checkpoint());
-    }
-
     let tx_types =
       if do_rdo_tx_type { RAV1E_TX_TYPES } else { &[TxType::DCT_DCT] };
 
     // Luma plane transform type decision
     let (tx_type, rd_cost) = rdo_tx_type_decision(
-      fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, tx_size, tx_set,
+      fi,
+      ts,
+      cw,
+      &mut cw_checkpoint,
+      luma_mode,
+      ref_frames,
+      mvs,
+      bsize,
+      tile_bo,
+      tx_size,
+      tx_set,
       tx_types,
     );
 
@@ -663,7 +667,6 @@ pub fn rdo_tx_size_type<T: Pixel>(
     );
 
     let next_tx_size = sub_tx_size_map[tx_size as usize];
-    cw.rollback(cw_checkpoint.as_ref().unwrap());
 
     if next_tx_size == tx_size {
       break;
@@ -1505,12 +1508,15 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   }
 }
 
-// RDO-based transform type decision
+/// RDO-based transform type decision
+/// If cw_checkpoint is None, a checkpoint for cw's (ContextWriter) current
+/// state is created and stored for later use.
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, mode: PredictionMode, ref_frames: [RefType; 2],
-  mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
-  tx_size: TxSize, tx_set: TxSet, tx_types: &[TxType],
+  cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
+  mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+  bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
+  tx_types: &[TxType],
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -1521,7 +1527,11 @@ pub fn rdo_tx_type_decision<T: Pixel>(
 
   let is_inter = !mode.is_intra();
 
-  let cw_checkpoint = cw.checkpoint();
+  if cw_checkpoint.is_none() {
+    // Only run the first call
+    // Prevents creating multiple checkpoints for own version of cw
+    *cw_checkpoint = Some(cw.checkpoint());
+  }
 
   let rdo_type = if fi.use_tx_domain_distortion {
     RDOType::TxDistRealRate
@@ -1603,7 +1613,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       best_type = tx_type;
     }
 
-    cw.rollback(&cw_checkpoint);
+    cw.rollback(cw_checkpoint.as_ref().unwrap());
   }
 
   assert!(best_rd >= 0_f64);
