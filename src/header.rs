@@ -12,6 +12,8 @@ use crate::context::*;
 use crate::ec::*;
 use crate::lrf::*;
 use crate::partition::*;
+use crate::tiling::MAX_TILE_WIDTH;
+use crate::util::Fixed;
 use crate::util::Pixel;
 
 use crate::DeblockState;
@@ -670,25 +672,70 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(fi.disable_frame_end_update_cdf)?;
     }
 
-    // tile <https://aomediacodec.github.io/av1-spec/#tile-info-syntax>
-    self.write_bit(true)?; // uniform_tile_spacing_flag
+    // tile
+    // <https://aomediacodec.github.io/av1-spec/#tile-info-syntax>
 
+    // Can we use the uniform spacing tile syntax?  'Uniform spacing'
+    // is a slight misnomer; it's more constrained than just a uniform
+    // spacing.
     let ti = &fi.tiling;
 
-    let cols_ones = ti.tile_cols_log2 - ti.min_tile_cols_log2;
-    for _ in 0..cols_ones {
-      self.write_bit(true);
-    }
-    if ti.tile_cols_log2 < ti.max_tile_cols_log2 {
-      self.write_bit(false);
-    }
+    if fi.sb_width.align_power_of_two_and_shift(ti.tile_cols_log2)
+      == ti.tile_width_sb
+      && fi.sb_height.align_power_of_two_and_shift(ti.tile_rows_log2)
+        == ti.tile_height_sb
+    {
+      // yes; our actual tile width/height setting (which is always
+      // currently uniform) also matches the constrained width/height
+      // calculation implicit in the uniform spacing flag.
 
-    let rows_ones = ti.tile_rows_log2 - ti.min_tile_rows_log2;
-    for _ in 0..rows_ones {
-      self.write_bit(true);
-    }
-    if ti.tile_rows_log2 < ti.max_tile_rows_log2 {
-      self.write_bit(false);
+      self.write_bit(true)?; // uniform_tile_spacing_flag
+
+      let cols_ones = ti.tile_cols_log2 - ti.min_tile_cols_log2;
+      for _ in 0..cols_ones {
+        self.write_bit(true);
+      }
+      if ti.tile_cols_log2 < ti.max_tile_cols_log2 {
+        self.write_bit(false);
+      }
+
+      let rows_ones = ti.tile_rows_log2 - ti.min_tile_rows_log2;
+      for _ in 0..rows_ones {
+        self.write_bit(true);
+      }
+      if ti.tile_rows_log2 < ti.max_tile_rows_log2 {
+        self.write_bit(false);
+      }
+    } else {
+      self.write_bit(false)?; // uniform_tile_spacing_flag
+      let mut sofar = 0;
+      let mut widest_tile_sb = 0;
+      for _ in 0..ti.cols {
+        let max = (MAX_TILE_WIDTH
+          >> if fi.sequence.use_128x128_superblock { 7 } else { 6 })
+        .min(fi.sb_width - sofar) as u16;
+        let this_sb_width = ti.tile_width_sb.min(fi.sb_width - sofar);
+        self.write_quniform(max, (this_sb_width - 1) as u16);
+        sofar += this_sb_width;
+        widest_tile_sb = widest_tile_sb.max(this_sb_width);
+      }
+
+      let max_tile_area_sb = if ti.min_tiles_log2 > 0 {
+        (fi.sb_height * fi.sb_width) >> (ti.min_tiles_log2 + 1)
+      } else {
+        fi.sb_height * fi.sb_width
+      };
+
+      let max_tile_height_sb = (max_tile_area_sb / widest_tile_sb).max(1);
+
+      sofar = 0;
+      for i in 0..ti.rows {
+        let max = max_tile_height_sb.min(fi.sb_height - sofar) as u16;
+        let this_sb_height = ti.tile_height_sb.min(fi.sb_height - sofar);
+
+        self.write_quniform(max, (this_sb_height - 1) as u16);
+        sofar += this_sb_height;
+      }
     }
 
     let tiles_log2 = ti.tile_cols_log2 + ti.tile_rows_log2;
