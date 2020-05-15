@@ -391,7 +391,7 @@ jobs:
     - name: Install nasm
       run: |
         $NASM_VERSION="2.14.02"
-        curl -LO "https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
+        curl --ssl-no-revoke -LO "https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
         echo "::add-path::C:\nasm"
     - name: Set MSVC x86_64 linker path
