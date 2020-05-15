@@ -1191,7 +1191,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   });
 
-  let mut sorted = izip!(inter_mode_set, mvs_set, satds).collect::<Vec<_>>();
+  let mut sorted =
+    izip!(inter_mode_set, mvs_set, satds).collect::<ArrayVec<[_; 20]>>();
   if num_modes_rdo != sorted.len() {
     sorted.sort_by_key(|((_mode, _i), _mvs, satd)| *satd);
   }
