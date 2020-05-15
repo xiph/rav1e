@@ -398,7 +398,8 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
-  let cfg = Config { enc: cli.enc, threads: cli.threads };
+  let cfg =
+    Config::new().with_encoder_config(cli.enc).with_threads(cli.threads);
 
   #[cfg(feature = "serialize")]
   {

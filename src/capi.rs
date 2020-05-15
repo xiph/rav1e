@@ -349,7 +349,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
 /// Create a RaConfig filled with default parameters.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
-  let cfg = rav1e::Config { enc: rav1e::EncoderConfig::default(), threads: 0 };
+  let cfg = rav1e::Config::default();
 
   let c = Box::new(Config { cfg });
 
