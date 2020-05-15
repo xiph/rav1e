@@ -96,6 +96,34 @@ pub struct Config {
   pub enc: EncoderConfig,
   /// The number of threads in the threadpool.
   pub threads: usize,
+  _guard: (),
+}
+
+impl Config {
+  /// Create a default configuration
+  ///
+  /// same as Default::default()
+  pub fn new() -> Self {
+    Config::default()
+  }
+
+  /// Set the encoder configuration
+  ///
+  /// EncoderConfig contains the settings impacting the
+  /// codec features used in the produced bitstream.
+  pub fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
+    self.enc = enc;
+    self
+  }
+
+  /// Set the number of workers in the threadpool
+  ///
+  /// The threadpool is shared across all the different parallel
+  /// components in the encoder.
+  pub fn with_threads(mut self, threads: usize) -> Self {
+    self.threads = threads;
+    self
+  }
 }
 
 fn check_tile_log2(n: usize) -> bool {
