@@ -407,7 +407,7 @@ impl RCFrameMetrics {
   }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct RCSummary {
   ntus: i32,
   nframes: [i32; FRAME_NSUBTYPES + 1],
