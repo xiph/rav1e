@@ -18,7 +18,7 @@ jobs:
       run: |
         $NASM_VERSION="2.14.02"
         $NASM_LINK="https://www.nasm.us/pub/nasm/releasebuilds"
-        curl -LO "$NASM_LINK/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
+        curl  --ssl-no-revoke -LO "$NASM_LINK/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
         echo "::add-path::C:\nasm"
 
