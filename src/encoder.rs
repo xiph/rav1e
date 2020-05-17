@@ -1211,8 +1211,9 @@ pub fn encode_tx_block<T: Pixel>(
   );
 
   let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
+  let has_coeff: bool = eob != 0;
 
-  let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
+  if rdo_type.needs_coeff_rate() {
     cw.write_coeffs_lv_map(
       w,
       p,
@@ -1227,9 +1228,7 @@ pub fn encode_tx_block<T: Pixel>(
       ydec,
       fi.use_reduced_tx_set,
     )
-  } else {
-    true
-  };
+  }
 
   // Reconstruct
   dequantize(

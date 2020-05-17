@@ -4139,7 +4139,7 @@ impl<'a> ContextWriter<'a> {
     coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool,
-  ) -> bool {
+  ) {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
     //assert!(!is_inter);
     // Note: Both intra and inter mode uses inter scan order. Surprised?
@@ -4166,7 +4166,7 @@ impl<'a> ContextWriter<'a> {
 
     if eob == 0 {
       self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, 0);
-      return false;
+      return;
     }
 
     let mut levels_buf = [0u8; TX_PAD_2D];
@@ -4324,7 +4324,6 @@ impl<'a> ContextWriter<'a> {
     BlockContext::set_dc_sign(&mut cul_level, i32::cast_from(coeffs[0]));
 
     self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
-    true
   }
 
   pub const fn checkpoint(&self) -> ContextWriterCheckpoint {
