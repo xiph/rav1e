@@ -1298,8 +1298,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       };
 
       let ief_params = if fi.sequence.enable_intra_edge_filter {
-        let above_block_info = ts.above_block_info(tile_bo, 0);
-        let left_block_info = ts.left_block_info(tile_bo, 0);
+        let above_block_info = ts.above_block_info(tile_bo, 0, 0);
+        let left_block_info = ts.left_block_info(tile_bo, 0, 0);
         Some(IntraEdgeFilterParameters::new(
           0,
           above_block_info,
