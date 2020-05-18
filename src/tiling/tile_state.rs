@@ -229,55 +229,43 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     })
   }
 
+  /// Returns above block information for context during prediction.
+  /// If there is no above block, returns `None`.
+  /// `xdec` and `ydec` are the decimation factors of the targeted plane.
   pub fn above_block_info(
-    &self, bo: TileBlockOffset, plane: usize,
+    &self, bo: TileBlockOffset, xdec: usize, ydec: usize,
   ) -> Option<CodedBlockInfo> {
-    let (bo_x, bo_y) = (bo.0.x, bo.0.y);
-    if plane == 0 {
-      if bo_y == 0 {
-        None
-      } else {
-        Some(self.coded_block_info[bo_y - 1][bo_x])
-      }
+    let (mut bo_x, mut bo_y) = (bo.0.x, bo.0.y);
+    if bo_x & 1 == 0 {
+      bo_x += xdec
+    };
+    if bo_y & 1 == 1 {
+      bo_y -= ydec
+    };
+    if bo_y == 0 {
+      None
     } else {
-      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
-      if bo_x & 1 == 0 {
-        bo_x_uv += 1
-      };
-      if bo_y & 1 == 1 {
-        bo_y_uv -= 1
-      };
-      if bo_y_uv == 0 {
-        None
-      } else {
-        Some(self.coded_block_info[bo_y_uv - 1][bo_x_uv])
-      }
+      Some(self.coded_block_info[bo_y - 1][bo_x])
     }
   }
 
+  /// Returns left block information for context during prediction.
+  /// If there is no left block, returns `None`.
+  /// `xdec` and `ydec` are the decimation factors of the targeted plane.
   pub fn left_block_info(
-    &self, bo: TileBlockOffset, plane: usize,
+    &self, bo: TileBlockOffset, xdec: usize, ydec: usize,
   ) -> Option<CodedBlockInfo> {
-    let (bo_x, bo_y) = (bo.0.x, bo.0.y);
-    if plane == 0 {
-      if bo_x == 0 {
-        None
-      } else {
-        Some(self.coded_block_info[bo_y][bo_x - 1])
-      }
+    let (mut bo_x, mut bo_y) = (bo.0.x, bo.0.y);
+    if bo_x & 1 == 1 {
+      bo_x -= xdec
+    };
+    if bo_y & 1 == 0 {
+      bo_y += ydec
+    };
+    if bo_x == 0 {
+      None
     } else {
-      let (mut bo_x_uv, mut bo_y_uv) = (bo_x, bo_y);
-      if bo_x & 1 == 1 {
-        bo_x_uv -= 1
-      };
-      if bo_y & 1 == 0 {
-        bo_y_uv += 1
-      };
-      if bo_x_uv == 0 {
-        None
-      } else {
-        Some(self.coded_block_info[bo_y_uv][bo_x_uv - 1])
-      }
+      Some(self.coded_block_info[bo_y][bo_x - 1])
     }
   }
 }
