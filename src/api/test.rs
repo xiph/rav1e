@@ -1662,62 +1662,70 @@ fn zero_frames() {
 
 #[test]
 fn tile_cols_overflow() {
-  let mut config = Config::default();
-  config.enc.tile_cols = usize::max_value();
+  let mut enc = EncoderConfig::default();
+  enc.tile_cols = usize::max_value();
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn max_key_frame_interval_overflow() {
-  let mut config = Config::default();
-  config.enc.max_key_frame_interval = i32::max_value() as u64;
-  config.enc.reservoir_frame_delay = None;
+  let mut enc = EncoderConfig::default();
+  enc.max_key_frame_interval = i32::max_value() as u64;
+  enc.reservoir_frame_delay = None;
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn target_bitrate_overflow() {
-  let mut config = Config::default();
-  config.enc.bitrate = i32::max_value();
-  config.enc.time_base = Rational::new(i64::max_value() as u64, 1);
+  let mut enc = EncoderConfig::default();
+  enc.bitrate = i32::max_value();
+  enc.time_base = Rational::new(i64::max_value() as u64, 1);
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn time_base_den_divide_by_zero() {
-  let mut config = Config::default();
-  config.enc.time_base = Rational::new(1, 0);
+  let mut enc = EncoderConfig::default();
+  enc.time_base = Rational::new(1, 0);
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn large_width_assert() {
-  let mut config = Config::default();
-  config.enc.width = u32::max_value() as usize;
+  let mut enc = EncoderConfig::default();
+  enc.width = u32::max_value() as usize;
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn reservoir_max_overflow() {
-  let mut config = Config::default();
-  config.enc.reservoir_frame_delay = Some(i32::max_value());
-  config.enc.bitrate = i32::max_value();
-  config.enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
+  let mut enc = EncoderConfig::default();
+  enc.reservoir_frame_delay = Some(i32::max_value());
+  enc.bitrate = i32::max_value();
+  enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
+  let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn zero_width() {
-  let mut config = Config::default();
-  config.enc.width = 0;
+  let mut enc = EncoderConfig::default();
+  enc.width = 0;
+  let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());
 }
 
 #[test]
 fn rdo_lookahead_frames_overflow() {
-  let mut config = Config::default();
-  config.enc.rdo_lookahead_frames = usize::max_value();
+  let mut enc = EncoderConfig::default();
+  enc.rdo_lookahead_frames = usize::max_value();
+  let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());
 }

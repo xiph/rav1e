@@ -195,7 +195,9 @@ mod header;
 
 use crate::encoder::*;
 
-pub use crate::api::{Config, Context, EncoderStatus, InvalidConfig, Packet};
+pub use crate::api::{
+  Config, Context, EncoderConfig, EncoderStatus, InvalidConfig, Packet,
+};
 pub use crate::frame::Frame;
 pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 

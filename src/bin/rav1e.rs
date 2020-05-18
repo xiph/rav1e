@@ -406,7 +406,7 @@ fn run() -> Result<(), error::CliError> {
     if let Some(save_config) = cli.save_config {
       let mut out = File::create(save_config)
         .map_err(|e| e.context("Cannot create configuration file"))?;
-      let s = toml::to_string(&cfg.enc).unwrap();
+      let s = toml::to_string(&cli.enc).unwrap();
       out
         .write_all(s.as_bytes())
         .map_err(|e| e.context("Cannot write the configuration file"))?
@@ -429,7 +429,7 @@ fn run() -> Result<(), error::CliError> {
     video_info.chroma_sampling,
     video_info.bit_depth
   );
-  info!("Encoding settings: {}", cfg.enc);
+  info!("Encoding settings: {}", cli.enc);
 
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },

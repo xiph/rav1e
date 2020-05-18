@@ -12,12 +12,14 @@ use rav1e::config::SpeedSettings;
 use rav1e::*;
 
 fn main() {
-  let mut cfg = Config::default();
+  let mut enc = EncoderConfig::default();
 
-  cfg.enc.width = 64;
-  cfg.enc.height = 96;
+  enc.width = 64;
+  enc.height = 96;
 
-  cfg.enc.speed_settings = SpeedSettings::from_preset(9);
+  enc.speed_settings = SpeedSettings::from_preset(9);
+
+  let cfg = Config::new().with_encoder_config(enc);
 
   let mut ctx: Context<u16> = cfg.new_context().unwrap();
 
