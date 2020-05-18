@@ -154,6 +154,7 @@ unsafe fn dequantize_avx2(
 #[cfg(test)]
 mod test {
   use super::*;
+  use rand::distributions::{Distribution, Uniform};
   use rand::{thread_rng, Rng};
 
   #[test]
@@ -191,9 +192,10 @@ mod test {
         let mut rcoeffs = Aligned::new([0i16; 32 * 32]);
 
         // Generate quantized coefficients upto the eob
+        let between = Uniform::from(-std::i16::MAX..=std::i16::MAX);
         for (i, qcoeff) in qcoeffs.data.iter_mut().enumerate().take(eob) {
-          *qcoeff =
-            rng.gen::<i16>() / if i == 0 { dc_quant } else { ac_quant };
+          *qcoeff = between.sample(&mut rng)
+            / if i == 0 { dc_quant } else { ac_quant };
         }
 
         // Rely on quantize's internal tests
