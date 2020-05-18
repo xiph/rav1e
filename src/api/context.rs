@@ -265,10 +265,11 @@ impl<T: Pixel> Context<T> {
   ///     Ok(())
   /// }
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-  /// #     let mut cfg = Config::default();
+  /// #     let mut enc = EncoderConfig::default();
   /// #     // So it runs faster.
-  /// #     cfg.enc.width = 16;
-  /// #     cfg.enc.height = 16;
+  /// #     enc.width = 16;
+  /// #     enc.height = 16;
+  /// #     let cfg = Config::new().with_encoder_config(enc);
   /// #     let mut ctx: Context<u8> = cfg.new_context()?;
   /// #
   /// #     let frames = vec![ctx.new_frame(); 4].into_iter();

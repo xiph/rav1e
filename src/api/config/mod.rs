@@ -93,10 +93,9 @@ pub enum InvalidConfig {
 #[derive(Clone, Debug, Default)]
 pub struct Config {
   /// Settings which impact the produced bitstream.
-  pub enc: EncoderConfig,
+  pub(crate) enc: EncoderConfig,
   /// The number of threads in the threadpool.
-  pub threads: usize,
-  _guard: (),
+  pub(crate) threads: usize,
 }
 
 impl Config {
