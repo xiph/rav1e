@@ -1140,8 +1140,11 @@ pub fn encode_tx_block<T: Pixel>(
   let ief_params = if mode.is_directional()
     && fi.sequence.enable_intra_edge_filter
   {
-    let above_block_info = ts.above_block_info(tile_partition_bo, p);
-    let left_block_info = ts.left_block_info(tile_partition_bo, p);
+    let (plane_xdec, plane_ydec) = if p == 0 { (0, 0) } else { (xdec, ydec) };
+    let above_block_info =
+      ts.above_block_info(tile_partition_bo, plane_xdec, plane_ydec);
+    let left_block_info =
+      ts.left_block_info(tile_partition_bo, plane_xdec, plane_ydec);
     Some(IntraEdgeFilterParameters::new(p, above_block_info, left_block_info))
   } else {
     None
