@@ -58,6 +58,41 @@ struct Source<D: Decoder> {
 }
 
 impl<D: Decoder> Source<D> {
+  cfg_if::cfg_if! {
+    if #[cfg(all(unix, feature = "signal-hook"))] {
+      fn new(limit: usize, input: D) -> Self {
+        let exit_requested = {
+          use std::sync::atomic::*;
+          let e = Arc::new(AtomicBool::from(false));
+
+          fn setup_signal(sig: i32, e: Arc<AtomicBool>) {
+            unsafe {
+              signal_hook::register(sig, move || {
+                if e.load(Ordering::SeqCst) {
+                  std::process::exit(128 + sig);
+                }
+                e.store(true, Ordering::SeqCst);
+                info!("Exit requested, flushing.");
+              })
+              .expect("Cannot register the signal hooks");
+            }
+          }
+
+          setup_signal(signal_hook::SIGTERM, e.clone());
+          setup_signal(signal_hook::SIGQUIT, e.clone());
+          setup_signal(signal_hook::SIGINT, e.clone());
+
+          e
+        };
+        Self { limit, input, count: 0, exit_requested, }
+      }
+    } else {
+      fn new(limit: usize, input: D) -> Self {
+        Self { limit, input, count: 0, }
+      }
+    }
+  }
+
   fn read_frame<T: Pixel>(
     &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
   ) -> Result<(), CliError> {
@@ -446,36 +481,7 @@ fn run() -> Result<(), error::CliError> {
     };
   }
 
-  #[cfg(all(unix, feature = "signal-hook"))]
-  let exit_requested = {
-    use std::sync::atomic::*;
-    let e = Arc::new(AtomicBool::from(false));
-
-    fn setup_signal(sig: i32, e: Arc<AtomicBool>) {
-      unsafe {
-        signal_hook::register(sig, move || {
-          if e.load(Ordering::SeqCst) {
-            std::process::exit(128 + sig);
-          }
-          e.store(true, Ordering::SeqCst);
-          info!("Exit requested, flushing.");
-        })
-        .expect("Cannot register the signal hooks");
-      }
-    }
-
-    setup_signal(signal_hook::SIGTERM, e.clone());
-    setup_signal(signal_hook::SIGQUIT, e.clone());
-    setup_signal(signal_hook::SIGINT, e.clone());
-
-    e
-  };
-
-  #[cfg(all(unix, feature = "signal-hook"))]
-  let mut source =
-    Source { limit: cli.limit, input: y4m_dec, count: 0, exit_requested };
-  #[cfg(not(all(unix, feature = "signal-hook")))]
-  let mut source = Source { limit: cli.limit, input: y4m_dec, count: 0 };
+  let mut source = Source::new(cli.limit, y4m_dec);
 
   if video_info.bit_depth == 8 {
     do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
