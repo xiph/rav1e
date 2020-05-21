@@ -314,8 +314,7 @@ impl Config {
       return Err(InvalidRenderHeight(render_height));
     }
 
-    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
-    {
+    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
       return Err(InvalidRdoLookaheadFrames {
         actual: config.rdo_lookahead_frames,
         max: MAX_RDO_LOOKAHEAD_FRAMES,
