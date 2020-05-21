@@ -10,43 +10,23 @@
 
 #[derive(Debug, thiserror::Error)]
 pub enum CliError {
-  #[error("{msg}: {io}")]
-  Io { msg: String, io: std::io::Error },
-  #[error("{msg}: {status:?}")]
-  Enc { msg: String, status: rav1e::EncoderStatus },
-  #[error("{msg}: {status}")]
-  Config { msg: String, status: rav1e::InvalidConfig },
   #[error("Cannot parse option `{opt}`: {err}")]
   ParseInt { opt: String, err: std::num::ParseIntError },
   #[error("{msg}")]
-  Generic { msg: String },
+  Message { msg: String },
+  #[error("{msg}: {e}")]
+  Generic { msg: String, e: String },
 }
 
 impl CliError {
   pub fn new(msg: &str) -> CliError {
-    CliError::Generic { msg: msg.to_owned() }
+    CliError::Message { msg: msg.to_owned() }
   }
 }
 
-pub trait ToError {
-  fn context(self, msg: &str) -> CliError;
-}
-
-impl ToError for std::io::Error {
+pub trait ToError: std::error::Error + Sized {
   fn context(self, msg: &str) -> CliError {
-    CliError::Io { msg: msg.to_owned(), io: self }
-  }
-}
-
-impl ToError for rav1e::EncoderStatus {
-  fn context(self, msg: &str) -> CliError {
-    CliError::Enc { msg: msg.to_owned(), status: self }
-  }
-}
-
-impl ToError for rav1e::InvalidConfig {
-  fn context(self, msg: &str) -> CliError {
-    CliError::Config { msg: msg.to_owned(), status: self }
+    CliError::Generic { msg: msg.to_owned(), e: self.to_string() }
   }
 }
 
@@ -55,6 +35,10 @@ impl ToError for std::num::ParseIntError {
     CliError::ParseInt { opt: opt.to_lowercase(), err: self }
   }
 }
+
+impl ToError for std::io::Error {}
+impl ToError for rav1e::InvalidConfig {}
+impl ToError for rav1e::EncoderStatus {}
 
 pub fn print_error(e: &dyn std::error::Error) {
   error!("{}", e);
