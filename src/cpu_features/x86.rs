@@ -44,15 +44,14 @@ impl Default for CpuFeatureLevel {
         && is_x86_feature_detected!("avx512vl")
     }
     fn avx512icl_detected() -> bool {
-      false
-      // avx512_detected()
-      // && is_x86_feature_detected!("avx512bitalg")
-      // && is_x86_feature_detected!("avx512clmulqdq")
-      // && is_x86_feature_detected!("avx512ifma")
-      // && is_x86_feature_detected!("avx512vaes")
-      // && is_x86_feature_detected!("avx512vbmi")
-      // && is_x86_feature_detected!("avx512vbmi2")
-      // && is_x86_feature_detected!("avx512vpopcntdq")
+      avx512_detected()
+        && is_x86_feature_detected!("avx512bitalg")
+        && is_x86_feature_detected!("avx512vpclmulqdq")
+        && is_x86_feature_detected!("avx512ifma")
+        && is_x86_feature_detected!("avx512vaes")
+        && is_x86_feature_detected!("avx512vbmi")
+        && is_x86_feature_detected!("avx512vbmi2")
+        && is_x86_feature_detected!("avx512vpopcntdq")
     }
 
     let detected: CpuFeatureLevel = if avx512icl_detected() {
