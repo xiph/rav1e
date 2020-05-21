@@ -376,7 +376,7 @@ impl<T: Pixel> ContextInner<T> {
   /// in order for FI lookahead to be full.
   pub fn needs_more_fi_lookahead(&self) -> bool {
     let ready_frames = self.get_rdo_lookahead_frames().count();
-    ready_frames < self.config.rdo_lookahead_frames + 1
+    ready_frames < self.config.rdo_lookahead_frames + 2
       && self.needs_more_frames(self.next_lookahead_frame)
   }
 
@@ -394,7 +394,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno < self.output_frameno
       })
       .filter(|(_, data)| !data.fi.invalid && !data.fi.show_existing_frame)
-      .take(self.config.rdo_lookahead_frames + 1)
+      .take(self.config.rdo_lookahead_frames + 2)
   }
 
   fn next_keyframe_input_frameno(

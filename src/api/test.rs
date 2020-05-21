@@ -1590,8 +1590,8 @@ struct LookaheadTestExpectations {
 }
 
 #[test]
-fn lookahead_size_properly_bounded_8() {
-  const LOOKAHEAD_SIZE: usize = 8;
+fn lookahead_size_properly_bounded_7() {
+  const LOOKAHEAD_SIZE: usize = 7;
   const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
     pre_receive_frame_q_lens: [
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -1622,8 +1622,8 @@ fn lookahead_size_properly_bounded_8() {
 }
 
 #[test]
-fn lookahead_size_properly_bounded_10() {
-  const LOOKAHEAD_SIZE: usize = 10;
+fn lookahead_size_properly_bounded_9() {
+  const LOOKAHEAD_SIZE: usize = 9;
   const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
     pre_receive_frame_q_lens: [
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -1654,8 +1654,8 @@ fn lookahead_size_properly_bounded_10() {
 }
 
 #[test]
-fn lookahead_size_properly_bounded_16() {
-  const LOOKAHEAD_SIZE: usize = 16;
+fn lookahead_size_properly_bounded_15() {
+  const LOOKAHEAD_SIZE: usize = 15;
   const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
     pre_receive_frame_q_lens: [
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -1686,8 +1686,8 @@ fn lookahead_size_properly_bounded_16() {
 }
 
 #[test]
-fn lookahead_size_properly_bounded_lowlatency_8() {
-  const LOOKAHEAD_SIZE: usize = 8;
+fn lookahead_size_properly_bounded_lowlatency_7() {
+  const LOOKAHEAD_SIZE: usize = 7;
   const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
     pre_receive_frame_q_lens: [
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 13, 13, 13, 13, 13,
@@ -1717,8 +1717,8 @@ fn lookahead_size_properly_bounded_lowlatency_8() {
 }
 
 #[test]
-fn lookahead_size_properly_bounded_lowlatency_1() {
-  const LOOKAHEAD_SIZE: usize = 1;
+fn lookahead_size_properly_bounded_lowlatency_0() {
+  const LOOKAHEAD_SIZE: usize = 0;
   const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
     pre_receive_frame_q_lens: [
       1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
