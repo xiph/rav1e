@@ -234,27 +234,13 @@ fn process_frame<T: Pixel, D: Decoder>(
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
-  output: &mut dyn Muxer, source: &mut Source<D>,
-  pass1file_name: Option<&String>, pass2file_name: Option<&String>,
+  output: &mut dyn Muxer, source: &mut Source<D>, mut pass1file: Option<File>,
+  mut pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
   metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
   let mut ctx: Context<T> =
     cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
-
-  let mut pass2file = match pass2file_name {
-    Some(f) => Some(File::open(f).map_err(|e| {
-      e.context("Unable to open file for reading two-pass data")
-    })?),
-    None => None,
-  };
-  // panic!(, f)
-  let mut pass1file = match pass1file_name {
-    Some(f) => Some(File::create(f).map_err(|e| {
-      e.context("Unable to open file for writing two-pass data")
-    })?),
-    None => None,
-  };
 
   let mut buffer: [u8; 80] = [0; 80];
   let mut buf_pos = 0;
@@ -433,6 +419,20 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
+  let pass2file = match cli.pass2file_name {
+    Some(f) => Some(File::open(f).map_err(|e| {
+      e.context("Unable to open file for reading two-pass data")
+    })?),
+    None => None,
+  };
+
+  let pass1file = match cli.pass1file_name {
+    Some(f) => Some(File::create(f).map_err(|e| {
+      e.context("Unable to open file for writing two-pass data")
+    })?),
+    None => None,
+  };
+
   let cfg =
     Config::new().with_encoder_config(cli.enc).with_threads(cli.threads);
 
@@ -490,8 +490,8 @@ fn run() -> Result<(), error::CliError> {
       progress,
       &mut *cli.io.output,
       &mut source,
-      cli.pass1file_name.as_ref(),
-      cli.pass2file_name.as_ref(),
+      pass1file,
+      pass2file,
       y4m_enc,
       cli.metrics_enabled,
     )?
@@ -502,8 +502,8 @@ fn run() -> Result<(), error::CliError> {
       progress,
       &mut *cli.io.output,
       &mut source,
-      cli.pass1file_name.as_ref(),
-      cli.pass2file_name.as_ref(),
+      pass1file,
+      pass2file,
       y4m_enc,
       cli.metrics_enabled,
     )?
