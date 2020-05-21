@@ -1520,7 +1520,7 @@ fn lookahead_size_properly_bounded_8() {
       14, 19, 19,
     ],
   };
-  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, false, &EXPECTATIONS);
 }
 
 #[test]
@@ -1552,7 +1552,7 @@ fn lookahead_size_properly_bounded_10() {
       19, 19, 19,
     ],
   };
-  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, false, &EXPECTATIONS);
 }
 
 #[test]
@@ -1584,11 +1584,71 @@ fn lookahead_size_properly_bounded_16() {
       26, 31, 31,
     ],
   };
-  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, &EXPECTATIONS);
+  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, false, &EXPECTATIONS);
+}
+
+#[test]
+fn lookahead_size_properly_bounded_lowlatency_8() {
+  const LOOKAHEAD_SIZE: usize = 8;
+  const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+    pre_receive_frame_q_lens: [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 13, 13, 13, 13, 13, 13, 13,
+      13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+      13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+      13, 13, 13, 13,
+    ],
+    pre_receive_fi_lens: [
+      0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+      10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+      10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+      10, 10, 10,
+    ],
+    post_receive_frame_q_lens: [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12, 12, 12,
+      12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
+      12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
+      12, 12, 12, 12,
+    ],
+    post_receive_fi_lens: [
+      0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+      9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+      9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
+    ],
+  };
+  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, true, &EXPECTATIONS);
+}
+
+#[test]
+fn lookahead_size_properly_bounded_lowlatency_1() {
+  const LOOKAHEAD_SIZE: usize = 1;
+  const EXPECTATIONS: LookaheadTestExpectations = LookaheadTestExpectations {
+    pre_receive_frame_q_lens: [
+      1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+      6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+      6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+    ],
+    pre_receive_fi_lens: [
+      0, 0, 0, 1, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    ],
+    post_receive_frame_q_lens: [
+      1, 2, 3, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+      5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+      5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+    ],
+    post_receive_fi_lens: [
+      0, 0, 0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+      2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    ],
+  };
+  lookahead_size_properly_bounded(LOOKAHEAD_SIZE, true, &EXPECTATIONS);
 }
 
 fn lookahead_size_properly_bounded(
-  rdo_lookahead: usize, expectations: &LookaheadTestExpectations,
+  rdo_lookahead: usize, low_latency: bool,
+  expectations: &LookaheadTestExpectations,
 ) {
   // Test that lookahead reads in the proper number of frames at once
 
@@ -1602,7 +1662,7 @@ fn lookahead_size_properly_bounded(
     0,
     100,
     0,
-    false,
+    low_latency,
     0,
     true,
     rdo_lookahead,
@@ -1610,29 +1670,36 @@ fn lookahead_size_properly_bounded(
 
   const LIMIT: usize = 60;
 
+  let mut pre_receive_frame_q_lens = [0; LIMIT];
+  let mut pre_receive_fi_lens = [0; LIMIT];
+  let mut post_receive_frame_q_lens = [0; LIMIT];
+  let mut post_receive_fi_lens = [0; LIMIT];
+
   for i in 0..LIMIT {
     let input = ctx.new_frame();
     let _ = ctx.send_frame(input);
-    assert_eq!(
-      ctx.inner.frame_q.len(),
-      expectations.pre_receive_frame_q_lens[i]
-    );
-    assert_eq!(
-      ctx.inner.frame_data.len(),
-      expectations.pre_receive_fi_lens[i]
-    );
+    pre_receive_frame_q_lens[i] = ctx.inner.frame_q.len();
+    pre_receive_fi_lens[i] = ctx.inner.frame_data.len();
     while ctx.receive_packet().is_ok() {
       // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
     }
-    assert_eq!(
-      ctx.inner.frame_q.len(),
-      expectations.post_receive_frame_q_lens[i]
-    );
-    assert_eq!(
-      ctx.inner.frame_data.len(),
-      expectations.post_receive_fi_lens[i]
-    );
+    post_receive_frame_q_lens[i] = ctx.inner.frame_q.len();
+    post_receive_fi_lens[i] = ctx.inner.frame_data.len();
   }
+
+  assert_eq!(
+    &pre_receive_frame_q_lens[..],
+    &expectations.pre_receive_frame_q_lens[..]
+  );
+  assert_eq!(&pre_receive_fi_lens[..], &expectations.pre_receive_fi_lens[..]);
+  assert_eq!(
+    &post_receive_frame_q_lens[..],
+    &expectations.post_receive_frame_q_lens[..]
+  );
+  assert_eq!(
+    &post_receive_fi_lens[..],
+    &expectations.post_receive_fi_lens[..]
+  );
 
   ctx.flush();
   let end = ctx.inner.frame_q.get(&(LIMIT as u64));

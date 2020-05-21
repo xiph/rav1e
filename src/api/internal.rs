@@ -186,7 +186,7 @@ impl InterConfig {
   }
 
   pub(crate) fn keyframe_lookahead_distance(&self) -> u64 {
-    cmp::max(1, self.max_reordering_latency()) + 1
+    self.max_reordering_latency() + 1
   }
 
   pub(crate) fn allowed_ref_frames(&self) -> &[RefType] {
