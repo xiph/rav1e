@@ -15,7 +15,7 @@ use crate::decoder::{DecodeError, Decoder, VideoDetails};
 use crate::Frame;
 use rav1e::prelude::*;
 
-impl Decoder for y4m::Decoder<'_, Box<dyn Read>> {
+impl Decoder for y4m::Decoder<Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
     let width = self.get_width();
     let height = self.get_height();
@@ -78,7 +78,7 @@ impl From<y4m::Error> for DecodeError {
       y4m::Error::EOF => DecodeError::EOF,
       y4m::Error::BadInput => DecodeError::BadInput,
       y4m::Error::UnknownColorspace => DecodeError::UnknownColorspace,
-      y4m::Error::ParseError => DecodeError::ParseError,
+      y4m::Error::ParseError(_) => DecodeError::ParseError,
       y4m::Error::IoError(e) => DecodeError::IoError(e),
       // Note that this error code has nothing to do with the system running out of memory,
       // it means the y4m decoder has exceeded its memory allocation limit.

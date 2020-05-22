@@ -58,7 +58,7 @@ bitstream-io = "0.8"
 cfg-if = "0.1"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
-y4m = { version = "0.5", optional = true }
+y4m = { version = "0.6", optional = true }
 backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
 num-derive = "0.3"
