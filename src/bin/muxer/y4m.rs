@@ -13,7 +13,7 @@ use std::io::Write;
 use std::slice;
 
 pub fn write_y4m_frame<T: Pixel>(
-  y4m_enc: &mut y4m::Encoder<'_, Box<dyn Write>>, rec: &Frame<T>,
+  y4m_enc: &mut y4m::Encoder<Box<dyn Write>>, rec: &Frame<T>,
   y4m_details: VideoDetails,
 ) {
   let planes =

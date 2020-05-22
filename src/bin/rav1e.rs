@@ -132,7 +132,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
   buffer: &mut [u8], buf_pos: &mut usize,
-  mut y4m_enc: Option<&mut y4m::Encoder<'_, Box<dyn Write>>>,
+  mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write>>>,
   metrics_cli: MetricsEnabled,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
   let y4m_details = source.input.get_video_details();
@@ -236,7 +236,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
   output: &mut dyn Muxer, source: &mut Source<D>, mut pass1file: Option<File>,
   mut pass2file: Option<File>,
-  mut y4m_enc: Option<y4m::Encoder<'_, Box<dyn Write>>>,
+  mut y4m_enc: Option<y4m::Encoder<Box<dyn Write>>>,
   metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
   let mut ctx: Context<T> =
