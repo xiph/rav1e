@@ -163,6 +163,14 @@ jobs:
     - name: Install packages
       run: |
         sudo dpkg -i ~/.cache/debs/*.deb
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      env:
+        LINK: https://github.com/lu-zero/cargo-c/releases/download
+        CARGO_C_VERSION: 0.6.5
+      run: |
+        curl -LO "$LINK/v$CARGO_C_VERSION/cargo-c-linux.zip"
+        unzip cargo-c-linux.zip -d $HOME/.cargo/bin
     - name: Install grcov
       if: matrix.conf == 'grcov-coveralls'
       env:
@@ -237,10 +245,6 @@ jobs:
       if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
       run: |
         cargo check --features=capi,dump_lookahead_data,serialize
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo install cargo-c
     - name: Run cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
@@ -383,16 +387,18 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install sccache
       run: |
-        $LINK="https://github.com/mozilla/sccache/releases/download/0.2.12"
-        $SCCACHE_FILE="sccache-0.2.12-x86_64-pc-windows-msvc"
+        $LINK = "https://github.com/mozilla/sccache/releases/download/0.2.12"
+        $SCCACHE_FILE = "sccache-0.2.12-x86_64-pc-windows-msvc"
         curl -LO "$LINK/$SCCACHE_FILE.tar.gz"
         tar xzf "$SCCACHE_FILE.tar.gz"
         echo "::add-path::$Env:GITHUB_WORKSPACE/$SCCACHE_FILE"
     - name: Install nasm
       run: |
         $NASM_VERSION="2.14.02"
-        curl --ssl-no-revoke -LO "https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
-        7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
+        $LINK = "https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
+        $NASM_FILE = "nasm-$NASM_VERSION-win64"
+        curl --ssl-no-revoke -LO "$LINK/$NASM_FILE.zip"
+        7z e -y "$NASM_FILE.zip" -o"C:\nasm"
         echo "::add-path::C:\nasm"
     - name: Set MSVC x86_64 linker path
       run: |
@@ -406,6 +412,13 @@ jobs:
         profile: minimal
         toolchain: ${{ matrix.toolchain }}
         override: true
+    - name: Install cargo-c
+      if: matrix.conf == 'cargo-c'
+      run: |
+        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.6.5"
+        $CARGO_C_FILE = "cargo-c-windows-msvc"
+        curl -LO "$LINK/$CARGO_C_FILE.zip"
+        7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
     - name: Generate Cargo.lock and Cargo.version
       run: |
         cargo update
@@ -437,10 +450,6 @@ jobs:
       if: matrix.conf == 'cargo-test'
       run: |
         cargo test --verbose
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo install cargo-c
     - name: Run cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
