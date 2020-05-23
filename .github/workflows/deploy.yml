@@ -7,7 +7,19 @@ on:
       - 'p*'
 
 jobs:
-  deploy-windows-binaries:
+
+  windows-binaries:
+
+    strategy:
+      matrix:
+        conf:
+         - msvc
+         - gnu
+        include:
+         - conf: msvc
+           toolchain: stable
+         - conf: gnu
+           toolchain: stable-x86_64-pc-windows-gnu
 
     runs-on: windows-latest
 
@@ -17,27 +29,45 @@ jobs:
     - name: Install nasm
       run: |
         $NASM_VERSION="2.14.02"
-        $NASM_LINK="https://www.nasm.us/pub/nasm/releasebuilds"
-        curl  --ssl-no-revoke -LO "$NASM_LINK/$NASM_VERSION/win64/nasm-$NASM_VERSION-win64.zip"
+        $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
+        curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
         echo "::add-path::C:\nasm"
 
-    - name: Install Rust
+    - name: Install cargo-c
+      run: |
+        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.6.5"
+        $CARGO_C_FILE = "cargo-c-windows-msvc"
+        curl -LO "$LINK/$CARGO_C_FILE.zip"
+        7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
+
+    - name: Set environment variables
+      if: matrix.conf == 'msvc'
+      run: |
+        $VsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+        echo "::add-path::$VsPath;C:\nasm"
+
+    - name: Set MSVC x86_64 linker path
+      if: matrix.conf == 'msvc'
+      run: |
+        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
+        $LinkPath = vswhere -latest -products * -find "$LinkGlob" |
+                    Select-Object -Last 1
+        echo "::add-path::$LinkPath"
+
+    - name: Install stable
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable-x86_64-pc-windows-gnu
+        toolchain: ${{ matrix.toolchain }}
         override: true
-
-    - name: Install cargo-c
-      run: |
-        cargo install cargo-c
 
     - name: Build rav1e
       run: |
         cargo build --release
 
-    - name: Strip rav1e binary
+    - name: Strip rav1e gnu-binary
+      if: matrix.conf == 'gnu'
       run: |
         strip target/release/rav1e.exe
 
@@ -47,7 +77,7 @@ jobs:
 
     - name: Rename cargo-c folder
       run: |
-        Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-sdk"
+        Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -60,13 +90,238 @@ jobs:
     - name: Package pre-release binaries
       if: startsWith(github.ref, 'refs/tags/p')
       run: |
-        7z a rav1e-windows.zip "C:\usr\rav1e-windows-sdk"
+        7z a rav1e-windows-${{ matrix.conf }}.zip `
+             "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Package release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
-        7z a rav1e-${{ steps.tagName.outputs.version }}-windows.zip `
-             "C:\usr\rav1e-windows-sdk"
+        $ZIP_PREFIX = "rav1e-${{ steps.tagName.outputs.version }}-windows"
+        7z a "$ZIP_PREFIX-${{ matrix.conf }}.zip" `
+             "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
+
+    - name: Upload rav1e msvc binary
+      if: matrix.conf == 'msvc'
+      uses: actions/upload-artifact@v2
+      with:
+        path: target/release/rav1e.exe
+
+    - name: Upload pre-release binaries
+      if: startsWith(github.ref, 'refs/tags/p')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-windows-${{ matrix.conf }}.zip
+
+    - name: Upload release binaries
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
+
+
+  linux-binaries:
+
+    strategy:
+      matrix:
+        target:
+         - x86_64-unknown-linux-musl
+         - aarch64-unknown-linux-musl
+         - wasm32-unknown-unknown
+        include:
+         - target: x86_64-unknown-linux-musl
+           name: linux
+           binaries: rav1e
+           strip: strip
+         - target: aarch64-unknown-linux-musl
+           name: aarch64-linux
+           binaries: rav1e
+           strip: aarch64-linux-gnu-strip
+         - target: wasm32-unknown-unknown
+           name: wasm32-linux
+           binaries: librav1e.a rav1e.wasm
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install nasm
+      if: matrix.target == 'x86_64-unknown-linux-musl'
+      env:
+        LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
+        NASM_VERSION: 2.14.02-1
+        NASM_SHA256: >-
+          5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
+      run: |
+        curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
+        echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
+        sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
+
+    - name: Install musl tools
+      if: matrix.target != 'wasm32-unknown-unknown'
+      run: |
+        sudo apt-get install musl-tools
+
+    - name: Install aarch64 tools
+      if: matrix.target == 'aarch64-unknown-linux-musl'
+      run: |
+        sudo apt-get install binutils-aarch64-linux-gnu
+
+    - name: Install ${{ matrix.target }} target
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        target: ${{ matrix.target }}
+        override: true
+
+    - name: Install cross
+      if: matrix.target == 'aarch64-unknown-linux-musl'
+      env:
+        LINK: https://github.com/rust-embedded/cross/releases/download
+        CROSS_VERSION: 0.2.0
+        CROSS_FILE: cross-v0.2.0-x86_64-unknown-linux-musl
+      run: |
+        curl -L "$LINK/v$CROSS_VERSION/$CROSS_FILE.tar.gz" |
+        tar xz -C $HOME/.cargo/bin
+
+    - name: Build rav1e for aarch64-musl
+      if: matrix.target == 'aarch64-unknown-linux-musl'
+      run: |
+        cross build --target ${{ matrix.target }} --release
+
+    - name: Build rav1e
+      if: matrix.target != 'aarch64-unknown-linux-musl'
+      run: |
+        cargo build --target ${{ matrix.target }} --release
+
+    - name: Strip musl rav1e
+      if: matrix.target != 'wasm32-unknown-unknown'
+      run: |
+        ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
+
+    - name: Get the version
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: tagName
+      run: |
+        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+        echo "::set-output name=version::$VERSION"
+
+    - name: Create a pre-release tar
+      if: startsWith(github.ref, 'refs/tags/p')
+      run: |
+        cd target/${{ matrix.target }}/release
+        tar -czvf $GITHUB_WORKSPACE/rav1e-${{ matrix.name }}.tar.gz \
+                  ${{ matrix.binaries }}
+
+    - name: Create a release tar
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        TAR_FILE=rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}
+        cd target/${{ matrix.target }}/release
+        tar -czvf $GITHUB_WORKSPACE/$TAR_FILE.tar.gz ${{ matrix.binaries }}
+
+    - name: Upload pre-release binaries
+      if: startsWith(github.ref, 'refs/tags/p')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-${{ matrix.name }}.tar.gz
+
+    - name: Upload release binaries
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
+
+  macos-binaries:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Install nasm
+      run: |
+        brew install nasm
+
+    - name: Install stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build rav1e
+      run: |
+        cargo build --release
+
+    - name: Strip rav1e
+      run: |
+        strip target/release/rav1e
+
+    - name: Get the version
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: tagName
+      run: |
+        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+        echo "::set-output name=version::$VERSION"
+
+    - name: Create a pre-release zip
+      if: startsWith(github.ref, 'refs/tags/p')
+      run: |
+        cd target/release
+        zip -9 $GITHUB_WORKSPACE/rav1e-macos.zip rav1e
+
+    - name: Create a release zip
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        ZIP_FILE=rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+        cd target/release
+        zip -9 $GITHUB_WORKSPACE/$ZIP_FILE rav1e
+
+    - name: Upload pre-release binaries
+      if: startsWith(github.ref, 'refs/tags/p')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-macos.zip
+
+    - name: Upload release binaries
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/upload-artifact@v2
+      with:
+        path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+
+  deploy:
+
+    needs: [windows-binaries, linux-binaries, macos-binaries]
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Download artifacts
+      uses: actions/download-artifact@v2
+      with:
+        name: artifact
+
+    - name: Install Rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Create Cargo.lock
+      run: |
+        cargo update
+
+    - name: Get the version
+      if: startsWith(github.ref, 'refs/tags/v')
+      id: tagName
+      run: |
+        VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
+        echo "::set-output name=version::$VERSION"
 
     - name: Create a pre-release
       if: startsWith(github.ref, 'refs/tags/p')
@@ -76,8 +331,13 @@ jobs:
         prerelease: true
         files: |
           Cargo.lock
-          rav1e-windows.zip
-          target/release/rav1e.exe
+          rav1e.exe
+          rav1e-linux.tar.gz
+          rav1e-aarch64-linux.tar.gz
+          rav1e-wasm32-linux.tar.gz
+          rav1e-macos.zip
+          rav1e-windows-msvc.zip
+          rav1e-windows-gnu.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -88,7 +348,12 @@ jobs:
         name: v${{ steps.tagName.outputs.version }}
         files: |
           Cargo.lock
-          rav1e-${{ steps.tagName.outputs.version }}-windows.zip
-          target/release/rav1e.exe
+          rav1e.exe
+          rav1e-${{ steps.tagName.outputs.version }}-linux.tar.gz
+          rav1e-${{ steps.tagName.outputs.version }}-aarch64-linux.tar.gz
+          rav1e-${{ steps.tagName.outputs.version }}-wasm32-linux.tar.gz
+          rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
