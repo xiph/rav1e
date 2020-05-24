@@ -1071,11 +1071,9 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     for &x in RAV1E_INTER_MODES_MINIMAL {
       inter_mode_set.push((x, i));
     }
-    if !mv_stack.is_empty() {
-      inter_mode_set.push((PredictionMode::NEAR0MV, i));
-    }
+    inter_mode_set.push((PredictionMode::GLOBALMV, i));
     if mv_stack.len() >= 2 {
-      inter_mode_set.push((PredictionMode::GLOBALMV, i));
+      inter_mode_set.push((PredictionMode::NEAR0MV, i));
     }
     let include_near_mvs = fi.config.speed_settings.include_near_mvs;
     if include_near_mvs {
