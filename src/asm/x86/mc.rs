@@ -410,7 +410,7 @@ mod test {
   use std::str::FromStr;
 
   macro_rules! test_put_fns {
-    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:literal, $BD:expr) => {
+    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
       $(
         paste::item! {
           #[test]
@@ -497,7 +497,7 @@ mod test {
   );
 
   macro_rules! test_prep_fns {
-    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:literal, $BD:expr) => {
+    ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
       $(
         paste::item! {
           #[test]
