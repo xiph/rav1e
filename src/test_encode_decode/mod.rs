@@ -11,7 +11,6 @@
 #![cfg_attr(fuzzing, allow(unused))]
 
 use crate::color::ChromaSampling;
-use crate::config::*;
 use crate::util::Pixel;
 use crate::*;
 use interpolate_name::interpolate_test;
