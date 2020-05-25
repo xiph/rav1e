@@ -44,7 +44,7 @@ pub fn inverse_transform_add<T: Pixel>(
 
 macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
-  ([$([$(($ENUM:pat, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
+  ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
    $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
       // For each tx type, declare an function for the current WxH
