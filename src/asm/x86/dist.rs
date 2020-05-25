@@ -443,7 +443,7 @@ mod test {
   use std::str::FromStr;
 
   macro_rules! test_dist_fns {
-    ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:literal) => {
+    ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:tt) => {
       $(
         paste::item! {
           #[test]
