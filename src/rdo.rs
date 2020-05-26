@@ -45,6 +45,7 @@ use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
 use std::fmt;
+use v_frame::math::*;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum RDOType {
@@ -237,27 +238,41 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   compute_bias: F,
 ) -> Distortion {
-  assert!(w & (MI_SIZE - 1) == 0);
-  assert!(h & (MI_SIZE - 1) == 0);
-
-  // To bias the distortion correctly, compute it in blocks up to the size
+  // To bias the distortion correctly, compute it in blocks up to the
   // importance block size in a non-subsampled plane.
-  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w << src1.plane_cfg.xdec);
-  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h << src1.plane_cfg.ydec);
+  let imp_block_w = IMPORTANCE_BLOCK_SIZE
+    .min((w << src1.plane_cfg.xdec).align_power_of_two(2));
+  let imp_block_h = IMPORTANCE_BLOCK_SIZE
+    .min((h << src1.plane_cfg.ydec).align_power_of_two(2));
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
+  let is_w4 = w == w.align_power_of_two(2);
+  let is_h4 = h == h.align_power_of_two(2);
+  let n_imp_blocks_w = (w + (block_w >> 1)) / block_w;
+  let n_imp_blocks_h = (h + (block_h >> 1)) / block_h;
+  let mut biased_sse = Distortion::zero();
 
-  let mut sse = Distortion::zero();
-  for block_y in 0..h / block_h {
-    for block_x in 0..w / block_w {
-      let mut value = 0;
+  for block_y in 0..n_imp_blocks_h {
+    let vis_bh = if block_y == n_imp_blocks_h - 1 && !is_h4 {
+      h - block_y * block_h
+    } else {
+      block_h
+    };
+    for block_x in 0..n_imp_blocks_w {
+      let mut imp_blk_sse = 0;
+      let vis_bw = if block_x == n_imp_blocks_w - 1 && !is_w4 {
+        w - block_x * block_w
+      } else {
+        block_w
+      };
+      let src_offset_x = block_x * block_w;
 
-      for j in 0..block_h {
-        let s1 = &src1[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
-        let s2 = &src2[block_y * block_h + j]
-          [block_x * block_w..(block_x + 1) * block_w];
+      for j in 0..vis_bh {
+        let s1 =
+          &src1[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
+        let s2 =
+          &src2[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
 
         let row_sse = s1
           .iter()
@@ -267,7 +282,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
             (c * c) as u32
           })
           .sum::<u32>();
-        value += row_sse as u64;
+        imp_blk_sse += row_sse as u64;
       }
 
       let bias = compute_bias(
@@ -278,10 +293,35 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
         },
         imp_bsize,
       );
-      sse += RawDistortion::new(value) * bias;
+      biased_sse += RawDistortion::new(imp_blk_sse) * bias;
     }
   }
-  sse
+  biased_sse
+}
+
+pub fn clip_visible_bsize(
+  frame_w: usize, frame_h: usize, bsize: BlockSize, x: usize, y: usize,
+) -> (usize, usize) {
+  let blk_w = bsize.width();
+  let blk_h = bsize.height();
+
+  let visible_w: usize = if x + blk_w <= frame_w {
+    blk_w
+  } else if x >= frame_w {
+    0
+  } else {
+    frame_w - x
+  };
+
+  let visible_h: usize = if y + blk_h <= frame_h {
+    blk_h
+  } else if y >= frame_h {
+    0
+  } else {
+    frame_h - y
+  };
+
+  (visible_w, visible_h)
 }
 
 // Compute the pixel-domain distortion for an encode
@@ -292,13 +332,33 @@ fn compute_distortion<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
+
+  // clip a block to have visible pixles only
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  let (visible_w, visible_h) = clip_visible_bsize(
+    fi.width,
+    fi.height,
+    bsize,
+    frame_bo.0.x << MI_SIZE_LOG2,
+    frame_bo.0.y << MI_SIZE_LOG2,
+  );
+
+  if visible_w == 0 || visible_h == 0 {
+    return ScaledDistortion::zero();
+  }
+
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
+    Tune::Psychovisual
+      if bsize.width() >= 8
+        && bsize.height() >= 8
+        && (visible_w & 0x7 == 0)
+        && (visible_h & 0x7 == 0) =>
+    {
       cdef_dist_wxh(
         &input_region,
         &rec_region,
-        bsize.width(),
-        bsize.height(),
+        visible_w,
+        visible_h,
         fi.sequence.bit_depth,
         |bias_area, bsize| {
           distortion_scale(
@@ -312,8 +372,8 @@ fn compute_distortion<T: Pixel>(
     Tune::Psnr | Tune::Psychovisual => sse_wxh(
       &input_region,
       &rec_region,
-      bsize.width(),
-      bsize.height(),
+      visible_w,
+      visible_h,
       |bias_area, bsize| {
         distortion_scale(
           fi,
@@ -324,41 +384,39 @@ fn compute_distortion<T: Pixel>(
     ),
   } * fi.dist_scale[0];
 
-  if !luma_only {
+  if is_chroma_block
+    && !luma_only
+    && fi.config.chroma_sampling != ChromaSampling::Cs400
+  {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
-    let mask = !(MI_SIZE - 1);
-    let mut w_uv = (bsize.width() >> xdec) & mask;
-    let mut h_uv = (bsize.height() >> ydec) & mask;
-
-    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-      w_uv = MI_SIZE;
-      h_uv = MI_SIZE;
-    }
-
-    // Add chroma distortion only when it is available
-    if fi.config.chroma_sampling != ChromaSampling::Cs400
-      && w_uv > 0
-      && h_uv > 0
-    {
-      for p in 1..3 {
-        let input_region = ts.input_tile.planes[p].subregion(area);
-        let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
-          &input_region,
-          &rec_region,
-          w_uv,
-          h_uv,
-          |bias_area, bsize| {
-            distortion_scale(
-              fi,
-              input_region.subregion(bias_area).frame_block_offset(),
-              bsize,
-            )
-          },
-        ) * fi.dist_scale[p];
-      }
+    let chroma_w = if bsize.width() >= 8 || xdec == 0 {
+      (visible_w + xdec) >> xdec
+    } else {
+      (4 + visible_w + xdec) >> xdec
     };
+    let chroma_h = if bsize.height() >= 8 || ydec == 0 {
+      (visible_h + ydec) >> ydec
+    } else {
+      (4 + visible_h + ydec) >> ydec
+    };
+
+    for p in 1..3 {
+      let input_region = ts.input_tile.planes[p].subregion(area);
+      let rec_region = ts.rec.planes[p].subregion(area);
+      distortion += sse_wxh(
+        &input_region,
+        &rec_region,
+        chroma_w,
+        chroma_h,
+        |bias_area, bsize| {
+          distortion_scale(
+            fi,
+            input_region.subregion(bias_area).frame_block_offset(),
+            bsize,
+          )
+        },
+      ) * fi.dist_scale[p];
+    }
   }
   distortion
 }
@@ -373,12 +431,30 @@ fn compute_tx_distortion<T: Pixel>(
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
+
+  let (visible_w, visible_h) = if !skip {
+    (bsize.width(), bsize.height())
+  } else {
+    let frame_bo = ts.to_frame_block_offset(tile_bo);
+    clip_visible_bsize(
+      fi.width,
+      fi.height,
+      bsize,
+      frame_bo.0.x << MI_SIZE_LOG2,
+      frame_bo.0.y << MI_SIZE_LOG2,
+    )
+  };
+
+  if visible_w == 0 || visible_h == 0 {
+    return ScaledDistortion::zero();
+  }
+
   let mut distortion = if skip {
     sse_wxh(
       &input_region,
       &rec_region,
-      bsize.width(),
-      bsize.height(),
+      visible_w,
+      visible_h,
       |bias_area, bsize| {
         distortion_scale(
           fi,
@@ -391,40 +467,39 @@ fn compute_tx_distortion<T: Pixel>(
     tx_dist
   };
 
-  if !luma_only && skip {
+  if is_chroma_block
+    && !luma_only
+    && skip
+    && fi.config.chroma_sampling != ChromaSampling::Cs400
+  {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
+    let chroma_w = if bsize.width() >= 8 || xdec == 0 {
+      (visible_w + xdec) >> xdec
+    } else {
+      (4 + visible_w + xdec) >> xdec
+    };
+    let chroma_h = if bsize.height() >= 8 || ydec == 0 {
+      (visible_h + ydec) >> ydec
+    } else {
+      (4 + visible_h + ydec) >> ydec
+    };
 
-    let mask = !(MI_SIZE - 1);
-    let mut w_uv = (bsize.width() >> xdec) & mask;
-    let mut h_uv = (bsize.height() >> ydec) & mask;
-
-    if (w_uv == 0 || h_uv == 0) && is_chroma_block {
-      w_uv = MI_SIZE;
-      h_uv = MI_SIZE;
-    }
-
-    // Add chroma distortion only when it is available
-    if fi.config.chroma_sampling != ChromaSampling::Cs400
-      && w_uv > 0
-      && h_uv > 0
-    {
-      for p in 1..3 {
-        let input_region = ts.input_tile.planes[p].subregion(area);
-        let rec_region = ts.rec.planes[p].subregion(area);
-        distortion += sse_wxh(
-          &input_region,
-          &rec_region,
-          w_uv,
-          h_uv,
-          |bias_area, bsize| {
-            distortion_scale(
-              fi,
-              input_region.subregion(bias_area).frame_block_offset(),
-              bsize,
-            )
-          },
-        ) * fi.dist_scale[p];
-      }
+    for p in 1..3 {
+      let input_region = ts.input_tile.planes[p].subregion(area);
+      let rec_region = ts.rec.planes[p].subregion(area);
+      distortion += sse_wxh(
+        &input_region,
+        &rec_region,
+        chroma_w,
+        chroma_h,
+        |bias_area, bsize| {
+          distortion_scale(
+            fi,
+            input_region.subregion(bias_area).frame_block_offset(),
+            bsize,
+          )
+        },
+      ) * fi.dist_scale[p];
     }
   }
   distortion
@@ -826,7 +901,6 @@ pub fn rdo_mode_decision<T: Pixel>(
   inter_cfg: &InterConfig,
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-
   let cw_checkpoint = cw.checkpoint();
 
   let rdo_type = if fi.use_tx_domain_rate {
@@ -838,6 +912,8 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   let mut best = if fi.frame_type.has_inter() {
+    assert!(fi.frame_type != FrameType::KEY);
+
     inter_frame_rdo_mode_decision(
       fi,
       ts,
@@ -897,7 +973,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     );
     cw.rollback(&cw_checkpoint);
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
-      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, fi) {
+      if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi) {
         let wr: &mut dyn Writer = &mut WriterCounter::new();
         let tell = wr.tell_frac();
 
@@ -1453,14 +1529,26 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
-  fi: &FrameInvariants<T>,
+  luma_tx_size: TxSize, fi: &FrameInvariants<T>,
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
 
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
+    (fi.width + xdec) >> xdec,
+    (fi.height + ydec) >> ydec,
+    uv_tx_size.block_size(),
+    (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
+    (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
+  );
+
+  if visible_tx_w == 0 || visible_tx_h == 0 {
+    return None;
+  };
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
-  luma_ac(&mut ac.data, ts, tile_bo, bsize);
+  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
   let best_alpha: ArrayVec<[i16; 2]> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
@@ -1498,8 +1586,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
           &rec_region.as_const(),
-          uv_tx_size.width(),
-          uv_tx_size.height(),
+          visible_tx_w,
+          visible_tx_h,
           |_, _| DistortionScale::default(), // We're not doing RDO here.
         )
         .0
@@ -1667,45 +1755,6 @@ pub fn get_sub_partitions(
   partition_offsets
 }
 
-pub fn get_sub_partitions_with_border_check(
-  four_partitions: &[TileBlockOffset; 4], partition: PartitionType,
-  mi_width: usize, mi_height: usize, subsize: BlockSize,
-) -> ArrayVec<[TileBlockOffset; 4]> {
-  let mut partition_offsets = ArrayVec::<[TileBlockOffset; 4]>::new();
-
-  partition_offsets.push(four_partitions[0]);
-
-  if partition == PARTITION_NONE {
-    return partition_offsets;
-  }
-
-  let hbsw = subsize.width_mi(); // Half the block size width in blocks
-  let hbsh = subsize.height_mi(); // Half the block size height in blocks
-
-  if (partition == PARTITION_VERT || partition == PARTITION_SPLIT)
-    && four_partitions[1].0.x + hbsw <= mi_width
-    && four_partitions[1].0.y + hbsh <= mi_height
-  {
-    partition_offsets.push(four_partitions[1]);
-  };
-
-  if (partition == PARTITION_HORZ || partition == PARTITION_SPLIT)
-    && four_partitions[2].0.x + hbsw <= mi_width
-    && four_partitions[2].0.y + hbsh <= mi_height
-  {
-    partition_offsets.push(four_partitions[2]);
-  };
-
-  if partition == PARTITION_SPLIT
-    && four_partitions[3].0.x + hbsw <= mi_width
-    && four_partitions[3].0.y + hbsh <= mi_height
-  {
-    partition_offsets.push(four_partitions[3]);
-  };
-
-  partition_offsets
-}
-
 #[inline(always)]
 fn rdo_partition_none<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
@@ -1713,6 +1762,8 @@ fn rdo_partition_none<T: Pixel>(
   inter_cfg: &InterConfig,
   child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
 ) -> Option<f64> {
+  debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
+
   let mode = rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
   let cost = mode.rd_cost;
 
@@ -1730,6 +1781,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   partition: PartitionType, rdo_type: RDOType, best_rd: f64,
   child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
 ) -> Option<f64> {
+  debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
   let subsize = bsize.subsize(partition);
 
   debug_assert!(subsize != BlockSize::BLOCK_INVALID);
@@ -1742,10 +1794,6 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   } else {
     0.0
   };
-
-  //pmv = best_pred_modes[0].mvs[0];
-
-  // assert!(best_pred_modes.len() <= 4);
 
   let hbsw = subsize.width_mi(); // Half the block size width in blocks
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
@@ -1764,43 +1812,47 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       y: tile_bo.0.y + hbsh as usize,
     }),
   ];
-  let partitions = get_sub_partitions_with_border_check(
-    &four_partitions,
-    partition,
-    ts.mi_width,
-    ts.mi_height,
-    subsize,
-  );
+
+  let partitions = get_sub_partitions(&four_partitions, partition);
 
   let mut rd_cost_sum = 0.0;
 
   for offset in partitions {
-    let mode_decision =
-      rdo_mode_decision(fi, ts, cw, subsize, offset, inter_cfg);
+    let hbs = subsize.width_mi() >> 1;
+    let has_cols = offset.0.x + hbs < ts.mi_width;
+    let has_rows = offset.0.y + hbs < ts.mi_height;
 
-    rd_cost_sum += mode_decision.rd_cost;
+    if has_cols && has_rows {
+      let mode_decision =
+        rdo_mode_decision(fi, ts, cw, subsize, offset, inter_cfg);
 
-    if fi.enable_early_exit && rd_cost_sum > best_rd {
+      rd_cost_sum += mode_decision.rd_cost;
+
+      if fi.enable_early_exit && rd_cost_sum > best_rd {
+        return None;
+      }
+      if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
+        let w: &mut W =
+          if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
+        cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
+      }
+      encode_block_with_modes(
+        fi,
+        ts,
+        cw,
+        w_pre_cdef,
+        w_post_cdef,
+        subsize,
+        offset,
+        &mode_decision,
+        rdo_type,
+        false,
+      );
+      child_modes.push(mode_decision);
+    } else {
+      //rd_cost_sum += std::f64::MAX;
       return None;
     }
-
-    if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
-      let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
-      cw.write_partition(w, offset, PartitionType::PARTITION_NONE, subsize);
-    }
-    encode_block_with_modes(
-      fi,
-      ts,
-      cw,
-      w_pre_cdef,
-      w_post_cdef,
-      subsize,
-      offset,
-      &mode_decision,
-      rdo_type,
-      false,
-    );
-    child_modes.push(mode_decision);
   }
 
   Some(cost + rd_cost_sum)

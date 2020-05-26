@@ -345,9 +345,9 @@ impl BlockSize {
       panic!("invalid block size for this subsampling mode");
     }
 
-    let uv_tx = max_txsize_rect_lookup[plane_bsize as usize];
+    let chroma_tx_size = max_txsize_rect_lookup[plane_bsize as usize];
 
-    av1_get_coded_tx_size(uv_tx)
+    av1_get_coded_tx_size(chroma_tx_size)
   }
 
   #[inline]
@@ -560,6 +560,7 @@ pub fn get_intra_edges<T: Pixel>(
 
   let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
     Aligned::uninitialized();
+  //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
   let base = 128u16 << (bit_depth - 8);
 
   {
@@ -601,8 +602,8 @@ pub fn get_intra_edges<T: Pixel>(
       needs_topleft = mode == PredictionMode::PAETH_PRED
         || (mode.is_directional() && p_angle != 90 && p_angle != 180);
       needs_top = (!dc_or_cfl || y != 0) || (p_angle != 90 && p_angle < 180);
-      needs_topright = mode.is_directional() && p_angle <= 90;
-      needs_bottomleft = p_angle >= 180;
+      needs_topright = mode.is_directional() && p_angle < 90;
+      needs_bottomleft = mode.is_directional() && p_angle > 180;
       needs_topleft_filter =
         enable_intra_edge_filter && p_angle > 90 && p_angle < 180;
     }
@@ -614,10 +615,21 @@ pub fn get_intra_edges<T: Pixel>(
 
     // Needs left
     if needs_left {
+      let txh = if y + tx_size.height() > rect_h {
+        rect_h - y
+      } else {
+        tx_size.height()
+      };
       if x != 0 {
-        for i in 0..tx_size.height() {
-          left[2 * MAX_TX_SIZE - tx_size.height() + i] =
-            dst[y + tx_size.height() - 1 - i][x - 1];
+        for i in 0..txh {
+          debug_assert!(y + i < rect_h);
+          left[2 * MAX_TX_SIZE - 1 - i] = dst[y + i][x - 1];
+        }
+        if txh < tx_size.height() {
+          let val = dst[y + txh - 1][x - 1];
+          for i in txh..tx_size.height() {
+            left[2 * MAX_TX_SIZE - 1 - i] = val;
+          }
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
@@ -629,9 +641,19 @@ pub fn get_intra_edges<T: Pixel>(
 
     // Needs top
     if needs_top {
+      let txw = if x + tx_size.width() > rect_w {
+        rect_w - x
+      } else {
+        tx_size.width()
+      };
       if y != 0 {
-        above[..tx_size.width()]
-          .copy_from_slice(&dst[y - 1][x..x + tx_size.width()]);
+        above[..txw].copy_from_slice(&dst[y - 1][x..x + txw]);
+        if txw < tx_size.width() {
+          let val = dst[y - 1][x + txw - 1];
+          for i in txw..tx_size.width() {
+            above[i] = val;
+          }
+        }
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {

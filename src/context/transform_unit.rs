@@ -717,6 +717,9 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
     tx_size: TxSize, txfm_split: bool, tbx: usize, tby: usize, depth: usize,
   ) {
+    if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {
+      return;
+    }
     debug_assert!(self.bc.blocks[bo].is_inter());
     debug_assert!(bsize > BlockSize::BLOCK_4X4);
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());

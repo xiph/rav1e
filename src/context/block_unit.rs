@@ -398,7 +398,8 @@ impl<'a> BlockContext<'a> {
 
   pub fn get_txb_ctx(
     &self, plane_bsize: BlockSize, tx_size: TxSize, plane: usize,
-    bo: TileBlockOffset, xdec: usize, ydec: usize,
+    bo: TileBlockOffset, xdec: usize, ydec: usize, frame_clipped_txw: usize,
+    frame_clipped_txh: usize,
   ) -> TXB_CTX {
     let mut txb_ctx = TXB_CTX { txb_skip_ctx: 0, dc_sign_ctx: 0 };
     const MAX_TX_SIZE_UNIT: usize = 16;
@@ -409,13 +410,11 @@ impl<'a> BlockContext<'a> {
       2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
     ];
     let mut dc_sign: i16 = 0;
-    let txb_w_unit = tx_size.width_mi();
-    let txb_h_unit = tx_size.height_mi();
 
-    let above_ctxs =
-      &self.above_coeff_context[plane][(bo.0.x >> xdec)..][..txb_w_unit];
-    let left_ctxs =
-      &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..][..txb_h_unit];
+    let above_ctxs = &self.above_coeff_context[plane][(bo.0.x >> xdec)..]
+      [..frame_clipped_txw >> 2];
+    let left_ctxs = &self.left_coeff_context[plane][(bo.y_in_sb() >> ydec)..]
+      [..frame_clipped_txh >> 2];
 
     // Decide txb_ctx.dc_sign_ctx
     for &ctx in above_ctxs {
@@ -1355,16 +1354,14 @@ impl<'a> ContextWriter<'a> {
       let border_h = 128 + blk_h as isize * 8;
       let mvx_min =
         -(frame_bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-      let mvx_max = (self.bc.blocks.frame_cols()
-        - frame_bo.0.x
-        - blk_w / MI_SIZE) as isize
+      let mvx_max = ((self.bc.blocks.frame_cols() - frame_bo.0.x) as isize
+        - (blk_w / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_w;
       let mvy_min =
         -(frame_bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-      let mvy_max = (self.bc.blocks.frame_rows()
-        - frame_bo.0.y
-        - blk_h / MI_SIZE) as isize
+      let mvy_max = ((self.bc.blocks.frame_rows() - frame_bo.0.y) as isize
+        - (blk_h / MI_SIZE) as isize)
         * (8 * MI_SIZE) as isize
         + border_h;
       mv.this_mv.row =
@@ -1765,10 +1762,14 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
     coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
     tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
-    use_reduced_tx_set: bool,
+    use_reduced_tx_set: bool, frame_clipped_txw: usize,
+    frame_clipped_txh: usize,
   ) -> bool {
+    debug_assert!(frame_clipped_txw != 0);
+    debug_assert!(frame_clipped_txh != 0);
+
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
-    //assert!(!is_inter);
+
     // Note: Both intra and inter mode uses inter scan order. Surprised?
     let scan: &[u16] =
       &av1_scan_orders[tx_size as usize][tx_type as usize].scan[..eob];
@@ -1783,8 +1784,16 @@ impl<'a> ContextWriter<'a> {
     let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
-    let txb_ctx =
-      self.bc.get_txb_ctx(plane_bsize, tx_size, plane, bo, xdec, ydec);
+    let txb_ctx = self.bc.get_txb_ctx(
+      plane_bsize,
+      tx_size,
+      plane,
+      bo,
+      xdec,
+      ydec,
+      frame_clipped_txw,
+      frame_clipped_txh,
+    );
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
