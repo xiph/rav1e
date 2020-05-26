@@ -1120,6 +1120,13 @@ pub fn encode_tx_block<T: Pixel>(
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
   let area = Area::BlockStartingAt { bo: tx_bo.0 };
 
+  if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+    return (false, ScaledDistortion::zero());
+  }
+
+  debug_assert!(tx_bo.0.x < ts.mi_width);
+  debug_assert!(tx_bo.0.y < ts.mi_height);
+
   debug_assert!(
     tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT
   );
@@ -1143,6 +1150,7 @@ pub fn encode_tx_block<T: Pixel>(
     None
   };
 
+  let frame_bo = ts.to_frame_block_offset(tx_bo);
   let rec = &mut ts.rec.planes[p];
 
   if mode.is_intra() {
@@ -1160,6 +1168,7 @@ pub fn encode_tx_block<T: Pixel>(
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
+
     mode.predict_intra(
       tile_rect,
       &mut rec.subregion_mut(area),
@@ -1178,7 +1187,10 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+  let mut residual_storage: Aligned<[i16; 64 * 64]> =
+    Aligned::new([0i16; 64 * 64]);
+  // TODO(yushin): When tx size != visible size, instead of init whole residual block as zeros everytime,
+  // consider doing so only pixels outside of visible frame.
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
@@ -1193,13 +1205,23 @@ pub fn encode_tx_block<T: Pixel>(
   );
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
-  diff(
-    residual,
-    &ts.input_tile.planes[p].subregion(area),
-    &rec.subregion(area),
-    tx_size.width(),
-    tx_size.height(),
+  let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
+    fi.width >> xdec,
+    fi.height >> ydec,
+    tx_size.block_size(),
+    (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
+    (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
   );
+
+  if visible_tx_w != 0 && visible_tx_h != 0 {
+    diff(
+      residual,
+      &ts.input_tile.planes[p].subregion(area),
+      &rec.subregion(area),
+      visible_tx_w,
+      visible_tx_h,
+    );
+  }
 
   forward_transform(
     residual,
@@ -1214,6 +1236,15 @@ pub fn encode_tx_block<T: Pixel>(
   let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
+    debug_assert!((((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4);
+    debug_assert!((((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec) >= 4);
+    let frame_clipped_txw: usize =
+      (((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec)
+        .min(tx_size.width());
+    let frame_clipped_txh: usize =
+      (((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec)
+        .min(tx_size.height());
+
     cw.write_coeffs_lv_map(
       w,
       p,
@@ -1227,6 +1258,8 @@ pub fn encode_tx_block<T: Pixel>(
       xdec,
       ydec,
       fi.use_reduced_tx_set,
+      frame_clipped_txw,
+      frame_clipped_txh,
     )
   } else {
     true
@@ -1257,46 +1290,48 @@ pub fn encode_tx_block<T: Pixel>(
     );
   }
 
-  let tx_dist = if rdo_type.needs_tx_dist() {
-    // Store tx-domain distortion of this block
-    // rcoeffs above 32 rows/cols aren't held in the array, because they are
-    // always 0. The first 32x32 is stored first in coeffs so we can iterate
-    // over coeffs and rcoeffs for the first 32 rows/cols. For the
-    // coefficients above 32 rows/cols, we iterate over the rest of coeffs
-    // with the assumption that rcoeff coefficients are zero.
-    let mut raw_tx_dist = coeffs
-      .iter()
-      .zip(rcoeffs.iter())
-      .map(|(&a, &b)| {
-        let c = i32::cast_from(a) - i32::cast_from(b);
-        (c * c) as u64
-      })
-      .sum::<u64>()
-      + coeffs[rcoeffs.len()..]
+  let tx_dist =
+    if rdo_type.needs_tx_dist() && visible_tx_w != 0 && visible_tx_h != 0 {
+      // Store tx-domain distortion of this block
+      // rcoeffs above 32 rows/cols aren't held in the array, because they are
+      // always 0. The first 32x32 is stored first in coeffs so we can iterate
+      // over coeffs and rcoeffs for the first 32 rows/cols. For the
+      // coefficients above 32 rows/cols, we iterate over the rest of coeffs
+      // with the assumption that rcoeff coefficients are zero.
+      let mut raw_tx_dist = coeffs
         .iter()
-        .map(|&a| {
-          let c = i32::cast_from(a);
+        .zip(rcoeffs.iter())
+        .map(|(&a, &b)| {
+          let c = i32::cast_from(a) - i32::cast_from(b);
           (c * c) as u64
         })
-        .sum::<u64>();
+        .sum::<u64>()
+        + coeffs[rcoeffs.len()..]
+          .iter()
+          .map(|&a| {
+            let c = i32::cast_from(a);
+            (c * c) as u64
+          })
+          .sum::<u64>();
 
-    let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
-    let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
+      let tx_dist_scale_bits = 2 * (3 - get_log_tx_scale(tx_size));
+      let tx_dist_scale_rounding_offset = 1 << (tx_dist_scale_bits - 1);
 
-    raw_tx_dist =
-      (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
+      raw_tx_dist =
+        (raw_tx_dist + tx_dist_scale_rounding_offset) >> tx_dist_scale_bits;
 
-    if rdo_type == RDOType::TxDistEstRate {
-      // look up rate and distortion in table
-      let estimated_rate = estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
-      w.add_bits_frac(estimated_rate as u32);
-    }
+      if rdo_type == RDOType::TxDistEstRate {
+        // look up rate and distortion in table
+        let estimated_rate =
+          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+        w.add_bits_frac(estimated_rate as u32);
+      }
 
-    let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
-    RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
-  } else {
-    ScaledDistortion::zero()
-  };
+      let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
+      RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
+    } else {
+      ScaledDistortion::zero()
+    };
 
   (has_coeff, tx_dist)
 }
@@ -1807,7 +1842,13 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
   if fi.sequence.enable_intra_edge_filter {
     for y in 0..bsize.height_mi() {
+      if tile_bo.0.y + y >= ts.mi_height {
+        continue;
+      }
       for x in 0..bsize.width_mi() {
+        if tile_bo.0.x + x >= ts.mi_width {
+          continue;
+        }
         let bi = &mut ts.coded_block_info[tile_bo.0.y + y][tile_bo.0.x + x];
         bi.luma_mode = luma_mode;
         bi.chroma_mode = chroma_mode;
@@ -1860,7 +1901,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
 
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize,
+  bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec);
@@ -1872,12 +1913,43 @@ pub fn luma_ac<T: Pixel>(
   };
   let rec = &ts.rec.planes[0];
   let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
+  let frame_bo = ts.to_frame_block_offset(bo);
+
+  let frame_clipped_bw: usize =
+    ((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2).min(bsize.width());
+  let frame_clipped_bh: usize =
+    ((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2).min(bsize.height());
+
+  // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
+  let max_luma_w: usize;
+  let max_luma_h: usize;
+
+  if bsize.width() > BlockSize::BLOCK_8X8.width() {
+    let txw_log2 = tx_size.width_log2();
+    max_luma_w =
+      ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
+  } else {
+    max_luma_w = bsize.width();
+  }
+  if bsize.height() > BlockSize::BLOCK_8X8.height() {
+    let txh_log2 = tx_size.height_log2();
+    max_luma_h =
+      ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
+  } else {
+    max_luma_h = bsize.height();
+  }
+
+  let max_luma_x: usize = max_luma_w.max(8) - (1 << xdec);
+  let max_luma_y: usize = max_luma_h.max(8) - (1 << ydec);
 
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
-      let y = sub_y << ydec;
-      let x = sub_x << xdec;
+      // Refer to https://aomediacodec.github.io/av1-spec/#predict-chroma-from-luma-process
+      let luma_y = sub_y << ydec;
+      let luma_x = sub_x << xdec;
+      let y = luma_y.min(max_luma_y);
+      let x = luma_x.min(max_luma_x);
       let mut sample: i16 = i16::cast_from(luma[y][x]);
       if xdec != 0 {
         sample += i16::cast_from(luma[y][x + 1]);
@@ -1894,6 +1966,7 @@ pub fn luma_ac<T: Pixel>(
   }
   let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
   let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
+
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
       ac[sub_y * plane_bsize.width() + sub_x] -= average;
@@ -1936,7 +2009,9 @@ pub fn write_tx_blocks<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
-
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
         fi,
@@ -1965,16 +2040,26 @@ pub fn write_tx_blocks<T: Pixel>(
     }
   }
 
-  if luma_only {
+  if !do_chroma
+    || luma_only
+    || fi.config.chroma_sampling == ChromaSampling::Cs400
+  {
     return (partition_has_coeff, tx_dist);
   };
+  debug_assert!(has_chroma(
+    tile_bo,
+    bsize,
+    xdec,
+    ydec,
+    fi.sequence.chroma_sampling
+  ));
 
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
 
   let mut bw_uv = (bw * tx_size.width_mi()) >> xdec;
   let mut bh_uv = (bh * tx_size.height_mi()) >> ydec;
 
-  if (bw_uv == 0 || bh_uv == 0) && do_chroma {
+  if bw_uv == 0 || bh_uv == 0 {
     bw_uv = 1;
     bh_uv = 1;
   }
@@ -1983,70 +2068,65 @@ pub fn write_tx_blocks<T: Pixel>(
   bh_uv /= uv_tx_size.height_mi();
 
   if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.data, ts, tile_bo, bsize);
+    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
   }
 
-  if fi.config.chroma_sampling != ChromaSampling::Cs400
-    && bw_uv > 0
-    && bh_uv > 0
-  {
-    let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
-      TxType::DCT_DCT
-    } else {
-      uv_intra_mode_to_tx_type_context(chroma_mode)
-    };
+  let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
+    TxType::DCT_DCT
+  } else {
+    uv_intra_mode_to_tx_type_context(chroma_mode)
+  };
 
-    for p in 1..3 {
-      ts.qc.update(
-        qidx,
-        uv_tx_size,
-        true,
-        fi.sequence.bit_depth,
-        fi.dc_delta_q[p],
-        fi.ac_delta_q[p],
-      );
-      let alpha = cfl.alpha(p - 1);
-      for by in 0..bh_uv {
-        for bx in 0..bw_uv {
-          let tx_bo = TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
-              - ((bw * tx_size.width_mi() == 1) as usize) * xdec,
-            y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
-              - ((bh * tx_size.height_mi() == 1) as usize) * ydec,
-          });
+  for p in 1..3 {
+    ts.qc.update(
+      qidx,
+      uv_tx_size,
+      true,
+      fi.sequence.bit_depth,
+      fi.dc_delta_q[p],
+      fi.ac_delta_q[p],
+    );
+    let alpha = cfl.alpha(p - 1);
+    for by in 0..bh_uv {
+      for bx in 0..bw_uv {
+        let tx_bo = TileBlockOffset(BlockOffset {
+          x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
+            - ((bw * tx_size.width_mi() == 1) as usize) * xdec,
+          y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
+            - ((bh * tx_size.height_mi() == 1) as usize) * ydec,
+        });
 
-          let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
-          po.x += (bx * uv_tx_size.width()) as isize;
-          po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
-            fi,
-            ts,
-            cw,
-            w,
-            p,
-            tile_bo,
-            bx,
-            by,
-            tx_bo,
-            chroma_mode,
-            uv_tx_size,
-            uv_tx_type,
-            bsize,
-            po,
-            skip,
-            qidx,
-            &ac.data,
-            if chroma_mode.is_cfl() {
-              IntraParam::Alpha(alpha)
-            } else {
-              IntraParam::AngleDelta(angle_delta.uv)
-            },
-            rdo_type,
-            need_recon_pixel,
-          );
-          partition_has_coeff |= has_coeff;
-          tx_dist += dist;
-        }
+        let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
+        po.x += (bx * uv_tx_size.width()) as isize;
+        po.y += (by * uv_tx_size.height()) as isize;
+        let (has_coeff, dist) = encode_tx_block(
+          fi,
+          ts,
+          cw,
+          w,
+          p,
+          tile_bo,
+          bx,
+          by,
+          tx_bo,
+          chroma_mode,
+          uv_tx_size,
+          uv_tx_type,
+          bsize,
+          po,
+          skip,
+          qidx,
+          &ac.data,
+          if chroma_mode.is_cfl() {
+            IntraParam::Alpha(alpha)
+          } else {
+            IntraParam::AngleDelta(angle_delta.uv)
+          },
+          rdo_type,
+          need_recon_pixel,
+        );
+        partition_has_coeff |= has_coeff;
+        tx_dist += dist;
       }
     }
   }
@@ -2091,6 +2171,9 @@ pub fn write_tx_tree<T: Pixel>(
         x: tile_bo.0.x + bx * tx_size.width_mi(),
         y: tile_bo.0.y + by * tx_size.height_mi(),
       });
+      if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
+        continue;
+      }
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
       let (has_coeff, dist) = encode_tx_block(
@@ -2120,9 +2203,19 @@ pub fn write_tx_tree<T: Pixel>(
     }
   }
 
-  if luma_only {
+  if !has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
+    || luma_only
+    || fi.config.chroma_sampling == ChromaSampling::Cs400
+  {
     return (partition_has_coeff, tx_dist);
   };
+  debug_assert!(has_chroma(
+    tile_bo,
+    bsize,
+    xdec,
+    ydec,
+    fi.sequence.chroma_sampling
+  ));
 
   let max_tx_size = max_txsize_rect_lookup[bsize as usize];
   debug_assert!(max_tx_size.block_size() <= BlockSize::BLOCK_64X64);
@@ -2131,9 +2224,7 @@ pub fn write_tx_tree<T: Pixel>(
   let mut bw_uv = max_tx_size.width_mi() >> xdec;
   let mut bh_uv = max_tx_size.height_mi() >> ydec;
 
-  if (bw_uv == 0 || bh_uv == 0)
-    && has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
-  {
+  if bw_uv == 0 || bh_uv == 0 {
     bw_uv = 1;
     bh_uv = 1;
   }
@@ -2141,60 +2232,54 @@ pub fn write_tx_tree<T: Pixel>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  if fi.config.chroma_sampling != ChromaSampling::Cs400
-    && bw_uv > 0
-    && bh_uv > 0
-  {
-    let uv_tx_type =
-      if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
+  let uv_tx_type = if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
 
-    for p in 1..3 {
-      ts.qc.update(
-        qidx,
-        uv_tx_size,
-        false,
-        fi.sequence.bit_depth,
-        fi.dc_delta_q[p],
-        fi.ac_delta_q[p],
-      );
+  for p in 1..3 {
+    ts.qc.update(
+      qidx,
+      uv_tx_size,
+      false,
+      fi.sequence.bit_depth,
+      fi.dc_delta_q[p],
+      fi.ac_delta_q[p],
+    );
 
-      for by in 0..bh_uv {
-        for bx in 0..bw_uv {
-          let tx_bo = TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
-              - (max_tx_size.width_mi() == 1) as usize * xdec,
-            y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
-              - (max_tx_size.height_mi() == 1) as usize * ydec,
-          });
+    for by in 0..bh_uv {
+      for bx in 0..bw_uv {
+        let tx_bo = TileBlockOffset(BlockOffset {
+          x: tile_bo.0.x + ((bx * uv_tx_size.width_mi()) << xdec)
+            - (max_tx_size.width_mi() == 1) as usize * xdec,
+          y: tile_bo.0.y + ((by * uv_tx_size.height_mi()) << ydec)
+            - (max_tx_size.height_mi() == 1) as usize * ydec,
+        });
 
-          let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
-          po.x += (bx * uv_tx_size.width()) as isize;
-          po.y += (by * uv_tx_size.height()) as isize;
-          let (has_coeff, dist) = encode_tx_block(
-            fi,
-            ts,
-            cw,
-            w,
-            p,
-            tile_bo,
-            bx,
-            by,
-            tx_bo,
-            luma_mode,
-            uv_tx_size,
-            uv_tx_type,
-            bsize,
-            po,
-            skip,
-            qidx,
-            ac,
-            IntraParam::AngleDelta(angle_delta_y),
-            rdo_type,
-            need_recon_pixel,
-          );
-          partition_has_coeff |= has_coeff;
-          tx_dist += dist;
-        }
+        let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
+        po.x += (bx * uv_tx_size.width()) as isize;
+        po.y += (by * uv_tx_size.height()) as isize;
+        let (has_coeff, dist) = encode_tx_block(
+          fi,
+          ts,
+          cw,
+          w,
+          p,
+          tile_bo,
+          bx,
+          by,
+          tx_bo,
+          luma_mode,
+          uv_tx_size,
+          uv_tx_type,
+          bsize,
+          po,
+          skip,
+          qidx,
+          ac,
+          IntraParam::AngleDelta(angle_delta_y),
+          rdo_type,
+          need_recon_pixel,
+        );
+        partition_has_coeff |= has_coeff;
+        tx_dist += dist;
       }
     }
   }
@@ -2282,31 +2367,34 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     part_modes: ArrayVec::new(),
   };
 
-  if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
+  if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return rdo_output;
   }
 
-  let bsw = bsize.width_mi();
-  let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width;
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
+  let is_straddle_x = tile_bo.0.x + bsize.width_mi() > ts.mi_width;
+  let is_straddle_y = tile_bo.0.y + bsize.height_mi() > ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
-  // Always split if the current partition is too large, i.e. right or bottom tile border
-  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
-    || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize > fi.partition_range.max)
-    && is_square;
 
-  // must_split overrides the minimum partition size when applicable
+  let must_split =
+    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
     if fi.frame_type.has_inter() &&
-    fi.config.chroma_sampling != ChromaSampling::Cs420 &&
-    bsize <= BlockSize::BLOCK_8X8 {
-    false
-  } else {
-    (bsize > fi.partition_range.min && is_square) || must_split
-  };
+      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      bsize <= BlockSize::BLOCK_8X8 {
+      false
+    } else {
+      (bsize > fi.partition_range.min && is_square) || must_split
+    };
+
+  assert!(bsize >= BlockSize::BLOCK_8X8 || !can_split);
+
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
   let cw_checkpoint = cw.checkpoint();
@@ -2358,45 +2446,44 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         true,
       );
     }
-  }
+  } // if !must_split
+
+  let mut early_exit = false;
 
   // Test all partition types other than PARTITION_NONE by comparing their RD costs
   if can_split {
     debug_assert!(is_square);
 
-    for &partition in RAV1E_PARTITION_TYPES {
-      if partition == PartitionType::PARTITION_NONE {
-        continue;
+    let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
+    if fi.config.speed_settings.non_square_partition
+      || is_straddle_x
+      || is_straddle_y
+    {
+      if has_cols {
+        partition_types.push(PartitionType::PARTITION_HORZ);
       }
-      if fi.sequence.chroma_sampling == ChromaSampling::Cs422
-        && partition == PartitionType::PARTITION_VERT
-      {
-        continue;
+      if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) && has_rows {
+        partition_types.push(PartitionType::PARTITION_VERT);
       }
+    }
+    partition_types.push(PartitionType::PARTITION_SPLIT);
 
-      if must_split {
-        let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
-        let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
-        let mut split_vert = false;
-        let mut split_horz = false;
-        if cbw == bsw / 2 && cbh == bsh {
-          split_vert = true;
-        }
-        if cbh == bsh / 2 && cbw == bsw {
-          split_horz = true;
-        }
-        if !split_horz && partition == PartitionType::PARTITION_HORZ {
-          continue;
-        };
-        if !split_vert && partition == PartitionType::PARTITION_VERT {
-          continue;
-        };
-      } else if !fi.config.speed_settings.non_square_partition
-        && (partition == PartitionType::PARTITION_HORZ
-          || partition == PartitionType::PARTITION_VERT)
-      {
-        continue;
-      }
+    for partition in partition_types {
+      // (!has_rows || !has_cols) --> must_split
+      debug_assert!((has_rows && has_cols) || must_split);
+      // (!has_rows && has_cols) --> partition != PartitionType::PARTITION_VERT
+      debug_assert!(
+        has_rows || !has_cols || (partition != PartitionType::PARTITION_VERT)
+      );
+      // (has_rows && !has_cols) --> partition != PartitionType::PARTITION_HORZ
+      debug_assert!(
+        !has_rows || has_cols || (partition != PartitionType::PARTITION_HORZ)
+      );
+      // (!has_rows && !has_cols) --> partition == PartitionType::PARTITION_SPLIT
+      debug_assert!(
+        has_rows || has_cols || (partition == PartitionType::PARTITION_SPLIT)
+      );
+
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
@@ -2432,12 +2519,15 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         }),
       ];
       let partitions = get_sub_partitions(&four_partitions, partition);
-      let mut early_exit = false;
 
+      early_exit = false;
       // If either of horz or vert partition types is being tested,
       // two partitioned rectangles, defined in 'partitions', of the current block
       // is passed to encode_partition_bottomup()
       for offset in partitions {
+        if offset.0.x >= ts.mi_width || offset.0.y >= ts.mi_height {
+          continue;
+        }
         let child_rdo_output = encode_partition_bottomup(
           fi,
           ts,
@@ -2454,7 +2544,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
         if cost != std::f64::MAX {
           rd_cost += cost;
-          if fi.enable_early_exit
+          if !must_split
+            && fi.enable_early_exit
             && (rd_cost >= best_rd || rd_cost >= ref_rd_cost)
           {
             assert!(cost != std::f64::MAX);
@@ -2476,12 +2567,13 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       }
     }
 
-    debug_assert!(best_partition != PartitionType::PARTITION_INVALID);
+    debug_assert!(
+      early_exit || best_partition != PartitionType::PARTITION_INVALID
+    );
 
     // If the best partition is not PARTITION_SPLIT, recode it
     if best_partition != PartitionType::PARTITION_SPLIT {
       assert!(!rdo_output.part_modes.is_empty());
-
       cw.rollback(&cw_checkpoint);
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
@@ -2522,7 +2614,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         );
       }
     }
-  }
+  } // if can_split {
 
   assert!(best_partition != PartitionType::PARTITION_INVALID);
 
@@ -2553,21 +2645,29 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
 ) {
-  if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
+  if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return;
   }
-  let bsw = bsize.width_mi();
-  let bsh = bsize.height_mi();
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
+  let hbs = bsize.width_mi() >> 1;
+  let has_cols = tile_bo.0.x + hbs < ts.mi_width;
+  let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
   assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
-  // Always split if the current partition is too large, i.e. right or bottom tile border
-  let must_split = (tile_bo.0.x + bsw as usize > ts.mi_width
-    || tile_bo.0.y + bsh as usize > ts.mi_height
-    || bsize > fi.partition_range.max)
-    && is_square;
+
+  let must_split =
+    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+
+  let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
+    if fi.frame_type.has_inter() &&
+      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      bsize <= BlockSize::BLOCK_8X8 {
+      false
+    } else {
+      (bsize > fi.partition_range.min && is_square) || must_split
+    };
 
   let mut rdo_output =
     block_output.clone().unwrap_or(PartitionGroupParameters {
@@ -2576,48 +2676,17 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       part_modes: ArrayVec::new(),
     });
   let partition: PartitionType;
-  let mut split_vert = false;
-  let mut split_horz = false;
+
   if must_split {
-    let cbw = (ts.mi_width - tile_bo.0.x).min(bsw); // clipped block width, i.e. having effective pixels
-    let cbh = (ts.mi_height - tile_bo.0.y).min(bsh);
-
-    if cbw == bsw / 2
-      && cbh == bsh
-      && fi.sequence.chroma_sampling != ChromaSampling::Cs422
-    {
-      split_vert = true;
-    }
-    if cbh == bsh / 2 && cbw == bsw {
-      split_horz = true;
-    }
-  }
-
-  if must_split && (!split_vert && !split_horz) {
-    // Oversized blocks are split automatically
     partition = PartitionType::PARTITION_SPLIT;
-  } else if (must_split || (bsize > fi.partition_range.min && is_square))
-    && (
-      // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-      !fi.frame_type.has_inter()
-        || fi.config.chroma_sampling == ChromaSampling::Cs420
-        || bsize > BlockSize::BLOCK_8X8
-    )
-  {
+  } else if can_split {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
     let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
-    if must_split {
-      partition_types.push(PartitionType::PARTITION_SPLIT);
-      if split_horz {
-        partition_types.push(PartitionType::PARTITION_HORZ);
-      };
-      if split_vert {
-        partition_types.push(PartitionType::PARTITION_VERT);
-      };
-    } else {
+
+    partition_types.push(PartitionType::PARTITION_SPLIT);
+    if !must_split {
       partition_types.push(PartitionType::PARTITION_NONE);
-      partition_types.push(PartitionType::PARTITION_SPLIT);
     }
     rdo_output = rdo_partition_decision(
       fi,
@@ -2644,11 +2713,13 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   );
 
   let subsize = bsize.subsize(partition);
+  debug_assert!(subsize != BlockSize::BLOCK_INVALID);
 
   if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     cw.write_partition(w, tile_bo, partition, bsize);
   }
+
   match partition {
     PartitionType::PARTITION_NONE => {
       let part_decision = if !rdo_output.part_modes.is_empty() {
@@ -2970,6 +3041,7 @@ fn encode_tile_group<T: Pixel>(
     );
   }
   fs.deblock.levels = levels;
+
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     let ts = &mut fs.as_tile_state_mut();
     let rec = &mut ts.rec;
@@ -3467,8 +3539,16 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
 
+      let is_straddle_sbx =
+        tile_bo.0.x + BlockSize::BLOCK_64X64.width_mi() > ts.mi_width;
+      let is_straddle_sby =
+        tile_bo.0.y + BlockSize::BLOCK_64X64.height_mi() > ts.mi_height;
+
       // Encode SuperBlock
-      if fi.config.speed_settings.encode_bottomup {
+      if fi.config.speed_settings.encode_bottomup
+        || is_straddle_sbx
+        || is_straddle_sby
+      {
         encode_partition_bottomup(
           fi,
           ts,

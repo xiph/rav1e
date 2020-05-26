@@ -206,9 +206,16 @@ impl TileBlocksMut<'_> {
   where
     F: Fn(&mut Block),
   {
-    let bw = bsize.width_mi();
+    let mut bw = bsize.width_mi();
     let bh = bsize.height_mi();
+
+    if bo.0.x + bw >= self.cols {
+      bw = self.cols - bo.0.x;
+    }
     for y in 0..bh {
+      if bo.0.y + y >= self.rows {
+        continue;
+      }
       for block in self[bo.0.y + y][bo.0.x..bo.0.x + bw].iter_mut() {
         f(block);
       }

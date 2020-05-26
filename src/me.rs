@@ -75,11 +75,11 @@ const fn get_mv_range(
   let border_w = 128 + blk_w as isize * 8;
   let border_h = 128 + blk_h as isize * 8;
   let mvx_min = -(bo.0.x as isize) * (8 * MI_SIZE) as isize - border_w;
-  let mvx_max = (w_in_b - bo.0.x - blk_w / MI_SIZE) as isize
+  let mvx_max = ((w_in_b - bo.0.x) as isize - (blk_w / MI_SIZE) as isize)
     * (8 * MI_SIZE) as isize
     + border_w;
   let mvy_min = -(bo.0.y as isize) * (8 * MI_SIZE) as isize - border_h;
-  let mvy_max = (h_in_b - bo.0.y - blk_h / MI_SIZE) as isize
+  let mvy_max = ((h_in_b - bo.0.y) as isize - (blk_h / MI_SIZE) as isize)
     * (8 * MI_SIZE) as isize
     + border_h;
 

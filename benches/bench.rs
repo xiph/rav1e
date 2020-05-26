@@ -171,7 +171,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let mut fs = FrameState::new(&fi);
   let mut ts = fs.as_tile_state_mut();
   let offset = TileBlockOffset(BlockOffset { x: 1, y: 1 });
-  b.iter(|| rdo_cfl_alpha(&mut ts, offset, bsize, &fi))
+  b.iter(|| rdo_cfl_alpha(&mut ts, offset, bsize, bsize.tx_size(), &fi))
 }
 
 fn ec_bench(c: &mut Criterion) {
