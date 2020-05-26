@@ -148,7 +148,7 @@ jobs:
         echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
         echo "$DAV1D_LIB_SHA256 libdav1d4_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Cache packages
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       id: debs
       with:
@@ -192,7 +192,7 @@ jobs:
         cargo update
         cargo --version > Cargo.version
     - name: Cache cargo registry
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: ~/.cargo/registry/cache
@@ -200,7 +200,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
     - name: Cache sccache output
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: /home/runner/.cache/sccache
@@ -327,7 +327,7 @@ jobs:
         cargo update
         cargo --version > Cargo.version
     - name: Cache cargo registry
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: ~/.cargo/registry/cache
@@ -335,7 +335,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
     - name: Cache sccache output
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: /Users/runner/Library/Caches/Mozilla.sccache
@@ -426,7 +426,7 @@ jobs:
         cargo update
         cargo --version > Cargo.version
     - name: Cache cargo registry
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: ~/.cargo/registry/cache
@@ -434,7 +434,7 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
     - name: Cache sccache output
-      uses: actions/cache@v1
+      uses: actions/cache@v2
       continue-on-error: true
       with:
         path: C:\sccache
