@@ -17,8 +17,8 @@ use rav1e::version;
 use scan_fmt::scan_fmt;
 
 use std::fs::File;
+use std::io;
 use std::io::prelude::*;
-use std::{env, io};
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
@@ -79,9 +79,8 @@ fn build_speed_long_help() -> String {
 /// Only call this once at the start of the app,
 /// otherwise bad things will happen.
 pub fn parse_cli() -> Result<CliOptions, CliError> {
-  let profile = env::var("PROFILE").unwrap();
-  let ver_short = format!("{} ({})", version::short(), profile);
-  let ver_long = format!("{} ({})", version::full(), profile);
+  let ver_short = version::short();
+  let ver_long = version::full();
   let speed_long_help = build_speed_long_help();
   let mut app = App::new("rav1e")
     .version(ver_short.as_str())
