@@ -27,9 +27,22 @@ mod binary {
     path
   }
 
+  #[cfg(not(windows))]
+  fn get_rav1e_command() -> Command {
+    let mut cmd = Command::cargo_bin("rav1e").unwrap();
+    cmd.env_clear();
+    cmd
+  }
+
+  #[cfg(windows)]
+  // `env_clear` doesn't work on Windows: https://github.com/rust-lang/rust/issues/31259
+  fn get_rav1e_command() -> Command {
+    Command::cargo_bin("rav1e").unwrap()
+  }
+
   #[test]
   fn one_pass_qp_based() {
-    let mut cmd = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd = get_rav1e_command();
     let outfile = get_tempfile_path("ivf");
 
     cmd
@@ -45,7 +58,7 @@ mod binary {
 
   #[test]
   fn one_pass_bitrate_based() {
-    let mut cmd = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd = get_rav1e_command();
     let outfile = get_tempfile_path("ivf");
 
     cmd
@@ -64,7 +77,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd1 = get_rav1e_command();
     cmd1
       .arg("--bitrate")
       .arg("1000")
@@ -77,7 +90,7 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd2 = get_rav1e_command();
     cmd2
       .arg("--bitrate")
       .arg("1000")
@@ -95,7 +108,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd1 = get_rav1e_command();
     cmd1
       .arg("--reservoir-frame-delay")
       .arg("14")
@@ -110,7 +123,7 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = Command::cargo_bin("rav1e").unwrap();
+    let mut cmd2 = get_rav1e_command();
     cmd2
       .arg("--reservoir-frame-delay")
       .arg("14")
