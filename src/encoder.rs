@@ -87,8 +87,8 @@ pub struct ReferenceFrame<T: Pixel> {
 
 #[derive(Debug, Clone, Default)]
 pub struct ReferenceFramesSet<T: Pixel> {
-  pub frames: [Option<Arc<ReferenceFrame<T>>>; (REF_FRAMES as usize)],
-  pub deblock: [DeblockState; (REF_FRAMES as usize)],
+  pub frames: [Option<Arc<ReferenceFrame<T>>>; REF_FRAMES as usize],
+  pub deblock: [DeblockState; REF_FRAMES as usize],
 }
 
 impl<T: Pixel> ReferenceFramesSet<T> {
@@ -869,7 +869,7 @@ impl<T: Pixel> FrameInvariants<T> {
       };
       // use a reference to the previous frame in the same level
       // (horizontally) as a third reference
-      fi.ref_frames[ref_in_previous_group.to_index()] = { slot_idx as u8 }
+      fi.ref_frames[ref_in_previous_group.to_index()] = slot_idx as u8;
     }
 
     fi.set_ref_frame_sign_bias();
