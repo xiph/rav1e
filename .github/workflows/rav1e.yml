@@ -49,7 +49,7 @@ jobs:
       matrix:
         conf:
          - beta-build
-         - 1.36.0-tests
+         - 1.43.1-tests
          - aom-tests
          - dav1d-tests
          - grcov-coveralls
@@ -62,8 +62,8 @@ jobs:
         include:
          - conf: beta-build
            toolchain: beta
-         - conf: 1.36.0-tests
-           toolchain: 1.36.0
+         - conf: 1.43.1-tests
+           toolchain: 1.43.1
          - conf: aom-tests
            toolchain: stable
          - conf: dav1d-tests
@@ -115,7 +115,7 @@ jobs:
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add aom
       if: >
-        matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests' ||
+        matrix.conf == '1.43.1-tests' || matrix.conf == 'aom-tests' ||
         matrix.conf == 'grcov-coveralls'
       env:
         LINK: http://ppa.launchpad.net/jonathonf/ffmpeg-4/ubuntu/pool/main/a/aom
@@ -131,7 +131,7 @@ jobs:
         echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add dav1d
       if: >
-        matrix.conf == '1.36.0-tests' || matrix.conf == 'dav1d-tests' ||
+        matrix.conf == '1.43.1-tests' || matrix.conf == 'dav1d-tests' ||
         matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz'
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
@@ -208,8 +208,8 @@ jobs:
     - name: Start sccache server
       run: |
         sccache --start-server
-    - name: Run 1.36.0 tests
-      if: matrix.toolchain == '1.36.0' && matrix.conf == '1.36.0-tests'
+    - name: Run 1.43.1 tests
+      if: matrix.toolchain == '1.43.1' && matrix.conf == '1.43.1-tests'
       run: |
         cargo test --verbose \
                    --features=decode_test,decode_test_dav1d,quick_test,capi
