@@ -69,7 +69,7 @@ jobs:
          - conf: dav1d-tests
            toolchain: stable
          - conf: grcov-coveralls
-           toolchain: nightly-2019-12-02
+           toolchain: nightly-2020-05-14
          - conf: bench
            toolchain: stable
          - conf: doc
@@ -81,7 +81,7 @@ jobs:
          - conf: check-extra-feats
            toolchain: stable
          - conf: fuzz
-           toolchain: nightly-2019-12-02
+           toolchain: nightly-2020-05-14
 
     env:
       RUST_BACKTRACE: 1
@@ -268,9 +268,9 @@ jobs:
         CARGO_INCREMENTAL: 0
         RUSTFLAGS: >
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-          -Zno-landing-pads
+          -Cpanic=abort -Zpanic_abort_tests
       run: |
-        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose --target x86_64-unknown-linux-gnu
     - name: Run grcov
       if: matrix.conf == 'grcov-coveralls'
       id: coverage
