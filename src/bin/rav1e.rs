@@ -234,7 +234,7 @@ fn process_frame<T: Pixel, D: Decoder>(
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
-  output: &mut dyn Muxer, source: &mut Source<D>, mut pass1file: Option<File>,
+  output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
   mut pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write>>>,
   metrics_enabled: MetricsEnabled,
@@ -248,7 +248,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   while let Some(frame_info) = process_frame(
     &mut ctx,
     &mut *output,
-    source,
+    &mut source,
     pass1file.as_mut(),
     pass2file.as_mut(),
     &mut buffer,
@@ -378,15 +378,14 @@ fn run() -> Result<(), error::CliError> {
       .saturating_mul(2304)
       .saturating_add(1024),
   };
-  let mut y4m_dec =
-    match y4m::Decoder::new_with_limits(&mut cli.io.input, limit) {
-      Err(_) => {
-        return Err(CliError::new("Could not input video. Is it a y4m file?"))
-      }
-      Ok(d) => d,
-    };
+  let mut y4m_dec = match y4m::Decoder::new_with_limits(cli.io.input, limit) {
+    Err(_) => {
+      return Err(CliError::new("Could not input video. Is it a y4m file?"))
+    }
+    Ok(d) => d,
+  };
   let video_info = y4m_dec.get_video_details();
-  let y4m_enc = match cli.io.rec.as_mut() {
+  let y4m_enc = match cli.io.rec {
     Some(rec) => Some(
       y4m::encode(
         video_info.width,
@@ -481,27 +480,27 @@ fn run() -> Result<(), error::CliError> {
     };
   }
 
-  let mut source = Source::new(cli.limit, y4m_dec);
+  let source = Source::new(cli.limit, y4m_dec);
 
   if video_info.bit_depth == 8 {
-    do_encode::<u8, y4m::Decoder<'_, Box<dyn Read>>>(
+    do_encode::<u8, y4m::Decoder<Box<dyn Read>>>(
       cfg,
       cli.verbose,
       progress,
       &mut *cli.io.output,
-      &mut source,
+      source,
       pass1file,
       pass2file,
       y4m_enc,
       cli.metrics_enabled,
     )?
   } else {
-    do_encode::<u16, y4m::Decoder<'_, Box<dyn Read>>>(
+    do_encode::<u16, y4m::Decoder<Box<dyn Read>>>(
       cfg,
       cli.verbose,
       progress,
       &mut *cli.io.output,
-      &mut source,
+      source,
       pass1file,
       pass2file,
       y4m_enc,
