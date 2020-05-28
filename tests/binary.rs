@@ -40,6 +40,12 @@ mod binary {
     Command::cargo_bin("rav1e").unwrap()
   }
 
+  fn get_common_cmd(outfile: &PathBuf) -> Command {
+    let mut cmd = get_rav1e_command();
+    cmd.arg("--bitrate").arg("1000").arg("-o").arg(outfile);
+    cmd
+  }
+
   #[test]
   fn one_pass_qp_based() {
     let mut cmd = get_rav1e_command();
@@ -58,18 +64,10 @@ mod binary {
 
   #[test]
   fn one_pass_bitrate_based() {
-    let mut cmd = get_rav1e_command();
     let outfile = get_tempfile_path("ivf");
 
-    cmd
-      .arg("--bitrate")
-      .arg("1000")
-      .arg("-o")
-      .arg(&outfile)
-      .arg("-")
-      .write_stdin(get_y4m_input())
-      .assert()
-      .success();
+    let mut cmd = get_common_cmd(&outfile);
+    cmd.arg("-").write_stdin(get_y4m_input()).assert().success();
   }
 
   #[test]
@@ -77,12 +75,8 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = get_rav1e_command();
+    let mut cmd1 = get_common_cmd(&outfile);
     cmd1
-      .arg("--bitrate")
-      .arg("1000")
-      .arg("-o")
-      .arg(&outfile)
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -90,12 +84,8 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = get_rav1e_command();
+    let mut cmd2 = get_common_cmd(&outfile);
     cmd2
-      .arg("--bitrate")
-      .arg("1000")
-      .arg("-o")
-      .arg(&outfile)
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
@@ -108,14 +98,10 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = get_rav1e_command();
+    let mut cmd1 = get_common_cmd(&outfile);
     cmd1
       .arg("--reservoir-frame-delay")
       .arg("14")
-      .arg("--bitrate")
-      .arg("1000")
-      .arg("-o")
-      .arg(&outfile)
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -123,14 +109,10 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = get_rav1e_command();
+    let mut cmd2 = get_common_cmd(&outfile);
     cmd2
       .arg("--reservoir-frame-delay")
       .arg("14")
-      .arg("--bitrate")
-      .arg("1000")
-      .arg("-o")
-      .arg(&outfile)
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
