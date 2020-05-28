@@ -269,6 +269,9 @@ jobs:
         RUSTFLAGS: >
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
           -Cpanic=abort -Zpanic_abort_tests
+        RUSTDOCFLAGS: >
+          -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
+          -Cpanic=abort -Zpanic_abort_tests
       run: |
         cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose --target x86_64-unknown-linux-gnu
     - name: Run grcov
