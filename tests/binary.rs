@@ -48,10 +48,9 @@ mod binary {
 
   #[test]
   fn one_pass_qp_based() {
-    let mut cmd = get_rav1e_command();
     let outfile = get_tempfile_path("ivf");
 
-    cmd
+    get_rav1e_command()
       .args(&["--quantizer", "100"])
       .arg("-o")
       .arg(&outfile)
@@ -65,8 +64,11 @@ mod binary {
   fn one_pass_bitrate_based() {
     let outfile = get_tempfile_path("ivf");
 
-    let mut cmd = get_common_cmd(&outfile);
-    cmd.arg("-").write_stdin(get_y4m_input()).assert().success();
+    get_common_cmd(&outfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
   }
 
   #[test]
@@ -74,8 +76,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = get_common_cmd(&outfile);
-    cmd1
+    get_common_cmd(&outfile)
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -83,8 +84,7 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = get_common_cmd(&outfile);
-    cmd2
+    get_common_cmd(&outfile)
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
@@ -97,8 +97,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    let mut cmd1 = get_common_cmd(&outfile);
-    cmd1
+    get_common_cmd(&outfile)
       .args(&["--reservoir-frame-delay", "14"])
       .arg("--first-pass")
       .arg(&passfile)
@@ -107,8 +106,7 @@ mod binary {
       .assert()
       .success();
 
-    let mut cmd2 = get_common_cmd(&outfile);
-    cmd2
+    get_common_cmd(&outfile)
       .args(&["--reservoir-frame-delay", "14"])
       .arg("--second-pass")
       .arg(&passfile)
