@@ -49,7 +49,7 @@ jobs:
       matrix:
         conf:
          - beta-build
-         - 1.36.0-tests
+         - 1.43.1-tests
          - aom-tests
          - dav1d-tests
          - grcov-coveralls
@@ -62,14 +62,14 @@ jobs:
         include:
          - conf: beta-build
            toolchain: beta
-         - conf: 1.36.0-tests
-           toolchain: 1.36.0
+         - conf: 1.43.1-tests
+           toolchain: 1.43.1
          - conf: aom-tests
            toolchain: stable
          - conf: dav1d-tests
            toolchain: stable
          - conf: grcov-coveralls
-           toolchain: nightly-2019-12-02
+           toolchain: nightly-2020-05-14
          - conf: bench
            toolchain: stable
          - conf: doc
@@ -81,7 +81,7 @@ jobs:
          - conf: check-extra-feats
            toolchain: stable
          - conf: fuzz
-           toolchain: nightly-2019-12-02
+           toolchain: nightly-2020-05-14
 
     env:
       RUST_BACKTRACE: 1
@@ -115,7 +115,7 @@ jobs:
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add aom
       if: >
-        matrix.conf == '1.36.0-tests' || matrix.conf == 'aom-tests' ||
+        matrix.conf == '1.43.1-tests' || matrix.conf == 'aom-tests' ||
         matrix.conf == 'grcov-coveralls'
       env:
         LINK: http://ppa.launchpad.net/jonathonf/ffmpeg-4/ubuntu/pool/main/a/aom
@@ -131,7 +131,7 @@ jobs:
         echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add dav1d
       if: >
-        matrix.conf == '1.36.0-tests' || matrix.conf == 'dav1d-tests' ||
+        matrix.conf == '1.43.1-tests' || matrix.conf == 'dav1d-tests' ||
         matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz'
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
@@ -175,7 +175,7 @@ jobs:
       if: matrix.conf == 'grcov-coveralls'
       env:
         LINK: https://github.com/mozilla/grcov/releases/download
-        GRCOV_VERSION: 0.5.14
+        GRCOV_VERSION: 0.5.15
       run: |
         curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
         tar xj -C $HOME/.cargo/bin
@@ -208,8 +208,8 @@ jobs:
     - name: Start sccache server
       run: |
         sccache --start-server
-    - name: Run 1.36.0 tests
-      if: matrix.toolchain == '1.36.0' && matrix.conf == '1.36.0-tests'
+    - name: Run 1.43.1 tests
+      if: matrix.toolchain == '1.43.1' && matrix.conf == '1.43.1-tests'
       run: |
         cargo test --verbose \
                    --features=decode_test,decode_test_dav1d,quick_test,capi
@@ -268,9 +268,12 @@ jobs:
         CARGO_INCREMENTAL: 0
         RUSTFLAGS: >
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-          -Zno-landing-pads
+          -Cpanic=abort -Zpanic_abort_tests
+        RUSTDOCFLAGS: >
+          -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
+          -Cpanic=abort -Zpanic_abort_tests
       run: |
-        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose
+        cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose --target x86_64-unknown-linux-gnu
     - name: Run grcov
       if: matrix.conf == 'grcov-coveralls'
       id: coverage
