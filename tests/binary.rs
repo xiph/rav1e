@@ -42,7 +42,7 @@ mod binary {
 
   fn get_common_cmd(outfile: &PathBuf) -> Command {
     let mut cmd = get_rav1e_command();
-    cmd.arg("--bitrate").arg("1000").arg("-o").arg(outfile);
+    cmd.args(&["--bitrate", "1000"]).arg("-o").arg(outfile);
     cmd
   }
 
@@ -52,8 +52,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
 
     cmd
-      .arg("--quantizer")
-      .arg("100")
+      .args(&["--quantizer", "100"])
       .arg("-o")
       .arg(&outfile)
       .arg("-")
@@ -100,8 +99,7 @@ mod binary {
 
     let mut cmd1 = get_common_cmd(&outfile);
     cmd1
-      .arg("--reservoir-frame-delay")
-      .arg("14")
+      .args(&["--reservoir-frame-delay", "14"])
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -111,8 +109,7 @@ mod binary {
 
     let mut cmd2 = get_common_cmd(&outfile);
     cmd2
-      .arg("--reservoir-frame-delay")
-      .arg("14")
+      .args(&["--reservoir-frame-delay", "14"])
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
