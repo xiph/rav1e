@@ -1,6 +1,12 @@
 
 # File Structure of rav1e 0.4.0
 
+<details>
+<summary><b>Table of Content</b></summary>
+
+- [High-level directory structure](#high-level-directory-structure)
+- [Overview of `src/*`](#overview-of-src)
+</details>
 
 ## High-level directory structure
 
@@ -13,7 +19,7 @@ Source: [draw.io](structure.draw.io)
 The below table gives a brief overview of design of [`src/*`](../src/)
 
 | Filename                                              | Functionality                                                                                              |
-|-------------------------------------------------------|------------------------------------------------------------------------------------------------------------|
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | [activity.rs](../src/activity.rs)                     | Implementation of Activity masking functions for planes                                                    |
 | [api/*.rs](../src/api/)                               | Contains public API of rav1e, for more information check [documentation](https://docs.rs/rav1e/)           |
 | [arm/32/*.S](../src/arm/32/)                          | ARM optimised functions for different encoding tools imported from dav1d by release                        |
@@ -22,7 +28,7 @@ The below table gives a brief overview of design of [`src/*`](../src/)
 | [arm/table.S](../src/arm/table.S)                     | Tables for various ARM optimised functions                                                                 |
 | [asm/\*/*.rs](../src/asm/)                            | High-level functions for binding rust and assembly functions for x86 and AArch64 Architecture              |
 | [bin/common.rs](../src/bin/common.rs)                 | Functions, enums, structures used command-line tool and debugging                                          |
-| [bin/rav1e.rs](../src/bin/rav1e.rs)                    | CLI Interface for encoding from y4m files with rav1e                                                      |
+| [bin/rav1e.rs](../src/bin/rav1e.rs)                   | CLI Interface for encoding from y4m files with rav1e                                                       |
 | [bin/stats.rs](../src/bin/stats.rs)                   | Functions for displaying Frame summary, progress info, metrics of the encoding process                     |
 | [bin/kv.rs](../src/bin/kv.rs)                         | Serialisation configuration of Key-value strings                                                           |
 | [bin/errror.rs](../src/bin/error.rs)                  | Functions and enums to parse various errors and displaying                                                 |
@@ -61,4 +67,3 @@ The below table gives a brief overview of design of [`src/*`](../src/)
 | [transform/*.rs](../src/transform)                    | Implementations of DCT and ADST transforms                                                                 |
 | [util/*.rs](../src/util/)                             | Misc utility code                                                                                          |
 | [x86/*.rs](../src/x86)                                | X86 optimised functions for various encoder functions along with functions imported from dav1d by release  |
-

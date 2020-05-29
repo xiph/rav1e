@@ -1,3 +1,13 @@
+# Frame Type Selection
+
+<details>
+<summary><b>Table of Content</b></summary>
+
+- [Current Features/Process](#current-featuresprocess)
+- [Detection Algorithm](#detection-algorithm)
+- [Desired Improvements](#desired-improvements)
+</details>
+
 ## Current Features/Process
 * The first frame of the video is always a key frame.
 * rav1e looks ahead up to the maximum number of frames in a sub-GOP
