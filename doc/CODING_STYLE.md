@@ -1,9 +1,19 @@
-The coding style for Rust code follows the [Rust Style Guide](https://github.com/rust-dev-tools/fmt-rfcs/blob/master/guide/guide.md), with the following exceptions:
+# Coding Style
 
+<details>
+<summary><b>Table of Content</b></summary>
+
+- [General](#general)
+- [Assertions](#assertions)
+</details>
+
+## General
+The coding style for Rust code follows the [Rust Style Guide](https://github.com/rust-dev-tools/fmt-rfcs/blob/master/guide/guide.md)
+
+Exceptions:
 - Each indentation level is 2 spaces.
 
-Assertions
-------------
+## Assertions
 Assertions should never be reachable by any sequence of API calls.
 
 Assertions should never be reachable by any sequence of crav1e API calls
