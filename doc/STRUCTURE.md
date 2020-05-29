@@ -6,6 +6,7 @@
 
 ![Image](structure.png)
 
+Source: [draw.io](structure.draw.io)
 
 ##  Overview of `src/*`
 
@@ -21,15 +22,15 @@ The below table gives a brief overview of design of [`src/*`](../src/)
 | [arm/table.S](../src/arm/table.S)                     | Tables for various ARM optimised functions                                                                 |
 | [asm/\*/*.rs](../src/asm/)                            | High-level functions for binding rust and assembly functions for x86 and AArch64 Architecture              |
 | [bin/common.rs](../src/bin/common.rs)                 | Functions, enums, structures used command-line tool and debugging                                          |
-| [bin/rav1e.rs](../src/bin/rav1e.rs)                    | CLI Interface for encoding from y4m files with rav1e                                           |
+| [bin/rav1e.rs](../src/bin/rav1e.rs)                    | CLI Interface for encoding from y4m files with rav1e                                                      |
 | [bin/stats.rs](../src/bin/stats.rs)                   | Functions for displaying Frame summary, progress info, metrics of the encoding process                     |
 | [bin/kv.rs](../src/bin/kv.rs)                         | Serialisation configuration of Key-value strings                                                           |
 | [bin/errror.rs](../src/bin/error.rs)                  | Functions and enums to parse various errors and displaying                                                 |
 | [bin/muxer/*.rs](../src/bin/muxer/)                   | Contains IVF Muxer functions for header definition, writing frames and flushing                            |
 | [bin/decoder/*.rs](../src/bin/decoder/)               | Decoder related structures and functions                                                                   |
-| [capi.rs](../src/capi.rs)                             | C Compatible API for using rav1e as a library                                                          |
+| [capi.rs](../src/capi.rs)                             | C Compatible API for using rav1e as a library                                                              |
 | [cdef.rs](../src/cdef.rs)                             | CDEF Filter implementation for the encoder                                                                 |
-| [context.rs](../src/context.rs)                       | High-level functions that write symbols to the bitstream, and maintain context                             |
+| [context/*.rs](../src/context/)                       | High-level functions that write symbols to the bitstream, and maintain context                             |
 | [cpu_features/*.rs](../src/cpu_features.rs)           | Functions to toggle CPU optimisations for different architectures                                          |
 | [deblock.rs](../src/deblock.rs)                       | Deblocking loop filter implementation for addressing blocking artifacts                                    |
 | [dist.rs](../src/dist.rs)                             | SAD and SATD functions and implementation for various encoder functions                                    |
@@ -45,7 +46,7 @@ The below table gives a brief overview of design of [`src/*`](../src/)
 | [mc.rs](../src/mc.rs)                                 | Low-level implementation of Motion Compensation of the encoding process                                    |
 | [me.rs](../src/me.rs)                                 | Motion Estimation related structures and functions of the encoding process                                 |
 | [partition.rs](../src/partition.rs)                   | Functions and enums to manage partitions (subdivisions of a superblock)                                    |
-| [predict.rs](../src/predict.rs)                       | Intra and inter prediction implementations                                                                           |
+| [predict.rs](../src/predict.rs)                       | Intra and inter prediction implementations                                                                 |
 | [quantize.rs](../src/quantize.rs)                     | Quantization and dequantization functions for coefficients                                                 |
 | [rate.rs](../src/rate.rs)                             | Low-level implementation of rate control API (Constant Quantizer)                                          |
 | [rdo.rs](../src/rdo.rs)                               | RDO-related structures and distortion computation functions                                                |
