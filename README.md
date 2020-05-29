@@ -2,12 +2,32 @@
 
 The fastest and safest AV1 encoder.
 
-## Overview
+<details>
+<summary><b>Table of Content</b></summary>
 
+- [Overview](#overview)
+- [Features](#features)
+- [Documentation](#documentation)
+- [Releases](#releases)
+- [Building](#building)
+  - [Dependency: NASM](#dependency-nasm)
+  - [Release binary](#release-binary)
+  - [Unstable features](#unstable-features)
+  - [Target-specific builds](#target-specific-builds)
+  - [Building the C-API](#building-the-c-api)
+- [Usage](#usage)
+  - [Compressing video](#compressing-video)
+  - [Decompressing video](#decompressing-video)
+  - [Configuring](#configuring)
+    - [Features](#features-1)
+- [Contributing](#contributing)
+- [Getting in Touch](#getting-in-touch)
+</details>
+
+## Overview
 rav1e is an AV1 video encoder. It is designed to eventually cover all use cases, though in its current form it is most suitable for cases where libaom (the reference encoder) is too slow.
 
 ## Features
-
 * Intra, inter, and switch frames
 * 64x64 superblocks
 * 4x4 to 64x64 RDO-selected square and 2:1/1:2 rectangular blocks
@@ -20,13 +40,15 @@ rav1e is an AV1 video encoder. It is designed to eventually cover all use cases,
 * Constant quantizer and target bitrate (single- and multi-pass) encoding modes
 * Still picture mode
 
-## Releases
+## Documentation
+Find the documentation in [`doc/`](doc/README.md)
 
+## Releases
 For the foreseeable future, a weekly pre-release of rav1e will be [published](https://github.com/xiph/rav1e/releases) every Tuesday.
 
 ## Building
 
-### NASM
+### Dependency: NASM
 Some `x86_64`-specific optimizations require a recent version of [NASM](https://nasm.us/) and are enabled by default.
 
 <details>
@@ -53,10 +75,10 @@ Have a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system
 
 </details>
 
-### release binary
+### Release binary
 To build release binary in `target/release/rav1e` run:
 
-```cmd
+```sh
 cargo build --release
 ```
 
@@ -72,13 +94,9 @@ Those Features and API are bound to change and evolve, do not rely on them stayi
 ### Target-specific builds
 The rust autovectorizer can produce a binary that is about 6%-7% faster if it can use `avx2` in the general code, you may allow it by issuing:
 
-```
+```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release
-```
-
-or
-
-```
+# or
 RUSTFLAGS="-C target-feature=+avx2,+fma" cargo build --release
 ```
 
@@ -87,7 +105,6 @@ The resulting binary will not work on cpus that do not sport the same set of SIM
 > **NOTE** : You may use `rustc --print target-cpus` to check if the cpu is supported, if not `-C target-cpu=native` would be a no-op.
 
 ### Building the C-API
-
 **rav1e** provides a C-compatible set of library, header and pkg-config file.
 
 To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
@@ -97,61 +114,43 @@ cargo install cargo-c
 cargo cinstall --release
 ```
 
-## Compressing video
-
-Input videos must be in y4m format. The monochrome color format is not supported.
+## Usage
+### Compressing video
+Input videos must be in [y4m format](https://wiki.multimedia.cx/index.php/YUV4MPEG2). The monochrome color format is not supported.
 
 ```sh
 cargo run --release --bin rav1e -- input.y4m -o output.ivf
 ```
 
-## Decompressing video
+_(Find a y4m-file for testing at [`tests/small_input.y4m`](tests/small_input.y4m) or at http://ultravideo.cs.tut.fi/#testsequences)_
 
+### Decompressing video
 Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can build compatible aomdec using the following:
 
 ```sh
-mkdir aom_test
-cd aom_test
+mkdir aom_test && cd aom_test
 cmake /path/to/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
 make -j8
 ./aomdec ../output.ivf -o output.y4m
 ```
 
-## Configuring
+### Configuring
+rav1e has several optional features that can be enabled by passing `--features` to cargo. Passing `--all-features` is discouraged.
 
-rav1e has several optional features that can be enabled by passing --features to cargo test. Passing --all-features is discouraged.
+#### Features
+Find a full list in feature-table in [`Cargo.toml`](Cargo.toml)
 
-* asm - enabled by default. When enabled, assembly is built for the platforms supporting it.
-  * It requires `nasm` on `x86_64`.
-  * It requires `gas` on `aarch64`.
+* `asm` - enabled by default. When enabled, assembly is built for the platforms supporting it.
+  * `x86_64`: Requires [`nasm`](#dependency-nasm).
+  * `aarch64`
+    * Requires `gas`
+    * Alternative: Use `clang` assembler by setting `CC=clang`
 
 **NOTE**: `SSE2` is always enabled on `x86_64`, `neon` is always enabled for aarch64, you may set the environment variable `RAV1E_CPU_TARGET` to `rust` to disable all the assembly-optimized routines at the runtime.
 
-## Using the AOMAnalyzer
-
-### Local Analyzer
-
-1. Download the [AOM Analyzer](http://aomanalyzer.org).
-2. Download [inspect.js](https://people.xiph.org/~mbebenita/analyzer/inspect.js) and [inspect.wasm](https://people.xiph.org/~mbebenita/analyzer/inspect.wasm) and save them in the same directory.
-3. Run the analyzer: `AOMAnalyzer path_to_inspect.js output.ivf`
-
-### Online Analyzer
-
-If your `.ivf` file is hosted somewhere (and CORS is enabled on your web server) you can use:
-
-```
-https://arewecompressedyet.com/analyzer/?d=https://people.xiph.org/~mbebenita/analyzer/inspect.js&f=path_to_output.ivf
-```
-
-## Design
-
-The File Structure and design of the encoder is explained more in the [Structure](doc/STRUCTURE.md) document.
-
 ## Contributing
-
 Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
 ## Getting in Touch
-
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
 up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
