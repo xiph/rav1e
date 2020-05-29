@@ -11,6 +11,7 @@
 use super::Muxer;
 use ivf::*;
 use rav1e::prelude::*;
+use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
@@ -45,6 +46,24 @@ impl Muxer for IvfMuxer {
 }
 
 impl IvfMuxer {
+  pub fn check_file(path: &str) -> Result<(), CliError> {
+    if fs::metadata(path).is_ok() {
+      eprint!("File '{}' already exists. Overwrite ? [y/N] ", path);
+      io::stdout().flush().unwrap();
+
+      let mut option_input = String::new();
+      io::stdin()
+        .read_line(&mut option_input)
+        .expect("Failed to read option.");
+
+      match option_input.as_str().trim() {
+        "y" | "Y" => return Ok(()),
+        _ => return Err(CliError::new("Not overwriting, exiting.")),
+      };
+    }
+    Ok(())
+  }
+
   pub fn open(path: &str) -> Result<Box<dyn Muxer>, CliError> {
     let ivf = IvfMuxer {
       output: match path {

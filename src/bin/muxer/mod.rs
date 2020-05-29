@@ -32,7 +32,13 @@ pub trait Muxer {
   fn flush(&mut self) -> io::Result<()>;
 }
 
-pub fn create_muxer(path: &str) -> Result<Box<dyn Muxer>, CliError> {
+pub fn create_muxer(
+  path: &str, overwrite: bool,
+) -> Result<Box<dyn Muxer>, CliError> {
+  if !overwrite {
+    IvfMuxer::check_file(path)?;
+  }
+
   if path == "-" {
     return IvfMuxer::open(path);
   }

@@ -355,6 +355,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .short("r")
         .takes_value(true)
     )
+    .arg(
+      Arg::with_name("OVERWRITE")
+        .help("Overwrite output file.")
+        .short("y")
+    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -442,7 +447,10 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         File::open(&f).map_err(|e| e.context("Cannot open input file"))?,
       ) as Box<dyn Read>,
     },
-    output: create_muxer(matches.value_of("OUTPUT").unwrap())?,
+    output: create_muxer(
+      matches.value_of("OUTPUT").unwrap(),
+      matches.is_present("OVERWRITE"),
+    )?,
     rec,
   };
 
