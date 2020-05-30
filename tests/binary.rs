@@ -42,7 +42,7 @@ mod binary {
 
   fn get_common_cmd(outfile: &PathBuf) -> Command {
     let mut cmd = get_rav1e_command();
-    cmd.args(&["--bitrate", "1000"]).arg("-o").arg(outfile);
+    cmd.args(&["--bitrate", "1000"]).arg("-o").arg(outfile).arg("-y");
     cmd
   }
 
