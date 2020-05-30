@@ -12,6 +12,30 @@
 #include "src/arm/asm.S"
 #include "util.S"
 
+.macro sad_rect width, height
+function sad\width\()x\height\()_neon, export=1
+.if \width == 128
+        movi            v3.4s,   #0
+.else
+        movi            v0.4s,   #0
+.endif
+        sxtw            x1,  w1
+.if \width == 128
+        movi            v18.4s,  #0
+.endif
+        sxtw            x3,  w3
+        mov             w4,  \height
+.if \width == 128
+        mov             v2.16b,  v3.16b
+.elseif \width >= 32
+        mov             v1.16b,  v0.16b
+.elseif \width == 16
+        mov             v3.16b,  v0.16b
+.endif
+        b               L(sad_w\width\())
+endfunc
+.endm
+
 function sad4x4_neon, export=1
         movi            v0.4s,   #0
         sxtw            x1,  w1
@@ -30,6 +54,9 @@ L(sad_w4):
         fmov            w0,  s0
         ret
 endfunc
+
+sad_rect 4, 8
+sad_rect 4, 16
 
 .macro horizontal_long_add_16x8
         dup             d2,  v1.d[0]
@@ -102,6 +129,10 @@ L(sad_w64):
         bne             L(sad_w64)
         horizontal_long_add_16x8
 endfunc
+
+sad_rect 64, 16
+sad_rect 64, 32
+sad_rect 64, 128
 
 function sad128x128_neon, export=1
         movi            v3.4s,   #0
@@ -194,6 +225,8 @@ L(sad_w128):
         ret
 endfunc
 
+sad_rect 128, 64
+
 function sad32x32_neon, export=1
         movi            v0.4s,   #0
         sxtw            x1,  w1
@@ -225,6 +258,10 @@ L(sad_w32):
         horizontal_add_16x8
 endfunc
 
+sad_rect 32, 8
+sad_rect 32, 16
+sad_rect 32, 64
+
 function sad16x16_neon, export=1
         movi            v0.4s,   #0
         sxtw            x1,  w1
@@ -248,14 +285,10 @@ L(sad_w16):
         horizontal_add_16x8
 endfunc
 
-function sad16x8_neon, export=1
-        movi            v0.4s,   #0
-        sxtw            x1,  w1
-        sxtw            x3,  w3
-        mov             w4,  #8
-        mov             v3.16b,  v0.16b
-        b               L(sad_w16)
-endfunc
+sad_rect 16, 4
+sad_rect 16, 8
+sad_rect 16, 32
+sad_rect 16, 64
 
 function sad8x8_neon, export=1
         movi            v0.4s,   #0
@@ -273,10 +306,6 @@ L(sad_w8):
         horizontal_add_16x8
 endfunc
 
-function sad8x16_neon, export=1
-        movi            v0.4s,   #0
-        sxtw            x1,  w1
-        sxtw            x3,  w3
-        mov             w4,  #16
-        b               L(sad_w8)
-endfunc
+sad_rect 8, 4
+sad_rect 8, 16
+sad_rect 8, 32
