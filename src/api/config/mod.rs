@@ -99,7 +99,7 @@ pub struct Config {
   /// Settings which impact the produced bitstream.
   pub(crate) enc: EncoderConfig,
   /// Rate control configuration
-  rate_control: RateControlConfig,
+  pub(crate) rate_control: RateControlConfig,
   /// The number of threads in the threadpool.
   pub(crate) threads: usize,
   /// Shared thread pool

@@ -256,6 +256,36 @@ impl EncContext {
       EncContext::U16(ctx) => ctx.twopass_out(),
     }
   }
+
+  fn rc_summary_size(&self) -> usize {
+    match self {
+      EncContext::U8(ctx) => ctx.rc_summary_size(),
+      EncContext::U16(ctx) => ctx.rc_summary_size(),
+    }
+  }
+
+  fn rc_receive_pass_data(&mut self) -> rav1e::RcData {
+    match self {
+      EncContext::U8(ctx) => ctx.rc_receive_pass_data(),
+      EncContext::U16(ctx) => ctx.rc_receive_pass_data(),
+    }
+  }
+
+  fn rc_second_pass_data_required(&self) -> usize {
+    match self {
+      EncContext::U8(ctx) => ctx.rc_second_pass_data_required(),
+      EncContext::U16(ctx) => ctx.rc_second_pass_data_required(),
+    }
+  }
+
+  fn rc_send_pass_data(
+    &mut self, data: &[u8],
+  ) -> Result<(), rav1e::EncoderStatus> {
+    match self {
+      EncContext::U8(ctx) => ctx.rc_send_pass_data(data),
+      EncContext::U16(ctx) => ctx.rc_send_pass_data(data),
+    }
+  }
 }
 
 /// Encoder context
@@ -354,6 +384,77 @@ pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let c = Box::new(Config { cfg });
 
   Box::into_raw(c)
+}
+
+unsafe fn decode_slice<'a>(
+  data: *mut *const u8, len: *mut size_t,
+) -> (c_int, Option<&'a [u8]>) {
+  use std::convert::TryInto;
+
+  if *len < 8 {
+    return (8, None);
+  }
+
+  let buf = slice::from_raw_parts(*data, *len as usize);
+  let (len_bytes, rest) = buf.split_at(std::mem::size_of::<u64>());
+  let buf_len = u64::from_be_bytes(len_bytes.try_into().unwrap()) as usize;
+  let full_len = buf_len + 8;
+  if buf_len > rest.len() {
+    return (full_len as c_int, None);
+  }
+
+  *len -= full_len;
+  *data = (*data).offset(full_len.try_into().unwrap());
+
+  (0, Some(&rest[..buf_len]))
+}
+
+/// Setup a second pass rate control using the provided summary
+///
+/// Passing NULL data resets the rate control settings.
+///
+/// If additional data is required, pointer and len stay unchanged, otherwise
+/// they are updated.
+///
+/// Return:
+/// 0 on success
+/// > 0 if the buffer has to be larger
+/// < 0 on failure
+#[no_mangle]
+pub unsafe extern fn rav1e_config_set_rc_summary(
+  cfg: *mut Config, data: *mut *const u8, len: *mut size_t,
+) -> c_int {
+  if data.is_null() {
+    (*cfg).cfg.rate_control.summary = None;
+
+    return 0;
+  }
+
+  let (needed, maybe_buf) = decode_slice(data, len);
+
+  if maybe_buf.is_none() {
+    return needed;
+  }
+
+  let summary = rav1e::RateControlSummary::from_slice(maybe_buf.unwrap()).ok();
+  if summary.is_none() {
+    -1
+  } else {
+    (*cfg).cfg.rate_control.summary = summary;
+
+    0
+  }
+}
+
+/// Request to emit pass data
+///
+/// Set emit to 0 to not emit pass data, non-zero to emit pass data.
+///
+#[no_mangle]
+pub unsafe extern fn rav1e_config_set_emit_data(
+  cfg: *mut Config, emit: c_int,
+) {
+  (*cfg).cfg.rate_control.emit_pass_data = emit != 0;
 }
 
 /// Set the time base of the stream
@@ -754,6 +855,132 @@ pub unsafe extern fn rav1e_twopass_out(ctx: *mut Context) -> *mut Data {
   }))
 }
 
+/// Rate Control Data
+#[derive(Debug, PartialEq)]
+#[repr(C)]
+pub enum RcDataKind {
+  /// A Rate Control Summary Packet
+  ///
+  /// It is emitted once, after the encoder is flushed.
+  ///
+  /// It contains a summary of the rate control information for the
+  /// encoding process that just terminated.
+  Summary,
+  /// A Rate Control Frame-specific Packet
+  ///
+  /// It is emitted every time a frame is processed.
+  ///
+  /// The information contained is required to encode its matching
+  /// frame in a second pass encoding.
+  Frame,
+}
+
+/// Return the Rate Control Summary Packet size
+///
+/// It is useful mainly to preserve space when saving
+/// both Rate Control Summary and Frame Packets in a single file
+#[no_mangle]
+pub unsafe extern fn rav1e_rc_summary_size(ctx: *const Context) -> size_t {
+  (*ctx).ctx.rc_summary_size() as size_t + 8
+}
+
+/// Return the first pass data
+///
+/// Call it after rav1e_receive_packet() returns a normal condition status:
+/// EncoderStatus::Encoded,
+/// EncoderStatus::Success,
+/// EncoderStatus::LimitReached.
+///
+/// use rav1e_data_unref() to free the data.
+///
+/// It will return a `RcDataKind::Summary` once the encoder is flushed.
+#[no_mangle]
+pub unsafe extern fn rav1e_rc_receive_pass_data(
+  ctx: *mut Context, data: *mut *mut Data,
+) -> RcDataKind {
+  use crate::api::RcData::*;
+  let (buf, kind) = match (*ctx).ctx.rc_receive_pass_data() {
+    Summary(data) => (data, RcDataKind::Summary),
+    Frame(data) => (data, RcDataKind::Frame),
+  };
+
+  let mut full_buf = Vec::with_capacity(buf.len() + 8);
+
+  full_buf.extend_from_slice(&(buf.len() as u64).to_be_bytes());
+  full_buf.extend_from_slice(&buf);
+
+  let full_buf = full_buf.into_boxed_slice();
+
+  *data = Box::into_raw(Box::new(Data {
+    len: full_buf.len(),
+    data: Box::into_raw(full_buf) as *mut u8,
+  }));
+
+  kind
+}
+
+/// Number of pass data packets required to progress the encoding process.
+///
+/// At least that number of packets must be passed before the encoder can
+/// progress.
+///
+/// Stop feeding-in pass data packets once the function returns 0.
+///
+/// ``` c
+/// while (rav1e_rc_second_pass_data_required(ctx) > 0) {
+///   int more = rav1e_rc_send_pass_data(ctx, &data, &len);
+///   if (more > 0) {
+///      refill(&data, &len);
+///   } else if (more < 0) {
+///     goto fail;
+///   }
+/// }
+/// ```
+///
+#[no_mangle]
+pub unsafe extern fn rav1e_rc_second_pass_data_required(
+  ctx: *const Context,
+) -> i32 {
+  (*ctx).ctx.rc_second_pass_data_required() as i32
+}
+
+/// Feed the first pass Rate Control data to the encoder,
+/// Frame-specific Packets only.
+///
+/// Call it before receive_packet()
+///
+/// If additional data is required, pointer and len stay unchanged, otherwise
+/// they are updated.
+///
+/// Returns:
+/// - `0` on success,
+/// - `> 0` the amount of bytes needed
+/// - `< 0` on unrecoverable failure
+#[no_mangle]
+pub unsafe extern fn rav1e_rc_send_pass_data(
+  ctx: *mut Context, data: *mut *const u8, len: *mut size_t,
+) -> c_int {
+  let (need, maybe_buf) = decode_slice(data, len);
+
+  if maybe_buf.is_none() {
+    return need;
+  }
+
+  let ret = (*ctx)
+    .ctx
+    .rc_send_pass_data(maybe_buf.unwrap())
+    .map(|_v| None)
+    .unwrap_or_else(|e| Some(e));
+
+  (*ctx).last_err = ret;
+
+  if ret.is_some() {
+    -1
+  } else {
+    0
+  }
+}
+
 /// Ask how many bytes of the stats file are needed before the next frame
 /// of the second pass in a two-pass encode can be encoded. This is a lower
 /// bound (more might be required), but if 0 is returned, then encoding can
@@ -1005,6 +1232,89 @@ mod test {
       // 42 would be freed after this
       rav1e_frame_unref(f);
       // 15 - reorder delay .. 29 would be freed after this
+      rav1e_context_unref(rax);
+      rav1e_config_unref(rac);
+    }
+  }
+
+  #[test]
+  fn two_pass_encoding() {
+    unsafe {
+      let rac = rav1e_config_default();
+      let w = CString::new("width").unwrap();
+      rav1e_config_parse_int(rac, w.as_ptr(), 64);
+      let h = CString::new("height").unwrap();
+      rav1e_config_parse_int(rac, h.as_ptr(), 64);
+      let s = CString::new("speed").unwrap();
+      rav1e_config_parse_int(rac, s.as_ptr(), 10);
+      let s = CString::new("bitrate").unwrap();
+      rav1e_config_parse_int(rac, s.as_ptr(), 1000);
+      rav1e_config_set_emit_data(rac, 1);
+
+      let rax = rav1e_context_new(rac);
+      let f = rav1e_frame_new(rax);
+
+      for _ in 0..10 {
+        rav1e_send_frame(rax, f);
+      }
+
+      rav1e_send_frame(rax, std::ptr::null_mut());
+
+      let mut frame_data = std::collections::VecDeque::new();
+      let mut summary: *mut Data = std::ptr::null_mut();
+
+      loop {
+        let mut p: *mut Packet = std::ptr::null_mut();
+        let ret = rav1e_receive_packet(rax, &mut p);
+        rav1e_packet_unref(p);
+        if ret == EncoderStatus::LimitReached {
+          let kind = rav1e_rc_receive_pass_data(rax, &mut summary);
+          assert_eq!(kind, RcDataKind::Summary);
+          eprintln!("Got rc summary {} bytes", (*summary).len);
+          break;
+        } else if ret == EncoderStatus::Encoded
+          || ret == EncoderStatus::Success
+        {
+          let mut p: *mut Data = std::ptr::null_mut();
+          let kind = rav1e_rc_receive_pass_data(rax, &mut p);
+          assert_eq!(kind, RcDataKind::Frame);
+          eprintln!("Got rc frame data {} bytes", (*p).len);
+          frame_data.push_back(p);
+        }
+      }
+
+      rav1e_config_set_emit_data(rac, 0);
+      let mut data = (*summary).data;
+      let mut len = (*summary).len;
+      let ret = rav1e_config_set_rc_summary(rac, &mut data, &mut len);
+      assert_eq!(ret, 0);
+
+      rav1e_data_unref(summary);
+
+      for _ in 0..10 {
+        rav1e_send_frame(rax, f);
+      }
+
+      rav1e_send_frame(rax, std::ptr::null_mut());
+
+      loop {
+        let mut p: *mut Packet = std::ptr::null_mut();
+        while rav1e_rc_second_pass_data_required(rax) > 0 {
+          let d = frame_data.pop_front().unwrap();
+          let mut data = (*d).data;
+          let mut len = (*d).len;
+          rav1e_rc_send_pass_data(rax, &mut data, &mut len);
+          rav1e_data_unref(d);
+        }
+
+        let ret = rav1e_receive_packet(rax, &mut p);
+        rav1e_packet_unref(p);
+        if ret == EncoderStatus::LimitReached {
+          break;
+        }
+      }
+
+      rav1e_frame_unref(f);
       rav1e_context_unref(rax);
       rav1e_config_unref(rac);
     }
