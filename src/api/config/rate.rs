@@ -34,7 +34,7 @@ pub use crate::rate::RCSummary as RateControlSummary;
 impl RateControlSummary {
   /// Deserializes a byte slice into a RateControlSummary
   // TODO: improve the error reporting later
-  fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
+  pub(crate) fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
     let mut de = RCDeserialize::default();
     let _ = de.buffer_fill(bytes, 0, TWOPASS_HEADER_SZ);
 
