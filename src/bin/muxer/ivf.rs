@@ -15,6 +15,7 @@ use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
+use std::path::Path;
 
 use crate::error::*;
 
@@ -45,9 +46,24 @@ impl Muxer for IvfMuxer {
   }
 }
 
+cfg_if::cfg_if! {
+  if #[cfg(unix)] {
+    use std::os::unix::fs::*;
+    fn is_file<P: AsRef<Path>>(path: P) -> bool {
+      fs::metadata(path).map(|meta| {
+        !meta.file_type().is_char_device() && !meta.file_type().is_socket()
+      }).unwrap_or(false)
+    }
+  } else {
+    fn is_file<P: AsRef<Path>>(path: P) -> bool {
+      fs::metadata(path).is_ok()
+    }
+  }
+}
+
 impl IvfMuxer {
   pub fn check_file(path: &str) -> Result<(), CliError> {
-    if fs::metadata(path).is_ok() {
+    if is_file(path) {
       eprint!("File '{}' already exists. Overwrite ? [y/N] ", path);
       io::stdout().flush().unwrap();
 
