@@ -138,22 +138,69 @@ fn process_frame<T: Pixel, D: Decoder>(
   let mut frame_summaries = Vec::new();
   let mut pass1file = pass1file;
   let mut pass2file = pass2file;
+
   // Submit first pass data to pass 2.
   if let Some(passfile) = pass2file.as_mut() {
-    let mut buflen = [0u8; 8];
-    passfile
-      .read_exact(&mut buflen)
-      .map_err(|e| e.context("Unable to read the two-pass data file."))?;
-    let mut data = vec![0u8; u64::from_be_bytes(buflen) as usize];
+    let required_data = ctx.rc_second_pass_data_required();
+    for _ in 0..required_data {
+      let mut buflen = [0u8; 8];
+      passfile
+        .read_exact(&mut buflen)
+        .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+      let mut data = vec![0u8; u64::from_be_bytes(buflen) as usize];
 
-    passfile
-      .read_exact(&mut data)
-      .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+      passfile
+        .read_exact(&mut data)
+        .map_err(|e| e.context("Unable to read the two-pass data file."))?;
 
-    ctx
-      .rc_send_pass_data(&data)
-      .map_err(|e| e.context("Corrupted first pass data"))?;
+      ctx
+        .rc_send_pass_data(&data)
+        .map_err(|e| e.context("Corrupted first pass data"))?;
+    }
   }
+
+  let pkt_wrapped = ctx.receive_packet();
+  let ret = match pkt_wrapped {
+    Ok(pkt) => {
+      output_file.write_frame(
+        pkt.input_frameno as u64,
+        pkt.data.as_ref(),
+        pkt.frame_type,
+      );
+      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+        (y4m_enc.as_mut(), &pkt.rec)
+      {
+        write_y4m_frame(y4m_enc_uw, rec, y4m_details);
+      }
+      frame_summaries.push(build_frame_summary(
+        pkt,
+        y4m_details.bit_depth,
+        y4m_details.chroma_sampling,
+        metrics_cli,
+      ));
+      Ok(Some(frame_summaries))
+    }
+    Err(EncoderStatus::NeedMoreData) => {
+      source.read_frame(ctx, y4m_details)?;
+      Ok(Some(frame_summaries))
+    }
+    Err(EncoderStatus::EnoughData) => {
+      unreachable!();
+    }
+    Err(EncoderStatus::LimitReached) => Ok(None),
+    Err(e @ EncoderStatus::Failure) => {
+      Err(e.context("Failed to encode video"))
+    }
+    Err(e @ EncoderStatus::NotReady) => {
+      Err(e.context("Mismanaged handling of two-pass stats data"))
+    }
+    Err(EncoderStatus::Encoded) => Ok(Some(frame_summaries)),
+  };
+
+  if ret.is_err() {
+    return ret;
+  }
+
   // Save first pass data from pass 1.
   if let Some(passfile) = pass1file.as_mut() {
     match ctx.rc_receive_pass_data() {
@@ -186,46 +233,7 @@ fn process_frame<T: Pixel, D: Decoder>(
     }
   }
 
-  let pkt_wrapped = ctx.receive_packet();
-  match pkt_wrapped {
-    Ok(pkt) => {
-      output_file.write_frame(
-        pkt.input_frameno as u64,
-        pkt.data.as_ref(),
-        pkt.frame_type,
-      );
-      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
-        (y4m_enc.as_mut(), &pkt.rec)
-      {
-        write_y4m_frame(y4m_enc_uw, rec, y4m_details);
-      }
-      frame_summaries.push(build_frame_summary(
-        pkt,
-        y4m_details.bit_depth,
-        y4m_details.chroma_sampling,
-        metrics_cli,
-      ));
-    }
-    Err(EncoderStatus::NeedMoreData) => {
-      source.read_frame(ctx, y4m_details)?;
-    }
-    Err(EncoderStatus::EnoughData) => {
-      unreachable!();
-    }
-    Err(EncoderStatus::LimitReached) => {
-      return Ok(None);
-    }
-    e @ Err(EncoderStatus::Failure) => {
-      let _ = e.map_err(|e| e.context("Failed to encode video"))?;
-    }
-    e @ Err(EncoderStatus::NotReady) => {
-      let _ = e.map_err(|e| {
-        e.context("Mismanaged handling of two-pass stats data")
-      })?;
-    }
-    Err(EncoderStatus::Encoded) => {}
-  }
-  Ok(Some(frame_summaries))
+  ret
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
