@@ -38,9 +38,7 @@
 
 #include "src/arm/asm.S"
 
-.global X(mc_subpel_filters)
-.hidden X(mc_subpel_filters)
-const X(mc_subpel_filters), align=3
+const mc_subpel_filters, export=1, align=3
 .byte  0,   1,  -3,  63,   4,  -1,   0,   0 /* REGULAR */
 .byte  0,   1,  -5,  61,   9,  -2,   0,   0
 .byte  0,   1,  -6,  58,  14,  -4,   1,   0
@@ -118,9 +116,7 @@ const X(mc_subpel_filters), align=3
 .byte  0,   0,   1,  17,  31,  15,   0,   0
 endconst
 
-.global X(filter_intra_taps)
-.hidden X(filter_intra_taps)
-const X(filter_intra_taps), align=4
+const filter_intra_taps, export=1,  align=4
 .byte  -6,  10,  -5,   2,  -3,   1,  -3,   1 /* 0 */
 .byte  -4,   6,  -3,   2,  -3,   2,  -3,   1
 .byte   0,   0,  10,   0,   1,  10,   1,   2
@@ -163,9 +159,7 @@ const X(filter_intra_taps), align=4
 .byte  14,   0,  12,   0,  11,   0,   9,   0
 endconst
 
-.global X(sgr_x_by_x)
-.hidden X(sgr_x_by_x)
-const X(sgr_x_by_x), align=4
+const sgr_x_by_x, export=1, align=4
 .byte 255, 128,  85,  64,  51,  43,  37,  32,  28,  26,  23,  21,  20,  18,  17
 .byte  16,  15,  14,  13,  13,  12,  12,  11,  11,  10,  10,   9,   9,   9,   9
 .byte   8,   8,   8,   8,   7,   7,   7,   7,   7,   6,   6,   6,   6,   6,   6
@@ -186,9 +180,7 @@ const X(sgr_x_by_x), align=4
 .byte   0
 endconst
 
-.global X(mc_warp_filter)
-.hidden X(mc_warp_filter)
-const X(mc_warp_filter), align=3
+const mc_warp_filter, export=1, align=3
 /*  [-1, 0) */
 .byte 0,   0, 127,   1,   0, 0, 0, 0,  0, - 1, 127,   2,   0, 0, 0, 0
 .byte 1, - 3, 127,   4, - 1, 0, 0, 0,  1, - 4, 126,   6, - 2, 1, 0, 0
@@ -292,9 +284,7 @@ const X(mc_warp_filter), align=3
 .byte 0, 0, 0,   0,   2, 127, - 1, 0
 endconst
 
-.global X(sm_weights)
-.hidden X(sm_weights)
-const X(sm_weights)
+const sm_weights, export=1
 .byte   0,   0 /* Unused, because we always offset by bs, which is at least 2. */
 .byte 255, 128 /* bs = 2 */
 .byte 255, 149,  85,  64 /* bs = 4 */
@@ -315,9 +305,7 @@ const X(sm_weights)
 .byte   7,   6,   6,   5,   5,   4,   4,   4
 endconst
 
-.global X(obmc_masks)
-.hidden X(obmc_masks)
-const X(obmc_masks), align=4
+const obmc_masks, export=1, align=4
 .byte  0,  0 /* Unused */
 .byte 19,  0 /* 2 */
 .byte 25, 14,  5,  0 /* 4 */
