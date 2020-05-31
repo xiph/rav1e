@@ -1594,6 +1594,12 @@ impl RCState {
   // Return the number of frame data packets to be parsed before
   // the encoding process can continue.
   pub(crate) fn twopass_in_frames_needed(&self) -> i32 {
+    if self.target_bitrate <= 0 {
+      return 0;
+    }
+    if self.frame_metrics.is_empty() {
+      return 1;
+    }
     let mut cur_scale_window_nframes = 0;
     let mut cur_nframes_left = 0;
     for fti in 0..=FRAME_NSUBTYPES {
@@ -1645,6 +1651,9 @@ impl RCState {
         }
         if m.show_frame {
           self.scale_window_ntus += 1;
+        }
+        if frames_needed == 1 {
+          self.pass2_data_ready = true;
         }
       } else {
         return Err(());

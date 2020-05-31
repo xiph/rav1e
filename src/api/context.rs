@@ -365,11 +365,12 @@ impl<T: Pixel> Context<T> {
 
   /// Return the first pass data
   ///
-  /// Call it before receive_packet.
+  /// Call it after receive_packet.
   ///
   /// It will return a `RcData::Summary` once the encoder is flushed.
   pub fn rc_receive_pass_data(&mut self) -> RcData {
-    if self.inner.done_processing() {
+    if self.inner.done_processing() && self.inner.rc_state.pass1_data_retrieved
+    {
       let data = self.inner.rc_state.emit_summary();
       RcData::Summary(data.to_vec().into_boxed_slice())
     } else if let Some(data) = self.inner.rc_state.emit_frame_data() {
@@ -384,7 +385,11 @@ impl<T: Pixel> Context<T> {
   /// Number of pass data packets required to progress the encoding process.
   ///
   pub fn rc_second_pass_data_required(&self) -> usize {
-    self.inner.rc_state.twopass_in_frames_needed() as usize
+    if self.inner.done_processing() {
+      0
+    } else {
+      self.inner.rc_state.twopass_in_frames_needed() as usize
+    }
   }
 
   /// Feed the first pass Rate Control data to the encoder,
