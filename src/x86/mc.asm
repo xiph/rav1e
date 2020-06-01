@@ -138,13 +138,24 @@ bilin_h_shuf8:  db  1,  0,  2,  1,  3,  2,  4,  3,  5,  4,  6,  5,  7,  6,  8,  
 bilin_v_shuf4:  db  4,  0,  5,  1,  6,  2,  7,  3,  8,  4,  9,  5, 10,  6, 11,  7
 deint_shuf4:    db  0,  4,  1,  5,  2,  6,  3,  7,  4,  8,  5,  9,  6, 10,  7, 11
 blend_shuf:     db  0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  2,  3,  2,  3,  2,  3
+pb_8x0_8x8: times 8 db 0
+            times 8 db 8
 
+ALIGN 32
+resize_mul:     dd  0,  1,  2,  3, 4, 5, 6, 7
+resize_shuf:    times 5 db 0
+                db  1, 2, 3, 4, 5, 6
+                times 5+8 db 7
+
+ALIGN 8
 wm_420_perm64:  dq 0xfedcba9876543210
 wm_420_sign:    dd 0x01020102, 0x01010101
 wm_422_sign:    dd 0x80808080, 0x7f7f7f7f
 wm_sign_avx512: dd 0x40804080, 0xc0c0c0c0, 0x40404040
 
+ALIGN 4
 pw_m128  times 2 dw -128
+pw_m256: times 2 dw -256
 pw_34:   times 2 dw 34
 pw_258:  times 2 dw 258
 pw_512:  times 2 dw 512
@@ -154,6 +165,7 @@ pw_6903: times 2 dw 6903
 pw_8192: times 2 dw 8192
 pd_2:     dd 2
 pd_32:    dd 32
+pd_63:    dd 63
 pd_512:   dd 512
 pd_32768: dd 32768
 
@@ -4985,6 +4997,147 @@ cglobal emu_edge, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
     jl .top_x_loop
 
 .end:
+    RET
+
+cextern resize_filter
+
+INIT_YMM avx2
+cglobal resize, 6, 14, 16, dst, dst_stride, src, src_stride, \
+                           dst_w, h, src_w, dx, mx0
+    sub          dword mx0m, 4<<14
+    sub        dword src_wm, 8
+    vpbroadcastd         m5, dxm
+    vpbroadcastd         m8, mx0m
+    vpbroadcastd         m6, src_wm
+
+    DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, h, x, picptr
+    LEA                  r7, $$
+%define base r7-$$
+
+    vpbroadcastd         m3, [base+pw_m256]
+    vpbroadcastd         m7, [base+pd_63]
+    vbroadcasti128      m15, [base+pb_8x0_8x8]
+    pmaddwd              m2, m5, [base+resize_mul]  ; dx*[0,1,2,3,4,5,6,7]
+    pslld                m5, 3                      ; dx*8
+    pslld                m6, 14
+    paddd                m8, m2                     ; mx+[0..7]*dx
+    pxor                 m2, m2
+
+    ; m2 = 0, m3 = pmulhrsw constant for x=(x+64)>>7
+    ; m8 = mx+[0..7]*dx, m5 = dx*8, m6 = src_w, m7 = 0x3f, m15=0,8
+
+.loop_y:
+    xor                  xd, xd
+    mova                 m4, m8                     ; per-line working version of mx
+
+.loop_x:
+    pmaxsd               m0, m4, m2
+    psrad                m9, m4, 8                  ; filter offset (unmasked)
+    pminsd               m0, m6                     ; iclip(mx, 0, src_w-8)
+    psubd                m1, m4, m0                 ; pshufb offset
+    psrad                m0, 14                     ; clipped src_x offset
+    psrad                m1, 14                     ; pshufb edge_emu offset
+    pand                 m9, m7                     ; filter offset (masked)
+
+    ; load source pixels - this ugly code is vpgatherdq emulation since
+    ; directly using vpgatherdq on Haswell is quite a bit slower :(
+    movd                r8d, xm0
+    pextrd              r9d, xm0, 1
+    pextrd             r10d, xm0, 2
+    pextrd             r11d, xm0, 3
+    vextracti128        xm0, m0, 1
+    movq               xm12, [srcq+r8]
+    movq               xm13, [srcq+r10]
+    movhps             xm12, [srcq+r9]
+    movhps             xm13, [srcq+r11]
+    movd                r8d, xm0
+    pextrd              r9d, xm0, 1
+    pextrd             r10d, xm0, 2
+    pextrd             r11d, xm0, 3
+    vinserti128         m12, [srcq+r8], 1
+    vinserti128         m13, [srcq+r10], 1
+    vpbroadcastq        m10, [srcq+r9]
+    vpbroadcastq        m11, [srcq+r11]
+    vpblendd            m12, m12, m10, 11000000b
+    vpblendd            m13, m13, m11, 11000000b
+
+    ; if no emulation is required, we don't need to shuffle or emulate edges
+    ; this also saves 2 quasi-vpgatherdqs
+    vptest               m1, m1
+    jz .filter
+
+    movd                r8d, xm1
+    pextrd              r9d, xm1, 1
+    pextrd             r10d, xm1, 2
+    pextrd             r11d, xm1, 3
+    movsxd               r8, r8d
+    movsxd               r9, r9d
+    movsxd              r10, r10d
+    movsxd              r11, r11d
+    vextracti128        xm1, m1, 1
+    movq               xm14, [base+resize_shuf+4+r8]
+    movq                xm0, [base+resize_shuf+4+r10]
+    movhps             xm14, [base+resize_shuf+4+r9]
+    movhps              xm0, [base+resize_shuf+4+r11]
+    movd                r8d, xm1
+    pextrd              r9d, xm1, 1
+    pextrd             r10d, xm1, 2
+    pextrd             r11d, xm1, 3
+    movsxd               r8, r8d
+    movsxd               r9, r9d
+    movsxd              r10, r10d
+    movsxd              r11, r11d
+    vinserti128         m14, [base+resize_shuf+4+r8], 1
+    vinserti128          m0, [base+resize_shuf+4+r10], 1
+    vpbroadcastq        m10, [base+resize_shuf+4+r9]
+    vpbroadcastq        m11, [base+resize_shuf+4+r11]
+    vpblendd            m14, m14, m10, 11000000b
+    vpblendd             m0, m0, m11, 11000000b
+
+    paddb               m14, m15
+    paddb                m0, m15
+    pshufb              m12, m14
+    pshufb              m13, m0
+
+.filter:
+    movd                r8d, xm9
+    pextrd              r9d, xm9, 1
+    pextrd             r10d, xm9, 2
+    pextrd             r11d, xm9, 3
+    vextracti128        xm9, m9, 1
+    movq               xm10, [base+resize_filter+r8*8]
+    movq               xm11, [base+resize_filter+r10*8]
+    movhps             xm10, [base+resize_filter+r9*8]
+    movhps             xm11, [base+resize_filter+r11*8]
+    movd                r8d, xm9
+    pextrd              r9d, xm9, 1
+    pextrd             r10d, xm9, 2
+    pextrd             r11d, xm9, 3
+    vinserti128         m10, [base+resize_filter+r8*8], 1
+    vinserti128         m11, [base+resize_filter+r10*8], 1
+    vpbroadcastq        m14, [base+resize_filter+r9*8]
+    vpbroadcastq         m1, [base+resize_filter+r11*8]
+    vpblendd            m10, m10, m14, 11000000b
+    vpblendd            m11, m11, m1, 11000000b
+
+    pmaddubsw           m12, m10
+    pmaddubsw           m13, m11
+    phaddw              m12, m13
+    vextracti128       xm13, m12, 1
+    phaddsw            xm12, xm13
+    pmulhrsw           xm12, xm3                    ; x=(x+64)>>7
+    packuswb           xm12, xm12
+    movq          [dstq+xq], xm12
+
+    paddd                m4, m5
+    add                  xd, 8
+    cmp                  xd, dst_wd
+    jl .loop_x
+
+    add                dstq, dst_strideq
+    add                srcq, src_strideq
+    dec                  hd
+    jg .loop_y
     RET
 
 INIT_YMM avx2
