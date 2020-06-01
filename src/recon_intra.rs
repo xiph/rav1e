@@ -69,10 +69,7 @@ static has_tr_16x8: &[u8] =
 static has_tr_16x16: &[u8] = &[255, 85, 119, 85, 127, 85, 119, 85];
 static has_tr_16x32: &[u8] = &[255, 119, 127, 119];
 static has_tr_32x16: &[u8] = &[15, 5, 7, 5];
-
-//pub static has_tr_32x32: [u8; 2] = [ 95, 87 ];
 static has_tr_32x32: &[u8] = &[95, 87];
-
 static has_tr_32x64: &[u8] = &[127];
 static has_tr_64x32: &[u8] = &[19];
 static has_tr_64x64: &[u8] = &[7];
@@ -136,22 +133,25 @@ static has_tr_vert_64x64: &[u8] = &[3];
 //
 // There are tables for each of the square sizes. Vertical rectangles (like
 // BLOCK_16X32) use their respective "non-vert" table
-/*
 static has_tr_vert_tables: &[&[u8]] = &[
-  // 4X4
-  has_null,
-  // 4X8,      8X4,         8X8
-  has_tr_4x8, has_null, has_tr_vert_8x8,
-  // 8X16,     16X8,        16X16
-  has_tr_8x16, has_null, has_tr_vert_16x16,
-  // 16X32,    32X16,       32X32
-  has_tr_16x32, has_null, has_tr_vert_32x32,
-  // 32X64,    64X32,       64X64
-  has_tr_32x64, has_null, has_tr_vert_64x64,
-  // 64x128,   128x64,      128x128
-  has_tr_64x128, has_null, has_tr_128x128
+  has_null,          // 4X4
+  has_tr_4x8,        // 4X8
+  has_null,          // 8X4
+  has_tr_vert_8x8,   // 8X8
+  has_tr_8x16,       // 8X16
+  has_null,          // 16X8
+  has_tr_vert_16x16, // 16X16
+  has_tr_16x32,      // 16X32
+  has_null,          // 32X16
+  has_tr_vert_32x32, // 32X32
+  has_tr_32x64,      // 32X64
+  has_null,          // 64X32
+  has_tr_vert_64x64, // 64X64
+  has_tr_64x128,     // 64x128
+  has_null,          // 128x64
+  has_tr_128x128,    // 128x128
 ];
-*/
+
 // TODO: Enable the case for PARTITION_VERT_A/B once they can be encoded by rav1e.
 pub fn get_has_tr_table(
   /*partition: PartitionType, */ bsize: BlockSize,
@@ -172,7 +172,6 @@ pub fn get_has_tr_table(
 }
 
 pub fn has_top_right(
-  /*const AV1_COMMON *cm,*/
   bsize: BlockSize, partition_bo: TileBlockOffset, top_available: bool,
   right_available: bool, tx_size: TxSize, row_off: usize, col_off: usize,
   ss_x: usize, _ss_y: usize,
@@ -213,8 +212,7 @@ pub fn has_top_right(
 
     let bw_in_mi_log2 = bsize.width_log2() - MI_SIZE_LOG2;
     let bh_in_mi_log2 = bsize.height_log2() - MI_SIZE_LOG2;
-    //const int sb_mi_size = mi_size_high[cm->seq_params.sb_size];
-    let sb_mi_size: usize = 16; // 64x64, fi.sequence.use_128x128_superblock
+    let sb_mi_size: usize = 16; // 64x64
     let blk_row_in_sb = (mi_row & (sb_mi_size - 1)) >> bh_in_mi_log2;
     let blk_col_in_sb = (mi_col & (sb_mi_size - 1)) >> bw_in_mi_log2;
 
@@ -374,15 +372,10 @@ pub fn get_has_bl_table(
 }
 
 pub fn has_bottom_left(
-  /*const AV1_COMMON *cm,*/
   bsize: BlockSize, partition_bo: TileBlockOffset, bottom_available: bool,
   left_available: bool, tx_size: TxSize, row_off: usize, col_off: usize,
   _ss_x: usize, ss_y: usize,
 ) -> bool {
-  /*static int has_bottom_left(const AV1_COMMON *cm, BLOCK_SIZE bsize, int mi_row,
-  int mi_col, int bottom_available, int left_available,
-  PARTITION_TYPE partition, TX_SIZE txsz, int row_off,
-  int col_off, int ss_x, int ss_y) {*/
   if !bottom_available || !left_available {
     return false;
   };
@@ -423,8 +416,7 @@ pub fn has_bottom_left(
 
     let bw_in_mi_log2 = bsize.width_log2() - MI_SIZE_LOG2;
     let bh_in_mi_log2 = bsize.height_log2() - MI_SIZE_LOG2;
-    //const int sb_mi_size = mi_size_high[cm->seq_params.sb_size];
-    let sb_mi_size: usize = 16; // 64x64, fi.sequence.use_128x128_superblock
+    let sb_mi_size: usize = 16; // 64x64
     let blk_row_in_sb = (mi_row & (sb_mi_size - 1)) >> bh_in_mi_log2;
     let blk_col_in_sb = (mi_col & (sb_mi_size - 1)) >> bw_in_mi_log2;
 
