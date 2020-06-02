@@ -592,12 +592,12 @@ unsafe fn option_match(
 /// - "speed": 0-10, default 6
 /// - "threads": maximum number of threads to be used
 /// - "tune": "psnr"-"psychovisual", default "psychovisual"
-/// - "quantizer": 0-255, default 100
+/// - "quantizer": 0-255 (0 denotes auto), default 100
 /// - "tiles": total number of tiles desired, default 0
 /// - "tile_rows": number of tiles horizontally (must be a power of two, overridden by tiles if present), default 0
 /// - "tile_cols": number of tiles vertically (must be a power of two, overridden by tiles if present), default 0
 /// - "min_quantizer": minimum allowed base quantizer to use in bitrate mode, default 0
-/// - "bitrate": target bitrate for the bitrate mode, default 0
+/// - "bitrate": target bitrate for the bitrate mode (required for two pass mode), default 0
 /// - "key_frame_interval": maximum interval between two keyframes, default 240
 /// - "min_key_frame_interval": minimum interval between two keyframes, default 12
 /// - "switch_frame_interval": interval between switch frames, default 0
@@ -606,6 +606,7 @@ unsafe fn option_match(
 /// - "low_latency": flag to enable low latency mode, default false
 /// - "enable_timing_info": flag to enable signaling timing info in the bitstream, default false
 /// - "still_picture": flag for still picture mode, default false
+///
 /// Return a negative value on error or 0.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_parse(
