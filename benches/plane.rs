@@ -33,7 +33,7 @@ pub fn downsample_8bit(c: &mut Criterion) {
   let input = init_plane_u8(1920, 1080);
   c.bench_function("downsample_8bit", move |b| {
     b.iter(|| {
-      let _ = input.downsampled(960, 540);
+      let _ = input.downsampled(input.cfg.width, input.cfg.height);
     })
   });
 }
@@ -42,7 +42,7 @@ pub fn downsample_odd(c: &mut Criterion) {
   let input = init_plane_u8(1919, 1079);
   c.bench_function("downsample_odd", move |b| {
     b.iter(|| {
-      let _ = input.downsampled(960, 540);
+      let _ = input.downsampled(input.cfg.width, input.cfg.height);
     })
   });
 }
@@ -51,7 +51,7 @@ pub fn downsample_10bit(c: &mut Criterion) {
   let input = init_plane_u16(1920, 1080);
   c.bench_function("downsample_10bit", move |b| {
     b.iter(|| {
-      let _ = input.downsampled(960, 540);
+      let _ = input.downsampled(input.cfg.width, input.cfg.height);
     })
   });
 }
