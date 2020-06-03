@@ -441,11 +441,11 @@ impl RCFrameMetrics {
 /// encoding pass.
 #[derive(Debug, Default, Clone)]
 pub struct RCSummary {
-  ntus: i32,
+  pub(crate) ntus: i32,
   nframes: [i32; FRAME_NSUBTYPES + 1],
   exp: [u8; FRAME_NSUBTYPES],
   scale_sum: [i64; FRAME_NSUBTYPES],
-  total: i32,
+  pub(crate) total: i32,
 }
 
 // Backing storage to deserialize Summary and Per-Frame pass data
