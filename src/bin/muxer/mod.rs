@@ -21,7 +21,7 @@ use std::path::Path;
 
 use crate::error::*;
 
-pub trait Muxer {
+pub trait Muxer: Send {
   fn write_header(
     &mut self, width: usize, height: usize, framerate_num: usize,
     framerate_den: usize,

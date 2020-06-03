@@ -19,6 +19,7 @@ readme = "README.md"
 repository = "https://github.com/xiph/rav1e/"
 autobenches = false
 autobins = false
+default-run = "rav1e"
 
 [features]
 unstable = []
@@ -129,6 +130,11 @@ rand_chacha = "0.2"
 
 [[bin]]
 name = "rav1e"
+required-features = ["binaries"]
+bench = false
+
+[[bin]]
+name = "rav1e-ch"
 required-features = ["binaries"]
 bench = false
 
