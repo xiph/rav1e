@@ -2261,8 +2261,8 @@ pub fn encode_block_with_modes<T: Pixel>(
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset, pmv_idx: usize,
-  ref_rd_cost: f64, inter_cfg: &InterConfig,
+  bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
+  inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2315,21 +2315,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       0.0
     };
 
-    let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
-      0
-    } else {
-      ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
-    };
-
-    let mode_decision = rdo_mode_decision(
-      fi,
-      ts,
-      cw,
-      bsize,
-      tile_bo,
-      (pmv_idx, pmv_inner_idx),
-      inter_cfg,
-    );
+    let mode_decision =
+      rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
 
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
@@ -2450,7 +2437,6 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           w_post_cdef,
           subsize,
           offset,
-          pmv_idx,
           best_rd,
           inter_cfg,
         );
@@ -2556,8 +2542,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
-  block_output: &Option<PartitionGroupParameters>, pmv_idx: usize,
-  inter_cfg: &InterConfig,
+  block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
 ) {
   if tile_bo.0.x >= cw.bc.blocks.cols() || tile_bo.0.y >= cw.bc.blocks.rows() {
     return;
@@ -2634,7 +2619,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       bsize,
       tile_bo,
       &rdo_output,
-      pmv_idx,
       &partition_types,
       rdo_type,
       inter_cfg,
@@ -2662,22 +2646,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         // The optimal prediction mode is known from a previous iteration
         rdo_output.part_modes[0].clone()
       } else {
-        let pmv_inner_idx = if bsize > BlockSize::BLOCK_32X32 {
-          0
-        } else {
-          ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
-        };
-
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(
-          fi,
-          ts,
-          cw,
-          bsize,
-          tile_bo,
-          (pmv_idx, pmv_inner_idx),
-          inter_cfg,
-        )
+        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg)
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -2838,7 +2808,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
               part_type: PartitionType::PARTITION_NONE,
               part_modes: ArrayVec::from_iter(once(mode)),
             }),
-            pmv_idx,
             inter_cfg,
           );
         }
@@ -2872,7 +2841,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             subsize,
             offset,
             &None,
-            pmv_idx,
             inter_cfg,
           );
         });
@@ -3491,8 +3459,6 @@ fn encode_tile<'a, T: Pixel>(
       cw.bc.cdef_coded = false;
       cw.bc.code_deltas = fi.delta_q_present;
 
-      let pmv_idx = sbx + sby * ts.sb_width;
-
       // Encode SuperBlock
       if fi.config.speed_settings.encode_bottomup {
         encode_partition_bottomup(
@@ -3503,7 +3469,6 @@ fn encode_tile<'a, T: Pixel>(
           &mut sbs_qe.w_post_cdef,
           BlockSize::BLOCK_64X64,
           tile_bo,
-          pmv_idx,
           std::f64::MAX,
           inter_cfg,
         );
@@ -3517,7 +3482,6 @@ fn encode_tile<'a, T: Pixel>(
           BlockSize::BLOCK_64X64,
           tile_bo,
           &None,
-          pmv_idx,
           inter_cfg,
         );
       }
