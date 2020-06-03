@@ -132,6 +132,11 @@ name = "rav1e"
 required-features = ["binaries"]
 bench = false
 
+[[bin]]
+name = "rav1e-ch"
+required-features = ["binaries"]
+bench = false
+
 [lib]
 bench = false
 
