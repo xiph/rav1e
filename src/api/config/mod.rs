@@ -165,22 +165,9 @@ fn check_tile_log2(n: usize) -> bool {
 }
 
 impl Config {
-  /// Creates a [`Context`] with this configuration.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// use rav1e::prelude::*;
-  ///
-  /// # fn main() -> Result<(), InvalidConfig> {
-  /// let cfg = Config::default();
-  /// let ctx: Context<u8> = cfg.new_context()?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  ///
-  /// [`Context`]: struct.Context.html
-  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
+  pub(crate) fn new_inner<T: Pixel>(
+    &self,
+  ) -> Result<ContextInner<T>, InvalidConfig> {
     assert!(
       8 * std::mem::size_of::<T>() >= self.enc.bit_depth,
       "The Pixel u{} does not match the Config bit_depth {}",
@@ -195,14 +182,6 @@ impl Config {
     // Since we only call this once, this shouldn't cause
     // performance issues.
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
-
-    let pool = if let Some(ref p) = self.pool {
-      p.clone()
-    } else {
-      let pool =
-        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
-      Arc::new(pool)
-    };
 
     let mut config = self.enc;
     config.set_key_frame_interval(
@@ -219,7 +198,6 @@ impl Config {
     }
 
     let mut inner = ContextInner::new(&config);
-
     if self.rate_control.emit_pass_data {
       let params = inner.rc_state.get_twopass_out_params(&inner, 0);
       inner.rc_state.init_first_pass(params.pass1_log_base_q);
@@ -229,6 +207,35 @@ impl Config {
       inner.rc_state.init_second_pass();
       inner.rc_state.setup_second_pass(s);
     }
+
+    Ok(inner)
+  }
+  /// Creates a [`Context`] with this configuration.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// # fn main() -> Result<(), InvalidConfig> {
+  /// let cfg = Config::default();
+  /// let ctx: Context<u8> = cfg.new_context()?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  ///
+  /// [`Context`]: struct.Context.html
+  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
+    let inner = self.new_inner()?;
+    let config = inner.config;
+
+    let pool = if let Some(ref p) = self.pool {
+      p.clone()
+    } else {
+      let pool =
+        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+      Arc::new(pool)
+    };
 
     Ok(Context { is_flushing: false, inner, pool, config })
   }
