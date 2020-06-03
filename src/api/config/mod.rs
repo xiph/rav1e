@@ -97,6 +97,10 @@ pub enum InvalidConfig {
   /// The rate control needs a target bitrate in order to produce results
   #[error("The rate control requires a target bitrate")]
   TargetBitrateNeeded,
+
+  /// The configuration
+  #[error("Mismatch in the rate control configuration")]
+  RateControlConfigurationMismatch,
 }
 
 /// Contains the encoder configuration.
@@ -198,6 +202,7 @@ impl Config {
     }
 
     let mut inner = ContextInner::new(&config);
+
     if self.rate_control.emit_pass_data {
       let params = inner.rc_state.get_twopass_out_params(&inner, 0);
       inner.rc_state.init_first_pass(params.pass1_log_base_q);
@@ -228,7 +233,6 @@ impl Config {
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     let inner = self.new_inner()?;
     let config = inner.config;
-
     let pool = if let Some(ref p) = self.pool {
       p.clone()
     } else {

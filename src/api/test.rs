@@ -13,14 +13,12 @@ use crate::prelude::*;
 use std::sync::Arc;
 
 use interpolate_name::interpolate_test;
-
-fn setup_encoder<T: Pixel>(
+fn setup_config(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   bitrate: i32, low_latency: bool, switch_frame_interval: u64,
   no_scene_detection: bool, rdo_lookahead_frames: usize,
-) -> Context<T> {
-  assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
+) -> Config {
   let mut enc = EncoderConfig::with_speed_preset(speed);
   enc.quantizer = quantizer;
   enc.min_key_frame_interval = min_keyint;
@@ -35,8 +33,30 @@ fn setup_encoder<T: Pixel>(
   enc.speed_settings.no_scene_detection = no_scene_detection;
   enc.rdo_lookahead_frames = rdo_lookahead_frames;
 
-  let cfg = Config::new().with_encoder_config(enc).with_threads(1);
+  Config::new().with_encoder_config(enc).with_threads(1)
+}
 
+fn setup_encoder<T: Pixel>(
+  w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
+  chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
+  bitrate: i32, low_latency: bool, switch_frame_interval: u64,
+  no_scene_detection: bool, rdo_lookahead_frames: usize,
+) -> Context<T> {
+  let cfg = setup_config(
+    w,
+    h,
+    speed,
+    quantizer,
+    bit_depth,
+    chroma_sampling,
+    min_keyint,
+    max_keyint,
+    bitrate,
+    low_latency,
+    switch_frame_interval,
+    no_scene_detection,
+    rdo_lookahead_frames,
+  );
   cfg.new_context().unwrap()
 }
 
@@ -63,6 +83,53 @@ fn fill_frame_const<T: Pixel>(frame: &mut Frame<T>, value: T) {
       }
     }
   }
+}
+
+#[interpolate_test(low_latency_no_scene_change, true, true)]
+#[interpolate_test(reorder_no_scene_change, false, true)]
+#[interpolate_test(low_latency_scene_change_detection, true, false)]
+#[interpolate_test(reorder_scene_change_detection, false, false)]
+fn flush_ch(low_lantency: bool, no_scene_detection: bool) {
+  let cfg = setup_config(
+    64,
+    80,
+    10,
+    100,
+    8,
+    ChromaSampling::Cs420,
+    150,
+    200,
+    0,
+    low_lantency,
+    0,
+    no_scene_detection,
+    10,
+  );
+
+  let limit = 41;
+
+  let (mut sf, rp) = cfg.new_channel::<u8>().unwrap();
+
+  for _ in 0..limit {
+    let input = sf.new_frame();
+    let _ = sf.send(input);
+  }
+
+  drop(sf);
+
+  let mut count = 0;
+
+  for _ in 0..limit {
+    let _ = rp
+      .recv()
+      .map(|_| {
+        eprintln!("Packet Received {}/{}", count, limit);
+        count += 1;
+      })
+      .unwrap();
+  }
+
+  assert_eq!(limit, count);
 }
 
 #[interpolate_test(low_latency_no_scene_change, true, true)]
