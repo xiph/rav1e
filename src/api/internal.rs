@@ -366,7 +366,7 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Indicates whether more frames need to be processed into FrameInvariants
   /// in order for FI lookahead to be full.
-  fn needs_more_fi_lookahead(&self) -> bool {
+  pub fn needs_more_fi_lookahead(&self) -> bool {
     let ready_frames = self.get_rdo_lookahead_frames().count();
     ready_frames < self.config.rdo_lookahead_frames + 1
       && self.needs_more_frames(self.next_lookahead_frame)
