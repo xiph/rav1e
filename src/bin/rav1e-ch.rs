@@ -49,9 +49,9 @@ use std::fs::File;
 use std::io::{Read, Seek, Write};
 use std::sync::Arc;
 
-impl<T: Pixel> FrameBuilder<T> for Context<T> {
+impl<T: Pixel> FrameBuilder<T> for FrameSender<T> {
   fn new_frame(&self) -> Frame<T> {
-    Context::new_frame(self)
+    FrameSender::new_frame(self)
   }
 }
 
@@ -100,205 +100,216 @@ impl<D: Decoder> Source<D> {
   }
 
   fn read_frame<T: Pixel>(
-    &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
-  ) -> Result<(), CliError> {
+    &mut self, send_frame: &mut FrameSender<T>, video_info: VideoDetails,
+  ) -> bool {
     if self.limit != 0 && self.count == self.limit {
-      ctx.flush();
-      return Ok(());
+      return false;
     }
 
     #[cfg(all(unix, feature = "signal-hook"))]
     {
       if self.exit_requested.load(std::sync::atomic::Ordering::SeqCst) {
-        ctx.flush();
-        return Ok(());
+        return false;
       }
     }
 
-    match self.input.read_frame(ctx, &video_info) {
+    match self.input.read_frame(send_frame, &video_info) {
       Ok(frame) => {
-        match video_info.bit_depth {
-          8 | 10 | 12 => {}
-          _ => return Err(CliError::new("Unsupported bit depth")),
-        }
         self.count += 1;
-        let _ = ctx.send_frame(Some(Arc::new(frame)));
+        let _ = send_frame.send(frame);
+        true
       }
-      _ => {
-        ctx.flush();
-      }
-    };
-    Ok(())
-  }
-}
-
-// Encode and write a frame.
-// Returns frame information in a `Result`.
-fn process_frame<T: Pixel, D: Decoder>(
-  ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
-  pass1file: Option<&mut File>, pass2file: Option<&mut File>,
-  mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write + Send>>>,
-  metrics_cli: MetricsEnabled,
-) -> Result<Option<Vec<FrameSummary>>, CliError> {
-  let y4m_details = source.input.get_video_details();
-  let mut frame_summaries = Vec::new();
-  let mut pass1file = pass1file;
-  let mut pass2file = pass2file;
-
-  // Submit first pass data to pass 2.
-  if let Some(passfile) = pass2file.as_mut() {
-    while ctx.rc_second_pass_data_required() > 0 {
-      let mut buflen = [0u8; 8];
-      passfile
-        .read_exact(&mut buflen)
-        .map_err(|e| e.context("Unable to read the two-pass data file."))?;
-      let mut data = vec![0u8; u64::from_be_bytes(buflen) as usize];
-
-      passfile
-        .read_exact(&mut data)
-        .map_err(|e| e.context("Unable to read the two-pass data file."))?;
-
-      ctx
-        .rc_send_pass_data(&data)
-        .map_err(|e| e.context("Corrupted first pass data"))?;
+      _ => false,
     }
   }
-
-  let pkt_wrapped = ctx.receive_packet();
-  let (ret, emit_pass_data) = match pkt_wrapped {
-    Ok(pkt) => {
-      output_file.write_frame(
-        pkt.input_frameno as u64,
-        pkt.data.as_ref(),
-        pkt.frame_type,
-      );
-      if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
-        (y4m_enc.as_mut(), &pkt.rec)
-      {
-        write_y4m_frame(y4m_enc_uw, rec, y4m_details);
-      }
-      frame_summaries.push(build_frame_summary(
-        pkt,
-        y4m_details.bit_depth,
-        y4m_details.chroma_sampling,
-        metrics_cli,
-      ));
-      (Ok(Some(frame_summaries)), true)
-    }
-    Err(EncoderStatus::NeedMoreData) => {
-      source.read_frame(ctx, y4m_details)?;
-      (Ok(Some(frame_summaries)), false)
-    }
-    Err(EncoderStatus::EnoughData) => {
-      unreachable!();
-    }
-    Err(EncoderStatus::LimitReached) => (Ok(None), true),
-    Err(e @ EncoderStatus::Failure) => {
-      (Err(e.context("Failed to encode video")), false)
-    }
-    Err(e @ EncoderStatus::NotReady) => {
-      (Err(e.context("Mismanaged handling of two-pass stats data")), false)
-    }
-    Err(EncoderStatus::Encoded) => (Ok(Some(frame_summaries)), true),
-  };
-
-  if ret.is_err() {
-    return ret;
-  }
-
-  // Save first pass data from pass 1.
-  if let Some(passfile) = pass1file.as_mut() {
-    if emit_pass_data {
-      match ctx.rc_receive_pass_data() {
-        Some(RcData::Frame(outbuf)) => {
-          let len = outbuf.len() as u64;
-          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-
-          passfile.write_all(&outbuf).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-        }
-        Some(RcData::Summary(outbuf)) => {
-          // The last packet of rate control data we get is the summary data.
-          // Let's put it at the start of the file.
-          passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
-            e.context("Unable to seek in the two-pass data file.")
-          })?;
-          let len = outbuf.len() as u64;
-
-          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-
-          passfile.write_all(&outbuf).map_err(|e| {
-            e.context("Unable to write to two-pass data file.")
-          })?;
-        }
-        None => {}
-      }
-    }
-  }
-
-  ret
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
-  output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
-  mut pass2file: Option<File>,
+  output: &mut dyn Muxer, mut source: Source<D>, pass1file: Option<File>,
+  pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write + Send>>>,
   metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
-  let mut ctx: Context<T> =
-    cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
+  let ((mut send_frame, receive_packet), (send_rc, receive_rc)) =
+    match (pass1file.is_some(), pass2file.is_some()) {
+      (true, true) => {
+        let (channel, (send_rc, receive_rc)) = cfg
+          .new_multipass_channel::<T>()
+          .map_err(|e| e.context("Invalid setup"))?;
+        (channel, (Some(send_rc), Some(receive_rc)))
+      }
+      (true, false) => {
+        let (channel, receive_rc) = cfg
+          .new_firstpass_channel()
+          .map_err(|e| e.context("Invalid setup"))?;
+        (channel, (None, Some(receive_rc)))
+      }
+      (false, true) => {
+        let (channel, send_rc) = cfg
+          .new_secondpass_channel()
+          .map_err(|e| e.context("Invalid setup"))?;
+        (channel, (Some(send_rc), None))
+      }
+      (false, false) => {
+        let channel =
+          cfg.new_channel().map_err(|e| e.context("Invalid setup"))?;
+        (channel, (None, None))
+      }
+    };
 
-  // Let's write down a placeholder.
-  if let Some(passfile) = pass1file.as_mut() {
-    let len = ctx.rc_summary_size();
-    let buf = vec![0u8; len];
+  let y4m_details = source.input.get_video_details();
 
-    passfile
-      .write_all(&(len as u64).to_be_bytes())
-      .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+  crossbeam::thread::scope(move |s| -> Result<(), CliError> {
+    // Receive pass data
+    let receive_pass_data = s.spawn(move |_| -> Result<(), CliError> {
+      if let (Some(mut passfile), Some(receive_rc)) = (pass1file, receive_rc) {
+        let len = receive_rc.summary_size();
+        let buf = vec![0u8; len];
 
-    passfile
-      .write_all(&buf)
-      .map_err(|e| e.context("Unable to write to two-pass data file."))?;
-  }
+        passfile
+          .write_all(&(len as u64).to_be_bytes())
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
 
-  while let Some(frame_info) = process_frame(
-    &mut ctx,
-    &mut *output,
-    &mut source,
-    pass1file.as_mut(),
-    pass2file.as_mut(),
-    y4m_enc.as_mut(),
-    metrics_enabled,
-  )? {
-    if verbose != Verbose::Quiet {
-      for frame in frame_info {
-        progress.add_frame(frame.clone());
-        if verbose == Verbose::Verbose {
-          info!("{} - {}", frame, progress);
-        } else {
-          // Print a one-line progress indicator that overrides itself with every update
-          eprint!("\r{}                    ", progress);
-        };
+        passfile
+          .write_all(&buf)
+          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+        for data in receive_rc.iter() {
+          match data {
+            RcData::Frame(outbuf) => {
+              let len = outbuf.len() as u64;
+              passfile.write_all(&len.to_be_bytes()).map_err(|e| {
+                e.context("Unable to write to two-pass data file.")
+              })?;
+
+              passfile.write_all(&outbuf).map_err(|e| {
+                e.context("Unable to write to two-pass data file.")
+              })?;
+            }
+            RcData::Summary(outbuf) => {
+              // Write an end marker
+              passfile.write_all(&0u64.to_be_bytes()).map_err(|e| {
+                e.context("Unable to write to two-pass data file.")
+              })?;
+
+              // The last packet of rate control data we get is the summary data.
+              // Let's put it at the start of the file.
+              passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+                e.context("Unable to seek in the two-pass data file.")
+              })?;
+              let len = outbuf.len() as u64;
+
+              passfile.write_all(&len.to_be_bytes()).map_err(|e| {
+                e.context("Unable to write to two-pass data file.")
+              })?;
+
+              passfile.write_all(&outbuf).map_err(|e| {
+                e.context("Unable to write to two-pass data file.")
+              })?;
+            }
+          }
+        }
+      }
+      Ok(())
+    });
+
+    // Send frames
+    let send_frames = s.spawn(move |_| -> Result<(), CliError> {
+      while source.read_frame(&mut send_frame, y4m_details) {}
+
+      // send_frame.result()
+      Ok(())
+    });
+
+    // Send pass data
+    let send_pass_data = s.spawn(move |_| -> Result<(), CliError> {
+      if let (Some(mut passfile), Some(mut send_rc)) = (pass2file, send_rc) {
+        let mut buflen = [0u8; 8];
+
+        passfile
+          .read_exact(&mut buflen)
+          .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+
+        let mut data = vec![0u8; u64::from_be_bytes(buflen) as usize];
+
+        passfile
+          .read_exact(&mut data)
+          .map_err(|e| e.context("Unable to read the two-pass data file."))?;
+
+        while send_rc.send(RcData::Frame(data.into_boxed_slice())).is_ok() {
+          passfile.read_exact(&mut buflen).map_err(|e| {
+            e.context("Unable to read the two-pass data file.")
+          })?;
+
+          if u64::from_be_bytes(buflen) == 0 {
+            break;
+          }
+
+          data = vec![0u8; u64::from_be_bytes(buflen) as usize];
+
+          passfile.read_exact(&mut data).map_err(|e| {
+            e.context("Unable to read the two-pass data file.")
+          })?;
+        }
       }
 
-      output.flush().unwrap();
-    }
-  }
-  if verbose != Verbose::Quiet {
-    if verbose == Verbose::Verbose {
-      // Clear out the temporary progress indicator
-      eprint!("\r");
-    }
-    progress.print_summary(verbose == Verbose::Verbose);
-  }
-  Ok(())
+      Ok(())
+    });
+
+    // Receive Packets
+    let receive_packets = s.spawn(move |_| -> Result<(), CliError> {
+      for pkt in receive_packet.iter() {
+        output.write_frame(
+          pkt.input_frameno as u64,
+          pkt.data.as_ref(),
+          pkt.frame_type,
+        );
+        output.flush().unwrap();
+        if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
+          (y4m_enc.as_mut(), &pkt.rec)
+        {
+          write_y4m_frame(y4m_enc_uw, rec, y4m_details);
+        }
+        let summary = build_frame_summary(
+          pkt,
+          y4m_details.bit_depth,
+          y4m_details.chroma_sampling,
+          metrics_enabled,
+        );
+
+        if verbose != Verbose::Quiet {
+          progress.add_frame(summary.clone());
+          if verbose == Verbose::Verbose {
+            info!("{} - {}", summary, progress);
+          } else {
+            // Print a one-line progress indicator that overrides itself with every update
+            eprint!("\r{}                    ", progress);
+          };
+        }
+      }
+
+      if verbose != Verbose::Quiet {
+        if verbose == Verbose::Verbose {
+          // Clear out the temporary progress indicator
+          eprint!("\r");
+        }
+        progress.print_summary(verbose == Verbose::Verbose);
+      }
+
+      // receive_packet.result()
+      Ok(())
+    });
+
+    send_pass_data.join().expect("The send pass data thread panicked ")?;
+    receive_pass_data
+      .join()
+      .expect("The receive pass data thread panicked")?;
+    send_frames.join().expect("The send frames thread panicked")?;
+    receive_packets.join().expect("The receive packets thread panicked")?;
+
+    Ok(())
+  })
+  .unwrap()
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -417,19 +428,19 @@ fn run() -> Result<(), error::CliError> {
         ),
       )
       .with_colorspace(y4m_dec.get_colorspace())
-      .with_pixel_aspect(y4m::Ratio {
-        num: video_info.sample_aspect_ratio.num as usize,
-        den: video_info.sample_aspect_ratio.den as usize,
-      })
       .write_header(rec)
       .unwrap(),
     ),
     None => None,
   };
 
+  match video_info.bit_depth {
+    8 | 10 | 12 => {}
+    _ => return Err(CliError::new("Unsupported bit depth")),
+  }
+
   cli.enc.width = video_info.width;
   cli.enc.height = video_info.height;
-  cli.enc.sample_aspect_ratio = video_info.sample_aspect_ratio;
   cli.enc.bit_depth = video_info.bit_depth;
   cli.enc.chroma_sampling = video_info.chroma_sampling;
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;

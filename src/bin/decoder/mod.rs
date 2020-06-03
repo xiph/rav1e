@@ -13,10 +13,14 @@ use std::io;
 
 pub mod y4m;
 
+pub trait FrameBuilder<T: Pixel> {
+  fn new_frame(&self) -> Frame<T>;
+}
+
 pub trait Decoder: Send {
   fn get_video_details(&self) -> VideoDetails;
-  fn read_frame<T: Pixel>(
-    &mut self, ctx: &Context<T>, cfg: &VideoDetails,
+  fn read_frame<T: Pixel, F: FrameBuilder<T>>(
+    &mut self, ctx: &F, cfg: &VideoDetails,
   ) -> Result<Frame<T>, DecodeError>;
 }
 

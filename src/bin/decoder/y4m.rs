@@ -11,7 +11,7 @@
 use std::io::Read;
 
 use crate::color::ChromaSampling::Cs400;
-use crate::decoder::{DecodeError, Decoder, VideoDetails};
+use crate::decoder::{DecodeError, Decoder, FrameBuilder, VideoDetails};
 use crate::Frame;
 use rav1e::prelude::*;
 
@@ -41,8 +41,8 @@ impl Decoder for y4m::Decoder<Box<dyn Read + Send>> {
     }
   }
 
-  fn read_frame<T: Pixel>(
-    &mut self, ctx: &Context<T>, cfg: &VideoDetails,
+  fn read_frame<T: Pixel, F: FrameBuilder<T>>(
+    &mut self, ctx: &F, cfg: &VideoDetails,
   ) -> Result<Frame<T>, DecodeError> {
     let bytes = self.get_bytes_per_sample();
     self

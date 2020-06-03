@@ -90,6 +90,10 @@ impl RcDataReceiver {
   pub fn iter(&self) -> Iter<RcData> {
     self.0.iter()
   }
+
+  pub fn summary_size(&self) -> usize {
+    crate::rate::TWOPASS_HEADER_SZ
+  }
 }
 
 pub type PassDataChannel = (RcDataSender, RcDataReceiver);

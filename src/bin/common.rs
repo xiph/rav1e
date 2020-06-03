@@ -26,7 +26,7 @@ pub struct EncoderIO {
   pub rec: Option<Box<dyn Write + Send>>,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Verbose {
   Quiet,
   Normal,
