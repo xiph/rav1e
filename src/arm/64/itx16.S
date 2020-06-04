@@ -1394,7 +1394,7 @@ const eob_16x16_identity
         .short 4, 8, 12, 256
 endconst
 
-.macro def_fn_16x16 txfm1, txfm2, eob_half
+.macro def_fn_16x16 txfm1, txfm2
 function inv_txfm_add_\txfm1\()_\txfm2\()_16x16_16bpc_neon, export=1
 .ifc \txfm1\()_\txfm2, dct_dct
         idct_dc         16,  16,  2
@@ -1418,18 +1418,18 @@ function inv_txfm_add_\txfm1\()_\txfm2\()_16x16_16bpc_neon, export=1
 endfunc
 .endm
 
-def_fn_16x16 dct, dct, 36
-def_fn_16x16 identity, identity, 36
-def_fn_16x16 dct, adst, 36
-def_fn_16x16 dct, flipadst, 36
-def_fn_16x16 dct, identity, 8
-def_fn_16x16 adst, dct, 36
-def_fn_16x16 adst, adst, 36
-def_fn_16x16 adst, flipadst, 36
-def_fn_16x16 flipadst, dct, 36
-def_fn_16x16 flipadst, adst, 36
-def_fn_16x16 flipadst, flipadst, 36
-def_fn_16x16 identity, dct, 8
+def_fn_16x16 dct, dct
+def_fn_16x16 identity, identity
+def_fn_16x16 dct, adst
+def_fn_16x16 dct, flipadst
+def_fn_16x16 dct, identity
+def_fn_16x16 adst, dct
+def_fn_16x16 adst, adst
+def_fn_16x16 adst, flipadst
+def_fn_16x16 flipadst, dct
+def_fn_16x16 flipadst, adst
+def_fn_16x16 flipadst, flipadst
+def_fn_16x16 identity, dct
 
 function inv_txfm_add_16x4_neon
         mov             x15, x30
