@@ -43,7 +43,7 @@ jobs:
       uses: actions-rs/clippy-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        args: -- -D warnings --verbose -A clippy::wrong-self-convention
+        args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names
 
   build-unix:
 
