@@ -95,60 +95,67 @@ pub type PassDataChannel = (PassDataSender, PassDataReceiver);
 pub type FrameInput<T> = (Option<Arc<Frame<T>>>, Option<FrameParameters>);
 
 /// Endpoint to send frames
-pub struct FrameSender<T: Pixel>(Sender<FrameInput<T>>);
+pub struct FrameSender<T: Pixel> {
+  sender: Sender<FrameInput<T>>,
+  enc: Arc<EncoderConfig>,
+}
 
+// Proxy the crossbeam Sender
 impl<T: Pixel> FrameSender<T> {
   pub fn try_send<F: IntoFrame<T>>(
     &self, frame: F,
   ) -> Result<(), TrySendError<FrameInput<T>>> {
-    self.0.try_send(frame.into())
+    self.sender.try_send(frame.into())
   }
 
   pub fn send<F: IntoFrame<T>>(
     &self, frame: F,
   ) -> Result<(), SendError<FrameInput<T>>> {
-    self.0.send(frame.into())
+    self.sender.send(frame.into())
   }
   pub fn len(&self) -> usize {
-    self.0.len()
+    self.sender.len()
   }
   pub fn is_empty(&self) -> bool {
-    self.0.is_empty()
+    self.sender.is_empty()
   }
   // TODO: proxy more methods
 }
 
-/// Endpoint to receive packets
-pub struct PacketReceiver<T: Pixel>(Receiver<Packet<T>>);
-
-impl<T: Pixel> PacketReceiver<T> {
-  pub fn try_recv(&self) -> Result<Packet<T>, TryRecvError> {
-    self.0.try_recv()
-  }
-  pub fn recv(&self) -> Result<Packet<T>, RecvError> {
-    self.0.recv()
-  }
-  pub fn len(&self) -> usize {
-    self.0.len()
-  }
-  pub fn is_empty(&self) -> bool {
-    self.0.is_empty()
-  }
-  pub fn iter(&self) -> Iter<Packet<T>> {
-    self.0.iter()
+// Frame factory
+impl<T: Pixel> FrameSender<T> {
+  /// Helper to create a new frame with the current encoder configuration
+  #[inline]
+  pub fn new_frame(&self) -> Frame<T> {
+    Frame::new(self.enc.width, self.enc.height, self.enc.chroma_sampling)
   }
 }
 
-pub type VideoDataChannel<T> = (FrameSender<T>, PacketReceiver<T>);
+/// Endpoint to receive packets
+pub struct PacketReceiver<T: Pixel>{
+  receiver: Receiver<Packet<T>>,
+  enc: Arc<EncoderConfig>,
+}
 
-// TODO: use a separate struct?
-impl Config {
-  // TODO: add validation
-  #[inline]
-  pub fn new_frame<T: Pixel>(&self) -> Frame<T> {
-    Frame::new(self.enc.width, self.enc.height, self.enc.chroma_sampling)
+impl<T: Pixel> PacketReceiver<T> {
+  pub fn try_recv(&self) -> Result<Packet<T>, TryRecvError> {
+    self.receiver.try_recv()
   }
+  pub fn recv(&self) -> Result<Packet<T>, RecvError> {
+    self.receiver.recv()
+  }
+  pub fn len(&self) -> usize {
+    self.receiver.len()
+  }
+  pub fn is_empty(&self) -> bool {
+    self.receiver.is_empty()
+  }
+  pub fn iter(&self) -> Iter<Packet<T>> {
+    self.receiver.iter()
+  }
+}
 
+impl<T: Pixel> PacketReceiver<T> {
   /// Produces a sequence header matching the current encoding context.
   ///
   /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
@@ -188,16 +195,18 @@ impl Config {
 
     sequence_header_inner(&seq).unwrap()
   }
+}
 
+/// A channel modeling an encoding process
+pub type VideoDataChannel<T> = (FrameSender<T>, PacketReceiver<T>);
+
+impl Config {
   /// Create a single pass encoder channel
-  ///
-  /// The `PacketReceiver<T>` endpoint may block if not enough Frames are
-  /// sent through the `FrameSender<T>` endpoint.
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
   pub fn new_channel<T: Pixel>(
     &self,
-  ) -> Result<(FrameSender<T>, PacketReceiver<T>), InvalidConfig> {
+  ) -> Result<VideoDataChannel<T>, InvalidConfig> {
     let (send_frame, receive_frame) =
       bounded(self.enc.rdo_lookahead_frames as usize * 2); // TODO: user settable
     let (send_packet, receive_packet) = unbounded();
@@ -207,6 +216,17 @@ impl Config {
       .num_threads(self.threads)
       .build()
       .unwrap();
+
+    let enc = Arc::new(self.enc);
+
+    let channel = (FrameSender {
+      sender: send_frame,
+      enc: enc.clone(),
+    },
+    PacketReceiver {
+      receiver: receive_packet,
+      enc
+    });
 
     pool.spawn(move || {
       for f in receive_frame.iter() {
@@ -244,9 +264,9 @@ impl Config {
       // drop(send_packet); // This happens implicitly
     });
 
-    Ok((FrameSender(send_frame), PacketReceiver(receive_packet)))
+    Ok(channel)
   }
-
+/*
   /// Create a multipass encoder channel
   ///
   /// To setup a first-pass encode drop the `PassDataSender` before sending the
@@ -275,49 +295,6 @@ impl Config {
       .build()
       .unwrap();
 
-    fn receive_packet_impl<T: Pixel>(
-      inner: &mut ContextInner<T>, send_rc_pass1: Option<&Sender<PassData>>,
-      receive_rc_pass2: Option<&Receiver<PassData>>,
-    ) -> Result<Packet<T>, EncoderStatus> {
-      if let Some(r) = receive_rc_pass2 {
-        while inner.rc_state.twopass_in(None).unwrap_or(0) > 0 {
-          r.recv()
-            .map(|data| {
-              // check data.len() vs twopass_bytes_needed()
-              let len = inner.rc_state.twopass_in(None).unwrap_or(0);
-              println!("{} vs {}", data.as_ref().len(), len);
-              inner
-                .rc_state
-                .twopass_in(Some(data.as_ref()))
-                .expect("Faulty pass data");
-            })
-            .unwrap();
-        }
-      }
-
-      if let Some(s) = send_rc_pass1 {
-        let params =
-          inner.rc_state.get_twopass_out_params(inner, inner.output_frameno);
-
-        let _ = inner.rc_state.twopass_out(params).map(|data| {
-          let pass_data = data.to_vec().into_boxed_slice();
-          s.send(PassData::Frame(pass_data)).unwrap();
-        });
-      }
-
-      inner.receive_packet()
-    }
-
-    fn send_pass_summary<T: Pixel>(
-      inner: &mut ContextInner<T>, send_rc_pass1: &Sender<PassData>,
-    ) -> bool {
-      let params =
-        inner.rc_state.get_twopass_out_params(inner, inner.output_frameno);
-
-      let data = inner.rc_state.twopass_out(params).unwrap();
-      let pass_data = data.to_vec().into_boxed_slice();
-      send_rc_pass1.send(PassData::Summary(pass_data)).is_ok()
-    }
 
     pool.spawn(move || {
       // Feed in the summary
@@ -395,4 +372,5 @@ impl Config {
       (PassDataSender(send_rc_pass2), PassDataReceiver(receive_rc_pass1)),
     ))
   }
+  */
 }
