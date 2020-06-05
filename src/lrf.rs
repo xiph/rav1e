@@ -1348,7 +1348,7 @@ impl RestorationState {
     // large enough that a tile is not an integer number of LRUs
     // wide/high.
     if fi.tiling.cols > 1 || fi.tiling.rows > 1 {
-      // despite suggestions to the contrary, apparently tiles can be
+      // despite suggestions to the contrary, tiles can be
       // non-powers-of-2.
       let trailing_h_zeros = fi.tiling.tile_width_sb.trailing_zeros() as usize;
       let trailing_v_zeros =
@@ -1361,19 +1361,34 @@ impl RestorationState {
       uv_unit_size = uv_unit_size
         .min(tile_aligned_uv_h_unit_size.min(tile_aligned_uv_v_unit_size));
 
-      // But it's actually worse: LRUs can't span tiles (in our design
-      // that is, spec allows it).  However, the spec mandates the last
-      // LRU stretches forward into any less-than-half-LRU span of
-      // superblocks at the right and bottom of a frame.  These
-      // superblocks may well be in a different tile!  Even if LRUs are
-      // minimum size (one superblock), when the right or bottom edge of
-      // the frame is a superblock that's less than half the
-      // width/height of a normal superblock, the LRU is forced by the
-      // spec to span into it (and thus a different tile).  Tiling is
-      // under no such restriction; it could decide the right/left
-      // sliver will be in its own tile row/column.  We can't disallow
-      // the combination here.  The tiling code will have to either
-      // prevent it or tolerate it.  (prayer mechanic == Issue #1629).
+      // But it's actually worse: LRUs can't span tiles (in our
+      // one-pass design that is, spec allows it).  However, the spec
+      // mandates the last LRU stretches forward into any
+      // less-than-half-LRU span of superblocks at the right and
+      // bottom of a frame.  These superblocks may well be in a
+      // different tile!  Even if LRUs are minimum size (one
+      // superblock), when the right or bottom edge of the frame is a
+      // superblock that's less than half the width/height of a normal
+      // superblock, the LRU is forced by the spec to span into it
+      // (and thus a different tile).  Tiling is under no such
+      // restriction; it could decide the right/left sliver will be in
+      // its own tile row/column.  We can't disallow the combination
+      // here.  The tiling code will have to either prevent it or
+      // tolerate it.  (prayer mechanic == Issue #1629).
+    }
+
+    // When coding 4:2:2 and 4:4:4, spec requires Y and UV LRU sizes
+    // to be the same*. If they differ at this
+    // point, it's due to a tiling restriction enforcing a maximum
+    // size, so force both to the smaller value.
+    //
+    // *see sec 5.9.20, "Loop restoration params syntax".  The
+    // bitstream provides means of coding a different UV LRU size only
+    // when chroma is in use and both x and y are subsampled in the
+    // chroma planes.
+    if ydec == 0 && y_unit_size != uv_unit_size {
+      y_unit_size = uv_unit_size.min(y_unit_size);
+      uv_unit_size = y_unit_size;
     }
 
     // derive the rest
