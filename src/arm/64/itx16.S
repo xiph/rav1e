@@ -1635,11 +1635,14 @@ function inv_txfm_add_16x8_neon
         stp             d10, d11, [sp, #0x10]
         stp             d12, d13, [sp, #0x20]
         stp             d14, d15, [sp, #0x30]
+
+        cmp             w3,  w13
+        mov             x11, #32
+        b.lt            1f
+
         movi            v4.4s,  #0
         movz            w16, #2896*8, lsl #16
         dup             v0.2s,   w16
-
-        mov             x11, #32
 
         add             x6,  x2,  #16
 .irp i, v16.4s, v17.4s, v18.4s, v19.4s, v20.4s, v21.4s, v22.4s, v23.4s, v24.4s, v25.4s, v26.4s, v27.4s, v28.4s, v29.4s, v30.4s, v31.4s
@@ -1671,6 +1674,12 @@ function inv_txfm_add_16x8_neon
         transpose_4x8h  v8,  v9,  v10, v11, v2,  v3,  v4,  v5
         transpose_4x8h  v12, v13, v14, v15, v2,  v3,  v4,  v5
 
+        b               2f
+1:
+.irp i, v8.8h, v9.8h, v10.8h, v11.8h, v12.8h, v13.8h, v14.8h, v15.8h
+        movi            \i,  #0
+.endr
+2:
         movz            w16, #2896*8, lsl #16
         dup             v0.2s,   w16
 
@@ -1897,7 +1906,6 @@ function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_16bpc_neon, export=1
 .endif
         adr             x4,  inv_\txfm1\()_4s_x\w\()_neon
         movrel          x5,  X(inv_\txfm2\()_8h_x\h\()_neon)
-.if \w == 8
 .ifc \txfm1, identity
 .ifc \txfm2, identity
         movrel          x13, eob_8x16
@@ -1911,6 +1919,8 @@ function inv_txfm_add_\txfm1\()_\txfm2\()_\w\()x\h\()_16bpc_neon, export=1
         movrel          x13, eob_8x16
 .endif
 .endif
+.if \h == 8
+        ldrh            w13, [x13]
 .endif
         b               inv_txfm_add_\w\()x\h\()_neon
 endfunc
