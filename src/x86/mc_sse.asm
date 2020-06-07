@@ -66,6 +66,9 @@ resize_shuf: times 5 db 0
 
 pb_64:    times 16 db 64
 pw_m256:  times 8 dw -256
+%if ARCH_X86_32
+pw_1:     times 8 dw 1
+%endif
 pw_8:     times 8 dw 8
 pw_26:    times 8 dw 26
 pw_34:    times 8 dw 34
@@ -117,6 +120,7 @@ BIDIR_JMP_TABLE blend_h_ssse3, 2, 4, 8, 16, 16, 16, 16
     %endrep
 %endmacro
 
+%xdefine prep_sse2 mangle(private_prefix %+ _prep_bilin_sse2.prep)
 %xdefine put_ssse3 mangle(private_prefix %+ _put_bilin_ssse3.put)
 %xdefine prep_ssse3 mangle(private_prefix %+ _prep_bilin_ssse3.prep)
 
@@ -155,6 +159,7 @@ BASE_JMP_TABLE prep, ssse3,    4, 8, 16, 32, 64, 128
     %endif
 %endmacro
 
+HV_JMP_TABLE prep, bilin,  sse2, 7,    4, 8, 16, 32, 64, 128
 HV_JMP_TABLE put,   8tap, ssse3, 3, 2, 4, 8, 16, 32, 64, 128
 HV_JMP_TABLE prep,  8tap, ssse3, 1,    4, 8, 16, 32, 64, 128
 HV_JMP_TABLE put,  bilin, ssse3, 7, 2, 4, 8, 16, 32, 64, 128
@@ -738,15 +743,79 @@ cglobal put_bilin, 4, 8, 0, dst, ds, src, ss, w, h, mxy, bak
     lea                 t0d, [hq+(7<<16)]
     jmp .hv_w16gt
 
+%macro PSHUFB_0X1X 1-2 ; dst[, src]
+ %if cpuflag(ssse3)
+    pshufb               %1, %2
+ %else
+    punpcklbw            %1, %1
+    psraw                %1, 8
+    pshufd               %1, %1, q0000
+ %endif
+%endmacro
+
+%macro PSHUFB_BILIN_H8 2 ; dst, src
+ %if cpuflag(ssse3)
+    pshufb               %1, %2
+ %else
+    mova                 %2, %1
+    psrldq               %1, 1
+    punpcklbw            %1, %2
+ %endif
+%endmacro
+
+%macro PSHUFB_BILIN_H4 3 ; dst, src, tmp
+ %if cpuflag(ssse3)
+    pshufb               %1, %2
+ %else
+    mova                 %2, %1
+    psrldq               %1, 1
+    punpckhbw            %3, %1, %2
+    punpcklbw            %1, %2
+    punpcklqdq           %1, %3
+ %endif
+%endmacro
+
+%macro PMADDUBSW 5 ; dst/src1, src2, zero, tmp, reset_zero
+ %if cpuflag(ssse3)
+    pmaddubsw            %1, %2
+ %else
+  %if %5 == 1
+    pxor                 %3, %3
+  %endif
+    punpckhbw            %4, %1, %3
+    punpcklbw            %1, %1, %3
+    pmaddwd              %4, %2
+    pmaddwd              %1, %2
+    packssdw             %1, %4
+ %endif
+%endmacro
+
+%macro PMULHRSW 5 ; dst, src, tmp, rndval, shift
+ %if cpuflag(ssse3)
+    pmulhrsw             %1, %2
+ %else
+    punpckhwd            %3, %1, %4
+    punpcklwd            %1, %4
+    pmaddwd              %3, %2
+    pmaddwd              %1, %2
+    psrad                %3, %5
+    psrad                %1, %5
+    packssdw             %1, %3
+ %endif
+%endmacro
+
+%macro PREP_BILIN 0
+
 DECLARE_REG_TMP 3, 5, 6
 %if ARCH_X86_32
- %define base        t2-prep_ssse3
+ %define base        t2-prep%+SUFFIX
 %else
  %define base        0
 %endif
+
 cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movifnidn          mxyd, r5m ; mx
-    LEA                  t2, prep_ssse3
+    LEA                  t2, prep%+SUFFIX
     tzcnt                wd, wm
     movifnidn            hd, hm
     test               mxyd, mxyd
@@ -755,6 +824,10 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     test               mxyd, mxyd
     jnz .v
 .prep:
+%if notcpuflag(ssse3)
+    add                  t2, prep_ssse3 - prep_sse2
+    jmp prep_ssse3
+%else
     movzx                wd, word [t2+wq*2+table_offset(prep,)]
     add                  wq, t2
     lea            stride3q, [strideq*3]
@@ -824,10 +897,18 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     sub                  hd, 2
     jg .prep_w16
     RET
-.prep_w16gt:
+.prep_w32:
+    mov                 t2d, 1
+    jmp .prep_w32_vloop
+.prep_w64:
+    mov                 t2d, 2
+    jmp .prep_w32_vloop
+.prep_w128:
+    mov                 t2d, 4
+.prep_w32_vloop:
     mov                 t1q, srcq
-    mov                 r3q, t2q
-.prep_w16gt_hloop:
+    mov                 r3d, t2d
+.prep_w32_hloop:
     movq                 m0, [t1q+8*0]
     movq                 m1, [t1q+8*1]
     movq                 m2, [t1q+8*2]
@@ -847,45 +928,49 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mova        [tmpq+16*3], m3
     add                tmpq, 16*4
     add                 t1q, 32
-    sub                 r3q, 1
-    jg .prep_w16gt_hloop
+    dec                 r3d
+    jg .prep_w32_hloop
     lea                srcq, [srcq+strideq]
-    sub                  hd, 1
-    jg .prep_w16gt
+    dec                  hd
+    jg .prep_w32_vloop
     RET
-.prep_w32:
-    mov                 t2q, 1
-    jmp .prep_w16gt
-.prep_w64:
-    mov                 t2q, 2
-    jmp .prep_w16gt
-.prep_w128:
-    mov                 t2q, 4
-    jmp .prep_w16gt
+%endif
 .h:
     ; 16 * src[x] + (mx * (src[x + 1] - src[x]))
     ; = (16 - mx) * src[x] + mx * src[x + 1]
     imul               mxyd, 0xff01
+%if cpuflag(ssse3)
     mova                 m4, [base+bilin_h_shuf8]
+%endif
     add                mxyd, 16 << 8
-    movd                xm5, mxyd
+    movd                 m5, mxyd
     mov                mxyd, r6m ; my
+%if cpuflag(ssse3)
     pshuflw              m5, m5, q0000
     punpcklqdq           m5, m5
+%else
+    PSHUFB_0X1X          m5
+%endif
     test               mxyd, mxyd
     jnz .hv
 %if ARCH_X86_32
     mov                  t1, t2 ; save base reg for w4
 %endif
     movzx                wd, word [t2+wq*2+table_offset(prep, _bilin_h)]
+%if notcpuflag(ssse3)
+    WIN64_SPILL_XMM 8
+    pxor                 m6, m6
+%endif
     add                  wq, t2
     lea            stride3q, [strideq*3]
     jmp                  wq
 .h_w4:
-%if ARCH_X86_32
+%if cpuflag(ssse3)
+ %if ARCH_X86_32
     mova                 m4, [t1-prep_ssse3+bilin_h_shuf4]
-%else
+ %else
     mova                 m4, [bilin_h_shuf4]
+ %endif
 %endif
 .h_w4_loop:
     movq                 m0, [srcq+strideq*0]
@@ -893,10 +978,10 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movq                 m1, [srcq+strideq*2]
     movhps               m1, [srcq+stride3q ]
     lea                srcq, [srcq+strideq*4]
-    pshufb               m0, m4
-    pmaddubsw            m0, m5
-    pshufb               m1, m4
-    pmaddubsw            m1, m5
+    PSHUFB_BILIN_H4      m0, m4, m2
+    PMADDUBSW            m0, m5, m6, m2, 0
+    PSHUFB_BILIN_H4      m1, m4, m2
+    PMADDUBSW            m1, m5, m6, m2, 0
     mova          [tmpq+0 ], m0
     mova          [tmpq+16], m1
     add                tmpq, 32
@@ -909,14 +994,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movu                 m2, [srcq+strideq*2]
     movu                 m3, [srcq+stride3q ]
     lea                srcq, [srcq+strideq*4]
-    pshufb               m0, m4
-    pshufb               m1, m4
-    pshufb               m2, m4
-    pshufb               m3, m4
-    pmaddubsw            m0, m5
-    pmaddubsw            m1, m5
-    pmaddubsw            m2, m5
-    pmaddubsw            m3, m5
+    PSHUFB_BILIN_H8      m0, m4
+    PSHUFB_BILIN_H8      m1, m4
+    PSHUFB_BILIN_H8      m2, m4
+    PSHUFB_BILIN_H8      m3, m4
+    PMADDUBSW            m0, m5, m6, m7, 0
+    PMADDUBSW            m1, m5, m6, m7, 0
+    PMADDUBSW            m2, m5, m6, m7, 0
+    PMADDUBSW            m3, m5, m6, m7, 0
     mova        [tmpq+16*0], m0
     mova        [tmpq+16*1], m1
     mova        [tmpq+16*2], m2
@@ -931,14 +1016,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movu                 m2, [srcq+strideq*1+8*0]
     movu                 m3, [srcq+strideq*1+8*1]
     lea                srcq, [srcq+strideq*2]
-    pshufb               m0, m4
-    pshufb               m1, m4
-    pshufb               m2, m4
-    pshufb               m3, m4
-    pmaddubsw            m0, m5
-    pmaddubsw            m1, m5
-    pmaddubsw            m2, m5
-    pmaddubsw            m3, m5
+    PSHUFB_BILIN_H8      m0, m4
+    PSHUFB_BILIN_H8      m1, m4
+    PSHUFB_BILIN_H8      m2, m4
+    PSHUFB_BILIN_H8      m3, m4
+    PMADDUBSW            m0, m5, m6, m7, 0
+    PMADDUBSW            m1, m5, m6, m7, 0
+    PMADDUBSW            m2, m5, m6, m7, 0
+    PMADDUBSW            m3, m5, m6, m7, 0
     mova        [tmpq+16*0], m0
     mova        [tmpq+16*1], m1
     mova        [tmpq+16*2], m2
@@ -947,52 +1032,60 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     sub                  hd, 2
     jg .h_w16
     RET
-.h_w16gt:
+.h_w32:
+    mov                 t2d, 1 << 0
+    jmp .h_w32_vloop
+.h_w64:
+    mov                 t2d, 1 << 1
+    jmp .h_w32_vloop
+.h_w128:
+    mov                 t2d, 1 << 3
+.h_w32_vloop:
     mov                 t1q, srcq
-    mov                 r3q, t2q
-.h_w16gt_hloop:
+    mov                 r3d, t2d
+.h_w32_hloop:
     movu                 m0, [t1q+8*0]
     movu                 m1, [t1q+8*1]
     movu                 m2, [t1q+8*2]
     movu                 m3, [t1q+8*3]
-    pshufb               m0, m4
-    pshufb               m1, m4
-    pshufb               m2, m4
-    pshufb               m3, m4
-    pmaddubsw            m0, m5
-    pmaddubsw            m1, m5
-    pmaddubsw            m2, m5
-    pmaddubsw            m3, m5
+    PSHUFB_BILIN_H8      m0, m4
+    PSHUFB_BILIN_H8      m1, m4
+    PSHUFB_BILIN_H8      m2, m4
+    PSHUFB_BILIN_H8      m3, m4
+    PMADDUBSW            m0, m5, m6, m7, 0
+    PMADDUBSW            m1, m5, m6, m7, 0
+    PMADDUBSW            m2, m5, m6, m7, 0
+    PMADDUBSW            m3, m5, m6, m7, 0
     mova        [tmpq+16*0], m0
     mova        [tmpq+16*1], m1
     mova        [tmpq+16*2], m2
     mova        [tmpq+16*3], m3
     add                tmpq, 16*4
     add                 t1q, 32
-    sub                 r3q, 1
-    jg .h_w16gt_hloop
+    shr                 r3d, 1
+    jnz .h_w32_hloop
     lea                srcq, [srcq+strideq]
     sub                  hd, 1
-    jg .h_w16gt
+    jg .h_w32_vloop
     RET
-.h_w32:
-    mov                 t2q, 1
-    jmp .h_w16gt
-.h_w64:
-    mov                 t2q, 2
-    jmp .h_w16gt
-.h_w128:
-    mov                 t2q, 4
-    jmp .h_w16gt
 .v:
+%if notcpuflag(ssse3)
+ %assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM 8
+%endif
     movzx                wd, word [t2+wq*2+table_offset(prep, _bilin_v)]
     imul               mxyd, 0xff01
     add                mxyd, 16 << 8
     add                  wq, t2
     lea            stride3q, [strideq*3]
     movd                 m5, mxyd
+%if cpuflag(ssse3)
     pshuflw              m5, m5, q0000
     punpcklqdq           m5, m5
+%else
+    PSHUFB_0X1X          m5
+    pxor                 m6, m6
+%endif
     jmp                  wq
 .v_w4:
     movd                 m0, [srcq+strideq*0]
@@ -1004,14 +1097,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     punpcklwd            m0, m1  ; 0 1 _ _
     punpcklwd            m1, m2  ; 1 2 _ _
     punpcklbw            m1, m0
-    pmaddubsw            m1, m5
+    PMADDUBSW            m1, m5, m6, m7, 0
     pshufd               m1, m1, q3120
     mova        [tmpq+16*0], m1
     movd                 m0, [srcq+strideq*0]
     punpcklwd            m2, m3  ; 2 3 _ _
     punpcklwd            m3, m0  ; 3 4 _ _
     punpcklbw            m3, m2
-    pmaddubsw            m3, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
     pshufd               m3, m3, q3120
     mova        [tmpq+16*1], m3
     add                tmpq, 32
@@ -1025,20 +1118,20 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movq                 m2, [srcq+strideq*1]
     movq                 m3, [srcq+stride3q ]
     lea                srcq, [srcq+strideq*4]
-    shufpd               m4, m0, m1, 0x0c ; 0 2
+    shufpd               m4, m0, m1, 0x0c       ; 0 2
     movq                 m0, [srcq+strideq*0]
-    shufpd               m2, m3, 0x0c ; 1 3
-    shufpd               m1, m0, 0x0c ; 2 4
+    shufpd               m2, m3, 0x0c           ; 1 3
+    shufpd               m1, m0, 0x0c           ; 2 4
     punpcklbw            m3, m2, m4
-    pmaddubsw            m3, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
     mova        [tmpq+16*0], m3
     punpckhbw            m3, m2, m4
-    pmaddubsw            m3, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
     mova        [tmpq+16*2], m3
     punpcklbw            m3, m1, m2
     punpckhbw            m1, m2
-    pmaddubsw            m3, m5
-    pmaddubsw            m1, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
+    PMADDUBSW            m1, m5, m6, m7, 0
     mova        [tmpq+16*1], m3
     mova        [tmpq+16*3], m1
     add                tmpq, 16*4
@@ -1052,14 +1145,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movu                 m2, [srcq+strideq*2]
     punpcklbw            m3, m1, m0
     punpckhbw            m4, m1, m0
-    pmaddubsw            m3, m5
-    pmaddubsw            m4, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*0], m3
     mova        [tmpq+16*1], m4
     punpcklbw            m3, m2, m1
     punpckhbw            m4, m2, m1
-    pmaddubsw            m3, m5
-    pmaddubsw            m4, m5
+    PMADDUBSW            m3, m5, m6, m7, 0
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*2], m3
     mova        [tmpq+16*3], m4
     movu                 m3, [srcq+stride3q ]
@@ -1068,14 +1161,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     add                tmpq, 16*8
     punpcklbw            m1, m3, m2
     punpckhbw            m4, m3, m2
-    pmaddubsw            m1, m5
-    pmaddubsw            m4, m5
+    PMADDUBSW            m1, m5, m6, m7, 0
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq-16*4], m1
     mova        [tmpq-16*3], m4
     punpcklbw            m1, m0, m3
     punpckhbw            m2, m0, m3
-    pmaddubsw            m1, m5
-    pmaddubsw            m2, m5
+    PMADDUBSW            m1, m5, m6, m7, 0
+    PMADDUBSW            m2, m5, m6, m7, 0
     mova        [tmpq-16*2], m1
     mova        [tmpq-16*1], m2
     sub                  hd, 4
@@ -1084,6 +1177,14 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
 .v_w32:
     lea                 t2d, [hq+(0<<16)]
     mov                 t0d, 64
+    jmp .v_w32_start
+.v_w64:
+    lea                 t2d, [hq+(1<<16)]
+    mov                 t0d, 128
+    jmp .v_w32_start
+.v_w128:
+    lea                 t2d, [hq+(3<<16)]
+    mov                 t0d, 256
 .v_w32_start:
 %if ARCH_X86_64
  %if WIN64
@@ -1092,43 +1193,43 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mov                  r7, tmpq
 %endif
     mov                  t1, srcq
-.v_w32_loop_h:
-    movu                 m0, [srcq+strideq*0+16*0] ; 0L
-    movu                 m1, [srcq+strideq*0+16*1] ; 0U
-.v_w32_loop_v:
-    movu                 m2, [srcq+strideq*1+16*0] ; 1L
-    movu                 m3, [srcq+strideq*1+16*1] ; 1U
+.v_w32_hloop:
+    movu                 m0, [srcq+strideq*0+16*0]
+    movu                 m1, [srcq+strideq*0+16*1]
+.v_w32_vloop:
+    movu                 m2, [srcq+strideq*1+16*0]
+    movu                 m3, [srcq+strideq*1+16*1]
     lea                srcq, [srcq+strideq*2]
     punpcklbw            m4, m2, m0
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*0], m4
     punpckhbw            m4, m2, m0
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*1], m4
     punpcklbw            m4, m3, m1
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*2], m4
     punpckhbw            m4, m3, m1
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*3], m4
     add                tmpq, t0q
-    movu                 m0, [srcq+strideq*0+16*0] ; 2L
-    movu                 m1, [srcq+strideq*0+16*1] ; 2U
+    movu                 m0, [srcq+strideq*0+16*0]
+    movu                 m1, [srcq+strideq*0+16*1]
     punpcklbw            m4, m0, m2
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*0], m4
     punpckhbw            m4, m0, m2
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*1], m4
     punpcklbw            m4, m1, m3
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*2], m4
     punpckhbw            m4, m1, m3
-    pmaddubsw            m4, m5
+    PMADDUBSW            m4, m5, m6, m7, 0
     mova        [tmpq+16*3], m4
     add                tmpq, t0q
     sub                  hd, 2
-    jg .v_w32_loop_v
+    jg .v_w32_vloop
     movzx                hd, t2w
     add                  t1, 32
     mov                srcq, t1
@@ -1141,62 +1242,78 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mov               tmpmp, tmpq
 %endif
     sub                 t2d, 1<<16
-    jg .v_w32_loop_h
+    jg .v_w32_hloop
 %if WIN64
     POP                  r7
 %endif
     RET
-.v_w64:
-    lea                 t2d, [hq+(1<<16)]
-    mov                 t0d, 128
-    jmp .v_w32_start
-.v_w128:
-    lea                 t2d, [hq+(3<<16)]
-    mov                 t0d, 256
-    jmp .v_w32_start
 .hv:
     ; (16 * src[x] + (my * (src[x + src_stride] - src[x])) + 8) >> 4
     ; = src[x] + (((my * (src[x + src_stride] - src[x])) + 8) >> 4)
-    %assign stack_offset stack_offset - stack_size_padded
-    WIN64_SPILL_XMM       8
+%assign stack_offset stack_offset - stack_size_padded
+%if cpuflag(ssse3)
+    WIN64_SPILL_XMM 8
+%else
+    WIN64_SPILL_XMM 10
+%endif
     movzx                wd, word [t2+wq*2+table_offset(prep, _bilin_hv)]
+%if cpuflag(ssse3)
     shl                mxyd, 11
-    movd                xm6, mxyd
+%else
+ %if ARCH_X86_64
+    mova                 m8, [pw_8]
+ %else
+  %define m8 [pw_8]
+ %endif
+    pxor                 m7, m7
+%endif
+    movd                 m6, mxyd
     add                  wq, t2
     pshuflw              m6, m6, q0000
+%if cpuflag(ssse3)
     punpcklqdq           m6, m6
+%else
+ %if ARCH_X86_64
+    psrlw                m0, m8, 3
+    punpcklwd            m6, m0
+ %else
+    punpcklwd            m6, [base+pw_1]
+ %endif
+%endif
 %if ARCH_X86_32
     mov                  t1, t2 ; save base reg for w4
 %endif
     lea            stride3q, [strideq*3]
     jmp                  wq
 .hv_w4:
-%if ARCH_X86_32
+%if cpuflag(ssse3)
+ %if ARCH_X86_32
     mova                 m4, [t1-prep_ssse3+bilin_h_shuf4]
-%else
+ %else
     mova                 m4, [bilin_h_shuf4]
+ %endif
 %endif
-    movq                 m0, [srcq+strideq*0] ; 0 _
-    punpcklqdq           m0, m0
-    pshufb               m0, m4
-    pmaddubsw            m0, m5
+    movhps               m0, [srcq+strideq*0]
+    PSHUFB_BILIN_H4      m0, m4, m3
+    PMADDUBSW            m0, m5, m7, m4, 0 ; _ 0
 .hv_w4_loop:
     movq                 m1, [srcq+strideq*1]
-    movhps               m1, [srcq+strideq*2] ; 1 _ 2 _
+    movhps               m1, [srcq+strideq*2]
     movq                 m2, [srcq+stride3q ]
     lea                srcq, [srcq+strideq*4]
-    movhps               m2, [srcq+strideq*0] ; 3 _ 4 _
-    pshufb               m1, m4
-    pshufb               m2, m4
-    pmaddubsw            m1, m5           ; 1 + 2 +
-    shufpd               m3, m0, m1, 0x01 ; 0 + 1 +
-    pmaddubsw            m0, m2, m5       ; 3 + 4 +
-    shufpd               m2, m1, m0, 0x01 ; 2 + 3 +
+    movhps               m2, [srcq+strideq*0]
+    PSHUFB_BILIN_H4      m1, m4, m3
+    PSHUFB_BILIN_H4      m2, m4, m3
+    PMADDUBSW            m1, m5, m7, m4, 0 ; 1 2
+    shufpd               m3, m0, m1, 0x01  ; 0 1
+    mova                 m0, m2
+    PMADDUBSW            m0, m5, m7, m4, 0 ; 3 4
+    shufpd               m2, m1, m0, 0x01  ; 2 3
     psubw                m1, m3
-    pmulhrsw             m1, m6
+    PMULHRSW             m1, m6, m4, m8, 4
     paddw                m1, m3
     psubw                m3, m0, m2
-    pmulhrsw             m3, m6
+    PMULHRSW             m3, m6, m4, m8, 4
     paddw                m3, m2
     mova        [tmpq+16*0], m1
     mova        [tmpq+16*1], m3
@@ -1205,46 +1322,74 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     jg .hv_w4_loop
     RET
 .hv_w8:
-    movu                 m0,     [srcq+strideq*0]
-    pshufb               m0, m4
-    pmaddubsw            m0, m5                   ; 0 +
+    movu                 m0, [srcq+strideq*0]
+    PSHUFB_BILIN_H8      m0, m4
+    PMADDUBSW            m0, m5, m7, m4, 0 ; 0
 .hv_w8_loop:
-    movu                 m1,     [srcq+strideq*1] ; 1
-    movu                 m2,     [srcq+strideq*2] ; 2
-    pshufb               m1, m4
-    pshufb               m2, m4
-    pmaddubsw            m1, m5 ; 1 +
-    pmaddubsw            m2, m5 ; 2 +
-    psubw                m3, m1, m0  ; 1-0
-    pmulhrsw             m3, m6
+    movu                 m1, [srcq+strideq*1]
+    movu                 m2, [srcq+strideq*2]
+    PSHUFB_BILIN_H8      m1, m4
+    PSHUFB_BILIN_H8      m2, m4
+    PMADDUBSW            m1, m5, m7, m4, 0 ; 1
+    PMADDUBSW            m2, m5, m7, m4, 0 ; 2
+    psubw                m3, m1, m0
+    PMULHRSW             m3, m6, m4, m8, 4
     paddw                m3, m0
-    psubw                m7, m2, m1  ; 2-1
-    pmulhrsw             m7, m6
+%if notcpuflag(ssse3) && ARCH_X86_64
+    SWAP                 m9, m7
+%endif
+    psubw                m7, m2, m1
+    PMULHRSW             m7, m6, m4, m8, 4
     paddw                m7, m1
     mova        [tmpq+16*0], m3
     mova        [tmpq+16*1], m7
-    movu                 m1,     [srcq+stride3q ] ; 3
-    lea                srcq,     [srcq+strideq*4]
-    movu                 m0,     [srcq+strideq*0] ; 4
-    pshufb               m1, m4
-    pshufb               m0, m4
-    pmaddubsw            m1, m5 ; 3 +
-    pmaddubsw            m0, m5 ; 4 +
-    psubw                m3, m1, m2  ; 3-2
-    pmulhrsw             m3, m6
+%if notcpuflag(ssse3) && ARCH_X86_64
+    SWAP                 m7, m9
+%endif
+    movu                 m1, [srcq+stride3q ]
+    lea                srcq, [srcq+strideq*4]
+    movu                 m0, [srcq+strideq*0]
+    PSHUFB_BILIN_H8      m1, m4
+    PSHUFB_BILIN_H8      m0, m4
+    PMADDUBSW            m1, m5, m7, m4, ARCH_X86_32 ; 3
+    PMADDUBSW            m0, m5, m7, m4, 0           ; 4
+    psubw                m3, m1, m2
+    PMULHRSW             m3, m6, m4, m8, 4
     paddw                m3, m2
-    psubw                m7, m0, m1  ; 4-3
-    pmulhrsw             m7, m6
+%if notcpuflag(ssse3) && ARCH_X86_64
+    SWAP                 m9, m7
+%endif
+    psubw                m7, m0, m1
+    PMULHRSW             m7, m6, m4, m8, 4
     paddw                m7, m1
     mova        [tmpq+16*2], m3
     mova        [tmpq+16*3], m7
+%if notcpuflag(ssse3)
+ %if ARCH_X86_64
+    SWAP                 m7, m9
+ %else
+    pxor                 m7, m7
+ %endif
+%endif
     add                tmpq, 16*4
     sub                  hd, 4
     jg .hv_w8_loop
     RET
 .hv_w16:
-    lea                 t2d, [hq+(0<<16)]
+    mov                 t2d, hd
     mov                 t0d, 32
+    jmp .hv_w16_start
+.hv_w32:
+    lea                 t2d, [hq+(1<<16)]
+    mov                 t0d, 64
+    jmp .hv_w16_start
+.hv_w64:
+    lea                 t2d, [hq+(3<<16)]
+    mov                 t0d, 128
+    jmp .hv_w16_start
+.hv_w128:
+    lea                 t2d, [hq+(7<<16)]
+    mov                 t0d, 256
 .hv_w16_start:
 %if ARCH_X86_64
  %if WIN64
@@ -1253,47 +1398,47 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mov                  r7, tmpq
 %endif
     mov                  t1, srcq
-.hv_w16_loop_h:
-    movu                 m0,     [srcq+strideq*0+8*0] ; 0L
-    movu                 m1,     [srcq+strideq*0+8*1] ; 0U
-    pshufb               m0, m4
-    pshufb               m1, m4
-    pmaddubsw            m0, m5      ; 0L +
-    pmaddubsw            m1, m5      ; 0U +
-.hv_w16_loop_v:
-    movu                 m2,     [srcq+strideq*1+8*0] ; 1L
-    pshufb               m2, m4
-    pmaddubsw            m2, m5      ; 1L +
-    psubw                m3, m2, m0  ; 1L-0L
-    pmulhrsw             m3, m6
+.hv_w16_hloop:
+    movu                 m0, [srcq+strideq*0+8*0]
+    movu                 m1, [srcq+strideq*0+8*1]
+    PSHUFB_BILIN_H8      m0, m4
+    PSHUFB_BILIN_H8      m1, m4
+    PMADDUBSW            m0, m5, m7, m4, 0 ; 0a
+    PMADDUBSW            m1, m5, m7, m4, 0 ; 0b
+.hv_w16_vloop:
+    movu                 m2, [srcq+strideq*1+8*0]
+    PSHUFB_BILIN_H8      m2, m4
+    PMADDUBSW            m2, m5, m7, m4, 0 ; 1a
+    psubw                m3, m2, m0
+    PMULHRSW             m3, m6, m4, m8, 4
     paddw                m3, m0
     mova        [tmpq+16*0], m3
-    movu                 m3,     [srcq+strideq*1+8*1] ; 1U
-    lea                srcq,     [srcq+strideq*2]
-    pshufb               m3, m4
-    pmaddubsw            m3, m5      ; 1U +
-    psubw                m0, m3, m1  ; 1U-0U
-    pmulhrsw             m0, m6
+    movu                 m3, [srcq+strideq*1+8*1]
+    lea                srcq, [srcq+strideq*2]
+    PSHUFB_BILIN_H8      m3, m4
+    PMADDUBSW            m3, m5, m7, m4, 0 ; 1b
+    psubw                m0, m3, m1
+    PMULHRSW             m0, m6, m4, m8, 4
     paddw                m0, m1
     mova        [tmpq+16*1], m0
     add                tmpq, t0q
-    movu                 m0,     [srcq+strideq*0+8*0] ; 2L
-    pshufb               m0, m4
-    pmaddubsw            m0, m5      ; 2L +
-    psubw                m1, m0, m2  ; 2L-1L
-    pmulhrsw             m1, m6
+    movu                 m0, [srcq+strideq*0+8*0]
+    PSHUFB_BILIN_H8      m0, m4
+    PMADDUBSW            m0, m5, m7, m4, 0 ; 2a
+    psubw                m1, m0, m2
+    PMULHRSW             m1, m6, m4, m8, 4
     paddw                m1, m2
     mova        [tmpq+16*0], m1
-    movu                 m1,     [srcq+strideq*0+8*1] ; 2U
-    pshufb               m1, m4
-    pmaddubsw            m1, m5      ; 2U +
-    psubw                m2, m1, m3  ; 2U-1U
-    pmulhrsw             m2, m6
+    movu                 m1, [srcq+strideq*0+8*1]
+    PSHUFB_BILIN_H8      m1, m4
+    PMADDUBSW            m1, m5, m7, m4, 0 ; 2b
+    psubw                m2, m1, m3
+    PMULHRSW             m2, m6, m4, m8, 4
     paddw                m2, m3
     mova        [tmpq+16*1], m2
     add                tmpq, t0q
     sub                  hd, 2
-    jg .hv_w16_loop_v
+    jg .hv_w16_vloop
     movzx                hd, t2w
     add                  t1, 16
     mov                srcq, t1
@@ -1306,23 +1451,12 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     mov               tmpmp, tmpq
 %endif
     sub                 t2d, 1<<16
-    jg .hv_w16_loop_h
+    jg .hv_w16_hloop
 %if WIN64
     POP                  r7
 %endif
     RET
-.hv_w32:
-    lea                 t2d, [hq+(1<<16)]
-    mov                 t0d, 64
-    jmp .hv_w16_start
-.hv_w64:
-    lea                 t2d, [hq+(3<<16)]
-    mov                 t0d, 128
-    jmp .hv_w16_start
-.hv_w128:
-    lea                 t2d, [hq+(7<<16)]
-    mov                 t0d, 256
-    jmp .hv_w16_start
+%endmacro
 
 ; int8_t subpel_filters[5][15][8]
 %assign FILTER_REGULAR (0*15 << 16) | 3*15
@@ -3393,7 +3527,6 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
 %endmacro
 
 %macro WARP_V 10 ; dst0, dst1, 0, 2, 4, 6, 1, 3, 5, 7
-    ; Can be done using gathers, but that's terribly slow on many CPU:s
  %if ARCH_X86_32
   %define m8  m4
   %define m9  m5
@@ -4030,20 +4163,6 @@ ALIGN function_align
     paddd                m1, m9
     ret
 %endmacro
-
-INIT_XMM sse4
-WARP_AFFINE_8X8
-WARP_AFFINE_8X8T
-
-INIT_XMM ssse3
-WARP_AFFINE_8X8
-WARP_AFFINE_8X8T
-
-INIT_XMM sse2
-WARP_AFFINE_8X8
-WARP_AFFINE_8X8T
-
-INIT_XMM ssse3
 
 %if WIN64
 DECLARE_REG_TMP 6, 4
@@ -5091,7 +5210,6 @@ cextern resize_filter
 %endif
 %endmacro
 
-INIT_XMM ssse3
 %if ARCH_X86_64
 cglobal resize, 0, 14, 16, dst, dst_stride, src, src_stride, \
                            dst_w, h, src_w, dx, mx0
@@ -5302,3 +5420,17 @@ cglobal resize, 0, 6, 8, 3 * 16, dst, dst_stride, src, src_stride, \
 %endif
     jg .loop_y
     RET
+
+INIT_XMM ssse3
+PREP_BILIN
+WARP_AFFINE_8X8
+WARP_AFFINE_8X8T
+
+INIT_XMM sse4
+WARP_AFFINE_8X8
+WARP_AFFINE_8X8T
+
+INIT_XMM sse2
+PREP_BILIN
+WARP_AFFINE_8X8
+WARP_AFFINE_8X8T
