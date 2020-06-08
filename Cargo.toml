@@ -112,8 +112,13 @@ features = ["parallel"]
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.1.9", optional = true }
 
+[target.'cfg(not(target_arch="wasm32"))'.dev-dependencies]
+assert_cmd = { version = "1.0" }
+
+[target.'cfg(target_arch="wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.2"
+
 [dev-dependencies]
-assert_cmd = "1.0"
 criterion = "0.3"
 pretty_assertions = "0.6"
 interpolate_name = "0.2.2"
@@ -134,7 +139,7 @@ bench = false
 
 [lib]
 bench = false
-crate-type = ["lib", "staticlib"]
+crate-type = ["lib", "staticlib", "cdylib"]
 
 [[bench]]
 name = "bench"

@@ -1,4 +1,4 @@
-#[cfg(feature = "binaries")]
+#[cfg(all(feature = "binaries", not(target_arch = "wasm32")))]
 mod binary {
   use assert_cmd::Command;
   use rand::distributions::Alphanumeric;
