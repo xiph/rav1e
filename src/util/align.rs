@@ -12,10 +12,10 @@ use std::mem::MaybeUninit;
 use std::ptr;
 use std::{fmt, mem};
 
-#[repr(align(32))]
-pub struct Align32;
+#[repr(align(64))]
+pub struct Align64;
 
-// A 32 byte aligned piece of data.
+// A 64 byte aligned piece of data.
 // # Examples
 // ```
 // let mut x: Aligned<[i16; 64 * 64]> = Aligned::new([0; 64 * 64]);
@@ -25,7 +25,7 @@ pub struct Align32;
 // assert!(x.data.as_ptr() as usize % 16 == 0);
 // ```
 pub struct Aligned<T> {
-  _alignment: [Align32; 0],
+  _alignment: [Align64; 0],
   pub data: T,
 }
 

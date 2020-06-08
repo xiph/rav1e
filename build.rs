@@ -79,7 +79,7 @@ fn build_nasm_files() {
   config_file.write(b" %define ARCH_X86_64 1\n").unwrap();
   config_file.write(b"	%define PIC 1\n").unwrap();
   config_file.write(b" %define STACK_ALIGNMENT 16\n").unwrap();
-  config_file.write(b" %define HAVE_AVX512ICL 0\n").unwrap();
+  config_file.write(b" %define HAVE_AVX512ICL 1\n").unwrap();
   if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
     config_file.write(b" %define PREFIX 1\n").unwrap();
   }

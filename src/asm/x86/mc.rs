@@ -339,6 +339,11 @@ macro_rules! decl_mct_fns {
             tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
             h: i32, mx: i32, my: i32
           );
+
+          fn [<$func_name _avx512icl>](
+            tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
+            h: i32, mx: i32, my: i32
+          );
         )*
       }
 
@@ -354,6 +359,14 @@ macro_rules! decl_mct_fns {
         let mut out: [Option<PrepFn>; 16] = [None; 16];
         $(
             out[get_2d_mode_idx($mode_x, $mode_y)] = Some([<$func_name _avx2>]);
+        )*
+        out
+      };
+
+      static PREP_FNS_AVX512ICL: [Option<PrepFn>; 16] = {
+        let mut out: [Option<PrepFn>; 16] = [None; 16];
+        $(
+            out[get_2d_mode_idx($mode_x, $mode_y)] = Some([<$func_name _avx512icl>]);
         )*
         out
       };
@@ -377,7 +390,7 @@ decl_mct_fns!(
 cpu_function_lookup_table!(
   PREP_FNS: [[Option<PrepFn>; 16]],
   default: [None; 16],
-  [SSSE3, AVX2]
+  [SSSE3, AVX2, AVX512ICL]
 );
 
 cpu_function_lookup_table!(
@@ -578,6 +591,22 @@ mod test {
     (BILINEAR, BILINEAR, rav1e_prep_bilin),
     avx2,
     "avx2",
+    8
+  );
+
+  test_prep_fns!(
+    (REGULAR, REGULAR, rav1e_prep_8tap_regular),
+    (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth),
+    (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp),
+    (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular),
+    (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth),
+    (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp),
+    (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular),
+    (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth),
+    (SHARP, SHARP, rav1e_prep_8tap_sharp),
+    (BILINEAR, BILINEAR, rav1e_prep_bilin),
+    avx512icl,
+    "avx512vpclmulqdq",
     8
   );
 
