@@ -592,8 +592,8 @@ unsafe fn option_match(
 /// - "speed": 0-10, default 6
 /// - "threads": maximum number of threads to be used
 /// - "tune": "psnr"-"psychovisual", default "psychovisual"
-/// - "quantizer": 0-255 (0 denotes auto), default 100
-/// - "tiles": total number of tiles desired, default 0
+/// - "quantizer": 0-255, default 100
+/// - "tiles": total number of tiles desired (0 denotes auto), default 0
 /// - "tile_rows": number of tiles horizontally (must be a power of two, overridden by tiles if present), default 0
 /// - "tile_cols": number of tiles vertically (must be a power of two, overridden by tiles if present), default 0
 /// - "min_quantizer": minimum allowed base quantizer to use in bitrate mode, default 0
