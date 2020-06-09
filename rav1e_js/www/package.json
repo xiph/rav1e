@@ -1,0 +1,37 @@
+{
+	"name": "rav1e_js-www",
+	"version": "0.1.0",
+	"description": "",
+	"main": "index.ts",
+	"scripts": {
+		"build": "webpack --config webpack.config.js",
+		"start": "webpack-dev-server"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/xiph/rav1e.git"
+	},
+	"keywords": [
+		"webassembly",
+		"wasm",
+		"rust",
+		"webpack"
+	],
+	"author": "Urhengulas <johann.hemmann@code.berlin>",
+	"license": "BSD-2-Clause",
+	"bugs": {
+		"url": "https://github.com/xiph/rav1e/issues"
+	},
+	"homepage": "https://github.com/xiph/rav1e/tree/master/rav1e_js#readme",
+	"dependencies": {
+		"rav1e": "file:../pkg",
+		"typescript": "^3.9.5"
+	},
+	"devDependencies": {
+		"copy-webpack-plugin": "^5.0.0",
+		"ts-loader": "^7.0.5",
+		"webpack": "^4.29.3",
+		"webpack-cli": "^3.1.0",
+		"webpack-dev-server": "^3.1.5"
+	}
+}

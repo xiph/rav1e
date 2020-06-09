@@ -156,7 +156,7 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = [".", "ivf", "v_frame"]
+members = [".", "ivf", "rav1e_js", "v_frame"]
 
 [package.metadata.docs.rs]
 no-default-features = true
