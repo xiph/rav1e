@@ -1,0 +1,52 @@
+name: js_api
+on:
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+jobs:
+    build-pack-test:
+        name: wasm-pack build, pack, test
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@master
+
+            - name: Set up Rust
+              uses: actions-rs/toolchain@v1
+              with:
+                  profile: minimal
+                  toolchain: stable
+                  override: true
+                  target: wasm32-unknown-unknown
+
+            - name: Set up wasm-pack
+              run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+            # BUILD & PACK
+            - name: Build
+              working-directory: rav1e_js
+              run: wasm-pack build
+
+            - name: Pack
+              working-directory: rav1e_js
+              run: wasm-pack pack
+
+            # TESTING BROWSER
+            - name: Test firefox
+              working-directory: rav1e_js
+              run: wasm-pack test --headless --firefox
+
+            - name: Test chrome
+              working-directory: rav1e_js
+              run: wasm-pack test --headless --chrome
+
+            # TESTING NODE
+            - name: Use Node.js 14
+              uses: actions/setup-node@v1
+              with:
+                  node-version: 14
+
+            - name: Test node
+              working-directory: rav1e_js
+              run: wasm-pack test --node
