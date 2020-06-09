@@ -358,7 +358,7 @@ DECLARE_REG_TMP_SIZE 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14
 %define vzeroupper_required (mmsize > 16 && (ARCH_X86_64 == 0 || xmm_regs_used > 16 || notcpuflag(avx512)))
 %define high_mm_regs (16*cpuflag(avx512))
 
-%macro ALLOC_STACK 1-2 0 ; stack_size, n_xmm_regs (for win64 only)
+%macro ALLOC_STACK 0-2 0, 0 ; stack_size, n_xmm_regs (for win64 only)
     %ifnum %1
         %if %1 != 0
             %assign %%pad 0
@@ -403,7 +403,7 @@ DECLARE_REG_TMP_SIZE 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14
     %endif
 %endmacro
 
-%macro SETUP_STACK_POINTER 1
+%macro SETUP_STACK_POINTER 0-1 0
     %ifnum %1
         %if %1 != 0 && required_stack_alignment > STACK_ALIGNMENT
             %if %1 > 0

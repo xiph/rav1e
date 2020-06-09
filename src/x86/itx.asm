@@ -884,7 +884,7 @@ cglobal iidentity_4x8_internal, 0, 5, 7, dst, stride, c, eob, tx2
     vpbroadcastd         m5, [o(pw_2896_2896)]
     ITX_MUL2X_PACK        1, 0, _, 10, 0, 5, 4    ; t6   t5
     vpbroadcastd         m0, [o(pw_m2896_2896)]
-    ITX_MUL2X_PACK        2, 0, _, 10, 0, 5, 4,   ; t13a t10a
+    ITX_MUL2X_PACK        2, 0, _, 10, 0, 5, 4    ; t13a t10a
     punpckhqdq           m0, m8, m3        ; t15a t14
     punpcklqdq           m8, m3            ; t8a  t9
     shufps               m5, m4, m2, q1032 ; t12  t13a
@@ -1170,7 +1170,7 @@ cglobal iidentity_4x16_internal, 0, 5, 11, dst, stride, c, eob, tx2
     paddsw               m3, m8
     jmp m(iadst_4x16_internal).end2
 
-%macro WRITE_8X4 4-7 strideq*1, strideq*2, r3, ; coefs[1-2], tmp[1-2], off[1-3]
+%macro WRITE_8X4 4-7 strideq*1, strideq*2, r3 ; coefs[1-2], tmp[1-2], off[1-3]
     movq               xm%3, [dstq   ]
     movhps             xm%3, [dstq+%5]
     movq               xm%4, [dstq+%6]
