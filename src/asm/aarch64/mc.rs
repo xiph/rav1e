@@ -26,15 +26,15 @@ type PutFn = unsafe extern fn(
 );
 
 type PutHBDFn = unsafe extern fn(
-  dst: *mut u8,
+  dst: *mut u16,
   dst_stride: isize,
-  src: *const u8,
+  src: *const u16,
   src_stride: isize,
   width: i32,
   height: i32,
   col_frac: i32,
   row_frac: i32,
-  bit_depth: i32,
+  bitdepth_max: i32,
 );
 
 type PrepFn = unsafe extern fn(
@@ -55,7 +55,7 @@ type PrepHBDFn = unsafe extern fn(
   height: i32,
   col_frac: i32,
   row_frac: i32,
-  bit_depth: i32,
+  bitdepth_max: i32,
 );
 
 type AvgFn = unsafe extern fn(
@@ -74,7 +74,7 @@ type AvgHBDFn = unsafe extern fn(
   tmp2: *const i16,
   width: i32,
   height: i32,
-  bit_depth: i32,
+  bitdepth_max: i32,
 );
 
 // gets an index that can be mapped to a function for a pair of filter modes
@@ -129,7 +129,7 @@ pub fn put_8tap<T: Pixel>(
             height as i32,
             col_frac,
             row_frac,
-            bit_depth as i32,
+            (1 << bit_depth) - 1,
           );
         },
         None => call_rust(dst),
@@ -194,7 +194,7 @@ pub fn prep_8tap<T: Pixel>(
             height as i32,
             col_frac,
             row_frac,
-            bit_depth as i32,
+            (1 << bit_depth) - 1,
           );
         },
         None => call_rust(tmp),
@@ -243,7 +243,7 @@ pub fn mc_avg<T: Pixel>(
           tmp2.as_ptr(),
           width as i32,
           height as i32,
-          bit_depth as i32,
+          (1 << bit_depth) - 1,
         );
       },
       None => call_rust(dst),
@@ -267,7 +267,7 @@ macro_rules! decl_mc_fns {
       $(
         fn $func_name(
           dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
-          w: i32, h: i32, mx: i32, my: i32
+          w: i32, h: i32, mx: i32, my: i32,
         );
       )*
     }
@@ -313,7 +313,7 @@ macro_rules! decl_mct_fns {
       $(
         fn $func_name(
           tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
-          h: i32, mx: i32, my: i32
+          h: i32, mx: i32, my: i32,
         );
       )*
     }

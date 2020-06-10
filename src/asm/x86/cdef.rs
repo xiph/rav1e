@@ -25,7 +25,7 @@ type CdefFilterFn = unsafe extern fn(
 );
 
 type CdefFilterHBDFn = unsafe extern fn(
-  dst: *mut u8,
+  dst: *mut u16,
   dst_stride: isize,
   tmp: *const u16,
   tmp_stride: isize,
@@ -33,7 +33,7 @@ type CdefFilterHBDFn = unsafe extern fn(
   sec_strength: i32,
   dir: i32,
   damping: i32,
-  bit_depth: i32,
+  bitdepth_max: i32,
 );
 
 #[inline(always)]
@@ -97,7 +97,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             sec_strength,
             dir as i32,
             damping,
-            bit_depth as i32,
+            (1 << bit_depth) - 1,
           );
         }
         None => call_rust(dst),
