@@ -69,7 +69,7 @@ jobs:
          - conf: dav1d-tests
            toolchain: stable
          - conf: grcov-coveralls
-           toolchain: nightly-2020-05-14
+           toolchain: stable
          - conf: bench
            toolchain: stable
          - conf: doc
@@ -266,6 +266,7 @@ jobs:
       if: matrix.conf == 'grcov-coveralls'
       env:
         CARGO_INCREMENTAL: 0
+        RUSTC_BOOTSTRAP: 1
         RUSTFLAGS: >
           -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
           -Cpanic=abort -Zpanic_abort_tests
