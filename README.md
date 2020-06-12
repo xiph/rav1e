@@ -88,6 +88,8 @@ RUSTFLAGS="-C target-feature=+avx2,+fma" cargo build --release
 
 The resulting binary will not work on cpus that do not sport the same set of SIMD extensions enabled.
 
+> **NOTE** : You may use `rustc --print target-cpus` to check if the cpu is supported, if not `-C target-cpu=native` would be a no-op.
+
 ### Building the C-API
 
 **rav1e** provides a C-compatible set of library, header and pkg-config file.
