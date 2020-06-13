@@ -165,32 +165,37 @@ impl BlockSize {
   pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
 
   #[inline]
-  pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
+  pub fn from_width_and_height_opt(w: usize, h: usize) -> Option<BlockSize> {
     match (w, h) {
-      (4, 4) => BLOCK_4X4,
-      (4, 8) => BLOCK_4X8,
-      (8, 4) => BLOCK_8X4,
-      (8, 8) => BLOCK_8X8,
-      (8, 16) => BLOCK_8X16,
-      (16, 8) => BLOCK_16X8,
-      (16, 16) => BLOCK_16X16,
-      (16, 32) => BLOCK_16X32,
-      (32, 16) => BLOCK_32X16,
-      (32, 32) => BLOCK_32X32,
-      (32, 64) => BLOCK_32X64,
-      (64, 32) => BLOCK_64X32,
-      (64, 64) => BLOCK_64X64,
-      (64, 128) => BLOCK_64X128,
-      (128, 64) => BLOCK_128X64,
-      (128, 128) => BLOCK_128X128,
-      (4, 16) => BLOCK_4X16,
-      (16, 4) => BLOCK_16X4,
-      (8, 32) => BLOCK_8X32,
-      (32, 8) => BLOCK_32X8,
-      (16, 64) => BLOCK_16X64,
-      (64, 16) => BLOCK_64X16,
-      _ => unreachable!(),
+      (4, 4) => Some(BLOCK_4X4),
+      (4, 8) => Some(BLOCK_4X8),
+      (8, 4) => Some(BLOCK_8X4),
+      (8, 8) => Some(BLOCK_8X8),
+      (8, 16) => Some(BLOCK_8X16),
+      (16, 8) => Some(BLOCK_16X8),
+      (16, 16) => Some(BLOCK_16X16),
+      (16, 32) => Some(BLOCK_16X32),
+      (32, 16) => Some(BLOCK_32X16),
+      (32, 32) => Some(BLOCK_32X32),
+      (32, 64) => Some(BLOCK_32X64),
+      (64, 32) => Some(BLOCK_64X32),
+      (64, 64) => Some(BLOCK_64X64),
+      (64, 128) => Some(BLOCK_64X128),
+      (128, 64) => Some(BLOCK_128X64),
+      (128, 128) => Some(BLOCK_128X128),
+      (4, 16) => Some(BLOCK_4X16),
+      (16, 4) => Some(BLOCK_16X4),
+      (8, 32) => Some(BLOCK_8X32),
+      (32, 8) => Some(BLOCK_32X8),
+      (16, 64) => Some(BLOCK_16X64),
+      (64, 16) => Some(BLOCK_64X16),
+      _ => None,
     }
+  }
+
+  #[inline]
+  pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
+    Self::from_width_and_height_opt(w, h).unwrap()
   }
 
   #[inline]

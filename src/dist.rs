@@ -13,6 +13,7 @@ cfg_if::cfg_if! {
   } else if #[cfg(asm_neon)] {
     pub use crate::asm::aarch64::dist::*;
     pub use self::rust::get_satd;
+    pub use self::rust::get_weighted_sse;
   } else {
     pub use self::rust::*;
   }
@@ -24,6 +25,8 @@ pub(crate) mod rust {
   use crate::tiling::*;
   use crate::util::*;
 
+  use crate::encoder::IMPORTANCE_BLOCK_SIZE;
+  use crate::rdo::{DistortionScale, RawDistortion};
   use simd_helpers::cold_for_target_arch;
 
   #[cold_for_target_arch("x86_64")]
@@ -175,6 +178,55 @@ pub(crate) mod rust {
     // Normalize the results
     let ln = msb(size as i32) as u64;
     ((sum + (1 << ln >> 1)) >> ln) as u32
+  }
+
+  /// Computes weighted sum of squared error.
+  ///
+  /// Each scale is applied to a 4x4 region in the provided inputs. Each scale
+  /// value is a fixed point number, currently ['DistortionScale'].
+  ///
+  /// Implementations can require alignment (bw (block width) for ['src1'] and
+  /// ['src2'] and bw/4 for scale).
+  #[inline(never)]
+  pub fn get_weighted_sse<T: Pixel>(
+    src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, scale: &[u32],
+    scale_stride: usize, w: usize, h: usize, _bit_depth: usize,
+    _cpu: CpuFeatureLevel,
+  ) -> u64 {
+    // Always chunk and apply scaling on the sse of squares the size of
+    // decimated/sub-sampled importance block sizes.
+    // Warning: Changing this will require changing/disabling assembly.
+    let chunk_size = IMPORTANCE_BLOCK_SIZE >> 1;
+
+    let mut sse: u64 = 0;
+
+    for block_y in 0..(h + chunk_size - 1) / chunk_size {
+      for block_x in 0..(w + chunk_size - 1) / chunk_size {
+        let mut block_sse: u32 = 0;
+
+        for j in 0..chunk_size {
+          let s1 = &src1[block_y * chunk_size + j]
+            [block_x * chunk_size..((block_x + 1) * chunk_size).min(w)];
+          let s2 = &src2[block_y * chunk_size + j]
+            [block_x * chunk_size..((block_x + 1) * chunk_size).min(w)];
+
+          block_sse += s1
+            .iter()
+            .zip(s2)
+            .map(|(&a, &b)| {
+              let c = (i16::cast_from(a) - i16::cast_from(b)) as i32;
+              (c * c) as u32
+            })
+            .sum::<u32>();
+        }
+
+        sse += (RawDistortion::new(block_sse as u64)
+          * DistortionScale(scale[block_y * scale_stride + block_x]))
+        .0;
+      }
+    }
+
+    sse
   }
 }
 

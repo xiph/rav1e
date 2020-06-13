@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use self::hbd::*;
+pub use self::sse::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::partition::BlockSize;
@@ -15,6 +16,7 @@ use crate::tiling::*;
 use crate::util::*;
 
 mod hbd;
+mod sse;
 
 type SadFn = unsafe extern fn(
   src: *const u8,
@@ -110,10 +112,10 @@ declare_asm_dist_fn![
 ];
 
 // BlockSize::BLOCK_SIZES.next_power_of_two();
-const DIST_FNS_LENGTH: usize = 32;
+pub(crate) const DIST_FNS_LENGTH: usize = 32;
 
 #[inline]
-const fn to_index(bsize: BlockSize) -> usize {
+pub(crate) const fn to_index(bsize: BlockSize) -> usize {
   bsize as usize & (DIST_FNS_LENGTH - 1)
 }
 
