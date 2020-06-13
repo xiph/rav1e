@@ -24,10 +24,6 @@ rav1e is an AV1 video encoder. It is designed to eventually cover all use cases,
 
 For the foreseeable future, a weekly pre-release of rav1e will be [published](https://github.com/xiph/rav1e/releases) every Tuesday.
 
-## Windows builds
-
-Automated AppVeyor builds can be found [here](https://ci.appveyor.com/project/tdaede/rav1e/history). Click on a build (it is recommended you select a build based on "master"), then click ARTIFACTS to reveal the rav1e.exe download link.
-
 ## Building
 
 ### NASM
