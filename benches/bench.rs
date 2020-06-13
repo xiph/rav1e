@@ -196,7 +196,7 @@ criterion_group!(write_block, write_b);
 criterion_group! {
   name = dist;
   config = Criterion::default().warm_up_time(Duration::new(1,0));
-  targets = dist::get_sad, dist::get_satd
+  targets = dist::get_sad, dist::get_satd, dist::get_weighted_sse
 }
 
 criterion_group!(ec, ec_bench);

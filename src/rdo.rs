@@ -13,6 +13,7 @@
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
+use crate::cpu_features::CpuFeatureLevel;
 use crate::deblock::*;
 use crate::dist::*;
 use crate::ec::{Writer, WriterCounter, OD_BITRES};
@@ -35,7 +36,7 @@ use crate::predict::{
 use crate::rdo_tables::*;
 use crate::tiling::*;
 use crate::transform::{TxSet, TxSize, TxType, RAV1E_TX_TYPES};
-use crate::util::{Aligned, CastFromPrimitive, Pixel};
+use crate::util::{init_slice_repeat_mut, Aligned, CastFromPrimitive, Pixel};
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::Tune;
@@ -45,7 +46,7 @@ use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
 use std::fmt;
-use v_frame::math::*;
+use std::mem::MaybeUninit;
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum RDOType {
@@ -233,70 +234,55 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   sum
 }
 
-// Sum of Squared Error for a wxh block
+/// Sum of Squared Error for a wxh block
+/// Currently limited to w and h of valid blocks
 pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  compute_bias: F,
+  compute_bias: F, bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> Distortion {
-  // To bias the distortion correctly, compute it in blocks up to the
+  // See get_weighted_sse in src/dist.rs.
+  // Provide a scale to get_weighted_sse for each square region of this size.
+  const CHUNK_SIZE: usize = IMPORTANCE_BLOCK_SIZE >> 1;
+
+  // To bias the distortion correctly, compute it in blocks up to the size
   // importance block size in a non-subsampled plane.
-  let imp_block_w = IMPORTANCE_BLOCK_SIZE
-    .min((w << src1.plane_cfg.xdec).align_power_of_two(2));
-  let imp_block_h = IMPORTANCE_BLOCK_SIZE
-    .min((h << src1.plane_cfg.ydec).align_power_of_two(2));
+  let imp_block_w = CHUNK_SIZE << src1.plane_cfg.xdec;
+  let imp_block_h = CHUNK_SIZE << src1.plane_cfg.ydec;
+
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
-  let block_w = imp_block_w >> src1.plane_cfg.xdec;
-  let block_h = imp_block_h >> src1.plane_cfg.ydec;
-  let is_w4 = w == w.align_power_of_two(2);
-  let is_h4 = h == h.align_power_of_two(2);
-  let n_imp_blocks_w = (w + (block_w >> 1)) / block_w;
-  let n_imp_blocks_h = (h + (block_h >> 1)) / block_h;
-  let mut biased_sse = Distortion::zero();
+
+  let n_imp_blocks_w = (w + CHUNK_SIZE - 1) / CHUNK_SIZE;
+  let n_imp_blocks_h = (h + CHUNK_SIZE - 1) / CHUNK_SIZE;
+
+  // TODO: Copying biases into a buffer is slow. It would be best if biases were
+  // passed directly. To do this, we would need different versions of the
+  // weighted sse function for decimated/subsampled data. Also requires
+  // eliminating use of unbiased sse.
+  // It should also be noted that the current copy code does not auto-vectorize.
+
+  // Copy biases into a buffer.
+  let mut buf_storage = Aligned::new(
+    [MaybeUninit::<u32>::uninit(); 128 / CHUNK_SIZE * 128 / CHUNK_SIZE],
+  );
+  let buf_stride = n_imp_blocks_w.next_power_of_two();
+  let buf = init_slice_repeat_mut(
+    &mut buf_storage.data[..buf_stride * n_imp_blocks_h],
+    0,
+  );
 
   for block_y in 0..n_imp_blocks_h {
-    let vis_bh = if block_y == n_imp_blocks_h - 1 && !is_h4 {
-      h - block_y * block_h
-    } else {
-      block_h
-    };
     for block_x in 0..n_imp_blocks_w {
-      let mut imp_blk_sse = 0;
-      let vis_bw = if block_x == n_imp_blocks_w - 1 && !is_w4 {
-        w - block_x * block_w
-      } else {
-        block_w
+      let block = Area::StartingAt {
+        x: (block_x * CHUNK_SIZE) as isize,
+        y: (block_y * CHUNK_SIZE) as isize,
       };
-      let src_offset_x = block_x * block_w;
-
-      for j in 0..vis_bh {
-        let s1 =
-          &src1[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
-        let s2 =
-          &src2[block_y * block_h + j][src_offset_x..src_offset_x + vis_bw];
-
-        let row_sse = s1
-          .iter()
-          .zip(s2)
-          .map(|(&a, &b)| {
-            let c = (i16::cast_from(a) - i16::cast_from(b)) as i32;
-            (c * c) as u32
-          })
-          .sum::<u32>();
-        imp_blk_sse += row_sse as u64;
-      }
-
-      let bias = compute_bias(
-        // StartingAt gives the correct block offset.
-        Area::StartingAt {
-          x: (block_x * block_w) as isize,
-          y: (block_y * block_h) as isize,
-        },
-        imp_bsize,
-      );
-      biased_sse += RawDistortion::new(imp_blk_sse) * bias;
+      buf[block_y * buf_stride + block_x] = compute_bias(block, imp_bsize).0;
     }
   }
-  biased_sse
+
+  Distortion(get_weighted_sse(
+    src1, src2, buf, buf_stride, w, h, bit_depth, cpu,
+  ))
 }
 
 pub fn clip_visible_bsize(
@@ -381,6 +367,8 @@ fn compute_distortion<T: Pixel>(
           bsize,
         )
       },
+      fi.sequence.bit_depth,
+      fi.cpu_feature_level,
     ),
   } * fi.dist_scale[0];
 
@@ -415,6 +403,8 @@ fn compute_distortion<T: Pixel>(
             bsize,
           )
         },
+        fi.sequence.bit_depth,
+        fi.cpu_feature_level,
       ) * fi.dist_scale[p];
     }
   }
@@ -462,6 +452,8 @@ fn compute_tx_distortion<T: Pixel>(
           bsize,
         )
       },
+      fi.sequence.bit_depth,
+      fi.cpu_feature_level,
     ) * fi.dist_scale[0]
   } else {
     tx_dist
@@ -499,6 +491,8 @@ fn compute_tx_distortion<T: Pixel>(
             bsize,
           )
         },
+        fi.sequence.bit_depth,
+        fi.cpu_feature_level,
       ) * fi.dist_scale[p];
     }
   }
@@ -576,13 +570,13 @@ pub fn distortion_scale_for(
 /// Fixed point arithmetic version of distortion scale
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct DistortionScale(u32);
+pub struct DistortionScale(pub u32);
 
 #[repr(transparent)]
 pub struct RawDistortion(u64);
 
 #[repr(transparent)]
-pub struct Distortion(u64);
+pub struct Distortion(pub u64);
 
 #[repr(transparent)]
 pub struct ScaledDistortion(u64);
@@ -1621,6 +1615,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           visible_tx_w,
           visible_tx_h,
           |_, _| DistortionScale::default(), // We're not doing RDO here.
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
         )
         .0
       };
@@ -2011,7 +2007,15 @@ fn rdo_loop_plane_error<T: Pixel>(
           cdef_dist_wxh_8x8(&src_region, &test_region, fi.sequence.bit_depth)
             * bias
         } else {
-          sse_wxh(&src_region, &test_region, 8 >> xdec, 8 >> ydec, |_, _| bias)
+          sse_wxh(
+            &src_region,
+            &test_region,
+            8 >> xdec,
+            8 >> ydec,
+            |_, _| bias,
+            fi.sequence.bit_depth,
+            fi.cpu_feature_level,
+          )
         };
       }
     }
