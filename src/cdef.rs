@@ -319,7 +319,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 // blocks, the minimum working unit of the CDEF filters.
 pub fn cdef_block8_frame<T: Pixel>(
   w_8: usize, h_8: usize, pattern_tile: &Tile<'_, T>,
-) -> Frame<u16> {
+) -> Frame<T> {
   Frame {
     planes: [
       {
@@ -336,6 +336,44 @@ pub fn cdef_block8_frame<T: Pixel>(
       },
     ],
   }
+}
+
+// Allocates and returns a new Frame with its own memory that is
+// patterned on the decimation of the Frame backing the passed-in
+// Tile.  The width and height are in units of 8-pixel (undecimated)
+// blocks, the minimum working unit of the CDEF filters. The contents
+// of the tile, beginning at the passed in superblock offset, are
+// copied into the new Frame.
+pub fn cdef_tile_copy<T: Pixel, U: Pixel>(
+  tile: &Tile<'_, U>, sbo: TileSuperBlockOffset, w_8: usize, h_8: usize,
+) -> Frame<T> {
+  let mut out = {
+    Frame {
+      planes: {
+        let new_plane = |pli: usize| {
+          let &PlaneConfig { xdec, ydec, .. } = tile.planes[pli].plane_cfg;
+          Plane::new(w_8 << 3 >> xdec, h_8 << 3 >> ydec, xdec, ydec, 0, 0)
+        };
+        [new_plane(0), new_plane(1), new_plane(2)]
+      },
+    }
+  };
+  // Copy data into frame
+  for pli in 0..3 {
+    let PlaneOffset { x, y } = sbo.plane_offset(tile.planes[pli].plane_cfg);
+    let out_width = out.planes[pli].cfg.width as isize;
+    let out_height = out.planes[pli].cfg.height as isize;
+    let mut out_region = out.planes[pli].as_region_mut();
+    for yi in 0..out_height {
+      let out_row = &mut out_region[yi as usize];
+      let in_row = &tile.planes[pli][(y + yi) as usize];
+      for xi in 0..out_width {
+        out_row[xi as usize] =
+          T::cast_from(u16::cast_from(in_row[(x + xi) as usize]));
+      }
+    }
+  }
+  out
 }
 
 // Allocates and returns a new Frame with its own memory that is

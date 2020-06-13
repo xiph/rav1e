@@ -1884,7 +1884,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
 fn rdo_loop_plane_error<T: Pixel>(
   base_sbo: TileSuperBlockOffset, offset_sbo: TileSuperBlockOffset,
   sb_w: usize, sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
-  blocks: &TileBlocks<'_>, test: &Frame<u16>, src: &Frame<u16>, pli: usize,
+  blocks: &TileBlocks<'_>, test: &Frame<T>, src: &Frame<T>, pli: usize,
 ) -> ScaledDistortion {
   let sb_w_blocks =
     if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
@@ -2022,7 +2022,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   // flagging the border pixels as inactive].  LR code currently does
   // not need and will not use padding area.  It always edge-extends
   // the passed in rectangle.
-  let mut rec_subset = {
+  let mut rec_subset16:Frame<u16> = {
     let const_rec = ts.rec.as_const();
     // a padding of 8 gets us a full block of border.  CDEF
     // only needs 2 pixels, but deblocking is happier with full
@@ -2045,20 +2045,21 @@ pub fn rdo_loop_decision<T: Pixel>(
     sb_h << SUPERBLOCK_TO_BLOCK_SHIFT,
   );
 
-  // why copy and not just a view?  Because CDEF optimization requires
-  // u16 working space. This avoids adding another generic buffer
-  // typing parameter and expanding code to handle all the possible
-  // input/output combinations.  In the future we may decide to prefer
-  // that over the additional temp buffer (after doing the work needed
-  // to allow CDEF opt to work on 8 bit).
-  let src_subset = {
-    cdef_padded_tile_copy(
+  let src_subset:Frame<T> = {
+    cdef_tile_copy(
       &ts.input_tile,
       base_sbo,
       (pixel_w + 7) >> 3,
       (pixel_h + 7) >> 3,
-      0,
-      planes,
+    )
+  };
+
+  let src_subset16:Frame<u16> = {
+    cdef_tile_copy(
+      &ts.input_tile,
+      base_sbo,
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
     )
   };
 
@@ -2068,8 +2069,8 @@ pub fn rdo_loop_decision<T: Pixel>(
     // better results from CDEF/LRF RDO.
     let deblock_levels = deblock_filter_optimize(
       fi,
-      &rec_subset.as_tile(),
-      &src_subset.as_tile(),
+      &rec_subset16.as_tile(),
+      &src_subset16.as_tile(),
       &tileblocks_subset.as_const(),
       crop_w,
       crop_h,
@@ -2084,7 +2085,7 @@ pub fn rdo_loop_decision<T: Pixel>(
       // finally, deblock the temp frame
       deblock_filter_frame(
         &deblock_copy,
-        &mut rec_subset.as_tile_mut(),
+        &mut rec_subset16.as_tile_mut(),
         &tileblocks_subset.as_const(),
         crop_w,
         crop_h,
@@ -2094,18 +2095,38 @@ pub fn rdo_loop_decision<T: Pixel>(
     }
   }
 
-  let mut cdef_work = if fi.sequence.enable_cdef {
-    Some(cdef_padded_tile_copy(
-      &rec_subset.as_tile(),
+  let rec_subset:Frame<T> = {
+    cdef_tile_copy(
+      &rec_subset16.as_tile(),
       TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 }),
       (pixel_w + 7) >> 3,
       (pixel_h + 7) >> 3,
-      0,
-      planes,
+    )
+  };
+
+  let mut cdef_work = if fi.sequence.enable_cdef {
+    Some(cdef_tile_copy (
+      &rec_subset16.as_tile(),
+      TileSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 }),
+      (pixel_w + 7) >> 3,
+      (pixel_h + 7) >> 3,
     ))
   } else {
     None
   };
+
+  let mut cdef_dirs = if fi.sequence.enable_cdef {
+    Some(cdef_analyze_superblock_range(
+      fi,
+      &rec_subset16,
+      &tileblocks_subset.as_const(),
+      sb_w,
+      sb_h,
+    ))
+  } else {
+    None
+  };
+
   let mut lrf_work = if fi.sequence.enable_restoration {
     Some(cdef_block8_frame(
       (pixel_w + 7) >> 3,
@@ -2117,21 +2138,14 @@ pub fn rdo_loop_decision<T: Pixel>(
   };
 
   // Precompute directional analysis for CDEF
-  let cdef_data = {
-    if cdef_work.is_some() {
-      Some((
-        &rec_subset,
-        cdef_analyze_superblock_range(
-          fi,
-          &rec_subset,
-          &tileblocks_subset.as_const(),
-          sb_w,
-          sb_h,
-        ),
-      ))
-    } else {
-      None
-    }
+  let mut cdef_data = if fi.sequence.enable_cdef {
+    Some((
+      &rec_subset16,
+      cdef_work.as_mut().unwrap(),
+      cdef_dirs.as_mut().unwrap(),
+    ))
+  } else {
+    None
   };
 
   // CDEF/LRF decision iteration
@@ -2144,8 +2158,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   let mut lrf_change = true;
   while cdef_change || lrf_change {
     // search for improved cdef indices, superblock by superblock, if cdef is enabled.
-    if let (Some((rec_copy, cdef_dirs)), Some(cdef_ref)) =
-      (&cdef_data, &mut cdef_work.as_mut())
+    if let Some((rec_copy, cdef_ref, cdef_dirs)) = cdef_data.as_mut()
     {
       for sby in 0..sb_h {
         for sbx in 0..sb_w {
@@ -2173,7 +2186,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             );
             cdef_filter_superblock(
               fi,
-              &rec_subset,
+              &rec_subset16,
               &mut cdef_ref_tm,
               &tileblocks_subset.as_const(),
               loop_sbo,
@@ -2215,7 +2228,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       fi,
                       ts,
                       &tileblocks_subset.as_const(),
-                      cdef_ref,
+                      &cdef_ref,
                       &src_subset,
                       pli,
                     );
@@ -2293,7 +2306,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   fi,
                   ts,
                   &tileblocks_subset.as_const(),
-                  cdef_ref,
+                  &cdef_ref,
                   &src_subset,
                   pli,
                 );
@@ -2350,9 +2363,13 @@ pub fn rdo_loop_decision<T: Pixel>(
 
     // search for improved restoration filter parameters if restoration is enabled
     if let Some(lrf_ref) = &mut lrf_work.as_mut() {
-      let lrf_input = if cdef_work.is_some() {
+      let lrf_input = if let Some((
+        _rec_copy,
+        cdef_work,
+        _cdef_dirs)) = &cdef_data
+      {
         // When CDEF is enabled, we pull from the CDEF output
-        &cdef_work.as_ref().unwrap()
+        &cdef_work
       } else {
         // When CDEF is disabled, we pull from the [optionally
         // deblocked] reconstruction

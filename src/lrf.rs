@@ -597,10 +597,10 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
-pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
+pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
-  cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
+  cdeffed: &PlaneSlice<T>, out: &mut PlaneRegionMut<T>,
 ) {
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
   let bdm8 = fi.sequence.bit_depth - 8;
@@ -808,8 +808,8 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
-  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<u16>,
-  cdeffed: &PlaneSlice<u16>, cdef_w: usize, cdef_h: usize,
+  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<T>,
+  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
 
