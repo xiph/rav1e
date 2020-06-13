@@ -240,8 +240,8 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
 
   // To bias the distortion correctly, compute it in blocks up to the size
   // importance block size in a non-subsampled plane.
-  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w);
-  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h);
+  let imp_block_w = IMPORTANCE_BLOCK_SIZE.min(w << src1.plane_cfg.xdec);
+  let imp_block_h = IMPORTANCE_BLOCK_SIZE.min(h << src1.plane_cfg.ydec);
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
   let block_w = imp_block_w >> src1.plane_cfg.xdec;
   let block_h = imp_block_h >> src1.plane_cfg.ydec;
