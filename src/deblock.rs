@@ -434,8 +434,8 @@ fn deblock_h_size4<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 2 taps back from the edge.
 // Accesses four taps, accumulates four pixels into the tally
-fn sse_size4<T: Pixel>(
-  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
+fn sse_size4<T: Pixel, U: Pixel>(
+  rec: &PlaneRegion<'_, U>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   for i in 0..4 {
@@ -568,8 +568,8 @@ fn deblock_h_size6<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 3 taps back from the edge.
 // Accesses six taps, accumulates four pixels into the tally
-fn sse_size6<T: Pixel>(
-  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
+fn sse_size6<T: Pixel, U: Pixel>(
+  rec: &PlaneRegion<'_, U>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -751,8 +751,8 @@ fn deblock_h_size8<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 4 taps back from the edge.
 // Accesses eight taps, accumulates six pixels into the tally
-fn sse_size8<T: Pixel>(
-  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
+fn sse_size8<T: Pixel, U: Pixel>(
+  rec: &PlaneRegion<'_, U>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -953,8 +953,8 @@ fn deblock_h_size14<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 7 taps back from the edge.
 // Accesses fourteen taps, accumulates twelve pixels into the tally
-fn sse_size14<T: Pixel>(
-  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
+fn sse_size14<T: Pixel, U: Pixel>(
+  rec: &PlaneRegion<'_, U>, src: &PlaneRegion<'_, T>,
   tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
 ) {
   let flat = 1 << (bd - 8);
@@ -1165,8 +1165,8 @@ fn filter_v_edge<T: Pixel>(
   }
 }
 
-fn sse_v_edge<T: Pixel>(
-  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
+fn sse_v_edge<T: Pixel, U: Pixel>(
+  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<U>,
   src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
   pli: usize, bd: usize, xdec: usize, ydec: usize,
 ) {
@@ -1261,8 +1261,8 @@ fn filter_h_edge<T: Pixel>(
   }
 }
 
-fn sse_h_edge<T: Pixel>(
-  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
+fn sse_h_edge<T: Pixel, U: Pixel>(
+  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<U>,
   src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
   pli: usize, bd: usize, xdec: usize, ydec: usize,
 ) {
@@ -1481,8 +1481,8 @@ pub fn deblock_plane<T: Pixel>(
 }
 
 // sse count of all edges in a single plane, accumulates into vertical and horizontal counts
-fn sse_plane<T: Pixel>(
-  rec: &PlaneRegion<T>, src: &PlaneRegion<T>,
+fn sse_plane<T: Pixel, U: Pixel>(
+  rec: &PlaneRegion<U>, src: &PlaneRegion<T>,
   v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
   h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize,
@@ -1575,8 +1575,8 @@ pub fn deblock_filter_frame<T: Pixel>(
   );
 }
 
-fn sse_optimize<T: Pixel>(
-  rec: &Tile<T>, input: &Tile<T>, blocks: &TileBlocks, crop_w: usize,
+fn sse_optimize<T: Pixel, U: Pixel>(
+  rec: &Tile<U>, input: &Tile<T>, blocks: &TileBlocks, crop_w: usize,
   crop_h: usize, bd: usize, monochrome: bool,
 ) -> [u8; 4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
@@ -1643,7 +1643,7 @@ fn sse_optimize<T: Pixel>(
 
 #[hawktracer(deblock_filter_optimize)]
 pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
-  fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<U>,
+  fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<T>,
   blocks: &TileBlocks, crop_w: usize, crop_h: usize,
 ) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {

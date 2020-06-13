@@ -1998,7 +1998,8 @@ pub fn rdo_loop_decision<T: Pixel>(
   const MAX_SB_SIZE: usize = 1 << MAX_SB_SHIFT;
   const MAX_LRU_SIZE: usize = MAX_SB_SIZE;
 
-  // Static allocation relies on the "minimal LRU area for all N planes" invariant.
+  // Static allocation relies on the "minimal LRU area for all N
+  // planes" invariant.
   let mut best_index = [-1; MAX_SB_SIZE * MAX_SB_SIZE];
   let mut best_lrf =
     [[RestorationFilter::None; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
@@ -2054,15 +2055,6 @@ pub fn rdo_loop_decision<T: Pixel>(
     )
   };
 
-  let src_subset16:Frame<u16> = {
-    cdef_tile_copy(
-      &ts.input_tile,
-      base_sbo,
-      (pixel_w + 7) >> 3,
-      (pixel_h + 7) >> 3,
-    )
-  };
-
   if deblock_p {
     // Find a good deblocking filter solution for the passed in area.
     // This is not RDO of deblocking itself, merely a solution to get
@@ -2070,7 +2062,7 @@ pub fn rdo_loop_decision<T: Pixel>(
     let deblock_levels = deblock_filter_optimize(
       fi,
       &rec_subset16.as_tile(),
-      &src_subset16.as_tile(),
+      &src_subset.as_tile(),
       &tileblocks_subset.as_const(),
       crop_w,
       crop_h,
