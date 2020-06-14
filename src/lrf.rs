@@ -19,10 +19,10 @@ use crate::color::ChromaSampling::Cs400;
 use crate::context::{MAX_PLANES, SB_SIZE};
 use crate::encoder::FrameInvariants;
 use crate::frame::{
-  AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
+  AsRegion, Frame, Plane, PlaneConfig, PlaneOffset,
 };
 use crate::hawktracer::*;
-use crate::tiling::{Area, PlaneRegionMut, Rect};
+use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect, SuperIndex};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 
 use crate::api::SGRComplexityLevel;
@@ -171,11 +171,11 @@ impl RestorationFilter {
 
 pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
-  use crate::frame::PlaneSlice;
   use crate::lrf::{
     get_integral_square, sgrproj_sum_finish, SGRPROJ_RST_BITS,
     SGRPROJ_SGR_BITS,
   };
+  use crate::tiling::PlaneRegion;
   use crate::util::CastFromPrimitive;
   use crate::Pixel;
 
@@ -204,7 +204,7 @@ pub(crate) mod rust {
     af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
     iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
     _cpu: CpuFeatureLevel,
-  ) {
+   ) {
     sgrproj_box_ab_internal(
       1,
       af,
@@ -242,7 +242,7 @@ pub(crate) mod rust {
   }
 
   pub(crate) fn sgrproj_box_f_r0<T: Pixel>(
-    f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
     _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r0_internal(f, 0, y, w, cdeffed);
@@ -250,16 +250,17 @@ pub(crate) mod rust {
 
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
-    f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    f: &mut [u32], start_x: usize, y: usize, w: usize,
+    cdeffed: &PlaneRegion<'_, T>,
   ) {
     for x in start_x..w {
-      f[x] = (u32::cast_from(cdeffed.p(x, y))) << SGRPROJ_RST_BITS;
+      f[x] = (u32::cast_from(cdeffed[y][x])) << SGRPROJ_RST_BITS;
     }
   }
 
   pub(crate) fn sgrproj_box_f_r1<T: Pixel>(
     af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-    cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
+    cdeffed: &PlaneRegion<'_, T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r1_internal(af, bf, f, 0, y, w, cdeffed);
   }
@@ -267,7 +268,7 @@ pub(crate) mod rust {
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r1_internal<T: Pixel>(
     af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], start_x: usize,
-    y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
   ) {
     let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
     for x in start_x..w {
@@ -285,14 +286,14 @@ pub(crate) mod rust {
             + bf[1][x + 1]
             + bf[2][x + 1]
             + bf[1][x + 2]);
-      let v = a * u32::cast_from(cdeffed.p(x, y)) + b;
+      let v = a * u32::cast_from(cdeffed[y][x]) + b;
       f[x] = (v + (1 << shift >> 1)) >> shift;
     }
   }
 
   pub(crate) fn sgrproj_box_f_r2<T: Pixel>(
     af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-    y: usize, w: usize, cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
+    y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r2_internal(af, bf, f0, f1, 0, y, w, cdeffed);
   }
@@ -300,7 +301,7 @@ pub(crate) mod rust {
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r2_internal<T: Pixel>(
     af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-    start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    start_x: usize, y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
   ) {
     let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
     let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
@@ -309,9 +310,9 @@ pub(crate) mod rust {
       let b = 5 * (bf[0][x] + bf[0][x + 2]) + 6 * (bf[0][x + 1]);
       let ao = 5 * (af[1][x] + af[1][x + 2]) + 6 * (af[1][x + 1]);
       let bo = 5 * (bf[1][x] + bf[1][x + 2]) + 6 * (bf[1][x + 1]);
-      let v = (a + ao) * u32::cast_from(cdeffed.p(x, y)) + b + bo;
+      let v = (a + ao) * u32::cast_from(cdeffed[y][x]) + b + bo;
       f0[x] = (v + (1 << shift >> 1)) >> shift;
-      let vo = ao * u32::cast_from(cdeffed.p(x, y + 1)) + bo;
+      let vo = ao * u32::cast_from(cdeffed[y+1][x]) + bo;
       f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
     }
   }
@@ -351,10 +352,8 @@ fn get_integral_square(
 
 struct VertPaddedIter<'a, T: Pixel> {
   // The two sources that can be selected when clipping
-  deblocked: &'a Plane<T>,
-  cdeffed: &'a Plane<T>,
-  // x index to choice where on the row to start
-  x: isize,
+  deblocked: &'a PlaneRegion<'a, T>,
+  cdeffed: &'a PlaneRegion<'a, T>,
   // y index that will be mutated
   y: isize,
   // The index at which to terminate. Can be larger than the slice length.
@@ -372,40 +371,28 @@ struct VertPaddedIter<'a, T: Pixel> {
 
 impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
   fn new(
-    cdeffed: &PlaneSlice<'a, T>, deblocked: &PlaneSlice<'a, T>,
+    cdeffed: &'a PlaneRegion<'a, T>, deblocked: &'a PlaneRegion<'a, T>,
     stripe_h: usize, crop: usize,
   ) -> VertPaddedIter<'a, T> {
-    // cdeffed and deblocked must start at the same coordinates from their
-    // underlying planes. Since cropping is provided via a separate params, the
-    // height of the underlying planes do not need to match.
-    assert_eq!(cdeffed.x, deblocked.x);
-    assert_eq!(cdeffed.y, deblocked.y);
-
     // To share integral images, always use the max box filter radius of 2
     let r = 2;
 
     // The number of rows outside the stripe are needed
-    let rows_above = r + 2;
+    let rows_above:isize = r + 2;
     let rows_below = 2;
 
-    // Offset crop and stripe_h so they are relative to the underlying plane
-    // and not the plane slice.
-    let crop = crop as isize + deblocked.y;
-    let stripe_end = stripe_h as isize + deblocked.y;
-
     // Move y up the number rows above.
-    // If y is negative we repeat the first row
-    let y = deblocked.y - rows_above as isize;
+    // If y is above the tile/frame, we repeat the first row
+    let y = - rows_above as isize;
 
     VertPaddedIter {
-      deblocked: deblocked.plane,
-      cdeffed: cdeffed.plane,
-      x: deblocked.x,
+      deblocked,
+      cdeffed,
       y,
-      end: (rows_above + stripe_h + rows_below) as isize + y,
-      stripe_begin: deblocked.y,
-      stripe_end,
-      crop,
+      end: (stripe_h + rows_below) as isize,
+      stripe_begin: 0,
+      stripe_end: stripe_h as isize,
+      crop: crop as isize,
     }
   }
 }
@@ -418,21 +405,22 @@ impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
     if self.end > self.y {
       // clamp before deciding the source
       // clamp vertically to storage at top and passed-in height at bottom
-      let cropped_y = clamp(self.y, 0, self.crop - 1);
+      let cropped_y = clamp(
+        self.y,
+        - self.deblocked.rect().y,
+        self.crop - 1);
       // clamp vertically to stripe limits
       let ly = clamp(cropped_y, self.stripe_begin - 2, self.stripe_end + 1);
 
       // decide if we're vertically inside or outside the strip
       let src_plane =
         if ly >= self.stripe_begin && ly < self.stripe_end as isize {
-          self.cdeffed
+          &self.cdeffed
         } else {
-          self.deblocked
+          &self.deblocked
         };
-      // cannot directly return self.ps.row(row) due to lifetime issue
-      let range = src_plane.row_range(self.x, ly);
       self.y += 1;
-      Some(&src_plane.data[range])
+      Some(&src_plane[SuperIndex(ly)])
     } else {
       None
     }
@@ -501,7 +489,7 @@ impl<T: Pixel> FusedIterator for HorzPaddedIter<'_, T> {}
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
-  stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
+  stripe_h: usize, cdeffed: &PlaneRegion<'_, T>, deblocked: &PlaneRegion<'_, T>,
 ) {
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
@@ -510,22 +498,41 @@ pub fn setup_integral_image<T: Pixel>(
   let left_w = 4; // max radius of 2 + 2 padding
   let right_w = 3; // max radius of 2 + 1 padding
 
-  assert_eq!(cdeffed.x, deblocked.x);
-
   // Find how many unique elements to use to the left and right
-  let left_uniques = if cdeffed.x == 0 { 0 } else { left_w };
+  let left_uniques = if cdeffed.rect().x == 0 {
+    0
+  } else {
+    left_w
+  };
   let right_uniques = right_w.min(crop_w - stripe_w);
 
   // Find the total number of unique elements used
   let row_uniques = left_uniques + stripe_w + right_uniques;
 
   // Negative start indices result in repeating the first element of the row
-  let start_index_x = if cdeffed.x == 0 { -(left_w as isize) } else { 0 };
+  let start_index_x = if cdeffed.rect().x == 0 {
+    -(left_w as isize)
+  } else {
+    0
+  };
 
+  // Shift inputs left to get to pre-data
+  let cdef_shifted = cdeffed.superregion(Area::Rect{
+      x: -(left_uniques as isize),
+      y: 0,
+      width: row_uniques,
+      height: cdeffed.rect().height,
+  });
+  let deblock_shifted = deblocked.superregion(Area::Rect{
+      x: -(left_uniques as isize),
+      y: 0,
+      width: row_uniques,
+      height: deblocked.rect().height,
+    });
   let mut rows_iter = VertPaddedIter::new(
     // Move left to encompass all the used data
-    &cdeffed.go_left(left_uniques),
-    &deblocked.go_left(left_uniques),
+    &cdef_shifted,
+    &deblock_shifted,
     // since r2 uses every other row, we need an extra row if stripe_h is odd
     stripe_h + (stripe_h & 1),
     crop_h,
@@ -600,7 +607,7 @@ pub fn setup_integral_image<T: Pixel>(
 pub fn sgrproj_stripe_filter<T: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
-  cdeffed: &PlaneSlice<T>, out: &mut PlaneRegionMut<T>,
+  cdeffed: &PlaneRegion<T>, out: &mut PlaneRegionMut<T>,
 ) {
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
   let bdm8 = fi.sequence.bit_depth - 8;
@@ -808,8 +815,8 @@ pub fn sgrproj_stripe_filter<T: Pixel>(
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
-  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<T>,
-  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
+  integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<T>,
+  cdeffed: &PlaneRegion<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
 
@@ -1519,10 +1526,14 @@ impl RestorationState {
                 (crop_h as isize - stripe_start_y) as usize,
                 size,
                 stripe_size,
-                &cdeffed.planes[pli]
-                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
-                &pre_cdef.planes[pli]
-                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                &cdeffed.planes[pli].region(Area::StartingAt {
+                    x: x as isize,
+                    y: stripe_start_y
+                  }),
+                &pre_cdef.planes[pli].region(Area::StartingAt {
+                    x: x as isize,
+                    y: stripe_start_y
+                  }),
               );
 
               sgrproj_stripe_filter(
@@ -1531,13 +1542,15 @@ impl RestorationState {
                 fi,
                 &stripe_filter_buffer,
                 STRIPE_IMAGE_STRIDE,
-                &cdeffed.planes[pli]
-                  .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
+                &cdeffed.planes[pli].region(Area::StartingAt {
+                    x: x as isize,
+                    y: stripe_start_y
+                  }),
                 &mut out.planes[pli].region_mut(Area::Rect {
-                  x: x as isize,
-                  y: stripe_start_y,
-                  width: size,
-                  height: stripe_size,
+                    x: x as isize,
+                    y: stripe_start_y,
+                    width: size,
+                    height: stripe_size,
                 }),
               );
             }

@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::cpu_features::CpuFeatureLevel;
-use crate::frame::PlaneSlice;
+use crate::tiling::PlaneRegion;
 use crate::lrf::*;
 use crate::util::Pixel;
 #[cfg(target_arch = "x86")]
@@ -93,7 +93,7 @@ pub fn sgrproj_box_ab_r2(
 
 #[inline]
 pub fn sgrproj_box_f_r0<T: Pixel>(
-  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
   cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
@@ -108,7 +108,7 @@ pub fn sgrproj_box_f_r0<T: Pixel>(
 #[inline]
 pub fn sgrproj_box_f_r1<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-  cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
+  cdeffed: &PlaneRegion<'_, T>, cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
@@ -122,7 +122,7 @@ pub fn sgrproj_box_f_r1<T: Pixel>(
 #[inline]
 pub fn sgrproj_box_f_r2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  y: usize, w: usize, cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
+  y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>, cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
     return unsafe {
@@ -353,18 +353,18 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
 #[inline]
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
-  f: &mut [u32], x: usize, y: usize, cdeffed: &PlaneSlice<T>,
+  f: &mut [u32], x: usize, y: usize, cdeffed: &PlaneRegion<'_, T>,
 ) {
   _mm256_storeu_si256(
     f.as_mut_ptr().add(x) as *mut _,
     _mm256_slli_epi32(
       if mem::size_of::<T>() == 1 {
         _mm256_cvtepu8_epi32(_mm_loadl_epi64(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       } else {
         _mm256_cvtepu16_epi32(_mm_loadu_si128(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       },
       SGRPROJ_RST_BITS as i32,
@@ -374,7 +374,7 @@ unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
 
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
-  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {
@@ -397,7 +397,7 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], x: usize, y: usize,
-  cdeffed: &PlaneSlice<T>,
+  cdeffed: &PlaneRegion<'_, T>,
 ) {
   let three = _mm256_set1_epi32(3);
   let four = _mm256_set1_epi32(4);
@@ -474,11 +474,11 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
       a,
       if mem::size_of::<T>() == 1 {
         _mm256_cvtepu8_epi32(_mm_loadl_epi64(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       } else {
         _mm256_cvtepu16_epi32(_mm_loadu_si128(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       },
     ),
@@ -497,7 +497,7 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-  cdeffed: &PlaneSlice<T>,
+  cdeffed: &PlaneRegion<'_, T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {
@@ -520,7 +520,7 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
 #[target_feature(enable = "avx2")]
 unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  x: usize, y: usize, cdeffed: &PlaneSlice<T>,
+  x: usize, y: usize, cdeffed: &PlaneRegion<'_, T>,
 ) {
   let five = _mm256_set1_epi32(5);
   let six = _mm256_set1_epi32(6);
@@ -573,11 +573,11 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
       _mm256_add_epi32(a, ao),
       if mem::size_of::<T>() == 1 {
         _mm256_cvtepu8_epi32(_mm_loadl_epi64(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       } else {
         _mm256_cvtepu16_epi32(_mm_loadu_si128(
-          cdeffed.subslice(x, y).as_ptr() as *const _
+          cdeffed[y][x..].as_ptr() as *const _
         ))
       },
     ),
@@ -588,11 +588,11 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
       ao,
       if mem::size_of::<T>() == 1 {
         _mm256_cvtepu8_epi32(_mm_loadl_epi64(
-          cdeffed.subslice(x, y + 1).as_ptr() as *const _,
+          cdeffed[y+1][x..].as_ptr() as *const _,
         ))
       } else {
         _mm256_cvtepu16_epi32(_mm_loadu_si128(
-          cdeffed.subslice(x, y + 1).as_ptr() as *const _,
+          cdeffed[y+1][x..].as_ptr() as *const _,
         ))
       },
     ),
@@ -619,7 +619,7 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
 #[target_feature(enable = "avx2")]
 pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-  y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+  y: usize, w: usize, cdeffed: &PlaneRegion<'_, T>,
 ) {
   for x in (0..w).step_by(8) {
     if x + 8 <= w {

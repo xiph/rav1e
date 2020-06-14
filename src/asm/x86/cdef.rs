@@ -9,8 +9,7 @@
 
 use crate::cdef::*;
 use crate::cpu_features::CpuFeatureLevel;
-use crate::frame::*;
-use crate::tiling::PlaneRegionMut;
+use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::util::*;
 
 type CdefFilterFn = unsafe extern fn(
@@ -41,8 +40,8 @@ const fn decimate_index(xdec: usize, ydec: usize) -> usize {
   ((ydec << 1) | xdec) & 3
 }
 
-pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
-  dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
+pub(crate) fn cdef_filter_block<T: Pixel>(
+  dst: &mut PlaneRegionMut<'_, T>, src: &PlaneRegion<'_, u16>,
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
   bit_depth: usize, xdec: usize, ydec: usize, cpu: CpuFeatureLevel,
 ) {
@@ -50,7 +49,6 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     rust::cdef_filter_block(
       dst,
       src,
-      src_stride,
       pri_strength,
       sec_strength,
       dir,
@@ -67,40 +65,42 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     call_rust(&mut copy.as_region_mut());
     copy
   };
-  match T::type_enum() {
-    PixelType::U8 => {
-      match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-          );
+  unsafe {
+    match T::type_enum() {
+      PixelType::U8 => {
+        match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
+          Some(func) => {
+            (func)(
+              dst.data_ptr_mut() as *mut _,
+              T::to_asm_stride(dst.plane_cfg.stride),
+              src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+              pri_strength,
+              sec_strength,
+              dir as i32,
+              damping,
+            );
+          }
+          None => call_rust(dst),
         }
-        None => call_rust(dst),
       }
-    }
-    PixelType::U16 => {
-      match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-            (1 << bit_depth) - 1,
+      PixelType::U16 => {
+        match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
+          Some(func) => {
+            (func)(
+              dst.data_ptr_mut() as *mut _,
+              T::to_asm_stride(dst.plane_cfg.stride),
+              src.data_ptr() as *const _,
+              T::to_asm_stride(src.plane_cfg.stride),
+              pri_strength,
+              sec_strength,
+              dir as i32,
+              damping,
+              (1 << bit_depth) - 1,
           );
+          }
+          None => call_rust(dst),
         }
-        None => call_rust(dst),
       }
     }
   }
@@ -159,7 +159,7 @@ type CdefDirFn =
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub(crate) fn cdef_find_dir<T: Pixel>(
-  img: &PlaneSlice<'_, u16>, var: &mut u32, coeff_shift: usize,
+  img: &PlaneRegion<'_, u16>, var: &mut u32, coeff_shift: usize,
   cpu: CpuFeatureLevel,
 ) -> i32 {
   let call_rust =
@@ -180,8 +180,8 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
           // input, even when working with 8 bit input. Mostly done to limit
           // the amount of code being impacted.
           (func)(
-            img.as_ptr() as *const u16,
-            u16::to_asm_stride(img.plane.cfg.stride),
+            img.data_ptr() as *const u16,
+            u16::to_asm_stride(img.plane_cfg.stride),
             var as *mut u32,
           )
         }

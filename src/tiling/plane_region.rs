@@ -38,6 +38,14 @@ impl Rect {
       height: self.height >> ydec,
     }
   }
+  pub fn to_area(&self) -> Area {
+    Area::Rect {
+      x: self.x,
+      y: self.y,
+      width: self.width,
+      height: self.height,
+    }
+  }
 }
 
 // Structure to describe a rectangle area in several ways
@@ -65,6 +73,11 @@ pub enum Area {
   /// a rectangle starting at given block offset until the bottom-right corner
   /// of the parent
   BlockStartingAt { bo: BlockOffset },
+  /// A well-defined rectangle with offset expressed in superblocks
+  SuperBlockRect { sbo: SuperBlockOffset, width: usize, height: usize },
+  /// a rectangle starting at given superblock offset until the
+  /// bottom-right corner of the parent
+  SuperBlockStartingAt { sbo: SuperBlockOffset },
 }
 
 impl Area {
@@ -101,6 +114,22 @@ impl Area {
           height: (parent_height as isize - y) as usize,
         }
       }
+      Area::SuperBlockRect { sbo, width, height } => Rect {
+        x: (sbo.x >> xdec << SUPERBLOCK_TO_PLANE_SHIFT) as isize,
+        y: (sbo.y >> ydec << SUPERBLOCK_TO_PLANE_SHIFT) as isize,
+        width,
+        height,
+      },
+      Area::SuperBlockStartingAt { sbo } => {
+        let x = (sbo.x >> xdec << SUPERBLOCK_TO_PLANE_SHIFT) as isize;
+        let y = (sbo.y >> ydec << SUPERBLOCK_TO_PLANE_SHIFT) as isize;
+        Rect {
+          x,
+          y,
+          width: (parent_width as isize - x) as usize,
+          height: (parent_height as isize - y) as usize,
+        }
+      }
     }
   }
 }
@@ -115,6 +144,7 @@ pub struct PlaneRegion<'a, T: Pixel> {
   pub plane_cfg: &'a PlaneConfig,
   // private to guarantee borrowing rules
   rect: Rect,
+  bounds: Rect,
   phantom: PhantomData<&'a T>,
 }
 
@@ -127,8 +157,11 @@ pub struct PlaneRegionMut<'a, T: Pixel> {
   data: *mut T, // points to (plane_cfg.x, plane_cfg.y)
   pub plane_cfg: &'a PlaneConfig,
   rect: Rect,
+  bounds: Rect,
   phantom: PhantomData<&'a mut T>,
 }
+
+pub struct SuperIndex(pub isize);
 
 // common impl for PlaneRegion and PlaneRegionMut
 macro_rules! plane_region_common {
@@ -145,6 +178,12 @@ macro_rules! plane_region_common {
             data: unsafe { std::ptr::null_mut::<T>() },
             plane_cfg: cfg,
             rect,
+            bounds: Rect{
+              x: -(cfg.xorigin as isize),
+              y: -(cfg.yorigin as isize),
+              width: cfg.width + cfg.xorigin + cfg.xpad,
+              height: cfg.height + cfg.yorigin + cfg.ypad,
+            },
             phantom: PhantomData,
           }
         }
@@ -158,12 +197,24 @@ macro_rules! plane_region_common {
           data: unsafe { data.$as_ptr().offset(origin) },
           plane_cfg: cfg,
           rect,
+          bounds: Rect{
+            x: -(cfg.xorigin as isize),
+            y: -(cfg.yorigin as isize),
+            width: cfg.width + cfg.xorigin + cfg.xpad,
+            height: cfg.height + cfg.yorigin + cfg.ypad,
+          },
           phantom: PhantomData,
         }
       }
+
       #[inline(always)]
       pub fn new(plane: &'a $($opt_mut)? Plane<T>, rect: Rect) -> Self {
         Self::from_slice(& $($opt_mut)? plane.data, &plane.cfg, rect)
+      }
+
+      #[inline(always)]
+      pub fn restrict(&mut self) {
+        self.bounds = self.rect;
       }
 
       #[inline(always)]
@@ -174,6 +225,11 @@ macro_rules! plane_region_common {
       #[inline(always)]
       pub fn rect(&self) -> &Rect {
         &self.rect
+      }
+
+      #[inline(always)]
+      pub fn pad_rect(&self) -> &Rect {
+        &self.bounds
       }
 
       #[inline(always)]
@@ -263,6 +319,43 @@ macro_rules! plane_region_common {
           data,
           plane_cfg: &self.plane_cfg,
           rect: absolute_rect,
+          bounds: self.bounds,
+          phantom: PhantomData,
+        }
+      }
+
+      #[inline(always)]
+      // as with subregion above, but allows re-expanding the region.
+      // This will _not_ allow expanding a region beyond the original
+      // rectangle created with new() or from_slice().  As such, it
+      // protects the original Tile/Frame boundaries.
+      pub fn superregion(&self, area: Area) -> PlaneRegion<'_, T> {
+        let rect = area.to_rect(
+          self.plane_cfg.xdec,
+          self.plane_cfg.ydec,
+          self.rect.width,
+          self.rect.height,
+        );
+        assert!(self.rect.x + rect.x >= self.bounds.x);
+        assert!(rect.x + self.rect.x <= self.bounds.width as isize +
+                self.bounds.x);
+        assert!(self.rect.y + rect.y >= self.bounds.y);
+        assert!(rect.y + self.rect.y <= self.bounds.height as isize +
+                self.bounds.y);
+        let data = unsafe {
+          self.data.offset(rect.y * self.plane_cfg.stride as isize + rect.x)
+        };
+        let absolute_rect = Rect {
+          x: self.rect.x + rect.x,
+          y: self.rect.y + rect.y,
+          width: rect.width,
+          height: rect.height,
+        };
+        PlaneRegion {
+          data,
+          plane_cfg: &self.plane_cfg,
+          rect: absolute_rect,
+          bounds: self.bounds,
           phantom: PhantomData,
         }
       }
@@ -345,6 +438,20 @@ macro_rules! plane_region_common {
         }
       }
     }
+
+    impl<T: Pixel> Index<SuperIndex> for $name<'_, T> {
+      type Output = [T];
+
+      #[inline(always)]
+      fn index(&self, index: SuperIndex) -> &Self::Output {
+        assert!(index.0 < self.bounds.y + self.bounds.height as isize - self.rect.y);
+        assert!(index.0 >= self.bounds.y - self.rect.y);
+        unsafe {
+          let ptr = self.data.offset(index.0 * self.plane_cfg.stride as isize);
+          slice::from_raw_parts(ptr, self.rect.width)
+        }
+      }
+    }
   }
 }
 
@@ -416,6 +523,43 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
       data,
       plane_cfg: self.plane_cfg,
       rect: absolute_rect,
+      bounds: self.bounds,
+      phantom: PhantomData,
+    }
+  }
+
+  #[inline(always)]
+  // as with subregion_mut above, but allows re-expanding the region.
+  // This will _not_ allow expanding a region beyond the original
+  // rectangle created with new() or from_slice().  As such, it
+  // protects the original Tile/Frame boundaries.
+  pub fn superregion_mut(&self, area: Area) -> PlaneRegionMut<'_, T> {
+    let rect = area.to_rect(
+      self.plane_cfg.xdec,
+      self.plane_cfg.ydec,
+      self.rect.width,
+      self.rect.height,
+    );
+    assert!(self.rect.x + rect.x >= self.bounds.x);
+    assert!(rect.x + self.rect.x <= self.bounds.width as isize +
+            self.bounds.x);
+    assert!(self.rect.y + rect.y >= self.bounds.y);
+    assert!(rect.y + self.rect.y <= self.bounds.height as isize +
+            self.bounds.y);
+    let data = unsafe {
+      self.data.offset(rect.y * self.plane_cfg.stride as isize + rect.x)
+    };
+    let absolute_rect = Rect {
+      x: self.rect.x + rect.x,
+      y: self.rect.y + rect.y,
+      width: rect.width,
+      height: rect.height,
+    };
+    PlaneRegionMut {
+      data,
+      plane_cfg: &self.plane_cfg,
+      rect: absolute_rect,
+      bounds: self.bounds,
       phantom: PhantomData,
     }
   }
@@ -426,6 +570,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
       data: self.data,
       plane_cfg: self.plane_cfg,
       rect: self.rect,
+      bounds: self.bounds,
       phantom: PhantomData,
     }
   }
@@ -549,6 +694,7 @@ impl<'a, T: Pixel> Iterator for VertWindows<'a, T> {
         data: self.data,
         plane_cfg: self.plane_cfg,
         rect: self.output_rect,
+        bounds: self.output_rect,
         phantom: PhantomData,
       };
       self.data = unsafe { self.data.add(self.plane_cfg.stride) };
@@ -583,6 +729,7 @@ impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
         data: self.data,
         plane_cfg: self.plane_cfg,
         rect: self.output_rect,
+        bounds: self.output_rect,
         phantom: PhantomData,
       };
       self.data = unsafe { self.data.add(1) };

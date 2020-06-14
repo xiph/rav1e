@@ -160,11 +160,11 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       width,
       height,
       input: &fs.input,
-      input_tile: Tile::new(&fs.input, luma_rect),
+      input_tile: Tile::new(&fs.input, luma_rect).restrict(),
       input_hres: &fs.input_hres,
       input_qres: &fs.input_qres,
       deblock: &fs.deblock,
-      rec: TileMut::new(Arc::make_mut(&mut fs.rec), luma_rect),
+      rec: TileMut::new(Arc::make_mut(&mut fs.rec), luma_rect).restrict(),
       qc: Default::default(),
       segmentation: &fs.segmentation,
       restoration: TileRestorationStateMut::new(
