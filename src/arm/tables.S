@@ -114,6 +114,24 @@ const mc_subpel_filters, export=1, align=3
 .byte  0,   0,   2,  20,  31,  11,   0,   0
 .byte  0,   0,   2,  18,  31,  13,   0,   0
 .byte  0,   0,   1,  17,  31,  15,   0,   0
+/* Bilin scaled being very rarely used, add a new table entry
+ * and use the put/prep_8tap_scaled code, thus acting as a
+ * scaled bilinear filter. */
+.byte  0,   0,   0,  60,   4,   0,   0,   0
+.byte  0,   0,   0,  56,   8,   0,   0,   0
+.byte  0,   0,   0,  52,  12,   0,   0,   0
+.byte  0,   0,   0,  48,  16,   0,   0,   0
+.byte  0,   0,   0,  44,  20,   0,   0,   0
+.byte  0,   0,   0,  40,  24,   0,   0,   0
+.byte  0,   0,   0,  36,  28,   0,   0,   0
+.byte  0,   0,   0,  32,  32,   0,   0,   0
+.byte  0,   0,   0,  28,  36,   0,   0,   0
+.byte  0,   0,   0,  24,  40,   0,   0,   0
+.byte  0,   0,   0,  20,  44,   0,   0,   0
+.byte  0,   0,   0,  16,  48,   0,   0,   0
+.byte  0,   0,   0,  12,  52,   0,   0,   0
+.byte  0,   0,   0,   8,  56,   0,   0,   0
+.byte  0,   0,   0,   4,  60,   0,   0,   0
 endconst
 
 const filter_intra_taps, export=1,  align=4
