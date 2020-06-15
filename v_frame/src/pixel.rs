@@ -111,6 +111,7 @@ pub trait Pixel:
   fn type_enum() -> PixelType;
 
   /// Converts stride in pixels to stride in bytes.
+  #[inline]
   fn to_asm_stride(in_stride: usize) -> isize {
     (in_stride * size_of::<Self>()) as isize
   }
@@ -119,6 +120,7 @@ pub trait Pixel:
 impl Pixel for u8 {
   type Coeff = i16;
 
+  #[inline]
   fn type_enum() -> PixelType {
     PixelType::U8
   }
@@ -127,6 +129,7 @@ impl Pixel for u8 {
 impl Pixel for u16 {
   type Coeff = i32;
 
+  #[inline]
   fn type_enum() -> PixelType {
     PixelType::U16
   }

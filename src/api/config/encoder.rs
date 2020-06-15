@@ -185,7 +185,10 @@ impl EncoderConfig {
   }
 
   /// Is temporal RDO enabled ?
+  #[inline]
   pub fn temporal_rdo(&self) -> bool {
+    // Note: This function is called frequently, unlike most other functions here.
+
     // `compute_distortion_scale` computes a scaling factor for the distortion
     // of an 8x8 block (4x4 blocks simply use the scaling of the enclosing 8x8
     // block). As long as distortion is always computed on <= 8x8 blocks, this

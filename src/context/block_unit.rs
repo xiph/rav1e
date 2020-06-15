@@ -53,6 +53,7 @@ pub struct TileBlockOffset(pub BlockOffset);
 
 impl BlockOffset {
   /// Offset of the superblock in which this block is located.
+  #[inline]
   const fn sb_offset(self) -> SuperBlockOffset {
     SuperBlockOffset {
       x: self.x >> SUPERBLOCK_TO_BLOCK_SHIFT,
@@ -61,6 +62,7 @@ impl BlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
+  #[inline]
   const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x >> plane.xdec << BLOCK_TO_PLANE_SHIFT) as isize,
@@ -77,10 +79,12 @@ impl BlockOffset {
     }
   }
 
+  #[inline]
   const fn y_in_sb(self) -> usize {
     self.y % MIB_SIZE
   }
 
+  #[inline]
   fn with_offset(self, col_offset: isize, row_offset: isize) -> BlockOffset {
     let x = self.x as isize + col_offset;
     let y = self.y as isize + row_offset;
@@ -274,6 +278,7 @@ impl<'a> BlockContext<'a> {
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 
+  #[inline]
   pub fn set_dc_sign(cul_level: &mut u32, dc_val: i32) {
     if dc_val < 0 {
       *cul_level |= 1 << COEFF_CONTEXT_BITS;
@@ -666,6 +671,7 @@ impl<'a> ContextWriter<'a> {
     &self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize]
   }
 
+  #[inline]
   pub fn write_intra_mode(
     &mut self, w: &mut dyn Writer, bsize: BlockSize, mode: PredictionMode,
   ) {
@@ -674,6 +680,7 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, mode as u32, cdf);
   }
 
+  #[inline]
   pub fn write_intra_uv_mode(
     &mut self, w: &mut dyn Writer, uv_mode: PredictionMode,
     y_mode: PredictionMode, bs: BlockSize,
@@ -687,6 +694,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  #[inline]
   pub fn write_angle_delta(
     &mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode,
   ) {
@@ -1418,6 +1426,7 @@ impl<'a> ContextWriter<'a> {
     self.bc.blocks[bo].neighbors_ref_counts = ref_counts;
   }
 
+  #[inline]
   pub fn ref_count_ctx(counts0: usize, counts1: usize) -> usize {
     if counts0 < counts1 {
       0
@@ -1428,6 +1437,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  #[inline]
   pub fn get_pred_ctx_brfarf2_or_arf(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
@@ -1438,6 +1448,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(brfarf2_count, arf_count)
   }
 
+  #[inline]
   pub fn get_pred_ctx_ll2_or_l3gld(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
@@ -1449,6 +1460,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_l2_count, l3_gold_count)
   }
 
+  #[inline]
   pub fn get_pred_ctx_last_or_last2(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
@@ -1458,6 +1470,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l_count, l2_count)
   }
 
+  #[inline]
   pub fn get_pred_ctx_last3_or_gold(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
@@ -1467,6 +1480,7 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(l3_count, gold_count)
   }
 
+  #[inline]
   pub fn get_pred_ctx_brf_or_arf2(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
@@ -1665,6 +1679,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  #[inline]
   pub fn write_drl_mode(
     &mut self, w: &mut dyn Writer, drl_mode: bool, ctx: usize,
   ) {

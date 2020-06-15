@@ -161,6 +161,7 @@ pub struct WriterCheckpoint {
 
 /// Constructor for a counting Writer
 impl WriterCounter {
+  #[inline]
   pub fn new() -> WriterBase<WriterCounter> {
     WriterBase::new(WriterCounter { bytes: 0 })
   }
@@ -168,6 +169,7 @@ impl WriterCounter {
 
 /// Constructor for a recording Writer
 impl WriterRecorder {
+  #[inline]
   pub fn new() -> WriterBase<WriterRecorder> {
     WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 })
   }
@@ -175,6 +177,7 @@ impl WriterRecorder {
 
 /// Constructor for a encoding Writer
 impl WriterEncoder {
+  #[inline]
   pub fn new() -> WriterBase<WriterEncoder> {
     WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
   }
@@ -183,6 +186,7 @@ impl WriterEncoder {
 /// The Counter stores nothing we write to it, it merely counts the
 /// bit usage like in an Encoder for cost analysis.
 impl StorageBackend for WriterBase<WriterCounter> {
+  #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - r.ilog();
@@ -194,9 +198,11 @@ impl StorageBackend for WriterBase<WriterCounter> {
     self.rng = r << d;
     self.cnt = s;
   }
+  #[inline]
   fn stream_bytes(&mut self) -> usize {
     self.s.bytes
   }
+  #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
       stream_bytes: self.s.bytes,
@@ -205,6 +211,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
       cnt: self.cnt,
     }
   }
+  #[inline]
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
@@ -217,6 +224,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
 /// neds to be able to report bit costs for RDO decisions.  It stores a
 /// pair of mostly-computed range coding values per token recorded.
 impl StorageBackend for WriterBase<WriterRecorder> {
+  #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - r.ilog();
@@ -229,9 +237,11 @@ impl StorageBackend for WriterBase<WriterRecorder> {
     self.cnt = s;
     self.s.storage.push((fl, fh, nms));
   }
+  #[inline]
   fn stream_bytes(&mut self) -> usize {
     self.s.bytes
   }
+  #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
       stream_bytes: self.s.bytes,
@@ -240,6 +250,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
       cnt: self.cnt,
     }
   }
+  #[inline]
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
@@ -277,9 +288,11 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     self.rng = r << d;
     self.cnt = s;
   }
+  #[inline]
   fn stream_bytes(&mut self) -> usize {
     self.s.precarry.len()
   }
+  #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
       stream_bytes: self.s.precarry.len(),
@@ -301,6 +314,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
 impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
+  #[inline]
   fn new(storage: S) -> Self {
     #[cfg(feature = "desync_finder")]
     {
@@ -503,6 +517,7 @@ where
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be exactly 32768. There should be at most 16 values.
+  #[inline(always)]
   fn symbol(&mut self, s: u32, cdf: &[u16]) {
     debug_assert!(cdf[cdf.len() - 1] == 0);
     let nms = cdf.len() - s as usize;

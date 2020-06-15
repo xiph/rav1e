@@ -118,6 +118,7 @@ pub enum PredictionVariant {
 }
 
 impl PredictionVariant {
+  #[inline]
   fn new(x: usize, y: usize) -> Self {
     match (x, y) {
       (0, 0) => PredictionVariant::NONE,
@@ -129,6 +130,7 @@ impl PredictionVariant {
 }
 
 impl Default for PredictionMode {
+  #[inline]
   fn default() -> Self {
     PredictionMode::DC_PRED
   }
@@ -149,9 +151,11 @@ pub fn intra_mode_to_angle(mode: PredictionMode) -> isize {
 }
 
 impl PredictionMode {
+  #[inline]
   pub fn is_compound(self) -> bool {
     self >= PredictionMode::NEAREST_NEARESTMV
   }
+  #[inline]
   pub fn has_nearmv(self) -> bool {
     self == PredictionMode::NEAR0MV
       || self == PredictionMode::NEAR1MV
@@ -166,6 +170,7 @@ impl PredictionMode {
       || self == PredictionMode::NEW_NEAR1MV
       || self == PredictionMode::NEW_NEAR2MV
   }
+  #[inline]
   pub fn has_newmv(self) -> bool {
     self == PredictionMode::NEWMV
       || self == PredictionMode::NEW_NEWMV
@@ -224,14 +229,17 @@ impl PredictionMode {
     );
   }
 
+  #[inline]
   pub fn is_intra(self) -> bool {
     self < PredictionMode::NEARESTMV
   }
 
+  #[inline]
   pub fn is_cfl(self) -> bool {
     self == PredictionMode::UV_CFL_PRED
   }
 
+  #[inline]
   pub fn is_directional(self) -> bool {
     self >= PredictionMode::V_PRED && self <= PredictionMode::D67_PRED
   }
@@ -411,6 +419,7 @@ pub struct AngleDelta {
 }
 
 impl Default for AngleDelta {
+  #[inline]
   fn default() -> Self {
     Self { y: 0, uv: 0 }
   }

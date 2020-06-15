@@ -11,10 +11,12 @@ pub mod inverse;
 
 use crate::transform::*;
 
+#[inline]
 pub const fn get_tx_size_idx(tx_size: TxSize) -> usize {
   (tx_size as usize) & 31
 }
 
+#[inline]
 pub const fn get_tx_type_idx(tx_type: TxType) -> usize {
   // TX_TYPES is 2^4 or 16
   (tx_type as usize) & (TX_TYPES - 1)

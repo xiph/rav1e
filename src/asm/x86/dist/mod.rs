@@ -112,6 +112,7 @@ declare_asm_dist_fn![
 // BlockSize::BLOCK_SIZES.next_power_of_two();
 const DIST_FNS_LENGTH: usize = 32;
 
+#[inline]
 fn to_index(bsize: BlockSize) -> usize {
   bsize as usize & (DIST_FNS_LENGTH - 1)
 }

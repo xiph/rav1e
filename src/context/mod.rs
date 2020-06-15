@@ -92,6 +92,7 @@ impl FieldMap {
   }
 }
 
+#[inline]
 pub fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
   match tx_size {
     TX_64X64 | TX_64X32 | TX_32X64 => TX_32X32,

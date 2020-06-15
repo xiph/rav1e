@@ -103,6 +103,7 @@ pub static sub_tx_size_map: [TxSize; TxSize::TX_SIZES_ALL] = [
   TX_32X16, // TX_64X16
 ];
 
+#[inline]
 pub fn has_chroma(
   bo: TileBlockOffset, bsize: BlockSize, subsampling_x: usize,
   subsampling_y: usize, chroma_sampling: ChromaSampling,
@@ -762,6 +763,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  #[inline]
   pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
@@ -783,10 +785,12 @@ impl<'a> ContextWriter<'a> {
   // Since the coefficients and levels are transposed in relation to how they
   // work in the spec, use the log of block height in our calculations instead
   // of block width.
+  #[inline]
   pub fn get_txb_bhl(tx_size: TxSize) -> usize {
     av1_get_coded_tx_size(tx_size).height_log2()
   }
 
+  #[inline]
   pub fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
     let t = if eob < 33 {
       eob_to_pos_small[eob] as u32
