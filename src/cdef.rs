@@ -245,6 +245,7 @@ pub(crate) mod rust {
 }
 
 // We use the variance of an 8x8 block to adjust the effective filter strength.
+#[inline]
 fn adjust_strength(strength: i32, var: i32) -> i32 {
   let i = if (var >> 6) != 0 { cmp::min(msb(var >> 6), 12) } else { 0 };
   if var != 0 {

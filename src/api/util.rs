@@ -85,10 +85,12 @@ pub enum FrameType {
 
 impl FrameType {
   /// Returns whether frame can have inter blocks
+  #[inline]
   pub fn has_inter(self) -> bool {
     self == FrameType::INTER || self == FrameType::SWITCH
   }
   /// Returns whether frame is only intra blocks
+  #[inline]
   pub fn all_intra(self) -> bool {
     self == FrameType::KEY || self == FrameType::INTRA_ONLY
   }

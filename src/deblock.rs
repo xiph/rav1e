@@ -81,6 +81,7 @@ fn deblock_adjusted_level(
   }
 }
 
+#[inline]
 fn deblock_left<'a, T: Pixel>(
   blocks: &'a TileBlocks, in_bo: TileBlockOffset, p: &PlaneRegion<T>,
 ) -> &'a Block {
@@ -92,6 +93,7 @@ fn deblock_left<'a, T: Pixel>(
   &blocks[in_bo.0.y | ydec][(in_bo.0.x | xdec) - (1 << xdec)]
 }
 
+#[inline]
 fn deblock_up<'a, T: Pixel>(
   blocks: &'a TileBlocks, in_bo: TileBlockOffset, p: &PlaneRegion<T>,
 ) -> &'a Block {
@@ -140,6 +142,7 @@ fn deblock_size<T: Pixel>(
 }
 
 // Must be called on a tx edge
+#[inline]
 fn deblock_level(
   deblock: &DeblockState, block: &Block, prev_block: &Block, pli: usize,
   vertical: bool,
@@ -153,6 +156,7 @@ fn deblock_level(
 }
 
 // four taps, 4 outputs (two are trivial)
+#[inline]
 fn filter_narrow2_4(
   p1: i32, p0: i32, q0: i32, q1: i32, shift: usize,
 ) -> [i32; 4] {
@@ -184,6 +188,7 @@ fn filter_narrow2_4(
 }
 
 // six taps, 6 outputs (four are trivial)
+#[inline]
 fn filter_narrow2_6(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
 ) -> [i32; 6] {
@@ -192,6 +197,7 @@ fn filter_narrow2_6(
 }
 
 // 12 taps, 12 outputs (ten are trivial)
+#[inline]
 fn filter_narrow2_12(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
   q2: i32, q3: i32, q4: i32, q5: i32, shift: usize,
@@ -201,6 +207,7 @@ fn filter_narrow2_12(
 }
 
 // four taps, 4 outputs
+#[inline]
 fn filter_narrow4_4(
   p1: i32, p0: i32, q0: i32, q1: i32, shift: usize,
 ) -> [i32; 4] {
@@ -230,6 +237,7 @@ fn filter_narrow4_4(
 }
 
 // six taps, 6 outputs (two are trivial)
+#[inline]
 fn filter_narrow4_6(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
 ) -> [i32; 6] {
@@ -238,6 +246,7 @@ fn filter_narrow4_6(
 }
 
 // 12 taps, 12 outputs (eight are trivial)
+#[inline]
 fn filter_narrow4_12(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
   q2: i32, q3: i32, q4: i32, q5: i32, shift: usize,
@@ -248,6 +257,7 @@ fn filter_narrow4_12(
 
 // six taps, 4 outputs
 #[rustfmt::skip]
+#[inline]
 const fn filter_wide6_4(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32
 ) -> [i32; 4] {
@@ -261,6 +271,7 @@ const fn filter_wide6_4(
 
 // eight taps, 6 outputs
 #[rustfmt::skip]
+#[inline]
 const fn filter_wide8_6(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32
 ) -> [i32; 6] {
@@ -275,6 +286,7 @@ const fn filter_wide8_6(
 }
 
 // 12 taps, 12 outputs (six are trivial)
+#[inline]
 const fn filter_wide8_12(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
   q2: i32, q3: i32, q4: i32, q5: i32,
@@ -285,6 +297,7 @@ const fn filter_wide8_12(
 
 // fourteen taps, 12 outputs
 #[rustfmt::skip]
+#[inline]
 const fn filter_wide14_12(
   p6: i32, p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32,
   q1: i32, q2: i32, q3: i32, q4: i32, q5: i32, q6: i32
@@ -325,6 +338,7 @@ fn copy_vertical<T: Pixel>(
   }
 }
 
+#[inline]
 fn stride_sse(a: &[i32], b: &[i32]) -> i64 {
   let mut acc: i32 = 0;
   for (a, b) in a.iter().take(b.len()).zip(b) {
@@ -333,34 +347,42 @@ fn stride_sse(a: &[i32], b: &[i32]) -> i64 {
   acc as i64
 }
 
+#[inline]
 const fn _level_to_limit(level: i32, shift: usize) -> i32 {
   level << shift
 }
 
+#[inline]
 const fn limit_to_level(limit: i32, shift: usize) -> i32 {
   (limit + (1 << shift) - 1) >> shift
 }
 
+#[inline]
 const fn _level_to_blimit(level: i32, shift: usize) -> i32 {
   (3 * level + 4) << shift
 }
 
+#[inline]
 const fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
   (((blimit + (1 << shift) - 1) >> shift) - 2) / 3
 }
 
+#[inline]
 const fn _level_to_thresh(level: i32, shift: usize) -> i32 {
   level >> 4 << shift
 }
 
+#[inline]
 const fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
   (thresh + (1 << shift) - 1) >> shift << 4
 }
 
+#[inline]
 fn nhev4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
   thresh_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift) as usize
 }
 
+#[inline]
 fn mask4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
   cmp::max(
     limit_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift),
@@ -468,6 +490,7 @@ fn sse_size4<T: Pixel>(
   }
 }
 
+#[inline]
 fn mask6(
   p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
 ) -> usize {
@@ -483,6 +506,7 @@ fn mask6(
   ) as usize
 }
 
+#[inline]
 fn flat6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> usize {
   cmp::max(
     (p1 - p0).abs(),
@@ -621,6 +645,7 @@ fn sse_size6<T: Pixel>(
   }
 }
 
+#[inline]
 fn mask8(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32,
   shift: usize,
@@ -646,6 +671,7 @@ fn mask8(
   ) as usize
 }
 
+#[inline]
 fn flat8(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32,
 ) -> usize {
@@ -822,6 +848,7 @@ fn sse_size8<T: Pixel>(
   }
 }
 
+#[inline]
 fn flat14_outer(
   p6: i32, p5: i32, p4: i32, p0: i32, q0: i32, q4: i32, q5: i32, q6: i32,
 ) -> usize {

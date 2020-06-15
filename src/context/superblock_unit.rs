@@ -47,6 +47,7 @@ pub struct TileSuperBlockOffset(pub SuperBlockOffset);
 
 impl SuperBlockOffset {
   /// Offset of a block inside the current superblock.
+  #[inline]
   const fn block_offset(self, block_x: usize, block_y: usize) -> BlockOffset {
     BlockOffset {
       x: (self.x << SUPERBLOCK_TO_BLOCK_SHIFT) + block_x,
@@ -55,6 +56,7 @@ impl SuperBlockOffset {
   }
 
   /// Offset of the top-left pixel of this block.
+  #[inline]
   const fn plane_offset(self, plane: &PlaneConfig) -> PlaneOffset {
     PlaneOffset {
       x: (self.x as isize) << (SUPERBLOCK_TO_PLANE_SHIFT - plane.xdec),

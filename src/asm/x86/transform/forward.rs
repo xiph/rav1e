@@ -21,6 +21,7 @@ use std::arch::x86_64::*;
 
 type TxfmFuncI32X8 = unsafe fn(&mut [I32X8]);
 
+#[inline]
 fn get_func_i32x8(t: TxfmType) -> TxfmFuncI32X8 {
   use self::TxfmType::*;
   match t {
@@ -63,11 +64,13 @@ struct I32X8 {
 
 impl I32X8 {
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn vec(self) -> __m256i {
     self.data
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn new(a: __m256i) -> I32X8 {
     I32X8 { data: a }
   }
@@ -75,11 +78,13 @@ impl I32X8 {
 
 impl TxOperations for I32X8 {
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn zero() -> Self {
     I32X8::new(_mm256_setzero_si256())
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn tx_mul(self, mul: (i32, i32)) -> Self {
     I32X8::new(_mm256_srav_epi32(
       _mm256_add_epi32(
@@ -91,6 +96,7 @@ impl TxOperations for I32X8 {
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn rshift1(self) -> Self {
     I32X8::new(_mm256_srai_epi32(
       _mm256_sub_epi32(
@@ -102,21 +108,25 @@ impl TxOperations for I32X8 {
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn add(self, b: Self) -> Self {
     I32X8::new(_mm256_add_epi32(self.vec(), b.vec()))
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn sub(self, b: Self) -> Self {
     I32X8::new(_mm256_sub_epi32(self.vec(), b.vec()))
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn add_avg(self, b: Self) -> Self {
     I32X8::new(_mm256_srai_epi32(_mm256_add_epi32(self.vec(), b.vec()), 1))
   }
 
   #[target_feature(enable = "avx2")]
+  #[inline]
   unsafe fn sub_avg(self, b: Self) -> Self {
     I32X8::new(_mm256_srai_epi32(_mm256_sub_epi32(self.vec(), b.vec()), 1))
   }
@@ -306,6 +316,7 @@ enum SizeClass1D {
 }
 
 impl SizeClass1D {
+  #[inline]
   fn from_length(len: usize) -> Self {
     assert!(len.is_power_of_two());
     use SizeClass1D::*;

@@ -34,6 +34,7 @@ pub struct MotionVector {
 impl ops::Add<MotionVector> for MotionVector {
   type Output = MotionVector;
 
+  #[inline]
   fn add(self, _rhs: MotionVector) -> MotionVector {
     MotionVector { row: self.row + _rhs.row, col: self.col + _rhs.col }
   }
@@ -42,16 +43,19 @@ impl ops::Add<MotionVector> for MotionVector {
 impl ops::Div<i16> for MotionVector {
   type Output = MotionVector;
 
+  #[inline]
   fn div(self, _rhs: i16) -> MotionVector {
     MotionVector { row: self.row / _rhs, col: self.col / _rhs }
   }
 }
 
 impl MotionVector {
+  #[inline]
   pub const fn quantize_to_fullpel(self) -> Self {
     Self { row: (self.row / 8) * 8, col: (self.col / 8) * 8 }
   }
 
+  #[inline]
   pub fn is_zero(self) -> bool {
     self.row == 0 && self.col == 0
   }

@@ -78,6 +78,7 @@ type AvgHBDFn = unsafe extern fn(
 );
 
 // gets an index that can be mapped to a function for a pair of filter modes
+#[inline]
 const fn get_2d_mode_idx(mode_x: FilterMode, mode_y: FilterMode) -> usize {
   (mode_x as usize + 4 * (mode_y as usize)) & 15
 }

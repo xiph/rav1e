@@ -85,27 +85,33 @@ pub struct CFLParams {
 }
 
 impl Default for CFLParams {
+  #[inline]
   fn default() -> Self {
     Self { sign: [CFL_SIGN_NEG, CFL_SIGN_ZERO], scale: [1, 0] }
   }
 }
 
 impl CFLParams {
+  #[inline]
   pub fn joint_sign(self) -> u32 {
     assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
     (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
   }
+  #[inline]
   pub fn context(self, uv: usize) -> usize {
     assert!(self.sign[uv] != CFL_SIGN_ZERO);
     (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
   }
+  #[inline]
   pub fn index(self, uv: usize) -> u32 {
     assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
     (self.scale[uv] - 1) as u32
   }
+  #[inline]
   pub fn alpha(self, uv: usize) -> i16 {
     cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i16)
   }
+  #[inline]
   pub fn from_alpha(u: i16, v: i16) -> CFLParams {
     CFLParams {
       sign: [CFLSign::from_alpha(u), CFLSign::from_alpha(v)],
@@ -225,6 +231,7 @@ impl<'a> ContextWriter<'a> {
     out[1] = 0;
   }
 
+  #[inline]
   pub fn write_skip(
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, skip: bool,
   ) {

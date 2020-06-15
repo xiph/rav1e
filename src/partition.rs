@@ -38,6 +38,7 @@ pub enum RefType {
 
 impl RefType {
   // convert to a ref list index, 0-6 (INTER_REFS_PER_FRAME)
+  #[inline]
   pub fn to_index(self) -> usize {
     match self {
       NONE_FRAME => {
@@ -49,9 +50,11 @@ impl RefType {
       _ => (self as usize) - 1,
     }
   }
+  #[inline]
   pub const fn is_fwd_ref(self) -> bool {
     (self as usize) < 5
   }
+  #[inline]
   pub const fn is_bwd_ref(self) -> bool {
     (self as usize) >= 5
   }
@@ -161,6 +164,7 @@ impl BlockSize {
   pub const BLOCK_SIZES_ALL: usize = 22;
   pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
 
+  #[inline]
   pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
     match (w, h) {
       (4, 4) => BLOCK_4X4,
@@ -189,15 +193,18 @@ impl BlockSize {
     }
   }
 
+  #[inline]
   pub fn cfl_allowed(self) -> bool {
     // TODO: fix me when enabling EXT_PARTITION_TYPES
     self <= BlockSize::BLOCK_32X32
   }
 
+  #[inline]
   pub fn width(self) -> usize {
     1 << self.width_log2()
   }
 
+  #[inline]
   pub fn width_log2(self) -> usize {
     match self {
       BLOCK_4X4 | BLOCK_4X8 | BLOCK_4X16 => 2,
@@ -210,23 +217,28 @@ impl BlockSize {
     }
   }
 
+  #[inline]
   pub fn width_mi_log2(self) -> usize {
     self.width_log2() - 2
   }
 
+  #[inline]
   pub fn width_mi(self) -> usize {
     self.width() >> MI_SIZE_LOG2
   }
 
+  #[inline]
   pub fn width_imp_b(self) -> usize {
     (self.width() >> (IMPORTANCE_BLOCK_TO_BLOCK_SHIFT + BLOCK_TO_PLANE_SHIFT))
       .max(1)
   }
 
+  #[inline]
   pub fn height(self) -> usize {
     1 << self.height_log2()
   }
 
+  #[inline]
   pub fn height_log2(self) -> usize {
     match self {
       BLOCK_4X4 | BLOCK_8X4 | BLOCK_16X4 => 2,
@@ -239,19 +251,23 @@ impl BlockSize {
     }
   }
 
+  #[inline]
   pub fn height_mi_log2(self) -> usize {
     self.height_log2() - 2
   }
 
+  #[inline]
   pub fn height_mi(self) -> usize {
     self.height() >> MI_SIZE_LOG2
   }
 
+  #[inline]
   pub fn height_imp_b(self) -> usize {
     (self.height() >> (IMPORTANCE_BLOCK_TO_BLOCK_SHIFT + BLOCK_TO_PLANE_SHIFT))
       .max(1)
   }
 
+  #[inline]
   pub fn tx_size(self) -> TxSize {
     match self {
       BLOCK_4X4 => TX_4X4,
@@ -278,6 +294,7 @@ impl BlockSize {
   }
 
   /// Source: Subsampled_Size (AV1 specification section 5.11.38)
+  #[inline]
   pub fn subsampled_size(self, xdec: usize, ydec: usize) -> BlockSize {
     match (xdec, ydec) {
       (0, 0) /* 4:4:4 */ => self,
@@ -321,6 +338,7 @@ impl BlockSize {
     }
   }
 
+  #[inline]
   pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
     let plane_bsize = self.subsampled_size(xdec, ydec);
     if plane_bsize == BLOCK_INVALID {
@@ -332,14 +350,17 @@ impl BlockSize {
     av1_get_coded_tx_size(uv_tx)
   }
 
+  #[inline]
   pub fn is_sqr(self) -> bool {
     self.width_log2() == self.height_log2()
   }
 
+  #[inline]
   pub fn is_sub8x8(self, xdec: usize, ydec: usize) -> bool {
     xdec != 0 && self.width_log2() == 2 || ydec != 0 && self.height_log2() == 2
   }
 
+  #[inline]
   pub fn sub8x8_offset(self, xdec: usize, ydec: usize) -> (isize, isize) {
     let offset_x = if xdec != 0 && self.width_log2() == 2 { -1 } else { 0 };
     let offset_y = if ydec != 0 && self.height_log2() == 2 { -1 } else { 0 };
