@@ -7,15 +7,21 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-//! Test suite for node.
+use rav1e::prelude::Frame as Rav1eFrame;
 
-#![cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
-mod utils;
+/// Wrapper around `v_frame::frame::Frame<u16>`.
+///
+/// Represents one video frame.
+#[wasm_bindgen]
+pub struct Frame {
+  pub(crate) f: Rav1eFrame<u16>,
+}
 
-use wasm_bindgen_test::*;
-
-#[wasm_bindgen_test]
-fn simple_encoding() {
-  utils::simple_encoding(30);
+#[wasm_bindgen]
+impl Frame {
+  pub fn debug(&self) -> String {
+    format!("{:?}", self.f)
+  }
 }

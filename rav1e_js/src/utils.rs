@@ -7,13 +7,15 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use wasm_bindgen::prelude::*;
+
+/// When the `console_error_panic_hook` feature is enabled, we can call the
+/// `set_panic_hook` function at least once during initialization, and then
+/// we will get better error messages if our code ever panics.
+///
+/// For more details see
+/// https://github.com/rustwasm/console_error_panic_hook#readme
 pub fn set_panic_hook() {
-  // When the `console_error_panic_hook` feature is enabled, we can call the
-  // `set_panic_hook` function at least once during initialization, and then
-  // we will get better error messages if our code ever panics.
-  //
-  // For more details see
-  // https://github.com/rustwasm/console_error_panic_hook#readme
   #[cfg(feature = "console_error_panic_hook")]
   console_error_panic_hook::set_once();
 }
@@ -24,4 +26,13 @@ macro_rules! log {
 	( $( $t:tt )* ) => {
 		web_sys::console::log_1(&format!( $( $t )* ).into());
 	}
+}
+
+pub fn construct_js_err(err: impl std::fmt::Display, msg: &str) -> JsValue {
+  let mut e = format!("{}", err);
+  if msg != "" {
+    e.push_str(": ");
+    e.push_str(msg);
+  }
+  JsValue::from(e)
 }

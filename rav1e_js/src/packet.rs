@@ -7,15 +7,24 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-//! Test suite for node.
+use wasm_bindgen::prelude::*;
 
-#![cfg(target_arch = "wasm32")]
+use rav1e::prelude::Packet as Rav1ePacket;
 
-mod utils;
+/// Wrapper around `rav1e::api::util::Packet<u16>`.
+///
+/// A packet contains one shown frame together with zero or more additional frames.
+#[wasm_bindgen]
+pub struct Packet {
+  pub(crate) p: Rav1ePacket<u16>,
+}
 
-use wasm_bindgen_test::*;
-
-#[wasm_bindgen_test]
-fn simple_encoding() {
-  utils::simple_encoding(30);
+#[wasm_bindgen]
+impl Packet {
+  pub fn display(&self) -> String {
+    format!("{}", self.p)
+  }
+  pub fn debug(&self) -> String {
+    format!("{:?}", self.p)
+  }
 }
