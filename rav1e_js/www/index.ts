@@ -7,6 +7,35 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-import { simple_encoding } from "rav1e";
+import { Encoder, EncoderConfig, Frame, Packet, ChromaSamplePosition } from "rav1e";
 
-simple_encoding(30);
+const conf: EncoderConfig = new EncoderConfig()
+    .setDim(96, 64)
+    .setSpeed(9)
+    .setChromaSamplePosition(ChromaSamplePosition.Unknown);
+console.log(conf.debug())
+
+try {
+    // could raise (catchable) error, if EncoderConfig is invalid
+    const enc: Encoder = new Encoder(conf);
+    console.log(enc.debug());
+
+    const f: Frame = enc.newFrame();
+
+    for (let i = 0; i < 10; i++) {
+        enc.sendFrame(f);
+    }
+    enc.flush();
+    console.log(enc.debug());
+
+    for (let i = 0; i < 20; i++) {
+        try {
+            const p: Packet = enc.receivePacket();
+            console.log(p.display())
+        } catch (e) {
+            console.warn(e);
+        }
+    }
+} catch (e) {
+    console.error(e);
+}

@@ -11,11 +11,13 @@
 
 #![cfg(target_arch = "wasm32")]
 
+mod utils;
+
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 fn simple_encoding() {
-  rav1e_js::simple_encoding_without_alert(30);
+  utils::simple_encoding(30);
 }
