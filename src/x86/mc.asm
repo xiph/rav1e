@@ -5719,12 +5719,21 @@ cglobal prep_8tap_scaled, 4, 14, 16, 112, tmp, src, ss, w, h, mx, my, dx, dy
 %undef isprep
 %endmacro
 
+%macro BILIN_SCALED_FN 1
+cglobal %1_bilin_scaled
+    mov                 t0d, (5*15 << 16) | 5*15
+    mov                 t1d, (5*15 << 16) | 5*15
+    jmp mangle(private_prefix %+ _%1_8tap_scaled %+ SUFFIX)
+%endmacro
+%define PUT_8TAP_SCALED_FN FN put_8tap_scaled,
+%define PREP_8TAP_SCALED_FN FN prep_8tap_scaled,
+
 %if WIN64
 DECLARE_REG_TMP 6, 5
 %else
 DECLARE_REG_TMP 6, 8
 %endif
-%define PUT_8TAP_SCALED_FN FN put_8tap_scaled,
+BILIN_SCALED_FN put
 PUT_8TAP_SCALED_FN regular,        REGULAR, REGULAR
 PUT_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
 PUT_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
@@ -5741,7 +5750,7 @@ DECLARE_REG_TMP 5, 4
 %else
 DECLARE_REG_TMP 6, 7
 %endif
-%define PREP_8TAP_SCALED_FN FN prep_8tap_scaled,
+BILIN_SCALED_FN prep
 PREP_8TAP_SCALED_FN regular,        REGULAR, REGULAR
 PREP_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
 PREP_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
