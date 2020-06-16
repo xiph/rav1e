@@ -118,9 +118,9 @@ endconst
 .endm
 
 .macro str_n            idx0, idx1, dstreg, dstoff, n
-        str             q\idx0,  [\dstreg, \dstoff]
+        str             \idx0,  [\dstreg, \dstoff]
 .if \n == 16
-        str             q\idx1,  [\dstreg, \dstoff + 16]
+        str             \idx1,  [\dstreg, \dstoff + 16]
 .endif
 .endm
 
@@ -150,7 +150,7 @@ function msac_decode_symbol_adapt4_neon, export=1
 
         ld1r            {v6.8h},  [x8]                            // dif >> (EC_WIN_SIZE - 16)
         movrel          x8,  bits
-        str_n           4,   5,  sp, #16, \n                      // store v values to allow indexed access
+        str_n           q4,  q5,  sp, #16, \n                     // store v values to allow indexed access
 
         ld1_n           v16, v17, x8,  .8h, \n
 
