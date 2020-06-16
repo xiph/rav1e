@@ -22,7 +22,7 @@ macro_rules! satd_hbd_avx2 {
             for chunk_x in (0isize..$W).step_by(size) {
               let src = src.offset(chunk_y * src_stride + chunk_x);
               let dst = dst.offset(chunk_y * dst_stride + chunk_x);
-              if (size == 4) {
+              if size == 4 {
                 sum += satd_kernel_4x4_hbd_avx2(src, src_stride, dst, dst_stride);
               } else {
                 sum += satd_kernel_8x8_hbd_avx2(src, src_stride, dst, dst_stride);
