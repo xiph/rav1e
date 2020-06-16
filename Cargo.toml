@@ -149,11 +149,9 @@ debug = true
 codegen-units = 1  # if > 1 enables parallel code generation which improves
                    # compile times, but prevents some optimizations.
                    # Passes `-C codegen-units`. Ignored when `lto = true`.
-lto = true
 
 [profile.bench]
 codegen-units = 1
-lto = true
 
 [workspace]
 members = [".", "ivf", "rav1e_js", "v_frame"]
