@@ -3242,7 +3242,11 @@ endfunc
 
 .macro sub_sp space
 #ifdef _WIN32
-.if \space > 4096
+.if \space > 8192
+        // Here, we'd need to touch two (or more) pages while decrementing
+        // the stack pointer.
+        .error          "sub_sp_align doesn't support values over 8K at the moment"
+.elseif \space > 4096
         sub             x16, sp,  #4096
         ldr             xzr, [x16]
         sub             sp,  x16, #(\space - 4096)
@@ -3252,11 +3256,9 @@ endfunc
 #else
 .if \space >= 4096
         sub             sp,  sp,  #(\space)/4096*4096
+.endif
 .if (\space % 4096) != 0
         sub             sp,  sp,  #(\space)%4096
-.endif
-.else
-        sub             sp,  sp,  #\space
 .endif
 #endif
 .endm
