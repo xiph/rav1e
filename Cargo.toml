@@ -106,9 +106,6 @@ version = "=0.1.7"
 optional = true
 features = ["parallel"]
 
-[replace]
-"v_frame:0.1.0" = { path = "v_frame/" }
-
 [target.'cfg(unix)'.dependencies]
 signal-hook = { version = "0.1.9", optional = true }
 
@@ -160,3 +157,6 @@ members = [".", "ivf", "rav1e_js", "v_frame"]
 
 [package.metadata.docs.rs]
 no-default-features = true
+
+[patch.crates-io]
+v_frame = { path = "v_frame" }
