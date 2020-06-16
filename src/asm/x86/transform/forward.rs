@@ -65,13 +65,13 @@ struct I32X8 {
 impl I32X8 {
   #[target_feature(enable = "avx2")]
   #[inline]
-  unsafe fn vec(self) -> __m256i {
+  const unsafe fn vec(self) -> __m256i {
     self.data
   }
 
   #[target_feature(enable = "avx2")]
   #[inline]
-  unsafe fn new(a: __m256i) -> I32X8 {
+  const unsafe fn new(a: __m256i) -> I32X8 {
     I32X8 { data: a }
   }
 }

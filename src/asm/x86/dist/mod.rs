@@ -113,7 +113,7 @@ declare_asm_dist_fn![
 const DIST_FNS_LENGTH: usize = 32;
 
 #[inline]
-fn to_index(bsize: BlockSize) -> usize {
+const fn to_index(bsize: BlockSize) -> usize {
   bsize as usize & (DIST_FNS_LENGTH - 1)
 }
 

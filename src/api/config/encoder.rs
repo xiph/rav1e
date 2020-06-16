@@ -186,7 +186,7 @@ impl EncoderConfig {
 
   /// Is temporal RDO enabled ?
   #[inline]
-  pub fn temporal_rdo(&self) -> bool {
+  pub const fn temporal_rdo(&self) -> bool {
     // Note: This function is called frequently, unlike most other functions here.
 
     // `compute_distortion_scale` computes a scaling factor for the distortion
