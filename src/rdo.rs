@@ -558,7 +558,7 @@ impl From<DistortionScale> for f64 {
 
 impl RawDistortion {
   #[inline]
-  pub fn new(dist: u64) -> Self {
+  pub const fn new(dist: u64) -> Self {
     Self(dist)
   }
 }
