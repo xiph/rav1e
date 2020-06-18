@@ -9,6 +9,45 @@
 
 use super::*;
 
+impl CDFContext {
+  // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
+  pub fn count_lrf_switchable(
+    &self, w: &dyn Writer, rs: &TileRestorationState,
+    filter: RestorationFilter, pli: usize,
+  ) -> u32 {
+    let nsym = &self.lrf_switchable_cdf.len() - 1;
+    match filter {
+      RestorationFilter::None => {
+        w.symbol_bits(0, &self.lrf_switchable_cdf[..nsym])
+      }
+      RestorationFilter::Wiener { .. } => {
+        unreachable!() // for now, not permanently
+      }
+      RestorationFilter::Sgrproj { set, xqd } => {
+        // Does *not* use 'RESTORE_SGRPROJ' but rather just '2'
+        let rp = &rs.planes[pli];
+        let mut bits = w.symbol_bits(2, &self.lrf_switchable_cdf[..nsym])
+          + ((SGRPROJ_PARAMS_BITS as u32) << OD_BITRES);
+        for i in 0..2 {
+          let s = SGRPROJ_PARAMS_S[set as usize][i];
+          let min = SGRPROJ_XQD_MIN[i] as i32;
+          let max = SGRPROJ_XQD_MAX[i] as i32;
+          if s > 0 {
+            bits += w.count_signed_subexp_with_ref(
+              xqd[i] as i32,
+              min,
+              max + 1,
+              SGRPROJ_PRJ_SUBEXP_K,
+              rp.sgrproj_ref[i] as i32,
+            );
+          }
+        }
+        bits
+      }
+    }
+  }
+}
+
 impl<'a> ContextWriter<'a> {
   fn get_ref_frame_ctx_b0(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
@@ -171,41 +210,12 @@ impl<'a> ContextWriter<'a> {
       }
     }
   }
-  // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
+
   pub fn count_lrf_switchable(
     &self, w: &dyn Writer, rs: &TileRestorationState,
     filter: RestorationFilter, pli: usize,
   ) -> u32 {
-    let nsym = &self.fc.lrf_switchable_cdf.len() - 1;
-    match filter {
-      RestorationFilter::None => {
-        w.symbol_bits(0, &self.fc.lrf_switchable_cdf[..nsym])
-      }
-      RestorationFilter::Wiener { .. } => {
-        unreachable!() // for now, not permanently
-      }
-      RestorationFilter::Sgrproj { set, xqd } => {
-        // Does *not* use 'RESTORE_SGRPROJ' but rather just '2'
-        let rp = &rs.planes[pli];
-        let mut bits = w.symbol_bits(2, &self.fc.lrf_switchable_cdf[..nsym])
-          + ((SGRPROJ_PARAMS_BITS as u32) << OD_BITRES);
-        for i in 0..2 {
-          let s = SGRPROJ_PARAMS_S[set as usize][i];
-          let min = SGRPROJ_XQD_MIN[i] as i32;
-          let max = SGRPROJ_XQD_MAX[i] as i32;
-          if s > 0 {
-            bits += w.count_signed_subexp_with_ref(
-              xqd[i] as i32,
-              min,
-              max + 1,
-              SGRPROJ_PRJ_SUBEXP_K,
-              rp.sgrproj_ref[i] as i32,
-            );
-          }
-        }
-        bits
-      }
-    }
+    self.fc.count_lrf_switchable(w, rs, filter, pli)
   }
 
   pub fn write_lrf<T: Pixel>(

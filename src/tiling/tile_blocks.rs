@@ -78,9 +78,9 @@ macro_rules! tile_blocks_common {
         y: usize,
         cols: usize,
         rows: usize,
-      ) -> Self {
-        Self {
-          data: & $($opt_mut)? self[y][x],
+      ) -> TileBlocks<'_> {
+        TileBlocks {
+          data: &self[y][x],
           x: self.x+x,
           y: self.y+y,
           cols: cmp::min(cols, self.cols - x),
@@ -180,6 +180,21 @@ impl TileBlocksMut<'_> {
       y: self.y,
       cols: self.cols,
       rows: self.rows,
+      frame_cols: self.frame_cols,
+      frame_rows: self.frame_rows,
+      phantom: PhantomData,
+    }
+  }
+
+  pub fn subregion_mut(
+    &mut self, x: usize, y: usize, cols: usize, rows: usize,
+  ) -> TileBlocksMut<'_> {
+    TileBlocksMut {
+      data: &mut self[y][x],
+      x: self.x + x,
+      y: self.y + y,
+      cols: cmp::min(cols, self.cols - x),
+      rows: cmp::min(rows, self.rows - y),
       frame_cols: self.frame_cols,
       frame_rows: self.frame_rows,
       phantom: PhantomData,
