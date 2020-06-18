@@ -2038,7 +2038,7 @@ pub fn rdo_loop_decision<T: Pixel>(
   };
 
   // sub-setted region of the TileBlocks for our working frame area
-  let mut tileblocks_subset = cw.bc.blocks.subregion(
+  let mut tileblocks_subset = cw.bc.blocks.subregion_mut(
     base_sbo.block_offset(0, 0).0.x,
     base_sbo.block_offset(0, 0).0.y,
     sb_w << SUPERBLOCK_TO_BLOCK_SHIFT,
@@ -2220,7 +2220,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       pli,
                     );
                     rate += if fi.sequence.enable_restoration {
-                      cw.count_lrf_switchable(
+                      cw.fc.count_lrf_switchable(
                         w,
                         &ts.restoration.as_const(),
                         best_lrf[lru_y * lru_w[pli] + lru_x][pli],
@@ -2274,7 +2274,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                       &src_subset,
                       pli,
                     );
-                    rate += cw.count_lrf_switchable(
+                    rate += cw.fc.count_lrf_switchable(
                       w,
                       &ts.restoration.as_const(),
                       best_lrf[lru_y * lru_w[pli] + lru_x][pli],
@@ -2400,7 +2400,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   &src_subset,
                   pli,
                 );
-                let rate = cw.count_lrf_switchable(
+                let rate = cw.fc.count_lrf_switchable(
                   w,
                   &ts.restoration.as_const(),
                   best_new_lrf,
@@ -2482,7 +2482,7 @@ pub fn rdo_loop_decision<T: Pixel>(
                   &src_subset,
                   pli,
                 );
-                let rate = cw.count_lrf_switchable(
+                let rate = cw.fc.count_lrf_switchable(
                   w,
                   &ts.restoration.as_const(),
                   current_lrf,
