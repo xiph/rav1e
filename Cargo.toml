@@ -142,8 +142,10 @@ opt-level = 1
 
 [profile.release]
 debug = true
+incremental = true
 
 [profile.bench]
+incremental = true
 
 [workspace]
 members = [".", "ivf", "rav1e_js", "v_frame"]
