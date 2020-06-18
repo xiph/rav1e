@@ -44,6 +44,7 @@ check_asm = []
 capi = []
 tracing = ["rust_hawktracer"]
 serialize = ["serde", "toml", "v_frame/serialize", "arrayvec/serde"]
+wasm = ["wasm-bindgen"]
 
 # Enables debug dumping of lookahead computation results, specifically:
 # - i-qres.png: quarter-resolution luma planes,
@@ -63,7 +64,7 @@ backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
 num-derive = "0.3"
 paste = "0.1"
-noop_proc_macro = "0.2.0"
+noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.3.2", optional = true }
 aom-sys = { version = "0.2.1", optional = true }
@@ -81,6 +82,7 @@ console = { version = "0.11", optional = true }
 fern = { version = "0.6", optional = true }
 itertools = "0.9"
 simd_helpers = "0.1"
+wasm-bindgen = { version = "0.2.63", optional = true }
 
 [dependencies.image]
 version = "0.23"

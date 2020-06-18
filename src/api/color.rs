@@ -8,11 +8,13 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::serialize::*;
+use crate::wasm_bindgen::*;
 
 use arg_enum_proc_macro::ArgEnum;
 use num_derive::FromPrimitive;
 
 /// Sample position for subsampled chroma
+#[wasm_bindgen]
 #[derive(
   Copy, Clone, Debug, PartialEq, FromPrimitive, Serialize, Deserialize,
 )]
@@ -184,6 +186,7 @@ pub struct ColorDescription {
 /// Allowed pixel value range
 ///
 /// C.f. VideoFullRangeFlag variable specified in ISO/IEC 23091-4/ITU-T H.273
+#[wasm_bindgen]
 #[derive(
   ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive, Serialize, Deserialize,
 )]
