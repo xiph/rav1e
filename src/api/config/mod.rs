@@ -9,8 +9,11 @@
 
 use thiserror::Error;
 
+use std::sync::Arc;
+
 use crate::api::{ChromaSampling, Context, ContextInner};
 use crate::cpu_features::CpuFeatureLevel;
+use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::tiling::TilingInfo;
 use crate::util::Pixel;
 
@@ -106,6 +109,8 @@ pub struct Config {
   rate_control: RateControlConfig,
   /// The number of threads in the threadpool.
   pub(crate) threads: usize,
+  /// Shared thread pool
+  pub(crate) pool: Option<Arc<ThreadPool>>,
 }
 
 impl Config {
@@ -139,6 +144,13 @@ impl Config {
   /// The default configuration is single pass
   pub fn with_rate_control(mut self, rate_control: RateControlConfig) -> Self {
     self.rate_control = rate_control;
+    self
+  }
+
+  #[cfg(features = "unstable")]
+  /// Use the provided threadpool
+  pub fn with_thread_pool(mut self, pool: Arc<ThreadPool>) -> Self {
+    self.threadpool = Some(pool);
     self
   }
 }
@@ -185,10 +197,13 @@ impl Config {
     // performance issues.
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
-    let pool = crate::rayon::ThreadPoolBuilder::new()
-      .num_threads(self.threads)
-      .build()
-      .unwrap();
+    let pool = if let Some(ref p) = self.pool {
+      p.clone()
+    } else {
+      let pool =
+        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+      Arc::new(pool)
+    };
 
     let mut config = self.enc;
     config.set_key_frame_interval(
