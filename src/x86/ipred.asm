@@ -1412,7 +1412,6 @@ ALIGN function_align
     mova                xm2, [r3+angleq*8] ; upper ymm half zero in both cases
     pcmpgtb              m1, m2
     pmovmskb            r5d, m1
-    popcnt              r5d, r5d ; sets ZF which can be used by caller
     ret
 .w4_no_upsample:
     %assign stack_offset org_stack_offset
@@ -1423,7 +1422,9 @@ ALIGN function_align
     lea            maxbased, [hq+3]
     call .filter_strength
     mov            maxbased, 7
+    test                r5d, r5d
     jz .w4_main ; filter_strength == 0
+    popcnt              r5d, r5d
     vpbroadcastd         m7, [base+pb_8]
     vbroadcasti128       m2, [tlq-1]
     pminub               m1, m7, [base+z_filter_s]
@@ -1596,7 +1597,9 @@ ALIGN function_align
     test             angled, 0x400
     jnz .w8_no_intra_edge_filter
     call .filter_strength
+    test                r5d, r5d
     jz .w8_main ; filter_strength == 0
+    popcnt              r5d, r5d
     movu                xm2, [tlq]
     pminub              xm1, xm0, [base+z_filter_s+14]
     vinserti128          m2, [tlq-1], 1
@@ -1698,7 +1701,9 @@ ALIGN function_align
     test             angled, 0x400
     jnz .w16_no_intra_edge_filter
     call .filter_strength
+    test                r5d, r5d
     jz .w16_main ; filter_strength == 0
+    popcnt              r5d, r5d
     vpbroadcastd         m1, [base+pb_12]
     vbroadcasti128       m6, [base+z_filter_s+8]
     vinserti128          m2, m6, [base+z_filter_s], 0
@@ -2205,7 +2210,6 @@ ALIGN function_align
     pand                 m0, m8, m7
     pcmpgtb              m0, m9
     pmovmskb            r3d, m0
-    popcnt              r3d, r3d
     ret
 ALIGN function_align
 .upsample_above: ; w4/w8
@@ -2255,7 +2259,9 @@ ALIGN function_align
     lea                 r3d, [hq+3]
     sub              angled, 1112 ; angle - 90
     call .filter_strength
+    test                r3d, r3d
     jz .w4_no_filter_above
+    popcnt              r3d, r3d
     vpbroadcastd        xm2, [base+pb_4]
     pminub              xm2, [base+z_filter_s]
     vpbroadcastd        xm0, [base+z_filter_k-4+r3*4+12*0]
@@ -2290,9 +2296,10 @@ ALIGN function_align
     pand                xm0, xm8 ; reuse from previous filter_strength call
     pcmpgtb             xm0, xm9
     pmovmskb            r3d, xm0
-    popcnt              r3d, r3d
 .w4_filter_left:
+    test                r3d, r3d
     jz .w4_main
+    popcnt              r3d, r3d
     mov                 r5d, 10
     cmp                  hd, 16
     movu                xm2, [rsp+49]
@@ -2443,7 +2450,9 @@ ALIGN function_align
     lea                 r3d, [hq+7]
     sub              angled, 90 ; angle - 90
     call .filter_strength
+    test                r3d, r3d
     jz .w8_no_filter_above
+    popcnt              r3d, r3d
     vpbroadcastd        xm3, [base+pb_8]
     pminub              xm3, [base+z_filter_s+8]
     vpbroadcastd        xm0, [base+z_filter_k-4+r3*4+12*0]
@@ -2476,9 +2485,10 @@ ALIGN function_align
     pand                 m0, m8
     pcmpgtb              m0, m9
     pmovmskb            r3d, m0
-    popcnt              r3d, r3d
 .w8_filter_left:
+    test                r3d, r3d
     jz .w8_main
+    popcnt              r3d, r3d
     vpbroadcastd         m7, [base+z_filter_k-4+r3*4+12*0]
     vpbroadcastd         m8, [base+z_filter_k-4+r3*4+12*1]
     vpbroadcastd         m9, [base+z_filter_k-4+r3*4+12*2]
@@ -2650,7 +2660,9 @@ ALIGN function_align
     lea                 r3d, [hq+15]
     sub              angled, 90
     call .filter_strength
+    test                r3d, r3d
     jz .w16_no_filter_above
+    popcnt              r3d, r3d
     vbroadcasti128       m6, [tlq+1]
     mova                xm2, [base+z_filter_s]
     vinserti128          m2, [base+z_filter_s+14], 1 ; 00 01 12 23 34 45 56 67   67 78 89 9a ab bc cd de
@@ -2683,8 +2695,9 @@ ALIGN function_align
     pand                 m0, m8
     pcmpgtb              m0, m9
     pmovmskb            r3d, m0
-    popcnt              r3d, r3d
+    test                r3d, r3d
     jz .w16_main
+    popcnt              r3d, r3d
     vpbroadcastd         m7, [base+z_filter_k-4+r3*4+12*0]
     vpbroadcastd         m8, [base+z_filter_k-4+r3*4+12*1]
     vpbroadcastd         m9, [base+z_filter_k-4+r3*4+12*2]
@@ -3086,7 +3099,6 @@ ALIGN function_align
     mova                xm2, [r4+angleq*8]
     pcmpgtb              m1, m2
     pmovmskb            r5d, m1
-    popcnt              r5d, r5d
     ret
 .h4_no_upsample:
     %assign stack_offset org_stack_offset
@@ -3097,7 +3109,9 @@ ALIGN function_align
     lea            maxbased, [wq+3]
     call .filter_strength
     mov            maxbased, 7
+    test                r5d, r5d
     jz .h4_main ; filter_strength == 0
+    popcnt              r5d, r5d
     vpbroadcastd         m7, [base+pb_7]
     vbroadcasti128       m2, [tlq-14]
     pmaxub               m1, m7, [base+z_filter_s-4]
@@ -3288,7 +3302,9 @@ ALIGN function_align
     test             angled, 0x400
     jnz .h8_no_intra_edge_filter
     call .filter_strength
+    test                r5d, r5d
     jz .h8_main ; filter_strength == 0
+    popcnt              r5d, r5d
     vpbroadcastd        xm6, [base+pb_15]
     pcmpeqb             xm1, xm1
     psubusb             xm6, xm0
@@ -3444,7 +3460,9 @@ ALIGN function_align
     test             angled, 0x400
     jnz .h16_no_intra_edge_filter
     call .filter_strength
+    test                r5d, r5d
     jz .h16_main ; filter_strength == 0
+    popcnt              r5d, r5d
     vpbroadcastd        m11, [base+pb_27]
     vpbroadcastd         m1, [base+pb_1]
     vbroadcasti128       m6, [base+z_filter_s+12]
