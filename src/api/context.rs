@@ -19,6 +19,7 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::util::Pixel;
 
+use std::fmt;
 use std::io;
 
 /// The encoder context.
@@ -406,5 +407,20 @@ impl<T: Pixel> Context<T> {
       .rc_state
       .parse_frame_data_packet(data)
       .map_err(|_| EncoderStatus::Failure)
+  }
+}
+
+impl<T: Pixel> fmt::Debug for Context<T> {
+  fn fmt(
+    &self, f: &mut fmt::Formatter<'_>,
+  ) -> std::result::Result<(), fmt::Error> {
+    write!(
+      f,
+      "{{ \
+        config: {:?}, \
+        is_flushing: {}, \
+      }}",
+      self.config, self.is_flushing,
+    )
   }
 }

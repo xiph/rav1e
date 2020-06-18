@@ -85,6 +85,16 @@ mod hawktracer {
   }
 }
 
+mod wasm_bindgen {
+  cfg_if::cfg_if! {
+    if #[cfg(feature="wasm")] {
+      pub use wasm_bindgen::prelude::*;
+    } else {
+      pub use noop_proc_macro::wasm_bindgen;
+    }
+  }
+}
+
 mod rayon {
   cfg_if::cfg_if! {
     if #[cfg(target_arch="wasm32")] {

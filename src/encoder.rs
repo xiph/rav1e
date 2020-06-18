@@ -35,6 +35,7 @@ use crate::stats::EncoderStats;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
+use crate::wasm_bindgen::*;
 
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
@@ -97,6 +98,7 @@ impl<T: Pixel> ReferenceFramesSet<T> {
   }
 }
 
+#[wasm_bindgen]
 #[derive(ArgEnum, Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[repr(C)]
 pub enum Tune {
