@@ -21,6 +21,7 @@ use crate::util::Pixel;
 
 use std::fmt;
 use std::io;
+use std::sync::Arc;
 
 /// The encoder context.
 ///
@@ -28,7 +29,7 @@ use std::io;
 pub struct Context<T: Pixel> {
   pub(crate) inner: ContextInner<T>,
   pub(crate) config: EncoderConfig,
-  pub(crate) pool: crate::rayon::ThreadPool,
+  pub(crate) pool: Arc<crate::rayon::ThreadPool>,
   pub(crate) is_flushing: bool,
 }
 

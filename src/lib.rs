@@ -110,6 +110,7 @@ mod rayon {
           ThreadPoolBuilder()
         }
       }
+      #[derive(Debug)]
       pub struct ThreadPool ();
       impl ThreadPool {
         pub fn install<OP, R>(&self, op: OP) -> R where
