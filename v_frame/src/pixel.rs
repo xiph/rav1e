@@ -8,9 +8,11 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::serialize::{Deserialize, Serialize};
+use crate::wasm_bindgen::*;
 
 use num_derive::FromPrimitive;
 use num_traits::{AsPrimitive, PrimInt, Signed};
+
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::mem::size_of;
@@ -149,6 +151,7 @@ impl Coefficient for i32 {
 }
 
 /// Chroma subsampling format
+#[wasm_bindgen]
 #[derive(
   Copy, Clone, Debug, PartialEq, FromPrimitive, Serialize, Deserialize,
 )]
