@@ -126,7 +126,6 @@ jobs:
         target:
          - x86_64-unknown-linux-musl
          - aarch64-unknown-linux-musl
-         - wasm32-unknown-unknown
         include:
          - target: x86_64-unknown-linux-musl
            name: linux
@@ -136,9 +135,6 @@ jobs:
            name: aarch64-linux
            binaries: rav1e
            strip: aarch64-linux-gnu-strip
-         - target: wasm32-unknown-unknown
-           name: wasm32-linux
-           binaries: librav1e.a rav1e.wasm
 
     runs-on: ubuntu-latest
 
@@ -334,7 +330,6 @@ jobs:
           rav1e.exe
           rav1e-linux.tar.gz
           rav1e-aarch64-linux.tar.gz
-          rav1e-wasm32-linux.tar.gz
           rav1e-macos.zip
           rav1e-windows-msvc.zip
           rav1e-windows-gnu.zip
@@ -351,7 +346,6 @@ jobs:
           rav1e.exe
           rav1e-${{ steps.tagName.outputs.version }}-linux.tar.gz
           rav1e-${{ steps.tagName.outputs.version }}-aarch64-linux.tar.gz
-          rav1e-${{ steps.tagName.outputs.version }}-wasm32-linux.tar.gz
           rav1e-${{ steps.tagName.outputs.version }}-macos.zip
           rav1e-${{ steps.tagName.outputs.version }}-windows-msvc.zip
           rav1e-${{ steps.tagName.outputs.version }}-windows-gnu.zip
