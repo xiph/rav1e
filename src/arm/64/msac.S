@@ -185,7 +185,7 @@ function msac_decode_symbol_adapt4_neon, export=1
         sbc             w4,  w4,  w14                             // -((count >> 4) + (n_symbols > 2) + 4)
 .endif
         sub_n           v4,  v5,  v4,  v5,  v0,  v1,  \sz, \n     // (32768 - cdf[i]) or (-1 - cdf[i])
-        dup             v6.8h,    w4                              // -rate
+        dup             v6\sz,    w4                              // -rate
 
         sub             w3,  w3,  w3, lsr #5                      // count - (count == 32)
         sub_n           v0,  v1,  v0,  v1,  v2,  v3,  \sz, \n     // cdf + (i >= val ? 1 : 0)
