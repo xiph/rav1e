@@ -311,6 +311,7 @@ impl ProgressInfo {
   }
 
   pub fn print_summary(&self, verbose: bool) {
+    eprint!("\r");
     info!("{}", self);
     info!("----------");
     self.print_frame_type_summary(FrameType::KEY);
