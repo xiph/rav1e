@@ -120,17 +120,17 @@ jobs:
         matrix.conf == '1.43.1-tests' || matrix.conf == 'aom-tests' ||
         matrix.conf == 'grcov-coveralls'
       env:
-        LINK: http://ppa.launchpad.net/jonathonf/ffmpeg-4/ubuntu/pool/main/a/aom
-        AOM_VERSION: 1.0.0.errata1-3~18.04.york0
+        LINK: http://www.deb-multimedia.org/pool/main/a/aom-dmo
+        AOM_VERSION: 2.0.0-dmo0~bpo10+1
         AOM_DEV_SHA256: >-
-          93e6f64f33722cf9c80a920b3d722713869793e5e1438c05ff9331791728ca90
+          86d3ff73e10a61dc0b9effe73c0b3cf618b2d8a229f5bb57cad5cda7b12950b8
         AOM_LIB_SHA256: >-
-          e1ff5093f077685e4e45ce74264f9ee7ccda4634be58e401ac180b73f4232b63
+          15c46126b5954c8a46866517b473cbdedb9e90165117e638ae874cc23fb13101
       run: |
         echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
-        echo "$LINK/libaom0_${AOM_VERSION}_amd64.deb" >> DEBS
+        echo "$LINK/libaom2_${AOM_VERSION}_amd64.deb" >> DEBS
         echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
-        echo "$AOM_LIB_SHA256 libaom0_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+        echo "$AOM_LIB_SHA256 libaom2_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
     - name: Add dav1d
       if: >
         matrix.conf == '1.43.1-tests' || matrix.conf == 'dav1d-tests' ||
