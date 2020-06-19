@@ -150,6 +150,11 @@ impl ProgressInfo {
       .unwrap_or_default() as u64
   }
 
+  // Elapsed time in seconds
+  pub fn elapsed_time(&self) -> u64 {
+    Instant::now().duration_since(self.time_started).as_secs() as u64
+  }
+
   // Number of frames of given type which appear in the video
   fn get_frame_type_count(&self, frame_type: FrameType) -> usize {
     self
@@ -669,21 +674,23 @@ impl fmt::Display for ProgressInfo {
     if let Some(total_frames) = self.total_frames {
       write!(
                 f,
-                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {}",
+                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {},  elap. time: {}",
                 self.frames_encoded(),
                 total_frames,
                 self.encoding_fps(),
                 self.bitrate() as f64 / 1000f64,
                 self.estimated_size() as f64 / (1024 * 1024) as f64,
-                secs_to_human_time(self.estimated_time())
+                secs_to_human_time(self.estimated_time()),
+                secs_to_human_time(self.elapsed_time())
             )
     } else {
       write!(
         f,
-        "encoded {} frames, {:.3} fps, {:.2} Kb/s",
+        "encoded {} frames, {:.3} fps, {:.2} Kb/s, elap. time: {}",
         self.frames_encoded(),
         self.encoding_fps(),
-        self.bitrate() as f64 / 1000f64
+        self.bitrate() as f64 / 1000f64,
+        secs_to_human_time(self.elapsed_time())
       )
     }
   }
