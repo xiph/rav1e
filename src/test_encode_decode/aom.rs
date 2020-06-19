@@ -31,7 +31,6 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
         w: w as u32,
         h: h as u32,
         allow_lowbitdepth: 1,
-        cfg: cfg_options { ext_partition: 1 },
       };
 
       let mut dec = MaybeUninit::uninit();
@@ -91,7 +90,7 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
             return DecodeResult::Done;
           }
           let mut corrupted = 0;
-          let ret = aom_codec_control_(
+          let ret = aom_codec_control(
             &mut self.dec,
             aom_dec_control_id::AOMD_GET_FRAME_CORRUPTED as i32,
             &mut corrupted,
