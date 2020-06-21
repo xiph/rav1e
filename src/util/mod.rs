@@ -10,10 +10,12 @@
 mod align;
 #[macro_use]
 mod cdf;
+mod slice2d;
 mod uninit;
 
 pub use v_frame::math::*;
 pub use v_frame::pixel::*;
 
 pub use align::*;
+pub use slice2d::*;
 pub use uninit::*;

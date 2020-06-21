@@ -12,44 +12,38 @@ use crate::mc::MotionVector;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::transform::*;
+use crate::util::{Slice2D, Slice2DMut};
 
 use std::cmp;
-use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 
 /// Tiled view of FrameBlocks
 #[derive(Debug)]
 pub struct TileBlocks<'a> {
-  data: *const Block,
+  data: Slice2D<'a, Block>,
   x: usize,
   y: usize,
-  cols: usize,
-  rows: usize,
   frame_cols: usize,
   frame_rows: usize,
-  phantom: PhantomData<&'a Block>,
 }
 
 /// Mutable tiled view of FrameBlocks
 #[derive(Debug)]
 pub struct TileBlocksMut<'a> {
-  data: *mut Block,
+  data: Slice2DMut<'a, Block>,
   // private to guarantee borrowing rules
   x: usize,
   y: usize,
-  cols: usize,
-  rows: usize,
   frame_cols: usize,
   frame_rows: usize,
-  phantom: PhantomData<&'a mut Block>,
 }
 
 // common impl for TileBlocks and TileBlocksMut
 macro_rules! tile_blocks_common {
   // $name: TileBlocks or TileBlocksMut
   // $opt_mut: nothing or mut
-  ($name:ident $(,$opt_mut:tt)?) => {
+  ($name:ident, $slice:ident $(,$opt_mut:tt)?) => {
     impl<'a> $name<'a> {
 
       #[inline(always)]
@@ -61,14 +55,11 @@ macro_rules! tile_blocks_common {
         rows: usize,
       ) -> Self {
         Self {
-          data: & $($opt_mut)? frame_blocks[y][x],
+          data: $slice ::new(& $($opt_mut)? frame_blocks[y][x], cols, rows, frame_blocks.cols),
           x,
           y,
-          cols,
-          rows,
           frame_cols: frame_blocks.cols,
           frame_rows: frame_blocks.rows,
-          phantom: PhantomData,
         }
       }
 
@@ -80,14 +71,16 @@ macro_rules! tile_blocks_common {
         rows: usize,
       ) -> Self {
         Self {
-          data: & $($opt_mut)? self[y][x],
+          data: $slice ::new(&
+            $($opt_mut)? self[y][x],
+            cmp::min(cols, self.cols() - x),
+            cmp::min(rows, self.rows() - y),
+            self.frame_cols
+          ),
           x: self.x+x,
           y: self.y+y,
-          cols: cmp::min(cols, self.cols - x),
-          rows: cmp::min(rows, self.rows - y),
           frame_cols: self.frame_cols,
           frame_rows: self.frame_rows,
-          phantom: PhantomData,
         }
       }
 
@@ -102,13 +95,13 @@ macro_rules! tile_blocks_common {
       }
 
       #[inline(always)]
-      pub const fn cols(&self) -> usize {
-        self.cols
+      pub fn cols(&self) -> usize {
+        self.data.width()
       }
 
       #[inline(always)]
-      pub const fn rows(&self) -> usize {
-        self.rows
+      pub fn rows(&self) -> usize {
+        self.data.height()
       }
 
       #[inline(always)]
@@ -149,11 +142,7 @@ macro_rules! tile_blocks_common {
       type Output = [Block];
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.rows);
-        unsafe {
-          let ptr = self.data.add(index * self.frame_cols);
-          slice::from_raw_parts(ptr, self.cols)
-        }
+        &self.data[index]
       }
     }
 
@@ -168,21 +157,18 @@ macro_rules! tile_blocks_common {
   }
 }
 
-tile_blocks_common!(TileBlocks);
-tile_blocks_common!(TileBlocksMut, mut);
+tile_blocks_common!(TileBlocks, Slice2D);
+tile_blocks_common!(TileBlocksMut, Slice2DMut, mut);
 
 impl TileBlocksMut<'_> {
   #[inline(always)]
   pub const fn as_const(&self) -> TileBlocks<'_> {
     TileBlocks {
-      data: self.data,
+      data: self.data.as_const(),
       x: self.x,
       y: self.y,
-      cols: self.cols,
-      rows: self.rows,
       frame_cols: self.frame_cols,
       frame_rows: self.frame_rows,
-      phantom: PhantomData,
     }
   }
 
@@ -257,8 +243,8 @@ impl TileBlocksMut<'_> {
   pub fn set_cdef(&mut self, sbo: TileSuperBlockOffset, cdef_index: u8) {
     let bo = sbo.block_offset(0, 0).0;
     // Checkme: Is 16 still the right block unit for 128x128 superblocks?
-    let bw = cmp::min(bo.x + MIB_SIZE, self.cols);
-    let bh = cmp::min(bo.y + MIB_SIZE, self.rows);
+    let bw = cmp::min(bo.x + MIB_SIZE, self.cols());
+    let bh = cmp::min(bo.y + MIB_SIZE, self.rows());
     for y in bo.y..bh {
       for x in bo.x..bw {
         self[y as usize][x as usize].cdef_index = cdef_index;
@@ -270,11 +256,7 @@ impl TileBlocksMut<'_> {
 impl IndexMut<usize> for TileBlocksMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-    assert!(index < self.rows);
-    unsafe {
-      let ptr = self.data.add(index * self.frame_cols);
-      slice::from_raw_parts_mut(ptr, self.cols)
-    }
+    &mut self.data[index]
   }
 }
 
