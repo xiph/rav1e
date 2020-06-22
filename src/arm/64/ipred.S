@@ -884,10 +884,10 @@ function ipred_smooth_8bpc_neon, export=1
         lsl             x1,  x1,  #1
         br              x5
 40:
-        sub             x2,  x2,  #4
-        mov             x7,  #-4
         ld1r            {v6.2s}, [x8]             // top
         ld1r            {v7.2s}, [x10]            // weights_hor
+        sub             x2,  x2,  #4
+        mov             x7,  #-4
         dup             v5.16b,  v6.b[3]          // right
         usubl           v6.8h,   v6.8b,   v4.8b   // top-bottom
         uxtl            v7.8h,   v7.8b            // weights_hor
@@ -922,10 +922,10 @@ function ipred_smooth_8bpc_neon, export=1
         b.gt            4b
         ret
 80:
-        sub             x2,  x2,  #4
-        mov             x7,  #-4
         ld1             {v6.8b}, [x8]             // top
         ld1             {v7.8b}, [x10]            // weights_hor
+        sub             x2,  x2,  #4
+        mov             x7,  #-4
         dup             v5.16b,  v6.b[7]          // right
         usubl           v6.8h,   v6.8b,   v4.8b   // top-bottom
         uxtl            v7.8h,   v7.8b            // weights_hor
