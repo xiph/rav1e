@@ -22,7 +22,7 @@ use crate::frame::{
   AsRegion, Frame, Plane, PlaneConfig, PlaneOffset,
 };
 use crate::hawktracer::*;
-use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect, SuperIndex};
+use crate::tiling::{Area, PadIndex, PadRow, PlaneRegion, PlaneRegionMut, Rect};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 
 use crate::api::SGRComplexityLevel;
@@ -398,7 +398,7 @@ impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
 }
 
 impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
-  type Item = &'a [T];
+  type Item = &'a PadRow<'a, T>;
 
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
@@ -420,7 +420,7 @@ impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
           &self.deblocked
         };
       self.y += 1;
-      Some(&src_plane[SuperIndex(ly)])
+      Some(&src_plane[PadIndex(ly)])
     } else {
       None
     }
@@ -439,24 +439,25 @@ impl<T: Pixel> ExactSizeIterator for VertPaddedIter<'_, T> {}
 impl<T: Pixel> FusedIterator for VertPaddedIter<'_, T> {}
 
 struct HorzPaddedIter<'a, T: Pixel> {
-  // Active area cropping is done using the length of the slice
-  slice: &'a [T],
+  row: &'a PadRow<'a, T>,
   // x index of the iterator
   // When less than 0, repeat the first element. When greater than end, repeat
   // the last element
   index: isize,
+  crop: isize,
   // The index at which to terminate. Can be larger than the slice length.
-  end: usize,
+  end: isize,
 }
 
 impl<'a, T: Pixel> HorzPaddedIter<'a, T> {
   fn new(
-    slice: &'a [T], start_index: isize, width: usize,
+    row: &'a PadRow<'a,T>, index: isize, crop: isize, end: isize,
   ) -> HorzPaddedIter<'a, T> {
     HorzPaddedIter {
-      slice,
-      index: start_index,
-      end: (width as isize + start_index) as usize,
+      row,
+      index,
+      crop,
+      end,
     }
   }
 }
@@ -468,9 +469,9 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
   fn next(&mut self) -> Option<Self::Item> {
     if self.index < self.end as isize {
       // clamp to the edges of the frame
-      let x = clamp(self.index, 0, self.slice.len() as isize - 1) as usize;
+      let x = clamp(self.index, -self.row.x(), self.crop as isize - 1);
       self.index += 1;
-      Some(&self.slice[x])
+      Some(&self.row[PadIndex(x)])
     } else {
       None
     }
@@ -498,51 +499,21 @@ pub fn setup_integral_image<T: Pixel>(
   let left_w = 4; // max radius of 2 + 2 padding
   let right_w = 3; // max radius of 2 + 1 padding
 
-  // Find how many unique elements to use to the left and right
-  let left_uniques = if cdeffed.rect().x == 0 {
-    0
-  } else {
-    left_w
-  };
-  let right_uniques = right_w.min(crop_w - stripe_w);
-
-  // Find the total number of unique elements used
-  let row_uniques = left_uniques + stripe_w + right_uniques;
-
-  // Negative start indices result in repeating the first element of the row
-  let start_index_x = if cdeffed.rect().x == 0 {
-    -(left_w as isize)
-  } else {
-    0
-  };
-
-  // Shift inputs left to get to pre-data
-  let cdef_shifted = cdeffed.superregion(Area::Rect{
-      x: -(left_uniques as isize),
-      y: 0,
-      width: row_uniques,
-      height: cdeffed.rect().height,
-  });
-  let deblock_shifted = deblocked.superregion(Area::Rect{
-      x: -(left_uniques as isize),
-      y: 0,
-      width: row_uniques,
-      height: deblocked.rect().height,
-    });
   let mut rows_iter = VertPaddedIter::new(
     // Move left to encompass all the used data
-    &cdef_shifted,
-    &deblock_shifted,
+    &cdeffed,
+    &deblocked,
     // since r2 uses every other row, we need an extra row if stripe_h is odd
     stripe_h + (stripe_h & 1),
     crop_h,
   )
-  .map(|row: &[T]| {
+  .map(|row: &PadRow<'_, T>| {
     HorzPaddedIter::new(
       // Limit how many unique elements we use
-      &row[..row_uniques],
-      start_index_x,
-      left_w + stripe_w + right_w,
+      row,
+      -left_w,
+      crop_w as isize,
+      stripe_w as isize + right_w,
     )
   });
 

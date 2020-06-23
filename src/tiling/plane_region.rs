@@ -16,6 +16,7 @@ use crate::util::*;
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
+use std::rc::Rc;
 use std::slice;
 
 /// Rectangle of a plane region, in pixels
@@ -134,6 +135,86 @@ impl Area {
   }
 }
 
+pub struct PadIndex(pub isize);
+pub struct PadRow<'a, T: Pixel>(pub [PlaneRegion<'a, T>]);
+pub struct PadRowMut<'a, T: Pixel>(pub [PlaneRegionMut<'a, T>]);
+
+macro_rules! pad_row_common {
+  // $name: PadRow or PadRowMut
+  ($name:ident, $parent:ident $(,$opt_mut:tt)?) => {
+    impl<'a, T: Pixel> $name<'a, T> {
+      pub fn x(&self) -> isize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.rect().x
+        }
+      }        
+      pub fn y(&self) -> isize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.rect().y
+        }
+      }
+      pub fn pad_x(&self) -> isize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.pad_rect().x
+        }
+      }        
+      pub fn pad_y(&self) -> isize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.pad_rect().y
+        }
+      }        
+      pub fn width(&self) -> usize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.pad_rect().width
+        }
+      }        
+      pub fn pad_width(&self) -> usize {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          pr.pad_rect().width
+        }
+      }        
+    }
+    impl<'a, T: Pixel> Index<PadIndex> for $name<'a, T> {
+      type Output = T;
+      #[inline(always)]
+      fn index(&self, index: PadIndex) -> &Self::Output {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          let row = self.0.len() as isize - pr.rect().y + pr.pad_rect().y - 1;
+          assert!(row >= pr.pad_rect().y - pr.rect().y);
+          assert!(row < pr.pad_rect().height as isize + pr.pad_rect().y - pr.rect().y);
+          assert!(index.0 >= pr.pad_rect().x - pr.rect().x);
+          assert!(index.0 < pr.pad_rect().width as isize + pr.pad_rect().x - pr.rect().x);
+          &*pr.data.offset(row * pr.plane_cfg.stride as isize + index.0)
+        }
+      }
+    }
+    impl<'a, T: Pixel> Index<usize> for $name<'a, T> {
+      type Output = T;
+      #[inline(always)]
+      fn index(&self, index: usize) -> &Self::Output {
+        unsafe {
+          let pr: &$parent<'a, T> = &self.0[0];
+          let row = self.0.len() as isize - pr.rect().y + pr.pad_rect().y - 1;
+          assert!(row >= pr.pad_rect().y - pr.rect().y);
+          assert!(row < pr.pad_rect().height as isize + pr.pad_rect().y - pr.rect().y);
+          assert!((index as isize) < pr.pad_rect().width as isize + pr.pad_rect().x - pr.rect().x);
+          &*pr.data.offset(row * pr.plane_cfg.stride as isize + index as isize)
+        }
+      }
+    }
+  }
+}
+
+pad_row_common!(PadRow, PlaneRegion);
+pad_row_common!(PadRowMut, PlaneRegionMut, mut);
+
 /// Bounded region of a plane
 ///
 /// This allows to give access to a rectangular area of a plane without
@@ -160,8 +241,6 @@ pub struct PlaneRegionMut<'a, T: Pixel> {
   bounds: Rect,
   phantom: PhantomData<&'a mut T>,
 }
-
-pub struct SuperIndex(pub isize);
 
 // common impl for PlaneRegion and PlaneRegionMut
 macro_rules! plane_region_common {
@@ -426,7 +505,7 @@ macro_rules! plane_region_common {
     unsafe impl<T: Pixel> Send for $name<'_, T> {}
     unsafe impl<T: Pixel> Sync for $name<'_, T> {}
 
-    impl<T: Pixel> Index<usize> for $name<'_, T> {
+    impl<'a, T: Pixel> Index<usize> for $name<'a, T> {
       type Output = [T];
 
       #[inline(always)]
@@ -439,16 +518,14 @@ macro_rules! plane_region_common {
       }
     }
 
-    impl<T: Pixel> Index<SuperIndex> for $name<'_, T> {
-      type Output = [T];
-
+    impl<'a, T: Pixel> Index<PadIndex> for $name<'a, T> {
+      type Output = PadRow<'a, T>;
       #[inline(always)]
-      fn index(&self, index: SuperIndex) -> &Self::Output {
-        assert!(index.0 < self.bounds.y + self.bounds.height as isize - self.rect.y);
+      fn index(&self, index: PadIndex) -> &Self::Output {
         assert!(index.0 >= self.bounds.y - self.rect.y);
+        assert!(index.0 < self.bounds.height as isize + self.bounds.y - self.rect.y);
         unsafe {
-          let ptr = self.data.offset(index.0 * self.plane_cfg.stride as isize);
-          slice::from_raw_parts(ptr, self.rect.width)
+          &*(slice::from_raw_parts(self, (index.0 + self.rect.y - self.bounds.y + 1) as usize) as *const [Self] as *const PadRow<'a, T>)
         }
       }
     }
@@ -533,7 +610,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
   // This will _not_ allow expanding a region beyond the original
   // rectangle created with new() or from_slice().  As such, it
   // protects the original Tile/Frame boundaries.
-  pub fn superregion_mut(&self, area: Area) -> PlaneRegionMut<'_, T> {
+  pub fn superregion_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
     let rect = area.to_rect(
       self.plane_cfg.xdec,
       self.plane_cfg.ydec,
