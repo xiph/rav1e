@@ -132,7 +132,7 @@ L(ipred_v_tbl):
         .word 80f  - L(ipred_v_tbl) + CONFIG_THUMB
         .word 40f  - L(ipred_v_tbl) + CONFIG_THUMB
 40:
-        vld1.32         {d0[0]},  [r2]
+        vld1.32         {d0[]},   [r2]
 4:
         vst1.32         {d0[0]},  [r0,  :32], r1
         vst1.32         {d0[0]},  [r12, :32], r1
@@ -215,7 +215,7 @@ L(ipred_h_tbl):
         .word 8f   - L(ipred_h_tbl) + CONFIG_THUMB
         .word 4f   - L(ipred_h_tbl) + CONFIG_THUMB
 4:
-        vld4.8          {d0[],  d1[],  d2[],  d3[]},  [r2],  lr
+        vld4.8          {d0[],  d1[],  d2[],  d3[]},  [r2, :32],  lr
         vst1.32         {d3[0]},  [r0,  :32], r1
         vst1.32         {d2[0]},  [r12, :32], r1
         subs            r4,  r4,  #4
@@ -224,7 +224,7 @@ L(ipred_h_tbl):
         bgt             4b
         pop             {r4-r5, pc}
 8:
-        vld4.8          {d0[],  d1[],  d2[],  d3[]},  [r2],  lr
+        vld4.8          {d0[],  d1[],  d2[],  d3[]},  [r2, :32],  lr
         vst1.8          {d3},  [r0,  :64], r1
         vst1.8          {d2},  [r12, :64], r1
         subs            r4,  r4,  #4
@@ -453,7 +453,7 @@ L(ipred_dc_left_tbl):
         .word L(ipred_dc_left_w4)  - L(ipred_dc_left_tbl) + CONFIG_THUMB
 
 L(ipred_dc_left_h4):
-        vld1.32         {d0[]},  [r2]
+        vld1.32         {d0[]},  [r2, :32]
         vpaddl.u8       d0,  d0
         vpadd.u16       d0,  d0
         vrshrn.u16      d0,  q0,  #2
@@ -468,7 +468,7 @@ L(ipred_dc_left_w4):
         bgt             L(ipred_dc_left_w4)
         pop             {r4-r5, pc}
 L(ipred_dc_left_h8):
-        vld1.8          {d0},  [r2]
+        vld1.8          {d0},  [r2, :64]
         vpaddl.u8       d0,  d0
         vpadd.u16       d0,  d0
         vpadd.u16       d0,  d0
@@ -484,7 +484,7 @@ L(ipred_dc_left_w8):
         bgt             L(ipred_dc_left_w8)
         pop             {r4-r5, pc}
 L(ipred_dc_left_h16):
-        vld1.8          {d0,  d1},  [r2]
+        vld1.8          {d0,  d1},  [r2, :128]
         vaddl.u8        q0,  d0,  d1
         vadd.u16        d0,  d0,  d1
         vpadd.u16       d0,  d0
@@ -501,7 +501,7 @@ L(ipred_dc_left_w16):
         bgt             L(ipred_dc_left_w16)
         pop             {r4-r5, pc}
 L(ipred_dc_left_h32):
-        vld1.8          {d0,  d1,  d2,  d3},  [r2]
+        vld1.8          {d0,  d1,  d2,  d3},  [r2, :128]
         vaddl.u8        q0,  d0,  d1
         vaddl.u8        q1,  d2,  d3
         vadd.u16        q0,  q0,  q1
@@ -522,8 +522,8 @@ L(ipred_dc_left_w32):
         bgt             1b
         pop             {r4-r5, pc}
 L(ipred_dc_left_h64):
-        vld1.8          {d0,  d1,  d2,  d3},  [r2]!
-        vld1.8          {d4,  d5,  d6,  d7},  [r2]
+        vld1.8          {d0,  d1,  d2,  d3},  [r2, :128]!
+        vld1.8          {d4,  d5,  d6,  d7},  [r2, :128]
         vaddl.u8        q0,  d0,  d1
         vaddl.u8        q1,  d2,  d3
         vaddl.u8        q2,  d4,  d5
@@ -599,13 +599,13 @@ L(ipred_dc_tbl):
         .word L(ipred_dc_w4)  - L(ipred_dc_tbl) + CONFIG_THUMB
 
 L(ipred_dc_h4):
-        vld1.32         {d0[0]},  [r2]!
+        vld1.32         {d0[]},  [r2, :32]!
         vpaddl.u8       d0,  d0
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w4):
         add             r2,  r2,  #1
-        vld1.32         {d1[0]},  [r2]
+        vld1.32         {d1[]},  [r2]
         vmov.32         d1[1],  r6
         vadd.s16        d0,  d0,  d30
         vpaddl.u8       d1,  d1
@@ -634,7 +634,7 @@ L(ipred_dc_w4):
         pop             {r4-r6, pc}
 
 L(ipred_dc_h8):
-        vld1.8          {d0},  [r2]!
+        vld1.8          {d0},  [r2, :64]!
         vpaddl.u8       d0,  d0
         vpadd.u16       d0,  d0
         vpadd.u16       d0,  d0
@@ -669,7 +669,7 @@ L(ipred_dc_w8):
         pop             {r4-r6, pc}
 
 L(ipred_dc_h16):
-        vld1.8          {d0,  d1},  [r2]!
+        vld1.8          {d0,  d1},  [r2, :128]!
         vaddl.u8        q0,  d0,  d1
         vadd.u16        d0,  d0,  d1
         vpadd.u16       d0,  d0
@@ -706,7 +706,7 @@ L(ipred_dc_w16):
         pop             {r4-r6, pc}
 
 L(ipred_dc_h32):
-        vld1.8          {d0,  d1,  d2,  d3},  [r2]!
+        vld1.8          {d0,  d1,  d2,  d3},  [r2, :128]!
         vaddl.u8        q0,  d0,  d1
         vaddl.u8        q1,  d2,  d3
         vadd.u16        q0,  q0,  q1
@@ -751,9 +751,9 @@ L(ipred_dc_w32):
         pop             {r4-r6, pc}
 
 L(ipred_dc_h64):
-        vld1.8          {d0,  d1,  d2,  d3},  [r2]!
+        vld1.8          {d0,  d1,  d2,  d3},  [r2, :128]!
         vaddl.u8        q0,  d0,  d1
-        vld1.8          {d4,  d5,  d6,  d7},  [r2]!
+        vld1.8          {d4,  d5,  d6,  d7},  [r2, :128]!
         vaddl.u8        q1,  d2,  d3
         vaddl.u8        q2,  d4,  d5
         vaddl.u8        q3,  d6,  d7
