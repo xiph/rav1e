@@ -1256,6 +1256,12 @@ INIT_XMM
                 %error use of ``%1'' sse2 instruction in cpuname function: current_function
             %elif %3 == 0 && __sizeofreg == 32 && notcpuflag(avx2)
                 %error use of ``%1'' avx2 instruction in cpuname function: current_function
+            %elif __sizeofreg == 16 && notcpuflag(sse)
+                %error use of ``%1'' sse instruction in cpuname function: current_function
+            %elif __sizeofreg == 32 && notcpuflag(avx)
+                %error use of ``%1'' avx instruction in cpuname function: current_function
+            %elif __sizeofreg == 64 && notcpuflag(avx512)
+                %error use of ``%1'' avx512 instruction in cpuname function: current_function
             %elifidn %1, pextrw ; special case because the base instruction is mmx2,
                 %ifnid %6       ; but sse4 is required for memory operands
                     %if notcpuflag(sse4)
