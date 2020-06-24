@@ -1678,6 +1678,7 @@ GPR_INSTR andn, bmi1
 GPR_INSTR bextr, bmi1
 GPR_INSTR blsi, bmi1
 GPR_INSTR blsmsk, bmi1
+GPR_INSTR blsr, bmi1
 GPR_INSTR bzhi, bmi2
 GPR_INSTR mulx, bmi2
 GPR_INSTR pdep, bmi2
