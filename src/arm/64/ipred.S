@@ -1460,12 +1460,14 @@ function ipred_filter_8bpc_neon, export=1
         subs            w3,  w3,  #16
         sqrshrun        v6.8b,   v6.8h,   #4
 
-        ins             v0.h[2], v2.h[7]
         st4             {v3.s, v4.s, v5.s, v6.s}[0], [x0], #16
-        ins             v0.b[0], v6.b[7]
         st4             {v3.s, v4.s, v5.s, v6.s}[1], [x6], #16
+        b.le            8f
+        ins             v0.h[2], v2.h[7]
+        ins             v0.b[0], v6.b[7]
         ins             v0.b[2], v6.b[3]
-        b.gt            2b
+        b               2b
+8:
         subs            w4,  w4,  #2
         b.le            9f
         sub             x8,  x6,  w9, uxtw
