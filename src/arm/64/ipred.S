@@ -1815,7 +1815,7 @@ function ipred_cfl_8bpc_neon, export=1
         dup             v16.8h, w8               // width + height
         adr             x7,  L(ipred_cfl_tbl)
         rbit            w8,  w8                  // rbit(width + height)
-        sub             w9,  w9,  #22            // 22 leading bits, minus table offset 4
+        sub             w9,  w9,  #22            // 26 leading bits, minus table offset 4
         sub             w6,  w6,  #26
         clz             w8,  w8                  // ctz(width + height)
         ldrh            w9,  [x7, w9, uxtw #1]
