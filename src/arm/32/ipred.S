@@ -568,7 +568,6 @@ function ipred_dc_8bpc_neon, export=1
         clz             r3,  r3
         clz             r12, r4
         vdup.16         q15, lr             // width + height
-        mov             r6,  #0
         adr             r5,  L(ipred_dc_tbl)
         rbit            lr,  lr             // rbit(width + height)
         sub             r3,  r3,  #20       // 25 leading bits, minus table offset 5
@@ -606,10 +605,8 @@ L(ipred_dc_h4):
 L(ipred_dc_w4):
         add             r2,  r2,  #1
         vld1.32         {d1[]},  [r2]
-        vmov.32         d1[1],  r6
         vadd.s16        d0,  d0,  d30
         vpaddl.u8       d1,  d1
-        vpadd.u16       d1,  d1
         vpadd.u16       d1,  d1
         cmp             r4,  #4
         vadd.s16        d0,  d0,  d1
