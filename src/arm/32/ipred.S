@@ -718,16 +718,13 @@ L(ipred_dc_w32):
         add             r2,  r2,  #1
         vld1.8          {d2,  d3,  d4,  d5},  [r2]
         vadd.s16        d0,  d0,  d30
-        vaddl.u8        q2,  d4,  d5
-        vadd.u16        d4,  d4,  d5
         vaddl.u8        q1,  d2,  d3
+        vaddl.u8        q2,  d4,  d5
+        vadd.u16        q1,  q1,  q2
         vadd.u16        d2,  d2,  d3
-        vpadd.u16       d4,  d4
         vpadd.u16       d2,  d2
-        vpadd.u16       d4,  d4
         vpadd.u16       d2,  d2
         cmp             r4,  #32
-        vadd.s16        d0,  d0,  d4
         vadd.s16        d0,  d0,  d2
         vshl.u16        d4,  d0,  d28
         beq             1f
