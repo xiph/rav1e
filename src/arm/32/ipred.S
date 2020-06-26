@@ -611,7 +611,8 @@ L(ipred_dc_w4):
         cmp             r4,  #4
         vadd.s16        d0,  d0,  d1
         vshl.u16        d0,  d0,  d28
-        beq             1f                  // h = 8/16
+        beq             1f
+        // h = 8/16
         movw            lr,  #(0x3334/2)
         movw            r5,  #(0x5556/2)
         cmp             r4,  #16
@@ -646,7 +647,8 @@ L(ipred_dc_w8):
         cmp             r4,  #8
         vadd.s16        d0,  d0,  d2
         vshl.u16        d0,  d0,  d28
-        beq             1f                  // h = 4/16/32
+        beq             1f
+        // h = 4/16/32
         cmp             r4,  #32
         movw            lr,  #(0x3334/2)
         movw            r5,  #(0x5556/2)
@@ -683,7 +685,8 @@ L(ipred_dc_w16):
         cmp             r4,  #16
         vadd.s16        d0,  d0,  d2
         vshl.u16        d0,  d0,  d28
-        beq             1f                  // h = 4/8/32/64
+        beq             1f
+        // h = 4/8/32/64
         tst             r4,  #(32+16+8)     // 16 added to make a consecutive bitmask
         movw            lr,  #(0x3334/2)
         movw            r5,  #(0x5556/2)
@@ -727,7 +730,8 @@ L(ipred_dc_w32):
         vadd.s16        d0,  d0,  d4
         vadd.s16        d0,  d0,  d2
         vshl.u16        d4,  d0,  d28
-        beq             1f                  // h = 8/16/64
+        beq             1f
+        // h = 8/16/64
         cmp             r4,  #8
         movw            lr,  #(0x3334/2)
         movw            r5,  #(0x5556/2)
