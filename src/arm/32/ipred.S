@@ -654,7 +654,7 @@ L(ipred_dc_w8):
         movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
-        vdup.16         q12, lr
+        vdup.16         d24, lr
         vqdmulh.s16     d0,  d0,  d24
 1:
         vdup.8          d0,  d0[0]
@@ -692,7 +692,7 @@ L(ipred_dc_w16):
         movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
-        vdup.16         q12, lr
+        vdup.16         d24, lr
         vqdmulh.s16     d0,  d0,  d24
 1:
         vdup.8          q0,  d0[0]
@@ -737,7 +737,7 @@ L(ipred_dc_w32):
         movw            r5,  #(0x5556/2)
         it              ne
         movne           lr,  r5
-        vdup.16         q12, lr
+        vdup.16         d24, lr
         vqdmulh.s16     d4,  d4,  d24
 1:
         vdup.8          q0,  d4[0]
