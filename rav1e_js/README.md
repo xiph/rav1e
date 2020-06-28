@@ -21,12 +21,10 @@ wasm-pack test --headless --firefox
 # make sure you have the latest npm version
 npm install -g npm@latest
 
-cd rav1e_js
 wasm-pack build
 
 cd www/
 npm install
 npm start
-# website served at localhost:8080
-# check the developer-console
+# website served at localhost:3000
 ```

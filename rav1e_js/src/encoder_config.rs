@@ -13,6 +13,7 @@ use rav1e::prelude::{
   ChromaSamplePosition, ContentLight, EncoderConfig as Rav1eEncoderConfig,
   PixelRange, Rational, SpeedSettings, Tune,
 };
+use serde_json;
 use v_frame::pixel::ChromaSampling;
 
 use wasm_bindgen::prelude::*;
@@ -35,6 +36,13 @@ impl EncoderConfig {
 
   pub fn debug(&self) -> String {
     format!("{:?}", self.conf)
+  }
+
+  pub fn toJSON(&self) -> String {
+    match serde_json::to_string(&self.conf) {
+      Ok(a) => a,
+      Err(e) => panic!(e),
+    }
   }
 
   /// Width and height of the frames in pixels.
