@@ -2246,7 +2246,6 @@ L(ipred_cfl_ac_420_w16_hpad):
 
         // Double the height and reuse the w8 summing/subtracting
         lsl             w6,  w6,  #1
-        lsl             w9,  w9,  #1
         b               L(ipred_cfl_ac_420_w8_calc_subtract_dc)
 
 L(ipred_cfl_ac_420_tbl):

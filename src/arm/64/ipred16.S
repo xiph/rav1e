@@ -2398,7 +2398,6 @@ L(ipred_cfl_ac_420_w8_hpad):
 
         // Double the height and reuse the w4 summing/subtracting
         lsl             w6,  w6,  #1
-        lsl             w9,  w9,  #1
         b               L(ipred_cfl_ac_420_w4_calc_subtract_dc)
 
 L(ipred_cfl_ac_420_w16):
@@ -2576,7 +2575,6 @@ L(ipred_cfl_ac_420_w16_hpad):
 
         // Quadruple the height and reuse the w4 summing/subtracting
         lsl             w6,  w6,  #2
-        lsl             w9,  w9,  #2
         b               L(ipred_cfl_ac_420_w4_calc_subtract_dc)
 
 L(ipred_cfl_ac_420_tbl):
