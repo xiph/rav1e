@@ -132,7 +132,7 @@ impl<T: Pixel> FrameSender<T> {
 }
 
 /// Endpoint to receive packets
-pub struct PacketReceiver<T: Pixel>{
+pub struct PacketReceiver<T: Pixel> {
   receiver: Receiver<Packet<T>>,
   enc: Arc<EncoderConfig>,
 }
@@ -219,14 +219,10 @@ impl Config {
 
     let enc = Arc::new(self.enc);
 
-    let channel = (FrameSender {
-      sender: send_frame,
-      enc: enc.clone(),
-    },
-    PacketReceiver {
-      receiver: receive_packet,
-      enc
-    });
+    let channel = (
+      FrameSender { sender: send_frame, enc: enc.clone() },
+      PacketReceiver { receiver: receive_packet, enc },
+    );
 
     pool.spawn(move || {
       for f in receive_frame.iter() {
@@ -266,7 +262,20 @@ impl Config {
 
     Ok(channel)
   }
-/*
+
+  /// Create an encoder channel with first pass data reporting
+  ///
+  /// Drop the `Sender<F>` endpoint to flush the encoder.
+  /// The last buffer in the Receiver<PassData> is the summary of the whole
+  /// encoding process.
+  pub fn new_firstpass_channel<T: Pixel>(
+    &self,
+  ) -> Result<(VideoDataChannel<T>, PassDataReceiver), InvalidConfig> {
+    let (video, passdata) = self.new_multipass_channel()?;
+
+    (video, passdata.1)
+  }
+
   /// Create a multipass encoder channel
   ///
   /// To setup a first-pass encode drop the `PassDataSender` before sending the
@@ -276,10 +285,15 @@ impl Config {
   /// are sent through the `PassDataSender` endpoint
   ///
   /// Drop the `Sender<F>` endpoint to flush the encoder.
-  /// The last buffer in the Receiver<PassData>
+  /// The last buffer in the Receiver<PassData> is the summary of the whole
+  /// encoding process.
   pub fn new_multipass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, PassDataChannel), InvalidConfig> {
+    todo!()
+  }
+
+  /*
     // TODO: make it user-settable
     let input_len = self.enc.rdo_lookahead_frames as usize * 2;
 
