@@ -1985,8 +1985,12 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
 %macro FN 4 ; fn, type, type_h, type_v
 cglobal %1_%2
     mov                 t0d, FILTER_%3
+%ifidn %3, %4
+    mov                 t1d, t0d
+%else
     mov                 t1d, FILTER_%4
-%ifnidn %1, sharp_smooth ; skip the jump in the last filter
+%endif
+%ifnidn %2, regular ; skip the jump in the last filter
     jmp mangle(private_prefix %+ _%1 %+ SUFFIX)
 %endif
 %endmacro
@@ -1999,15 +2003,15 @@ DECLARE_REG_TMP 7, 8
 
 %define PUT_8TAP_FN FN put_8tap,
 
-PUT_8TAP_FN regular,        REGULAR, REGULAR
-PUT_8TAP_FN regular_sharp,  REGULAR, SHARP
-PUT_8TAP_FN regular_smooth, REGULAR, SMOOTH
-PUT_8TAP_FN smooth_regular, SMOOTH,  REGULAR
-PUT_8TAP_FN smooth,         SMOOTH,  SMOOTH
-PUT_8TAP_FN smooth_sharp,   SMOOTH,  SHARP
-PUT_8TAP_FN sharp_regular,  SHARP,   REGULAR
 PUT_8TAP_FN sharp,          SHARP,   SHARP
 PUT_8TAP_FN sharp_smooth,   SHARP,   SMOOTH
+PUT_8TAP_FN smooth_sharp,   SMOOTH,  SHARP
+PUT_8TAP_FN smooth,         SMOOTH,  SMOOTH
+PUT_8TAP_FN sharp_regular,  SHARP,   REGULAR
+PUT_8TAP_FN regular_sharp,  REGULAR, SHARP
+PUT_8TAP_FN smooth_regular, SMOOTH,  REGULAR
+PUT_8TAP_FN regular_smooth, REGULAR, SMOOTH
+PUT_8TAP_FN regular,        REGULAR, REGULAR
 
 cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     imul                mxd, mxm, 0x010101
@@ -2730,30 +2734,24 @@ cglobal put_8tap, 4, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     mova             [tmpq], ym3
 %endmacro
 
-%macro PREP_8TAP_FN 3 ; type, type_h, type_v
-cglobal prep_8tap_%1
-    mov                 t0d, FILTER_%2
-    mov                 t1d, FILTER_%3
-%ifnidn %1, sharp_smooth ; skip the jump in the last filter
-    jmp mangle(private_prefix %+ _prep_8tap %+ SUFFIX)
-%endif
-%endmacro
-
 %macro PREP_8TAP 0
  %if WIN64
   DECLARE_REG_TMP 6, 4
  %else
   DECLARE_REG_TMP 6, 7
- %endif
-PREP_8TAP_FN regular,        REGULAR, REGULAR
-PREP_8TAP_FN regular_sharp,  REGULAR, SHARP
-PREP_8TAP_FN regular_smooth, REGULAR, SMOOTH
-PREP_8TAP_FN smooth_regular, SMOOTH,  REGULAR
-PREP_8TAP_FN smooth,         SMOOTH,  SMOOTH
-PREP_8TAP_FN smooth_sharp,   SMOOTH,  SHARP
-PREP_8TAP_FN sharp_regular,  SHARP,   REGULAR
+%endif
+
+%define PREP_8TAP_FN FN prep_8tap,
+
 PREP_8TAP_FN sharp,          SHARP,   SHARP
 PREP_8TAP_FN sharp_smooth,   SHARP,   SMOOTH
+PREP_8TAP_FN smooth_sharp,   SMOOTH,  SHARP
+PREP_8TAP_FN smooth,         SMOOTH,  SMOOTH
+PREP_8TAP_FN sharp_regular,  SHARP,   REGULAR
+PREP_8TAP_FN regular_sharp,  REGULAR, SHARP
+PREP_8TAP_FN smooth_regular, SMOOTH,  REGULAR
+PREP_8TAP_FN regular_smooth, REGULAR, SMOOTH
+PREP_8TAP_FN regular,        REGULAR, REGULAR
 
 cglobal prep_8tap, 3, 8, 0, tmp, src, stride, w, h, mx, my, stride3
     imul                mxd, mxm, 0x010101
@@ -5722,27 +5720,29 @@ cglobal prep_8tap_scaled, 4, 14, 16, 112, tmp, src, ss, w, h, mx, my, dx, dy
 %macro BILIN_SCALED_FN 1
 cglobal %1_bilin_scaled
     mov                 t0d, (5*15 << 16) | 5*15
-    mov                 t1d, (5*15 << 16) | 5*15
+    mov                 t1d, t0d
     jmp mangle(private_prefix %+ _%1_8tap_scaled %+ SUFFIX)
 %endmacro
-%define PUT_8TAP_SCALED_FN FN put_8tap_scaled,
-%define PREP_8TAP_SCALED_FN FN prep_8tap_scaled,
 
 %if WIN64
 DECLARE_REG_TMP 6, 5
 %else
 DECLARE_REG_TMP 6, 8
 %endif
+
+%define PUT_8TAP_SCALED_FN FN put_8tap_scaled,
+%define PREP_8TAP_SCALED_FN FN prep_8tap_scaled,
+
 BILIN_SCALED_FN put
-PUT_8TAP_SCALED_FN regular,        REGULAR, REGULAR
-PUT_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
-PUT_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
-PUT_8TAP_SCALED_FN smooth_regular, SMOOTH,  REGULAR
-PUT_8TAP_SCALED_FN smooth,         SMOOTH,  SMOOTH
-PUT_8TAP_SCALED_FN smooth_sharp,   SMOOTH,  SHARP
-PUT_8TAP_SCALED_FN sharp_regular,  SHARP,   REGULAR
 PUT_8TAP_SCALED_FN sharp,          SHARP,   SHARP
 PUT_8TAP_SCALED_FN sharp_smooth,   SHARP,   SMOOTH
+PUT_8TAP_SCALED_FN smooth_sharp,   SMOOTH,  SHARP
+PUT_8TAP_SCALED_FN smooth,         SMOOTH,  SMOOTH
+PUT_8TAP_SCALED_FN sharp_regular,  SHARP,   REGULAR
+PUT_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
+PUT_8TAP_SCALED_FN smooth_regular, SMOOTH,  REGULAR
+PUT_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
+PUT_8TAP_SCALED_FN regular,        REGULAR, REGULAR
 MC_8TAP_SCALED put
 
 %if WIN64
@@ -5750,16 +5750,17 @@ DECLARE_REG_TMP 5, 4
 %else
 DECLARE_REG_TMP 6, 7
 %endif
+
 BILIN_SCALED_FN prep
-PREP_8TAP_SCALED_FN regular,        REGULAR, REGULAR
-PREP_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
-PREP_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
-PREP_8TAP_SCALED_FN smooth_regular, SMOOTH,  REGULAR
-PREP_8TAP_SCALED_FN smooth,         SMOOTH,  SMOOTH
-PREP_8TAP_SCALED_FN smooth_sharp,   SMOOTH,  SHARP
-PREP_8TAP_SCALED_FN sharp_regular,  SHARP,   REGULAR
 PREP_8TAP_SCALED_FN sharp,          SHARP,   SHARP
 PREP_8TAP_SCALED_FN sharp_smooth,   SHARP,   SMOOTH
+PREP_8TAP_SCALED_FN smooth_sharp,   SMOOTH,  SHARP
+PREP_8TAP_SCALED_FN smooth,         SMOOTH,  SMOOTH
+PREP_8TAP_SCALED_FN sharp_regular,  SHARP,   REGULAR
+PREP_8TAP_SCALED_FN regular_sharp,  REGULAR, SHARP
+PREP_8TAP_SCALED_FN smooth_regular, SMOOTH,  REGULAR
+PREP_8TAP_SCALED_FN regular_smooth, REGULAR, SMOOTH
+PREP_8TAP_SCALED_FN regular,        REGULAR, REGULAR
 MC_8TAP_SCALED prep
 
 %macro WARP_V 5 ; dst, 02, 46, 13, 57
