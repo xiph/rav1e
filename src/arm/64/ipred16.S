@@ -2546,7 +2546,6 @@ L(ipred_cfl_ac_420_w16_wpad3):
         b.gt            1b
         mov             v0.16b,  v2.16b
         mov             v1.16b,  v3.16b
-        b               L(ipred_cfl_ac_420_w16_hpad)
 
 L(ipred_cfl_ac_420_w16_hpad):
         cbz             w4,  3f
