@@ -460,9 +460,9 @@ pub mod test {
     assert_eq!((32, 0, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[2].rec; // the top-right tile
-    assert_eq!((128, 0, 32, 64), rect(&tile.planes[0]));
-    assert_eq!((64, 0, 16, 32), rect(&tile.planes[1]));
-    assert_eq!((64, 0, 16, 32), rect(&tile.planes[2]));
+    assert_eq!((128, 0, 64, 64), rect(&tile.planes[0]));
+    assert_eq!((64, 0, 32, 32), rect(&tile.planes[1]));
+    assert_eq!((64, 0, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[3].rec; // the middle-left tile
     assert_eq!((0, 64, 64, 64), rect(&tile.planes[0]));
@@ -475,24 +475,24 @@ pub mod test {
     assert_eq!((32, 32, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[5].rec; // the middle-right tile
-    assert_eq!((128, 64, 32, 64), rect(&tile.planes[0]));
-    assert_eq!((64, 32, 16, 32), rect(&tile.planes[1]));
-    assert_eq!((64, 32, 16, 32), rect(&tile.planes[2]));
+    assert_eq!((128, 64, 64, 64), rect(&tile.planes[0]));
+    assert_eq!((64, 32, 32, 32), rect(&tile.planes[1]));
+    assert_eq!((64, 32, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[6].rec; // the bottom-left tile
-    assert_eq!((0, 128, 64, 16), rect(&tile.planes[0]));
-    assert_eq!((0, 64, 32, 8), rect(&tile.planes[1]));
-    assert_eq!((0, 64, 32, 8), rect(&tile.planes[2]));
+    assert_eq!((0, 128, 64, 64), rect(&tile.planes[0]));
+    assert_eq!((0, 64, 32, 32), rect(&tile.planes[1]));
+    assert_eq!((0, 64, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[7].rec; // the bottom-middle tile
-    assert_eq!((64, 128, 64, 16), rect(&tile.planes[0]));
-    assert_eq!((32, 64, 32, 8), rect(&tile.planes[1]));
-    assert_eq!((32, 64, 32, 8), rect(&tile.planes[2]));
+    assert_eq!((64, 128, 64, 64), rect(&tile.planes[0]));
+    assert_eq!((32, 64, 32, 32), rect(&tile.planes[1]));
+    assert_eq!((32, 64, 32, 32), rect(&tile.planes[2]));
 
     let tile = &tile_states[8].rec; // the bottom-right tile
-    assert_eq!((128, 128, 32, 16), rect(&tile.planes[0]));
-    assert_eq!((64, 64, 16, 8), rect(&tile.planes[1]));
-    assert_eq!((64, 64, 16, 8), rect(&tile.planes[2]));
+    assert_eq!((128, 128, 64, 64), rect(&tile.planes[0]));
+    assert_eq!((64, 64, 32, 32), rect(&tile.planes[1]));
+    assert_eq!((64, 64, 32, 32), rect(&tile.planes[2]));
   }
 
   #[inline]
@@ -572,7 +572,7 @@ pub mod test {
         // row 8 of U-plane of the middle-right tile
         let tile_plane = &mut tile_states[5].rec.planes[1];
         let row = &mut tile_plane[8];
-        assert_eq!(16, row.len());
+        assert_eq!(32, row.len());
         row[..4].copy_from_slice(&[14, 121, 1, 3]);
       }
 

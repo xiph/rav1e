@@ -136,11 +136,15 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       height % MI_SIZE == 0,
       "Tile width must be a multiple of MI_SIZE"
     );
+
+    let sb_rounded_width = width.align_power_of_two(sb_size_log2);
+    let sb_rounded_height = height.align_power_of_two(sb_size_log2);
+
     let luma_rect = TileRect {
       x: sbo.0.x << sb_size_log2,
       y: sbo.0.y << sb_size_log2,
-      width,
-      height,
+      width: sb_rounded_width,
+      height: sb_rounded_height,
     };
     let sb_width = width.align_power_of_two_and_shift(sb_size_log2);
     let sb_height = height.align_power_of_two_and_shift(sb_size_log2);
