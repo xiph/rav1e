@@ -2743,7 +2743,7 @@ cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
  %endif
 %endmacro
 
-%macro PREP_8TAP_HV_LOAD 4 ; dst0, src_memloc, tmp[1-2]
+%macro PREP_8TAP_HV 4 ; dst, src_memloc, tmp[1-2]
  %if cpuflag(ssse3)
     movu                 %1, [%2]
     pshufb               m2, %1, shufB
@@ -2754,10 +2754,6 @@ cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
     PREP_8TAP_H_LOAD4    m2, %2+4, m1, %3, %4
     PREP_8TAP_H_LOAD4    m3, %2+8, m1, %3, %4
  %endif
-%endmacro
-
-%macro PREP_8TAP_HV 4 ; dst, src_memloc, tmp[1-2]
-    PREP_8TAP_HV_LOAD %{1:4}
     mova                 m1, m2
     PMADDUBSW            m1, subpelh0, %3, %4, 1 ; subpel +0 C0
     PMADDUBSW            m3, subpelh1, %3, %4, 0 ; subpel +4 B4
