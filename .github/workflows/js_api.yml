@@ -1,16 +1,47 @@
 name: js_api
 on:
     push:
-        branches: [master]
+        branches:
+            - master
     pull_request:
-        branches: [master]
+        branches:
+            - master
 jobs:
     build-pack-test:
         name: wasm-pack build, pack, test
+
+        strategy:
+            matrix:
+                conf: [build, firefox, chrome, node]
+                include:
+                    - conf: firefox
+                      headless: --headless
+                    - conf: chrome
+                      headless: --headless
+
+        env:
+            RUST_BACKTRACE: 1
+            RUSTC_WRAPPER: sccache
+            SCCACHE_CACHE_SIZE: 300M
+            SCCACHE_DIR: /home/runner/.cache/sccache
+            SCCACHE_IDLE_TIMEOUT: 0
+
         runs-on: ubuntu-latest
+
         steps:
             - name: Checkout repository
               uses: actions/checkout@master
+
+            - name: Install sccache
+              env:
+                  LINK: https://github.com/mozilla/sccache/releases/download
+                  SCCACHE_VERSION: 0.2.13
+              run: |
+                  SCCACHE_FILE=sccache-$SCCACHE_VERSION-x86_64-unknown-linux-musl
+                  mkdir -p $HOME/.local/bin
+                  curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+                  mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+                  echo "::add-path::$HOME/.local/bin"
 
             - name: Set up Rust
               uses: actions-rs/toolchain@v1
@@ -20,33 +51,60 @@ jobs:
                   override: true
                   target: wasm32-unknown-unknown
 
+            - name: Generate Cargo.lock and Cargo.version
+              run: |
+                  cargo update
+                  cargo --version > Cargo.version
+
+            - name: Cache cargo registry
+              uses: actions/cache@v2
+              continue-on-error: true
+              with:
+                  path: ~/.cargo/registry/cache
+                  key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+
+            - name: Cache sccache output
+              uses: actions/cache@v2
+              continue-on-error: true
+              with:
+                  path: /home/runner/.cache/sccache
+                  key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
+                  restore-keys: |
+                      ${{ runner.os }}-${{ matrix.conf }}-sccache-
+
+            - name: Start sccache server
+              run: |
+                  sccache --start-server
+
             - name: Set up wasm-pack
               run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
             # BUILD & PACK
             - name: Build
+              if: matrix.conf == 'build'
               working-directory: rav1e_js
               run: wasm-pack build
 
             - name: Pack
+              if: matrix.conf == 'build'
               working-directory: rav1e_js
               run: wasm-pack pack
 
-            # TESTING BROWSER
-            - name: Test firefox
-              working-directory: rav1e_js
-              run: wasm-pack test --headless --firefox
-
-            - name: Test chrome
-              working-directory: rav1e_js
-              run: wasm-pack test --headless --chrome
-
-            # TESTING NODE
+            # TESTING
             - name: Use Node.js 14
+              if: matrix.conf == 'node'
               uses: actions/setup-node@v1
               with:
                   node-version: 14
 
-            - name: Test node
+            - name: Test ${{ matrix.conf }} (${{ matrix.headless }})
+              if: matrix.conf != 'build'
               working-directory: rav1e_js
-              run: wasm-pack test --node
+              run: wasm-pack test --${{ matrix.conf }} ${{ matrix.headless }}
+
+            # STOP SCCACHE
+            - name: Stop sccache server
+              run: |
+                  sccache --stop-server
