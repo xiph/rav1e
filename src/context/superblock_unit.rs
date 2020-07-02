@@ -9,7 +9,7 @@
 
 use super::*;
 
-const MAX_SB_SIZE_LOG2: usize = 7;
+pub const MAX_SB_SIZE_LOG2: usize = 7;
 const SB_SIZE_LOG2: usize = 6;
 pub const SB_SIZE: usize = 1 << SB_SIZE_LOG2;
 const SB_SQUARE: usize = SB_SIZE * SB_SIZE;

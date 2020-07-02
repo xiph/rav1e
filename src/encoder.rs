@@ -1332,6 +1332,7 @@ pub fn motion_compensate<T: Pixel>(
     };
 
   let luma_tile_rect = ts.tile_rect();
+  let compound_buffer = &mut ts.inter_compound_buffers;
   for p in 0..num_planes {
     let plane_bsize =
       if p == 0 { bsize } else { bsize.subsampled_size(u_xdec, u_ydec) };
@@ -1370,6 +1371,7 @@ pub fn motion_compensate<T: Pixel>(
           plane_bsize.height(),
           ref_frames,
           mvs,
+          compound_buffer,
         );
       } else {
         assert!(u_xdec == 1 && u_ydec == 1);
@@ -1397,6 +1399,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf0,
             mv0,
+            compound_buffer,
           );
           luma_mode.predict_inter(
             fi,
@@ -1408,6 +1411,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf1,
             mv1,
+            compound_buffer,
           );
           luma_mode.predict_inter(
             fi,
@@ -1419,6 +1423,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf2,
             mv2,
+            compound_buffer,
           );
           luma_mode.predict_inter(
             fi,
@@ -1430,6 +1435,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             ref_frames,
             mvs,
+            compound_buffer,
           );
         }
         if bsize == BlockSize::BLOCK_8X4 {
@@ -1445,6 +1451,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             rf1,
             mv1,
+            compound_buffer,
           );
           let po3 = PlaneOffset { x: po.x, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
@@ -1458,6 +1465,7 @@ pub fn motion_compensate<T: Pixel>(
             2,
             ref_frames,
             mvs,
+            compound_buffer,
           );
         }
         if bsize == BlockSize::BLOCK_4X8 {
@@ -1473,6 +1481,7 @@ pub fn motion_compensate<T: Pixel>(
             4,
             rf2,
             mv2,
+            compound_buffer,
           );
           let po3 = PlaneOffset { x: po.x + 2, y: po.y };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
@@ -1486,6 +1495,7 @@ pub fn motion_compensate<T: Pixel>(
             4,
             ref_frames,
             mvs,
+            compound_buffer,
           );
         }
       }
@@ -1500,6 +1510,7 @@ pub fn motion_compensate<T: Pixel>(
         plane_bsize.height(),
         ref_frames,
         mvs,
+        compound_buffer,
       );
     }
   }

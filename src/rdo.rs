@@ -1197,6 +1197,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         bsize.height(),
         ref_frames_set[i],
         mvs,
+        &mut ts.inter_compound_buffers,
       );
 
       let plane_org = ts.input_tile.planes[0]
