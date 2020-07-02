@@ -194,8 +194,8 @@ impl TileBlocksMut<'_> {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
     for y in 0..bh {
-      for x in 0..bw {
-        f(&mut self[bo.0.y + y as usize][bo.0.x + x as usize]);
+      for block in self[bo.0.y + y][bo.0.x..bo.0.x + bw].iter_mut() {
+        f(block);
       }
     }
   }
