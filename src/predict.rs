@@ -21,7 +21,7 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::context::MAX_TX_SIZE;
+use crate::context::{MAX_SB_SIZE_LOG2, MAX_TX_SIZE};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::FrameInvariants;
 use crate::frame::*;
@@ -259,45 +259,82 @@ impl PredictionMode {
     }
   }
 
-  pub fn predict_inter<T: Pixel>(
+  // Used by inter prediction to extract the fractional component of a mv and
+  // obtain the correct PlaneSlice to operate on.
+  #[inline]
+  fn get_mv_params<'a, T: Pixel>(
+    rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
+  ) -> (i32, i32, PlaneSlice<'a, T>) {
+    let rec_cfg = &rec_plane.cfg;
+    let shift_row = 3 + rec_cfg.ydec;
+    let shift_col = 3 + rec_cfg.xdec;
+    let row_offset = mv.row as i32 >> shift_row;
+    let col_offset = mv.col as i32 >> shift_col;
+    let row_frac =
+      (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
+    let col_frac =
+      (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+    let qo = PlaneOffset {
+      x: po.x + col_offset as isize - 3,
+      y: po.y + row_offset as isize - 3,
+    };
+    (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
+  }
+
+  /// Inter prediction with a single reference (i.e. not compound mode)
+  pub fn predict_inter_single<T: Pixel>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
-    height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+    height: usize, ref_frame: RefType, mv: MotionVector,
   ) {
     assert!(!self.is_intra());
     let frame_po = tile_rect.to_frame_plane_offset(po);
 
     let mode = fi.default_filter;
-    let is_compound = ref_frames[1] != RefType::INTRA_FRAME
-      && ref_frames[1] != RefType::NONE_FRAME;
 
-    fn get_params<'a, T: Pixel>(
-      rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
-    ) -> (i32, i32, PlaneSlice<'a, T>) {
-      let rec_cfg = &rec_plane.cfg;
-      let shift_row = 3 + rec_cfg.ydec;
-      let shift_col = 3 + rec_cfg.xdec;
-      let row_offset = mv.row as i32 >> shift_row;
-      let col_offset = mv.col as i32 >> shift_col;
-      let row_frac =
-        (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
-      let col_frac =
-        (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
-      let qo = PlaneOffset {
-        x: po.x + col_offset as isize - 3,
-        y: po.y + row_offset as isize - 3,
-      };
-      (row_frac, col_frac, rec_plane.slice(qo).clamp().subslice(3, 3))
-    };
+    if let Some(ref rec) =
+      fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
+    {
+      let (row_frac, col_frac, src) =
+        PredictionMode::get_mv_params(&rec.frame.planes[p], frame_po, mv);
+      put_8tap(
+        dst,
+        src,
+        width,
+        height,
+        col_frac,
+        row_frac,
+        mode,
+        mode,
+        fi.sequence.bit_depth,
+        fi.cpu_feature_level,
+      );
+    }
+  }
 
-    if !is_compound {
+  /// Inter prediction with two references.
+  pub fn predict_inter_compound<T: Pixel>(
+    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
+    po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
+    height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+    buffer: &mut InterCompoundBuffers,
+  ) {
+    assert!(!self.is_intra());
+    let frame_po = tile_rect.to_frame_plane_offset(po);
+
+    let mode = fi.default_filter;
+
+    for i in 0..2 {
       if let Some(ref rec) =
-        fi.rec_buffer.frames[fi.ref_frames[ref_frames[0].to_index()] as usize]
+        fi.rec_buffer.frames[fi.ref_frames[ref_frames[i].to_index()] as usize]
       {
-        let (row_frac, col_frac, src) =
-          get_params(&rec.frame.planes[p], frame_po, mvs[0]);
-        put_8tap(
-          dst,
+        let (row_frac, col_frac, src) = PredictionMode::get_mv_params(
+          &rec.frame.planes[p],
+          frame_po,
+          mvs[i],
+        );
+        prep_8tap(
+          buffer.get_buffer_mut(i),
           src,
           width,
           height,
@@ -309,39 +346,92 @@ impl PredictionMode {
           fi.cpu_feature_level,
         );
       }
-    } else {
-      let mut tmp: [Aligned<[i16; 128 * 128]>; 2] =
-        [Aligned::uninitialized(), Aligned::uninitialized()];
-      for i in 0..2 {
-        if let Some(ref rec) = fi.rec_buffer.frames
-          [fi.ref_frames[ref_frames[i].to_index()] as usize]
-        {
-          let (row_frac, col_frac, src) =
-            get_params(&rec.frame.planes[p], frame_po, mvs[i]);
-          prep_8tap(
-            &mut tmp[i].data,
-            src,
-            width,
-            height,
-            col_frac,
-            row_frac,
-            mode,
-            mode,
-            fi.sequence.bit_depth,
-            fi.cpu_feature_level,
-          );
-        }
-      }
-      mc_avg(
+    }
+    mc_avg(
+      dst,
+      buffer.get_buffer(0),
+      buffer.get_buffer(1),
+      width,
+      height,
+      fi.sequence.bit_depth,
+      fi.cpu_feature_level,
+    );
+  }
+
+  /// Inter prediction that determines whether compound mode is being used based
+  /// on the second ['RefType'] in ['ref_frames'].
+  pub fn predict_inter<T: Pixel>(
+    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
+    po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
+    height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
+    compound_buffer: &mut InterCompoundBuffers,
+  ) {
+    let is_compound = ref_frames[1] != RefType::INTRA_FRAME
+      && ref_frames[1] != RefType::NONE_FRAME;
+
+    if !is_compound {
+      self.predict_inter_single(
+        fi,
+        tile_rect,
+        p,
+        po,
         dst,
-        &tmp[0].data,
-        &tmp[1].data,
         width,
         height,
-        fi.sequence.bit_depth,
-        fi.cpu_feature_level,
+        ref_frames[0],
+        mvs[0],
+      )
+    } else {
+      self.predict_inter_compound(
+        fi,
+        tile_rect,
+        p,
+        po,
+        dst,
+        width,
+        height,
+        ref_frames,
+        mvs,
+        compound_buffer,
       );
     }
+  }
+}
+
+/// A pair of buffers holding the interpolation of two references. Use for
+/// compound inter_prediction
+#[derive(Debug)]
+pub struct InterCompoundBuffers {
+  data: AlignedBoxedSlice<i16>,
+}
+
+impl InterCompoundBuffers {
+  // Size of one of the two buffers used.
+  const BUFFER_SIZE: usize = 1 << (2 * MAX_SB_SIZE_LOG2);
+
+  /// Get the buffer for eith
+  #[inline]
+  fn get_buffer_mut(&mut self, i: usize) -> &mut [i16] {
+    match i {
+      0 => &mut self.data[0..Self::BUFFER_SIZE],
+      1 => &mut self.data[Self::BUFFER_SIZE..2 * Self::BUFFER_SIZE],
+      _ => panic!(),
+    }
+  }
+
+  #[inline]
+  fn get_buffer(&self, i: usize) -> &[i16] {
+    match i {
+      0 => &self.data[0..Self::BUFFER_SIZE],
+      1 => &self.data[Self::BUFFER_SIZE..2 * Self::BUFFER_SIZE],
+      _ => panic!(),
+    }
+  }
+}
+
+impl Default for InterCompoundBuffers {
+  fn default() -> Self {
+    Self { data: AlignedBoxedSlice::new(2 * Self::BUFFER_SIZE, 0) }
   }
 }
 

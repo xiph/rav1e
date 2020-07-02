@@ -15,7 +15,6 @@ use crate::dist::*;
 use crate::encoder::ReferenceFrame;
 use crate::frame::*;
 use crate::mc::MotionVector;
-use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::tiling::*;
@@ -821,7 +820,7 @@ fn get_mv_rd_cost<T: Pixel>(
       width: region.plane_cfg.width,
       height: region.plane_cfg.height,
     };
-    PredictionMode::NEWMV.predict_inter(
+    PredictionMode::NEWMV.predict_inter_single(
       fi,
       tile_rect,
       0,
@@ -829,8 +828,8 @@ fn get_mv_rd_cost<T: Pixel>(
       region,
       bsize.width(),
       bsize.height(),
-      [ref_frame, NONE_FRAME],
-      [cand_mv, MotionVector { row: 0, col: 0 }],
+      ref_frame,
+      cand_mv,
     );
     let plane_ref = region.as_const();
     compute_mv_rd_cost(
@@ -914,7 +913,7 @@ fn telescopic_subpel_search<T: Pixel>(
         }
 
         {
-          mode.predict_inter(
+          mode.predict_inter_single(
             fi,
             tile_rect,
             0,
@@ -922,8 +921,8 @@ fn telescopic_subpel_search<T: Pixel>(
             &mut tmp_plane.as_region_mut(),
             blk_w,
             blk_h,
-            [ref_frame, NONE_FRAME],
-            [cand_mv, MotionVector { row: 0, col: 0 }],
+            ref_frame,
+            cand_mv,
           );
         }
 
