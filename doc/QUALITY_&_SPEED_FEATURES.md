@@ -17,12 +17,12 @@ Quality features that are required for to reach parity with state-of-the-art enc
 
 | Feature                     |       rav1e        |       libaom       |            x264             |        x265        |
 | --------------------------- | :----------------: | :----------------: | :-------------------------: | :----------------: |
-| Exact RDO                   | :white_check_mark: |        :x:         |     :white_check_mark:      | :white_check_mark: |
-| Temporal RDO                | :white_check_mark: |        :x:         | :white_check_mark: (mbtree) | :white_check_mark: |
-| Smart distortion            | :white_check_mark: |        :x:         | :white_check_mark: (psyrd)  | :white_check_mark: |
-| Automatic QM                |        :x:         |        :x:         |             :x:             | :white_check_mark: |
-| Rational luma/chroma weight | :white_check_mark: |        :x:         |     :white_check_mark:      | :white_check_mark: |
-| B-pyramid                   | :white_check_mark: | :white_check_mark: |     :white_check_mark:      | :white_check_mark: |
+| Exact RDO                   | :heavy_check_mark: |        :x:         |     :heavy_check_mark:      | :heavy_check_mark: |
+| Temporal RDO                | :heavy_check_mark: |        :x:         | :heavy_check_mark: (mbtree) | :heavy_check_mark: |
+| Smart distortion            | :heavy_check_mark: |        :x:         | :heavy_check_mark: (psyrd)  | :heavy_check_mark: |
+| Automatic QM                |        :x:         |        :x:         |             :x:             | :heavy_check_mark: |
+| Rational luma/chroma weight | :heavy_check_mark: |        :x:         |     :heavy_check_mark:      | :heavy_check_mark: |
+| B-pyramid                   | :heavy_check_mark: | :heavy_check_mark: |     :heavy_check_mark:      | :heavy_check_mark: |
 
 ### Unique
 
@@ -30,15 +30,15 @@ Quality features where rav1e can go beyond state-of-the-art encoders.
 
 | Feature                     |       rav1e        | libaom | x264  |      x265       |
 | --------------------------- | :----------------: | :----: | :---: | :-------------: |
-| Joint loop filter search    | :white_check_mark: |  :x:   |  :x:  |       :x:       |
-| Chunk-compatible first pass | :white_check_mark: |  :x:   |  :x:  | :x: (in UHDKit) |
+| Joint loop filter search    | :heavy_check_mark: |  :x:   |  :x:  |       :x:       |
+| Chunk-compatible first pass | :heavy_check_mark: |  :x:   |  :x:  | :x: (in UHDKit) |
 
 ## Speed Features
 
 | Feature                       |       rav1e        |       libaom       |        x264        |        x265        |
 | ----------------------------- | :----------------: | :----------------: | :----------------: | :----------------: |
-| Pruning using approximate RDO | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |
-| Frame-parallel encoding       |        :x:         |        :x:         | :white_check_mark: | :white_check_mark: |
-| Model-based RDO cost          |        :x:         |    :x: (broken)    | :white_check_mark: |         ?          |
+| Pruning using approximate RDO | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Frame-parallel encoding       |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
+| Model-based RDO cost          |        :x:         |    :x: (broken)    | :heavy_check_mark: |         ?          |
 
 
