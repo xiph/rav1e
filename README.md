@@ -72,6 +72,14 @@ sudo dnf install nasm
 ```
 **windows** <br/>
 Have a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH.
+```sh
+$NASM_VERSION="2.14.02" # or newer
+$LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
+curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
+7z e -y "nasm-$NASM_VERSION-win64.zip" -o "C:\nasm"
+# set path for the current sessions
+set PATH="%PATH%;C:\nasm"
+```
 
 </details>
 
