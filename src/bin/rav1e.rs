@@ -160,7 +160,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   }
 
   let pkt_wrapped = ctx.receive_packet();
-  let ret = match pkt_wrapped {
+  let (ret, emit_pass_data) = match pkt_wrapped {
     Ok(pkt) => {
       output_file.write_frame(
         pkt.input_frameno as u64,
@@ -178,23 +178,23 @@ fn process_frame<T: Pixel, D: Decoder>(
         y4m_details.chroma_sampling,
         metrics_cli,
       ));
-      Ok(Some(frame_summaries))
+      (Ok(Some(frame_summaries)), true)
     }
     Err(EncoderStatus::NeedMoreData) => {
       source.read_frame(ctx, y4m_details)?;
-      Ok(Some(frame_summaries))
+      (Ok(Some(frame_summaries)), false)
     }
     Err(EncoderStatus::EnoughData) => {
       unreachable!();
     }
-    Err(EncoderStatus::LimitReached) => Ok(None),
+    Err(EncoderStatus::LimitReached) => (Ok(None), true),
     Err(e @ EncoderStatus::Failure) => {
-      Err(e.context("Failed to encode video"))
+      (Err(e.context("Failed to encode video")), false)
     }
     Err(e @ EncoderStatus::NotReady) => {
-      Err(e.context("Mismanaged handling of two-pass stats data"))
+      (Err(e.context("Mismanaged handling of two-pass stats data")), false)
     }
-    Err(EncoderStatus::Encoded) => Ok(Some(frame_summaries)),
+    Err(EncoderStatus::Encoded) => (Ok(Some(frame_summaries)), true),
   };
 
   if ret.is_err() {
@@ -203,32 +203,34 @@ fn process_frame<T: Pixel, D: Decoder>(
 
   // Save first pass data from pass 1.
   if let Some(passfile) = pass1file.as_mut() {
-    match ctx.rc_receive_pass_data() {
-      RcData::Frame(outbuf) => {
-        let len = outbuf.len() as u64;
-        passfile
-          .write_all(&len.to_be_bytes())
-          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+    if emit_pass_data {
+      match ctx.rc_receive_pass_data() {
+        RcData::Frame(outbuf) => {
+          let len = outbuf.len() as u64;
+          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
+            e.context("Unable to write to two-pass data file.")
+          })?;
 
-        passfile
-          .write_all(&outbuf)
-          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
-      }
-      RcData::Summary(outbuf) => {
-        // The last packet of rate control data we get is the summary data.
-        // Let's put it at the start of the file.
-        passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
-          e.context("Unable to seek in the two-pass data file.")
-        })?;
-        let len = outbuf.len() as u64;
+          passfile.write_all(&outbuf).map_err(|e| {
+            e.context("Unable to write to two-pass data file.")
+          })?;
+        }
+        RcData::Summary(outbuf) => {
+          // The last packet of rate control data we get is the summary data.
+          // Let's put it at the start of the file.
+          passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+            e.context("Unable to seek in the two-pass data file.")
+          })?;
+          let len = outbuf.len() as u64;
 
-        passfile
-          .write_all(&len.to_be_bytes())
-          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+          passfile.write_all(&len.to_be_bytes()).map_err(|e| {
+            e.context("Unable to write to two-pass data file.")
+          })?;
 
-        passfile
-          .write_all(&outbuf)
-          .map_err(|e| e.context("Unable to write to two-pass data file."))?;
+          passfile.write_all(&outbuf).map_err(|e| {
+            e.context("Unable to write to two-pass data file.")
+          })?;
+        }
       }
     }
   }
