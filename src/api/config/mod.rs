@@ -91,6 +91,10 @@ pub enum InvalidConfig {
   #[error("The rate control requires a target bitrate")]
   TargetBitrateNeeded,
 
+  /// The configuration
+  #[error("Mismatch in the rate control configuration")]
+  RateControlConfigurationMismatch,
+
   // This variant prevents people from exhaustively matching on this enum,
   // which allows us to add more variants without it being a breaking change.
   // This can be replaced with #[non_exhaustive] when it's stable:
@@ -106,7 +110,7 @@ pub struct Config {
   /// Settings which impact the produced bitstream.
   pub(crate) enc: EncoderConfig,
   /// Rate control configuration
-  rate_control: RateControlConfig,
+  pub(crate) rate_control: RateControlConfig,
   /// The number of threads in the threadpool.
   pub(crate) threads: usize,
   /// Shared thread pool
@@ -199,6 +203,7 @@ impl Config {
     }
 
     let mut inner = ContextInner::new(&config);
+
     if self.rate_control.emit_pass_data {
       let params = inner.rc_state.get_twopass_out_params(&inner, 0);
       inner.rc_state.init_first_pass(params.pass1_log_base_q);
@@ -229,7 +234,6 @@ impl Config {
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     let inner = self.new_inner()?;
     let config = inner.config;
-
     let pool = if let Some(ref p) = self.pool {
       p.clone()
     } else {
