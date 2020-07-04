@@ -1598,7 +1598,7 @@ impl RCState {
       return 0;
     }
     if self.frame_metrics.is_empty() {
-      return 1;
+      return if self.pass2_data_ready { 0 } else { 1 };
     }
     let mut cur_scale_window_nframes = 0;
     let mut cur_nframes_left = 0;
