@@ -850,7 +850,7 @@ impl RCState {
       nencoded_frames: 0,
       nsef_frames: 0,
       pass1_buffer: [0; TWOPASS_HEADER_SZ],
-      pass1_data_retrieved: false,
+      pass1_data_retrieved: true,
       pass1_summary_retrieved: false,
       pass2_data_ready: false,
       prev_metrics: RCFrameMetrics::new(),

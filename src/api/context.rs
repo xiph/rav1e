@@ -367,7 +367,13 @@ impl<T: Pixel> Context<T> {
 
   /// Return the first pass data
   ///
-  /// Call it after receive_packet.
+  /// Call it after receive_packet, it returns a packet or the encoder
+  /// lifecycle statuses [`EncoderStatus::Encoded`] and
+  /// [`EncoderStatus::LimitReached].
+  ///
+  /// [`EncoderStatus::Encoded`]: enum.EncoderStatus.html#variant.Encoded
+  /// [`EncoderStatus::LimitReached`]:
+  /// enum.EncoderStatus.html#variant.LimitReached
   ///
   /// It will return a `RcData::Summary` once the encoder is flushed.
   pub fn rc_receive_pass_data(&mut self) -> RcData {
