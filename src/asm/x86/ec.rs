@@ -11,6 +11,7 @@ use crate::ec::rust;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+#[inline(always)]
 pub fn update_cdf(cdf: &mut [u16], val: u32) {
   if cdf.len() == 5 {
     return unsafe {
@@ -22,6 +23,7 @@ pub fn update_cdf(cdf: &mut [u16], val: u32) {
 }
 
 #[target_feature(enable = "sse2")]
+#[inline]
 unsafe fn update_cdf_4_sse2(cdf: &mut [u16], val: u32) {
   let nsymbs = 4;
   let rate = 5 + (cdf[nsymbs] >> 4) as usize;
