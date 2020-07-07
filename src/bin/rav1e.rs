@@ -141,8 +141,7 @@ fn process_frame<T: Pixel, D: Decoder>(
 
   // Submit first pass data to pass 2.
   if let Some(passfile) = pass2file.as_mut() {
-    let required_data = ctx.rc_second_pass_data_required();
-    for _ in 0..required_data {
+    while ctx.rc_second_pass_data_required() > 0 {
       let mut buflen = [0u8; 8];
       passfile
         .read_exact(&mut buflen)

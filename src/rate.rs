@@ -1654,6 +1654,7 @@ impl RCState {
         }
         if frames_needed == 1 {
           self.pass2_data_ready = true;
+          self.cur_metrics = self.frame_metrics[self.frame_metrics_head];
         }
       } else {
         return Err(());
