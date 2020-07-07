@@ -390,7 +390,10 @@ impl<T: Pixel> Context<T> {
     }
   }
 
-  /// Number of pass data packets required to progress the encoding process.
+  /// Lower bound number of pass data packets required to progress the
+  /// encoding process.
+  ///
+  /// It should be called iteratively until it returns 0.
   ///
   pub fn rc_second_pass_data_required(&self) -> usize {
     if self.inner.done_processing() {
