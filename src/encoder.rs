@@ -2825,6 +2825,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
           );
         }
       } else {
+        debug_assert!(must_split);
         let hbsw = subsize.width_mi(); // Half the block size width in blocks
         let hbsh = subsize.height_mi(); // Half the block size height in blocks
         let four_partitions = [
