@@ -2879,6 +2879,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
       if !rdo_output.part_modes.is_empty() {
+        debug_assert!(can_split && !must_split);
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         assert!(subsize != BlockSize::BLOCK_INVALID);
 
