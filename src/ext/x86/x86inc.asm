@@ -27,10 +27,8 @@
 ; It also has various other useful features to simplify writing the kind of
 ; DSP functions that are most often used.
 
-%include "config.asm"
-
 %ifndef private_prefix
-    %define private_prefix dav1d
+    %error private_prefix not defined
 %endif
 
 %ifndef public_prefix
