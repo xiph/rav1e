@@ -94,6 +94,8 @@
 #ifdef __ELF__
         .type   EXTERN\name, %function
         .hidden EXTERN\name
+#elif defined(__MACH__)
+        .private_extern EXTERN\name
 #endif
 #if HAVE_AS_FUNC
         .func   EXTERN\name
