@@ -10,7 +10,7 @@
 - [Glossary](#glossary)
 - [Profiling](#profiling)
 - [Quality- & Speed-Features](#quality---speed-features)
-- [regress_log-bitrate_wrt_log-quantizer.ipynb](#regress_log-bitrate_wrt_log-quantizeripynb)
+- [Rate-control Empirical Analysis](#rate-control-empirical-analysis)
 - [File Structure](#file-structure)
 - [Versioning](#versioning)
 </details>
@@ -45,7 +45,9 @@ List of various profiling tools:
 ## [Quality- & Speed-Features](QUALITY_&_SPEED_FEATURES.md)
 Overview of quality and speed-features for rav1e and other state-of-the-art encoder.
 
-## [regress_log-bitrate_wrt_log-quantizer.ipynb](regress_log-bitrate_wrt_log-quantizer.ipynb)
+## [Rate-control Empirical Analysis](regress_log-bitrate_wrt_log-quantizer.ipynb)
+Notebook documenting how rate-control constants were derived from empirical data.
+These constants determine the initial values of `RCState::log_scale`, `RCState::exp` and `RCState::scalefilter`.
 
 ## [File Structure](STRUCTURE.md)
 - High-level directory structure
