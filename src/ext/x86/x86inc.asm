@@ -1,5 +1,5 @@
 ;*****************************************************************************
-;* x86inc.asm: x264asm abstraction layer
+;* x86inc.asm: x86 abstraction layer
 ;*****************************************************************************
 ;* Copyright (C) 2005-2020 x264 project
 ;*
@@ -21,18 +21,11 @@
 ;* OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ;*****************************************************************************
 
-; This is a header file for the x264ASM assembly language, which uses
+; This is a header file for the x86inc.asm assembly language, which uses
 ; NASM/YASM syntax combined with a large number of macros to provide easy
 ; abstraction between different calling conventions (x86_32, win64, linux64).
 ; It also has various other useful features to simplify writing the kind of
-; DSP functions that are most often used in x264.
-
-; Unlike the rest of x264, this file is available under an ISC license, as it
-; has significant usefulness outside of x264 and we want it to be available
-; to the largest audience possible.  Of course, if you modify it for your own
-; purposes to add a new feature, we strongly encourage contributing a patch
-; as this feature might be useful for others as well.  Send patches or ideas
-; to x264-devel@videolan.org .
+; DSP functions that are most often used.
 
 %include "config.asm"
 
@@ -118,7 +111,7 @@
 ; Macros to eliminate most code duplication between x86_32 and x86_64:
 ; Currently this works only for leaf functions which load all their arguments
 ; into registers at the start, and make no other use of the stack. Luckily that
-; covers most of x264's asm.
+; covers most use cases.
 
 ; PROLOGUE:
 ; %1 = number of arguments. loads them from stack if needed.
