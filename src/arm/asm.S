@@ -131,6 +131,8 @@ EXTERN\name:
         .global EXTERN\name
 #ifdef __ELF__
         .hidden EXTERN\name
+#elif defined(__MACH__)
+        .private_extern EXTERN\name
 #endif
 EXTERN\name:
     .endif
