@@ -3,7 +3,7 @@ name: deploy
 on:
   schedule:
     # Run every Tuesday at 21:00 (UTC)
-    - cron:  '0 21 * * TUE'
+    - cron: '0 21 * * TUE'
   push:
     tags:
       - 'v*.*.*'
@@ -31,7 +31,7 @@ jobs:
 
     - name: Install nasm
       run: |
-        $NASM_VERSION="2.14.02"
+        $NASM_VERSION="2.15.02"
         $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
         curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
@@ -150,9 +150,9 @@ jobs:
       if: matrix.target == 'x86_64-unknown-linux-musl'
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.14.02-1
+        NASM_VERSION: 2.15.02-1+b1
         NASM_SHA256: >-
-          5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
+          b454c064732c046ba025b82549833b3892ce85f2812d3addb8cbb06c6a47da8e
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
