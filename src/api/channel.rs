@@ -10,6 +10,7 @@
 
 use crate::api::color::*;
 use crate::api::config::*;
+use crate::api::internal::ContextInner;
 use crate::api::util::*;
 
 use bitstream_io::*;
@@ -19,7 +20,7 @@ use crate::api::context::RcData;
 use crate::encoder::*;
 use crate::frame::*;
 use crate::rate::RCState;
-use crate::rayon::ThreadPoolBuilder;
+use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::util::Pixel;
 
 use std::io;
@@ -177,19 +178,11 @@ impl<T: Pixel> PacketReceiver<T> {
 pub type VideoDataChannel<T> = (FrameSender<T>, PacketReceiver<T>);
 
 impl Config {
-  /// Create a single pass encoder channel
-  ///
-  /// Drop the `FrameSender<T>` endpoint to flush the encoder.
-  pub fn new_channel<T: Pixel>(
+  fn setup<T: Pixel>(
     &self,
-  ) -> Result<VideoDataChannel<T>, InvalidConfig> {
+  ) -> Result<(ContextInner<T>, Arc<ThreadPool>), InvalidConfig> {
     self.validate()?;
-
-    let (send_frame, receive_frame) =
-      bounded(self.enc.rdo_lookahead_frames as usize * 2); // TODO: user settable
-    let (send_packet, receive_packet) = unbounded();
-
-    let mut inner = self.new_inner()?;
+    let inner = self.new_inner()?;
 
     let pool = if let Some(ref p) = self.pool {
       p.clone()
@@ -198,6 +191,21 @@ impl Config {
         ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
       Arc::new(pool)
     };
+
+    Ok((inner, pool))
+  }
+
+  /// Create a single pass encoder channel
+  ///
+  /// Drop the `FrameSender<T>` endpoint to flush the encoder.
+  pub fn new_channel<T: Pixel>(
+    &self,
+  ) -> Result<VideoDataChannel<T>, InvalidConfig> {
+    let (mut inner, pool) = self.setup()?;
+
+    let (send_frame, receive_frame) =
+      bounded(self.enc.rdo_lookahead_frames as usize * 2); // TODO: user settable
+    let (send_packet, receive_packet) = unbounded();
 
     let enc = Arc::new(self.enc);
 
@@ -255,22 +263,20 @@ impl Config {
   pub fn new_firstpass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, RcDataReceiver), InvalidConfig> {
-    self.validate()?;
-
     let rc = &self.rate_control;
 
-    let mut inner = self.new_inner()?;
-    let pool = rayon::ThreadPoolBuilder::new()
-      .num_threads(self.threads)
-      .build()
-      .unwrap();
+    if !rc.emit_pass_data {
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
+    }
+
+    let (mut inner, pool) = self.setup()?;
 
     // TODO: make it user-settable
     let input_len = self.enc.rdo_lookahead_frames as usize * 2;
 
     let (send_frame, receive_frame) = bounded(input_len);
     let (send_packet, receive_packet) = unbounded();
-    let (send_rc_pass1, receive_rc_pass1) = unbounded();
+    let (mut send_rc_pass1, receive_rc_pass1) = unbounded();
 
     let enc = Arc::new(self.enc);
 
@@ -348,13 +354,7 @@ impl Config {
       send_pass_summary(&mut inner.rc_state, &mut send_rc_pass1);
     });
 
-    Ok((
-      (
-        FrameSender { sender: send_frame, enc: enc.clone() },
-        PacketReceiver { receiver: receive_packet, enc },
-      ),
-      RcDataReceiver(receive_rc_pass1),
-    ))
+    Ok((channel, RcDataReceiver(receive_rc_pass1)))
   }
 
   /// Create a second pass encoder channel
@@ -364,11 +364,92 @@ impl Config {
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
   pub fn new_secondpass_channel<T: Pixel>(
     &self,
-  ) -> Result<(VideoDataChannel<T>, PassDataSender), InvalidConfig> {
-    todo!()
+  ) -> Result<(VideoDataChannel<T>, RcDataSender), InvalidConfig> {
+    let rc = &self.rate_control;
+    if !rc.summary.is_none() {
+      return Err(InvalidConfig::RateControlConfigurationMismatch);
+    }
+
+    // The inner context is already configured to use the summary at this point.
+    let (mut inner, pool) = self.setup()?;
+
+    // TODO: make it user-settable
+    let input_len = self.enc.rdo_lookahead_frames as usize * 2;
+
+    let (send_frame, receive_frame) = bounded(input_len);
+    let (send_packet, receive_packet) = unbounded();
+    let (send_rc_pass2, mut receive_rc_pass2) = unbounded();
+
+    let enc = Arc::new(self.enc);
+
+    let channel = (
+      FrameSender { sender: send_frame, enc: enc.clone() },
+      PacketReceiver { receiver: receive_packet, enc },
+    );
+
+    fn feed_pass_data<T: Pixel>(
+      inner: &mut ContextInner<T>, recv: &mut Receiver<RcData>,
+    ) -> Result<(), ()> {
+      while inner.rc_state.twopass_in_frames_needed() > 0
+        && inner.done_processing()
+      {
+        if let Ok(RcData::Frame(data)) = recv.recv() {
+          inner
+            .rc_state
+            .parse_frame_data_packet(data.as_ref())
+            .unwrap_or_else(|_| todo!("Error reporting"));
+        } else {
+          todo!("Error reporting");
+        }
+      }
+
+      Ok(())
+    }
+
+    pool.spawn(move || {
+      for f in receive_frame.iter() {
+        // info!("frame in {}", inner.frame_count);
+        while !inner.needs_more_fi_lookahead() {
+          feed_pass_data(&mut inner, &mut receive_rc_pass2).unwrap();
+          // needs_more_fi_lookahead() should guard for missing output_frameno
+          // already.
+          //
+          // this call should return either Ok or Err(Encoded)
+          match inner.receive_packet() {
+            Ok(p) => {
+              send_packet.send(p).unwrap();
+            }
+            Err(EncoderStatus::Encoded) => {}
+            Err(EncoderStatus::NotReady) => todo!("Error reporting"),
+            _ => unreachable!(),
+          };
+        }
+
+        let (frame, params) = f;
+        let _ = inner.send_frame(frame, params); // TODO make sure it cannot fail.
+      }
+
+      inner.limit = Some(inner.frame_count);
+      let _ = inner.send_frame(None, None);
+
+      loop {
+        feed_pass_data(&mut inner, &mut receive_rc_pass2).unwrap();
+        let r = inner.receive_packet();
+        match r {
+          Ok(p) => {
+            // warn!("Sending out {}", p.input_frameno);
+            send_packet.send(p).unwrap();
+          }
+          Err(EncoderStatus::LimitReached) => break,
+          Err(EncoderStatus::Encoded) => {}
+          _ => unreachable!(),
+        };
+      }
+    });
+
+    Ok((channel, RcDataSender(send_rc_pass2)))
   }
 
-  /*
   /// Create a multipass encoder channel
   ///
   /// The `PacketReceiver<T>` may block if not enough pass statistics data
@@ -380,66 +461,91 @@ impl Config {
   pub fn new_multipass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, PassDataChannel), InvalidConfig> {
-    self.validate()?;
-
     let rc = &self.rate_control;
-
-    if !rc.emit_pass_data || rc.summary.is_none() {
+    if !rc.summary.is_none() || !rc.emit_pass_data {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
+
+    // The inner context is already configured to use the summary at this point.
+    let (mut inner, pool) = self.setup()?;
 
     // TODO: make it user-settable
     let input_len = self.enc.rdo_lookahead_frames as usize * 2;
 
     let (send_frame, receive_frame) = bounded(input_len);
     let (send_packet, receive_packet) = unbounded();
+    let (mut send_rc_pass1, receive_rc_pass1) = unbounded();
+    let (send_rc_pass2, mut receive_rc_pass2) = unbounded();
 
-    let (send_rc_pass1, receive_rc_pass1) = bounded(input_len);
-    let (send_rc_pass2, receive_rc_pass2) = unbounded();
+    let enc = Arc::new(self.enc);
 
-    let mut inner = self.new_inner()?;
-    let pool = rayon::ThreadPoolBuilder::new()
-      .num_threads(self.threads)
-      .build()
-      .unwrap();
+    let channel = (
+      FrameSender { sender: send_frame, enc: enc.clone() },
+      PacketReceiver { receiver: receive_packet, enc },
+    );
+
+    let pass_channel =
+      (RcDataSender(send_rc_pass2), RcDataReceiver(receive_rc_pass1));
+
+    fn send_pass_data(rc_state: &mut RCState, send_rc: &mut Sender<RcData>) {
+      if let Some(data) = rc_state.emit_frame_data() {
+        let data = data.to_vec().into_boxed_slice();
+        send_rc.send(RcData::Frame(data)).unwrap();
+      } else {
+        unreachable!(
+          "The encoder received more frames than its internal
+              limit allows"
+        );
+      }
+    }
+
+    fn send_pass_summary(
+      rc_state: &mut RCState, send_rc: &mut Sender<RcData>,
+    ) {
+      let data = rc_state.emit_summary();
+      let data = data.to_vec().into_boxed_slice();
+      send_rc.send(RcData::Frame(data)).unwrap();
+    }
+
+    fn feed_pass_data<T: Pixel>(
+      inner: &mut ContextInner<T>, recv: &mut Receiver<RcData>,
+    ) -> Result<(), ()> {
+      while inner.rc_state.twopass_in_frames_needed() > 0
+        && inner.done_processing()
+      {
+        if let Ok(RcData::Frame(data)) = recv.recv() {
+          inner
+            .rc_state
+            .parse_frame_data_packet(data.as_ref())
+            .unwrap_or_else(|_| todo!("Error reporting"));
+        } else {
+          todo!("Error reporting");
+        }
+      }
+
+      Ok(())
+    }
 
     pool.spawn(move || {
-      // Feed in the summary
-      let second_pass = receive_rc_pass2
-        .recv()
-        .map(|data: PassData| {
-          let len = inner
-            .rc_state
-            .inner
-            .rc_state
-            .twopass_in(Some(data.as_ref()))
-            .expect("Faulty pass data");
-          true
-        })
-        .unwrap_or(false);
-
-      // Send the placeholder data
-      let first_pass = send_pass_summary(&mut inner, &send_rc_pass1);
-
-      let second_pass_recv =
-        if second_pass { Some(receive_rc_pass2) } else { None };
-
-      let first_pass_send =
-        if first_pass { Some(send_rc_pass1) } else { None };
-
       for f in receive_frame.iter() {
         // info!("frame in {}", inner.frame_count);
         while !inner.needs_more_fi_lookahead() {
+          feed_pass_data(&mut inner, &mut receive_rc_pass2).unwrap();
           // needs_more_fi_lookahead() should guard for missing output_frameno
           // already.
+          //
           // this call should return either Ok or Err(Encoded)
-          if let Ok(p) = receive_packet_impl(
-            &mut inner,
-            first_pass_send.as_ref(),
-            second_pass_recv.as_ref(),
-          ) {
-            // warn!("packet out {}", p.input_frameno);
-            send_packet.send(p).unwrap();
+          let has_pass_data = match inner.receive_packet() {
+            Ok(p) => {
+              send_packet.send(p).unwrap();
+              true
+            }
+            Err(EncoderStatus::Encoded) => true,
+            Err(EncoderStatus::NotReady) => todo!("Error reporting"),
+            _ => unreachable!(),
+          };
+          if has_pass_data {
+            send_pass_data(&mut inner.rc_state, &mut send_rc_pass1);
           }
         }
 
@@ -451,32 +557,28 @@ impl Config {
       let _ = inner.send_frame(None, None);
 
       loop {
-        let r = receive_packet_impl(
-          &mut inner,
-          first_pass_send.as_ref(),
-          second_pass_recv.as_ref(),
-        );
-        match r {
+        feed_pass_data(&mut inner, &mut receive_rc_pass2).unwrap();
+        let r = inner.receive_packet();
+        let has_pass_data = match r {
           Ok(p) => {
             // warn!("Sending out {}", p.input_frameno);
             send_packet.send(p).unwrap();
+            true
           }
           Err(EncoderStatus::LimitReached) => break,
-          Err(EncoderStatus::Encoded) => {}
-          Err(e) => panic!("got {:?}", e),
+          Err(EncoderStatus::Encoded) => true,
+          Err(EncoderStatus::NotReady) => todo!("Error reporting"),
+          _ => unreachable!(),
+        };
+
+        if has_pass_data {
+          send_pass_data(&mut inner.rc_state, &mut send_rc_pass1);
         }
       }
 
-      // Final summary
-      let _ = first_pass_send.map(|p| send_pass_summary(&mut inner, &p));
-
-      // drop(send_packet); // This happens implicitly
+      send_pass_summary(&mut inner.rc_state, &mut send_rc_pass1);
     });
 
-    Ok((
-      (FrameSender(send_frame), PacketReceiver(receive_packet)),
-      (PassDataSender(send_rc_pass2), PassDataReceiver(receive_rc_pass1)),
-    ))
+    Ok((channel, pass_channel))
   }
-    */
 }

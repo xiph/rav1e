@@ -57,7 +57,7 @@ if ! cargo build ${IS_RELEASE:+--release}; then
   exit $e
 fi
 
-if ! cargo run --bin rav1e ${IS_RELEASE:+--release} -- "$SEQ" -o $ENC_FILE -s 3 -r $REC_FILE; then
+if ! cargo run --bin rav1e ${IS_RELEASE:+--release} -- "$SEQ" -o $ENC_FILE -s 3 -r $REC_FILE --tiles 8 -l 100; then
   echo "rav1e failed to run" >&2
   exit 1
 fi
