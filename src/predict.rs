@@ -283,15 +283,11 @@ impl PredictionMode {
   fn get_mv_params<'a, T: Pixel>(
     rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
   ) -> (i32, i32, PlaneSlice<'a, T>) {
-    let rec_cfg = &rec_plane.cfg;
-    let shift_row = 3 + rec_cfg.ydec;
-    let shift_col = 3 + rec_cfg.xdec;
-    let row_offset = mv.row as i32 >> shift_row;
-    let col_offset = mv.col as i32 >> shift_col;
-    let row_frac =
-      (mv.row as i32 - (row_offset << shift_row)) << (4 - shift_row);
-    let col_frac =
-      (mv.col as i32 - (col_offset << shift_col)) << (4 - shift_col);
+    let &PlaneConfig { xdec, ydec, .. } = &rec_plane.cfg;
+    let row_offset = mv.row as i32 >> (3 + ydec);
+    let col_offset = mv.col as i32 >> (3 + xdec);
+    let row_frac = ((mv.row as i32) << (1 - ydec)) & 0xf;
+    let col_frac = ((mv.col as i32) << (1 - xdec)) & 0xf;
     let qo = PlaneOffset {
       x: po.x + col_offset as isize - 3,
       y: po.y + row_offset as isize - 3,
