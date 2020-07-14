@@ -639,8 +639,10 @@ pub fn cdef_filter_tile<T: Pixel>(
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
   // FIXME: 128x128 SB support will break this, we need FilterBlockOffset etc.
   let planes = if fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
-  let fb_width = (rec.planes[0].rect().width + 63) / 64;
-  let fb_height = (rec.planes[0].rect().height + 63) / 64;
+  let coded_tile_w = tb.cols() << MI_SIZE_LOG2;
+  let coded_tile_h = tb.rows() << MI_SIZE_LOG2;
+  let fb_width = (coded_tile_w + 63) / 64;
+  let fb_height = (coded_tile_h + 63) / 64;
 
   // Construct a padded copy of part of the input tile
   let mut cdef_frame: Frame<u16> = Frame {
@@ -660,8 +662,8 @@ pub fn cdef_filter_tile<T: Pixel>(
   };
 
   for p in 0..planes {
-    let rec_w = rec.planes[p].rect().width;
-    let rec_h = rec.planes[p].rect().height;
+    let rec_w = coded_tile_w >> rec.planes[p].plane_cfg.xdec;
+    let rec_h = coded_tile_h >> rec.planes[p].plane_cfg.ydec;
     let mut cdef_region = cdef_frame.planes[p].region_mut(Area::Rect {
       x: -2,
       y: -2,
