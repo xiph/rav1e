@@ -131,7 +131,7 @@ impl<D: Decoder> Source<D> {
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
-  mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write>>>,
+  mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write + Send>>>,
   metrics_cli: MetricsEnabled,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
   let y4m_details = source.input.get_video_details();
@@ -241,7 +241,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
   output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
   mut pass2file: Option<File>,
-  mut y4m_enc: Option<y4m::Encoder<Box<dyn Write>>>,
+  mut y4m_enc: Option<y4m::Encoder<Box<dyn Write + Send>>>,
   metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
   let mut ctx: Context<T> =
@@ -520,7 +520,7 @@ fn run() -> Result<(), error::CliError> {
   let source = Source::new(cli.limit, y4m_dec);
 
   if video_info.bit_depth == 8 {
-    do_encode::<u8, y4m::Decoder<Box<dyn Read>>>(
+    do_encode::<u8, y4m::Decoder<Box<dyn Read + Send>>>(
       cfg,
       cli.verbose,
       progress,
@@ -532,7 +532,7 @@ fn run() -> Result<(), error::CliError> {
       cli.metrics_enabled,
     )?
   } else {
-    do_encode::<u16, y4m::Decoder<Box<dyn Read>>>(
+    do_encode::<u16, y4m::Decoder<Box<dyn Read + Send>>>(
       cfg,
       cli.verbose,
       progress,

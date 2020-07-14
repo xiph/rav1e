@@ -34,7 +34,7 @@ pub trait Muxer {
 
 pub fn create_muxer(
   path: &str, overwrite: bool,
-) -> Result<Box<dyn Muxer>, CliError> {
+) -> Result<Box<dyn Muxer + Send>, CliError> {
   if !overwrite {
     IvfMuxer::check_file(path)?;
   }
