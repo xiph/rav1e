@@ -13,7 +13,7 @@ use std::io;
 
 pub mod y4m;
 
-pub trait Decoder {
+pub trait Decoder: Send {
   fn get_video_details(&self) -> VideoDetails;
   fn read_frame<T: Pixel>(
     &mut self, ctx: &Context<T>, cfg: &VideoDetails,
