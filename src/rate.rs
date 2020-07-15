@@ -445,6 +445,7 @@ pub struct RCSummary {
   nframes: [i32; FRAME_NSUBTYPES + 1],
   exp: [u8; FRAME_NSUBTYPES],
   scale_sum: [i64; FRAME_NSUBTYPES],
+  total: i32,
 }
 
 // Backing storage to deserialize Summary and Per-Frame pass data
@@ -552,6 +553,8 @@ impl RCDeserialize {
     if s.ntus > total {
       return Err("More TUs than frames".to_string());
     }
+
+    s.total = total;
 
     for exp in s.exp.iter_mut() {
       *exp = self.unbuffer_val(1) as u8;
