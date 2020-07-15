@@ -3,4 +3,6 @@ target
 Cargo.lock
 *.y4m
 *.ivf
+*.png
+*.bin
 secret_key
