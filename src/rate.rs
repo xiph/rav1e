@@ -716,19 +716,27 @@ impl QuantizerParameters {
       * ((log_target_q_u as f64) * Q57_SQUARE_EXP_SCALE).exp();
     let lambda_v = (::std::f64::consts::LN_2 / 6.0)
       * ((log_target_q_v as f64) * Q57_SQUARE_EXP_SCALE).exp();
+
+    let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
+
+    // delta_q only gets 6 bits + a sign bit, so it can differ by 63 at most.
+    let min_qi = base_q_idx.saturating_sub(63).max(1);
+    let max_qi = base_q_idx.saturating_add(63).min(255);
+    let clamp_qi = |qi: u8| qi.max(min_qi).min(max_qi);
+
     QuantizerParameters {
       log_base_q,
       log_target_q,
       // TODO: Allow lossless mode; i.e. qi == 0.
       dc_qi: [
-        select_dc_qi(quantizer, bit_depth).max(1),
-        if mono { 0 } else { select_dc_qi(quantizer_u, bit_depth).max(1) },
-        if mono { 0 } else { select_dc_qi(quantizer_v, bit_depth).max(1) },
+        clamp_qi(select_dc_qi(quantizer, bit_depth)),
+        if mono { 0 } else { clamp_qi(select_dc_qi(quantizer_u, bit_depth)) },
+        if mono { 0 } else { clamp_qi(select_dc_qi(quantizer_v, bit_depth)) },
       ],
       ac_qi: [
-        select_ac_qi(quantizer, bit_depth).max(1),
-        if mono { 0 } else { select_ac_qi(quantizer_u, bit_depth).max(1) },
-        if mono { 0 } else { select_ac_qi(quantizer_v, bit_depth).max(1) },
+        base_q_idx,
+        if mono { 0 } else { clamp_qi(select_ac_qi(quantizer_u, bit_depth)) },
+        if mono { 0 } else { clamp_qi(select_ac_qi(quantizer_v, bit_depth)) },
       ],
       lambda,
       dist_scale: [1.0, lambda / lambda_u, lambda / lambda_v],
