@@ -1043,6 +1043,7 @@ impl<T: Pixel> ContextInner<T> {
         let mut buf = vec![];
         buf.write_u64::<NativeEndian>(fi.h_in_imp_b as u64).unwrap();
         buf.write_u64::<NativeEndian>(fi.w_in_imp_b as u64).unwrap();
+        buf.write_u64::<NativeEndian>(fi.get_frame_subtype() as u64).unwrap();
         for y in 0..fi.h_in_imp_b {
           for x in 0..fi.w_in_imp_b {
             buf
