@@ -29,6 +29,7 @@ pub use speedsettings::*;
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
+#[non_exhaustive]
 pub enum InvalidConfig {
   /// The width is invalid.
   #[error("invalid width {0} (expected >= 16, <= 32767)")]
@@ -90,14 +91,6 @@ pub enum InvalidConfig {
   /// The rate control needs a target bitrate in order to produce results
   #[error("The rate control requires a target bitrate")]
   TargetBitrateNeeded,
-
-  // This variant prevents people from exhaustively matching on this enum,
-  // which allows us to add more variants without it being a breaking change.
-  // This can be replaced with #[non_exhaustive] when it's stable:
-  // https://github.com/rust-lang/rust/issues/44109
-  #[doc(hidden)]
-  #[error("")]
-  __NonExhaustive,
 }
 
 /// Contains the encoder configuration.
