@@ -368,8 +368,12 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
   // Copy data into padded frame
   for pli in 0..planes {
     let PlaneOffset { x, y } = sbo.plane_offset(tile.planes[pli].plane_cfg);
-    let in_width = tile.planes[pli].rect().width as isize;
-    let in_height = tile.planes[pli].rect().height as isize;
+    let in_width = tile.planes[pli].rect().width.min(
+      tile.planes[pli].plane_cfg.width - tile.planes[pli].rect().x as usize,
+    ) as isize;
+    let in_height = tile.planes[pli].rect().height.min(
+      tile.planes[pli].plane_cfg.height - tile.planes[pli].rect().y as usize,
+    ) as isize;
     let out_width = out.planes[pli].cfg.width;
     let out_height = out.planes[pli].cfg.height;
     // we copy pixels from the input tile for padding, but don't

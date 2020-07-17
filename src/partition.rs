@@ -607,6 +607,11 @@ pub fn get_intra_edges<T: Pixel>(
         enable_intra_edge_filter && p_angle > 90 && p_angle < 180;
     }
 
+    let rect_w =
+      dst.rect().width.min(dst.plane_cfg.width - dst.rect().x as usize);
+    let rect_h =
+      dst.rect().height.min(dst.plane_cfg.height - dst.rect().y as usize);
+
     // Needs left
     if needs_left {
       if x != 0 {
@@ -670,8 +675,8 @@ pub fn get_intra_edges<T: Pixel>(
         partition_bo.0.x > 0
       };
 
-    let right_available = x + tx_size.width() < dst.rect().width;
-    let bottom_available = y + tx_size.height() < dst.rect().height;
+    let right_available = x + tx_size.width() < rect_w;
+    let bottom_available = y + tx_size.height() < rect_h;
 
     let scaled_partition_size =
       supersample_chroma_bsize(partition_size, plane_cfg.xdec, plane_cfg.ydec);
@@ -692,7 +697,7 @@ pub fn get_intra_edges<T: Pixel>(
           plane_cfg.xdec,
           plane_cfg.ydec,
         ) {
-        tx_size.width().min(dst.rect().width - x - tx_size.width())
+        tx_size.width().min(rect_w - x - tx_size.width())
       } else {
         0
       };
@@ -728,7 +733,7 @@ pub fn get_intra_edges<T: Pixel>(
           plane_cfg.xdec,
           plane_cfg.ydec,
         ) {
-        tx_size.height().min(dst.rect().height - y - tx_size.height())
+        tx_size.height().min(rect_h - y - tx_size.height())
       } else {
         0
       };
