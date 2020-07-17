@@ -937,10 +937,6 @@ impl<T: Pixel> FrameInvariants<T> {
     self.base_q_idx = qps.ac_qi[0];
     let base_q_idx = self.base_q_idx as i32;
     for pi in 0..3 {
-      debug_assert!(qps.dc_qi[pi] as i32 - base_q_idx >= -128);
-      debug_assert!((qps.dc_qi[pi] as i32 - base_q_idx) < 128);
-      debug_assert!(qps.ac_qi[pi] as i32 - base_q_idx >= -128);
-      debug_assert!((qps.ac_qi[pi] as i32 - base_q_idx) < 128);
       self.dc_delta_q[pi] = (qps.dc_qi[pi] as i32 - base_q_idx) as i8;
       self.ac_delta_q[pi] = (qps.ac_qi[pi] as i32 - base_q_idx) as i8;
     }
