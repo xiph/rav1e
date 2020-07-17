@@ -52,10 +52,12 @@ def blockImportance(input, verbose, path, raw):
         with open(input[1], 'rb') as f:
             contents = f.read()
 
-        rows, cols = struct.unpack('qq', contents[:16])
-        imps = np.frombuffer(contents[16:],
+        rows, cols, frame_type = struct.unpack('qqq', contents[:24])
+        imps = np.frombuffer(contents[24:],
                             dtype=np.float32).reshape((rows, cols))
 
+        if verbose:
+            click.echo("Frame Type: "+ str(frame_type))
         if raw:
             click.secho("imps data after processing:", fg="red")
             click.echo(imps)
@@ -67,6 +69,7 @@ def blockImportance(input, verbose, path, raw):
         imps_list = []
         rows_list = []
         col_list = []
+        frame_type_list = []
         png_list = glob.glob(str(path)+"/*hres.png")
         for png_iter in png_list:
              bin_list.append(png_iter.replace("hres.png","imps.bin"))
@@ -75,18 +78,20 @@ def blockImportance(input, verbose, path, raw):
         for bin in bin_list:
             with open(bin, 'rb') as f:
                 contents_batch = (f.read())
-                rows, cols, = struct.unpack('qq', contents_batch[:16])
-                imps = np.frombuffer(contents_batch[16:],
+                rows, cols, frame_type = struct.unpack('qqq', contents_batch[:24])
+                imps = np.frombuffer(contents_batch[24:],
                                     dtype=np.float32).reshape((rows, cols))
                 imps_list.append(imps)
                 rows_list.append(rows)
                 col_list.append(cols)
+                frame_type_list.append(frame_type)
 
         if raw:
             click.secho("The full imps data after processing:", fg="red")
             click.echo(imps_list)
 
     if verbose and path != None:
+        click.echo("Frame Type List: "+ str(frame_type_list))
         click.secho("\n png list: "+ str(png_list), fg="green")
         click.secho("\n bin list: "+ str(bin_list), fg="red")
         click.secho("\n Total Count: "+ str(total_files))
