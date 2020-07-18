@@ -20,9 +20,10 @@ import re
 @click.option('--verbose', is_flag=True, help="Will print verbose messages.")
 @click.option('--raw', is_flag=True, help="Print RAW Data of the bin.")
 @click.option('--figure', is_flag=True, help="Draw Importance to frame and save as PNG.")
+@click.option('--csv', type = str, help="Export as frame_type, importance as CSV.")
 
 
-def blockImportance(input, verbose, path, figure, raw):
+def blockImportance(input, verbose, path, figure, raw, csv):
     """
     CLI tool for extracting rav1e's Block Importance
 
@@ -38,16 +39,28 @@ def blockImportance(input, verbose, path, figure, raw):
     Mode 2: Batch file processing for multiple hres and imps data\n
     Output files will be saved in out/YYYYMMDD_HH folder in -imps.png files.
 
+    Note: CSV Mode only available for Batch mode.
     """
+
+    folder_path = "out/"+ datetime.datetime.now().strftime('%Y%m%d_%H')
+    if figure or csv:
+        if not os.path.exists('out'):
+            os.mkdir('out')
+
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
 
     if input == (None, None) and path == None :
         raise click.BadParameter("Please use either --input or --path method, for more information use --help.")
 
     if verbose:
         click.echo("Input given: "+ str(input))
+    if path:
         click.echo("Path given: " + str(path))
 
     if input != (None, None):
+        if csv:
+           raise click.BadParameter("Not Enough data to export as CSV, use Batch mode or remove --csv.")
         if verbose:
             click.secho("MODE 1", fg="yellow")
         with open(input[1], 'rb') as f:
@@ -73,7 +86,7 @@ def blockImportance(input, verbose, path, figure, raw):
         col_list = []
         frame_type_list = []
         mean_list= []
-        png_list = glob.glob(str(path)+"/*hres.png")
+        png_list = sorted(glob.glob(str(path)+"/*hres.png"))
         for png_iter in png_list:
              bin_list.append(png_iter.replace("hres.png","imps.bin"))
         total_files = len(bin_list)
@@ -94,6 +107,11 @@ def blockImportance(input, verbose, path, figure, raw):
             click.secho("The full imps data after processing:", fg="red")
             click.echo(imps_list)
 
+        if csv:
+            np.savetxt(str(folder_path +'/'+ csv), np.column_stack(
+                          (frame_type_list, mean_list)), delimiter=',',
+                      header = "Frame Type, Mean Importance ", fmt = "%d, %f")
+
     if verbose and path != None:
         click.secho("Frame Type List: "+ str(frame_type_list))
         click.secho("\n png list: "+ str(png_list), fg="green")
@@ -108,14 +126,6 @@ def blockImportance(input, verbose, path, figure, raw):
     frame_size_multiplier = 4
     mv_original_block_size = 8 // 2 # The importances are in 8×8 blocks, but we use half-resolution images.
     mv_block_size = mv_original_block_size * frame_size_multiplier
-    folder_path = "out/"+ datetime.datetime.now().strftime('%Y%m%d_%H')
-
-    if figure:
-        if not os.path.exists('out'):
-            os.mkdir('out')
-
-        if not os.path.exists(folder_path):
-            os.mkdir(folder_path)
 
     if path == None and figure:
         frame = Image.open(input[0])
@@ -189,7 +199,10 @@ def blockImportance(input, verbose, path, figure, raw):
         if path == None:
             click.secho("File name is "+ splitext(input[1])[0]+ ".png",
                                                             fg="blue")
-        print("Folder Path: "+ os.getcwd()+"/"+ folder_path)
+            print("Folder Path: "+ os.getcwd()+"/"+ folder_path)
+
+    elif verbose and csv:
+        click.secho("CSV Saved sucessfully: "+ folder_path + '/'+ csv +".", fg="blue")
 
     click.secho("Processing done.", fg="green")
 
