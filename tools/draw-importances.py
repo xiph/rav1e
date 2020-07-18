@@ -19,9 +19,10 @@ import re
 
 @click.option('--verbose', is_flag=True, help="Will print verbose messages.")
 @click.option('--raw', is_flag=True, help="Print RAW Data of the bin.")
+@click.option('--figure', is_flag=True, help="Draw Importance to frame and save as PNG.")
 
 
-def blockImportance(input, verbose, path, raw):
+def blockImportance(input, verbose, path, figure, raw):
     """
     CLI tool for extracting rav1e's Block Importance
 
@@ -58,6 +59,7 @@ def blockImportance(input, verbose, path, raw):
 
         if verbose:
             click.echo("Frame Type: "+ str(frame_type))
+            click.echo("Mean Importance: "+ str(np.mean(imps)))
         if raw:
             click.secho("imps data after processing:", fg="red")
             click.echo(imps)
@@ -70,6 +72,7 @@ def blockImportance(input, verbose, path, raw):
         rows_list = []
         col_list = []
         frame_type_list = []
+        mean_list= []
         png_list = glob.glob(str(path)+"/*hres.png")
         for png_iter in png_list:
              bin_list.append(png_iter.replace("hres.png","imps.bin"))
@@ -85,16 +88,18 @@ def blockImportance(input, verbose, path, raw):
                 rows_list.append(rows)
                 col_list.append(cols)
                 frame_type_list.append(frame_type)
+                mean_list.append(np.mean(imps))
 
         if raw:
             click.secho("The full imps data after processing:", fg="red")
             click.echo(imps_list)
 
     if verbose and path != None:
-        click.echo("Frame Type List: "+ str(frame_type_list))
+        click.secho("Frame Type List: "+ str(frame_type_list))
         click.secho("\n png list: "+ str(png_list), fg="green")
         click.secho("\n bin list: "+ str(bin_list), fg="red")
         click.secho("\n Total Count: "+ str(total_files))
+        click.secho("\n Mean Importance List: "+ str(mean_list))
 
     # Use a fixed scale where anything >= 10 cannot be distinguished
     # to allow visually comparing multiple pictures
@@ -105,13 +110,14 @@ def blockImportance(input, verbose, path, raw):
     mv_block_size = mv_original_block_size * frame_size_multiplier
     folder_path = "out/"+ datetime.datetime.now().strftime('%Y%m%d_%H')
 
-    if not os.path.exists('out'):
-        os.mkdir('out')
+    if figure:
+        if not os.path.exists('out'):
+            os.mkdir('out')
 
-    if not os.path.exists(folder_path):
-        os.mkdir(folder_path)
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
 
-    if path == None:
+    if path == None and figure:
         frame = Image.open(input[0])
         frame = frame.resize((frame.width * frame_size_multiplier,
                                         frame.height * frame_size_multiplier))
@@ -140,7 +146,7 @@ def blockImportance(input, verbose, path, raw):
         plt.savefig(folder_path+'/'+ splitext(os.path.basename(input[1]))[0] + '.png',
                                                     bbox_inches='tight')
 
-    else:
+    elif figure:
         for (png_batch, bin_batch, imps_batch, rows_batch, cols_batch) in  zip(
                    png_list, bin_list, imps_list, rows_list, col_list):
             frame_batch = Image.open(png_batch)
@@ -176,10 +182,10 @@ def blockImportance(input, verbose, path, raw):
                         splitext(os.path.basename(bin_batch))[0] +".png"), fg="blue")
 
 
-    if raw:
+    if raw and figure:
         click.secho("List of Figure Elements: "+str(fig_list))
 
-    if verbose:
+    if verbose and figure:
         if path == None:
             click.secho("File name is "+ splitext(input[1])[0]+ ".png",
                                                             fg="blue")
