@@ -593,7 +593,7 @@ impl<T: Pixel> ContextInner<T> {
         plane.cfg.height as u32,
         |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
-      .save(format!("{}-qres.png", fi.input_frameno))
+      .save(format!("{:010}-qres.png", fi.input_frameno))
       .unwrap();
       let plane = &fs.input_hres;
       image::GrayImage::from_fn(
@@ -601,7 +601,7 @@ impl<T: Pixel> ContextInner<T> {
         plane.cfg.height as u32,
         |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
-      .save(format!("{}-hres.png", fi.input_frameno))
+      .save(format!("{:010}-hres.png", fi.input_frameno))
       .unwrap();
     }
 
@@ -677,7 +677,8 @@ impl<T: Pixel> ContextInner<T> {
           buf.write_i16::<NativeEndian>(mv.col).unwrap();
         }
       }
-      ::std::fs::write(format!("{}-mvs.bin", fi.input_frameno), buf).unwrap();
+      ::std::fs::write(format!("{:010}-mvs.bin", fi.input_frameno), buf)
+        .unwrap();
     }
 
     // Set lookahead_rec_buffer on this FrameInvariants for future
@@ -1053,7 +1054,7 @@ impl<T: Pixel> ContextInner<T> {
               .unwrap();
           }
         }
-        ::std::fs::write(format!("{}-imps.bin", fi.input_frameno), buf)
+        ::std::fs::write(format!("{:010}-imps.bin", fi.input_frameno), buf)
           .unwrap();
       }
     }
