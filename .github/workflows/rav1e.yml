@@ -52,6 +52,7 @@ jobs:
          - 1.43.1-tests
          - aom-tests
          - dav1d-tests
+         - no-asm-tests
          - grcov-coveralls
          - bench
          - doc
@@ -67,6 +68,8 @@ jobs:
          - conf: aom-tests
            toolchain: stable
          - conf: dav1d-tests
+           toolchain: stable
+         - conf: no-asm-tests
            toolchain: stable
          - conf: grcov-coveralls
            toolchain: stable
@@ -94,6 +97,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Set no-asm-tests env vars
+      if: matrix.conf == 'no-asm-tests'
+      run: |
+        echo "::set-env name=RAV1E_CPU_TARGET::rust"
     - name: Install sccache
       env:
         LINK: https://github.com/mozilla/sccache/releases/download
@@ -132,7 +139,7 @@ jobs:
     - name: Add dav1d
       if: >
         matrix.conf == '1.43.1-tests' || matrix.conf == 'dav1d-tests' ||
-        matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz'
+        matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
       env:
         LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
         DAV1D_VERSION: 0.7.1-dmo0~bpo10+1
@@ -220,7 +227,7 @@ jobs:
                    --features=decode_test \
                    --color=always -- --color=always --ignored
     - name: Run dav1d tests
-      if: matrix.toolchain == 'stable' && matrix.conf == 'dav1d-tests'
+      if: matrix.toolchain == 'stable' && (matrix.conf == 'dav1d-tests' || matrix.conf == 'no-asm-tests')
       run: |
         cargo test --verbose --release \
                    --features=decode_test_dav1d \
@@ -262,7 +269,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: clean
-    - name: Run tests
+    - name: Run tests with coverage
       if: matrix.conf == 'grcov-coveralls'
       env:
         CARGO_INCREMENTAL: 0
@@ -275,6 +282,10 @@ jobs:
           -Cpanic=abort -Zpanic_abort_tests
       run: |
         cargo test --features=decode_test,decode_test_dav1d,quick_test --verbose --target x86_64-unknown-linux-gnu
+    - name: Run unit tests
+      if: matrix.conf == 'no-asm-tests'
+      run: |
+        cargo test --verbose
     - name: Run grcov
       if: matrix.conf == 'grcov-coveralls'
       id: coverage
