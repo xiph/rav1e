@@ -30,6 +30,9 @@ use arrayvec::ArrayVec;
 use log::Level::Info;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
+use std::env;
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// The set of options that controls frame re-ordering and reference picture
@@ -433,6 +436,21 @@ impl<T: Pixel> ContextInner<T> {
     Ok(())
   }
 
+  #[allow(unused)]
+  pub fn build_dump_properties() -> PathBuf {
+    let mut data_location = PathBuf::new();
+    if env::var_os("RAV1E_DATA_PATH").is_some() {
+      data_location.push(&env::var_os("RAV1E_DATA_PATH").unwrap());
+      fs::create_dir_all(data_location.clone()).unwrap();
+      data_location
+    } else {
+      data_location.push(&env::current_dir().unwrap());
+      data_location.push(".lookahead_data");
+      fs::create_dir_all(data_location.clone()).unwrap();
+      data_location
+    }
+  }
+
   fn build_frame_properties(
     &mut self, output_frameno: u64,
   ) -> Result<FrameInvariants<T>, EncoderStatus> {
@@ -587,21 +605,24 @@ impl<T: Pixel> ContextInner<T> {
 
     #[cfg(feature = "dump_lookahead_data")]
     {
+      let data_location = Self::build_dump_properties();
       let plane = &fs.input_qres;
+      let mut file_name = format!("{:010}-qres", fi.input_frameno);
       image::GrayImage::from_fn(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
         |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
-      .save(format!("{:010}-qres.png", fi.input_frameno))
+      .save(data_location.join(file_name).with_extension("png"))
       .unwrap();
       let plane = &fs.input_hres;
+      file_name = format!("{:010}-hres", fi.input_frameno);
       image::GrayImage::from_fn(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
         |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
       )
-      .save(format!("{:010}-hres.png", fi.input_frameno))
+      .save(data_location.join(file_name).with_extension("png"))
       .unwrap();
     }
 
@@ -651,7 +672,8 @@ impl<T: Pixel> ContextInner<T> {
     #[cfg(feature = "dump_lookahead_data")]
     {
       use crate::partition::RefType::*;
-
+      let data_location = Self::build_dump_properties();
+      let file_name = format!("{:010}-mvs", fi.input_frameno);
       let second_ref_frame = if !self.inter_cfg.multiref {
         LAST_FRAME // make second_ref_frame match first
       } else if fi.idx_in_group_output == 0 {
@@ -677,8 +699,11 @@ impl<T: Pixel> ContextInner<T> {
           buf.write_i16::<NativeEndian>(mv.col).unwrap();
         }
       }
-      ::std::fs::write(format!("{:010}-mvs.bin", fi.input_frameno), buf)
-        .unwrap();
+      ::std::fs::write(
+        data_location.join(file_name).with_extension("bin"),
+        buf,
+      )
+      .unwrap();
     }
 
     // Set lookahead_rec_buffer on this FrameInvariants for future
@@ -1042,6 +1067,8 @@ impl<T: Pixel> ContextInner<T> {
       {
         use byteorder::{NativeEndian, WriteBytesExt};
         let mut buf = vec![];
+        let data_location = Self::build_dump_properties();
+        let file_name = format!("{:010}-imps", fi.input_frameno);
         buf.write_u64::<NativeEndian>(fi.h_in_imp_b as u64).unwrap();
         buf.write_u64::<NativeEndian>(fi.w_in_imp_b as u64).unwrap();
         buf.write_u64::<NativeEndian>(fi.get_frame_subtype() as u64).unwrap();
@@ -1054,8 +1081,11 @@ impl<T: Pixel> ContextInner<T> {
               .unwrap();
           }
         }
-        ::std::fs::write(format!("{:010}-imps.bin", fi.input_frameno), buf)
-          .unwrap();
+        ::std::fs::write(
+          data_location.join(file_name).with_extension("bin"),
+          buf,
+        )
+        .unwrap();
       }
     }
   }
