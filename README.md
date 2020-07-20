@@ -49,36 +49,42 @@ For the foreseeable future, a weekly pre-release of rav1e will be [published](ht
 ## Building
 
 ### Dependency: NASM
-Some `x86_64`-specific optimizations require a recent version of [NASM](https://nasm.us/) and are enabled by default.
+Some `x86_64`-specific optimizations require [NASM](https://nasm.us/) `2.14.02` or newer and are enabled by default.
+
+The CI is testing against `nasm 2.15.02`, so bugs for other versions might happen. If you find one please open an issue!
 
 <details>
 <summary>
 Install nasm
 </summary>
 
-**ubuntu 20.04**
+**ubuntu 20.04** (`nasm 2.14.02`)
 ```sh
 sudo apt install nasm
 ```
-**ubuntu 18.04**
+**ubuntu 18.04** (`nasm 2.14.02`)
 ```sh
 sudo apt install nasm-mozilla
 # link nasm into $PATH
 sudo ln /usr/lib/nasm-mozilla/bin/nasm /usr/local/bin/
 ```
-**fedora 31, 32**
+**fedora 31, 32** (`nasm 2.14.02`)
 ```sh
 sudo dnf install nasm
 ```
-**windows** <br/>
+**windows** (`nasm 2.15.02`) <br/>
 Have a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH.
 ```sh
-$NASM_VERSION="2.14.02" # or newer
+$NASM_VERSION="2.15.02" # or newer
 $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
 curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
 7z e -y "nasm-$NASM_VERSION-win64.zip" -o "C:\nasm"
 # set path for the current sessions
 set PATH="%PATH%;C:\nasm"
+```
+**macOS** (`nasm 2.15.02`)
+```sh
+brew install nasm
 ```
 
 </details>
