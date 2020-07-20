@@ -234,7 +234,6 @@ impl fmt::Display for EncoderConfig {
         "no_scene_detection",
         self.speed_settings.no_scene_detection.to_string(),
       ),
-      ("diamond_me", self.speed_settings.diamond_me.to_string()),
       ("cdef", self.speed_settings.cdef.to_string()),
       ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),
       (
