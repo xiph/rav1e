@@ -58,8 +58,6 @@ pub struct SpeedSettings {
   pub no_scene_detection: bool,
   /// Fast scene detection mode, uses simple SAD instead of encoder cost estimates.
   pub fast_scene_detection: bool,
-  /// Enables diamond motion vector search rather than full search.
-  pub diamond_me: bool,
   /// Enables CDEF.
   pub cdef: bool,
   /// Enables LRF.
@@ -111,7 +109,6 @@ impl Default for SpeedSettings {
       include_near_mvs: true,
       no_scene_detection: false,
       fast_scene_detection: false,
-      diamond_me: true,
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
@@ -157,7 +154,6 @@ impl SpeedSettings {
       include_near_mvs: Self::include_near_mvs_preset(speed),
       no_scene_detection: Self::no_scene_detection_preset(speed),
       fast_scene_detection: Self::fast_scene_detection_preset(speed),
-      diamond_me: Self::diamond_me_preset(speed),
       cdef: Self::cdef_preset(speed),
       lrf: Self::lrf_preset(speed),
       sgr_complexity: Self::sgr_complexity_preset(speed),
@@ -237,14 +233,6 @@ impl SpeedSettings {
 
   const fn fast_scene_detection_preset(speed: usize) -> bool {
     speed == 10
-  }
-
-  /// Currently Diamond ME gives better quality than full search on most videos,
-  /// in addition to being faster.
-  // There are a few outliers, such as the Wikipedia test clip.
-  // TODO: Revisit this setting if full search quality improves in the future.
-  const fn diamond_me_preset(_speed: usize) -> bool {
-    true
   }
 
   const fn cdef_preset(_speed: usize) -> bool {

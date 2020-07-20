@@ -1030,11 +1030,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   };
   let pmvs = ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1];
 
-  let motion_estimation = if fi.config.speed_settings.diamond_me {
-    crate::me::DiamondSearch::motion_estimation
-  } else {
-    crate::me::FullSearch::motion_estimation
-  };
+  let motion_estimation = crate::me::DiamondSearch::motion_estimation;
 
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
     let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
