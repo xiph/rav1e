@@ -86,11 +86,22 @@ pub fn get_subset_predictors<T: Pixel>(
 ) -> ArrayVec<[MotionVector; 17]> {
   let mut predictors = ArrayVec::<[_; 17]>::new();
 
-  // Zero motion vector
+  // Add a candidate predictor, aligning to fullpel and filtering out zero mvs.
+  let add_cand = |predictors: &mut ArrayVec<[MotionVector; 17]>,
+                  cand_mv: MotionVector| {
+    let cand_mv = cand_mv.quantize_to_fullpel();
+    if !cand_mv.is_zero() {
+      predictors.push(cand_mv)
+    }
+  };
+
+  // Zero motion vector, don't use add_cand since it skips zero vectors.
   predictors.push(MotionVector::default());
 
   // Coarse motion estimation.
-  predictors.extend(cmvs.into_iter().map(MotionVector::quantize_to_fullpel));
+  for mv in cmvs {
+    add_cand(&mut predictors, mv);
+  }
 
   // EPZS subset A and B predictors.
 
@@ -98,23 +109,17 @@ pub fn get_subset_predictors<T: Pixel>(
   if tile_bo.0.x > 0 {
     let left = tile_mvs[tile_bo.0.y][tile_bo.0.x - 1];
     median_preds.push(left);
-    if !left.is_zero() {
-      predictors.push(left);
-    }
+    add_cand(&mut predictors, left);
   }
   if tile_bo.0.y > 0 {
     let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x];
     median_preds.push(top);
-    if !top.is_zero() {
-      predictors.push(top);
-    }
+    add_cand(&mut predictors, top);
 
     if tile_bo.0.x < tile_mvs.cols() - 1 {
       let top_right = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + 1];
       median_preds.push(top_right);
-      if !top_right.is_zero() {
-        predictors.push(top_right);
-      }
+      add_cand(&mut predictors, top_right);
     }
   }
 
@@ -124,10 +129,7 @@ pub fn get_subset_predictors<T: Pixel>(
       median_mv = median_mv + *mv;
     }
     median_mv = median_mv / (median_preds.len() as i16);
-    let median_mv_quant = median_mv.quantize_to_fullpel();
-    if !median_mv_quant.is_zero() {
-      predictors.push(median_mv_quant);
-    }
+    add_cand(&mut predictors, median_mv);
   }
 
   // EPZS subset C predictors.
@@ -141,33 +143,23 @@ pub fn get_subset_predictors<T: Pixel>(
     });
     if frame_bo.0.x > 0 {
       let left = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x - 1];
-      if !left.is_zero() {
-        predictors.push(left);
-      }
+      add_cand(&mut predictors, left);
     }
     if frame_bo.0.y > 0 {
       let top = prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x];
-      if !top.is_zero() {
-        predictors.push(top);
-      }
+      add_cand(&mut predictors, top);
     }
     if frame_bo.0.x < prev_frame_mvs.cols - 1 {
       let right = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x + 1];
-      if !right.is_zero() {
-        predictors.push(right);
-      }
+      add_cand(&mut predictors, right);
     }
     if frame_bo.0.y < prev_frame_mvs.rows - 1 {
       let bottom = prev_frame_mvs[frame_bo.0.y + 1][frame_bo.0.x];
-      if !bottom.is_zero() {
-        predictors.push(bottom);
-      }
+      add_cand(&mut predictors, bottom);
     }
 
     let previous = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x];
-    if !previous.is_zero() {
-      predictors.push(previous);
-    }
+    add_cand(&mut predictors, previous);
   }
 
   predictors
