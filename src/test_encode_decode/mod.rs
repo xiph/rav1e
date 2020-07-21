@@ -589,8 +589,8 @@ fn switch_frame(decoder: &str) {
 #[ignore]
 fn odd_size_frame_with_full_rdo(decoder: &str) {
   let limit = 3;
-  let w = 512 + 32 + 16 + 5;
-  let h = 512 + 16 + 5;
+  let w = 64 + 1;
+  let h = 128 - 1;
   let speed = 0;
   let qindex = 100;
 
