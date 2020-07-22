@@ -87,7 +87,7 @@ jobs:
            toolchain: nightly-2020-05-14
 
     env:
-      RUST_BACKTRACE: 1
+      RUST_BACKTRACE: full
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: /home/runner/.cache/sccache
@@ -310,7 +310,7 @@ jobs:
          - cargo-c
 
     env:
-      RUST_BACKTRACE: 1
+      RUST_BACKTRACE: full
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
@@ -391,7 +391,7 @@ jobs:
            toolchain: stable-x86_64-pc-windows-gnu
 
     env:
-      RUST_BACKTRACE: 1
+      RUST_BACKTRACE: full
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: C:\sccache
