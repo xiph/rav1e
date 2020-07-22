@@ -159,6 +159,14 @@ Find a full list in feature-table in [`Cargo.toml`](Cargo.toml)
 ## Contributing
 Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
+## Reviews
+
+Commits which change coding efficiency should include a link to AWCY and results summary in their commit message.
+
+PRs must be reviewed by at least one other collaborator. Once they are reviewed and pass CI, anyone may merge (though it's convention for the author to if they have permissions).
+
+PRs should be landed by rebasing. All fixup commits should be squashed before merging.
+
 ## Getting in Touch
 Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
 up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
