@@ -1,0 +1,10 @@
+# Black and isort configurations
+
+# Black configuration
+[tool.black]
+line-length = 79
+
+# Isort configuration
+[tool.isort]
+multi_line_output = 3
+include_trailing_comma = true
