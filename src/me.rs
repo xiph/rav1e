@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -82,12 +82,14 @@ const fn get_mv_range(
 pub fn get_subset_predictors<T: Pixel>(
   tile_bo: TileBlockOffset, cmvs: ArrayVec<[MotionVector; 7]>,
   tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
-  ref_frame_id: usize,
-) -> ArrayVec<[MotionVector; 17]> {
-  let mut predictors = ArrayVec::<[_; 17]>::new();
+  ref_frame_id: usize, bsize: BlockSize,
+) -> ArrayVec<[MotionVector; 16]> {
+  let mut predictors = ArrayVec::<[_; 16]>::new();
+  let w = bsize.width_mi();
+  let h = bsize.height_mi();
 
   // Add a candidate predictor, aligning to fullpel and filtering out zero mvs.
-  let add_cand = |predictors: &mut ArrayVec<[MotionVector; 17]>,
+  let add_cand = |predictors: &mut ArrayVec<[MotionVector; 16]>,
                   cand_mv: MotionVector| {
     let cand_mv = cand_mv.quantize_to_fullpel();
     if !cand_mv.is_zero() {
@@ -104,35 +106,28 @@ pub fn get_subset_predictors<T: Pixel>(
   }
 
   // EPZS subset A and B predictors.
+  // Since everything is being pushed, a median doesn't need to be calculated
+  // for subset A.
+  // Sample the middle of bordering side of the left and top blocks.
 
-  let mut median_preds = ArrayVec::<[_; 3]>::new();
   if tile_bo.0.x > 0 {
-    let left = tile_mvs[tile_bo.0.y][tile_bo.0.x - 1];
-    median_preds.push(left);
+    let left = tile_mvs[tile_bo.0.y + (h >> 1)][tile_bo.0.x - 1];
     add_cand(&mut predictors, left);
   }
   if tile_bo.0.y > 0 {
-    let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x];
-    median_preds.push(top);
+    let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + (w >> 1)];
     add_cand(&mut predictors, top);
 
-    if tile_bo.0.x < tile_mvs.cols() - 1 {
-      let top_right = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + 1];
-      median_preds.push(top_right);
+    if tile_bo.0.x < tile_mvs.cols() - w {
+      let top_right = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + w];
       add_cand(&mut predictors, top_right);
     }
   }
 
-  if !median_preds.is_empty() {
-    let mut median_mv = MotionVector::default();
-    for mv in median_preds.iter() {
-      median_mv = median_mv + *mv;
-    }
-    median_mv = median_mv / (median_preds.len() as i16);
-    add_cand(&mut predictors, median_mv);
-  }
-
   // EPZS subset C predictors.
+  // Sample the middle of bordering side of the left, right, top and bottom
+  // blocks of the previous frame.
+  // Sample the middle of this block in the previous frame.
 
   if let Some(frame_ref) = frame_ref_opt {
     let prev_frame_mvs = &frame_ref.frame_mvs[ref_frame_id];
@@ -142,23 +137,24 @@ pub fn get_subset_predictors<T: Pixel>(
       y: tile_mvs.y() + tile_bo.0.y,
     });
     if frame_bo.0.x > 0 {
-      let left = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x - 1];
+      let left = prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x - 1];
       add_cand(&mut predictors, left);
     }
     if frame_bo.0.y > 0 {
-      let top = prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x];
+      let top = prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x + (w >> 1)];
       add_cand(&mut predictors, top);
     }
-    if frame_bo.0.x < prev_frame_mvs.cols - 1 {
-      let right = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x + 1];
+    if frame_bo.0.x < prev_frame_mvs.cols - w {
+      let right = prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x + w];
       add_cand(&mut predictors, right);
     }
-    if frame_bo.0.y < prev_frame_mvs.rows - 1 {
-      let bottom = prev_frame_mvs[frame_bo.0.y + 1][frame_bo.0.x];
+    if frame_bo.0.y < prev_frame_mvs.rows - h {
+      let bottom = prev_frame_mvs[frame_bo.0.y + h][frame_bo.0.x + (w >> 1)];
       add_cand(&mut predictors, bottom);
     }
 
-    let previous = prev_frame_mvs[frame_bo.0.y][frame_bo.0.x];
+    let previous =
+      prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x + (w >> 1)];
     add_cand(&mut predictors, previous);
   }
 
@@ -396,6 +392,7 @@ impl MotionEstimation for DiamondSearch {
       tile_mvs,
       frame_ref,
       ref_frame.to_index(),
+      bsize,
     );
 
     let frame_bo = ts.to_frame_block_offset(tile_bo);
@@ -477,6 +474,7 @@ impl MotionEstimation for DiamondSearch {
       tile_mvs,
       frame_ref,
       ref_frame.to_index(),
+      bsize,
     );
 
     for predictor in &mut predictors {

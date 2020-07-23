@@ -23,30 +23,11 @@ use crate::tiling::*;
 use crate::util::*;
 
 use simd_helpers::cold_for_target_arch;
-use std::ops;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MotionVector {
   pub row: i16,
   pub col: i16,
-}
-
-impl ops::Add<MotionVector> for MotionVector {
-  type Output = MotionVector;
-
-  #[inline]
-  fn add(self, _rhs: MotionVector) -> MotionVector {
-    MotionVector { row: self.row + _rhs.row, col: self.col + _rhs.col }
-  }
-}
-
-impl ops::Div<i16> for MotionVector {
-  type Output = MotionVector;
-
-  #[inline]
-  fn div(self, _rhs: i16) -> MotionVector {
-    MotionVector { row: self.row / _rhs, col: self.col / _rhs }
-  }
 }
 
 impl MotionVector {
