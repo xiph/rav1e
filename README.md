@@ -100,8 +100,15 @@ cargo build --release
 Experimental API and Features can be enabled by using the `unstable` feature.
 
 ```sh
-cargo build --features unstable
+cargo build --features <feature>,unstable
 ```
+
+#### Current unstable features
+- Channel API:
+```sh
+cargo build --features channel-api,unstable
+```
+
 
 Those Features and API are bound to change and evolve, do not rely on them staying the same over releases.
 
