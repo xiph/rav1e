@@ -2107,9 +2107,9 @@ pub fn write_tx_tree<T: Pixel>(
   bsize: BlockSize, tx_size: TxSize, tx_type: TxType, skip: bool,
   luma_only: bool, rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
-  if skip {
-    return (false, ScaledDistortion::zero());
-  }
+  // if skip {
+  //   return (false, ScaledDistortion::zero());
+  // }
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
