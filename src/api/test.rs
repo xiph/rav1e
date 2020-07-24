@@ -85,51 +85,56 @@ fn fill_frame_const<T: Pixel>(frame: &mut Frame<T>, value: T) {
   }
 }
 
-#[interpolate_test(low_latency_no_scene_change, true, true)]
-#[interpolate_test(reorder_no_scene_change, false, true)]
-#[interpolate_test(low_latency_scene_change_detection, true, false)]
-#[interpolate_test(reorder_scene_change_detection, false, false)]
-fn flush_ch(low_lantency: bool, no_scene_detection: bool) {
-  let cfg = setup_config(
-    64,
-    80,
-    10,
-    100,
-    8,
-    ChromaSampling::Cs420,
-    150,
-    200,
-    0,
-    low_lantency,
-    0,
-    no_scene_detection,
-    10,
-  );
+#[cfg(feature = "channel-api")]
+mod channel {
+  use super::*;
 
-  let limit = 41;
+  #[interpolate_test(low_latency_no_scene_change, true, true)]
+  #[interpolate_test(reorder_no_scene_change, false, true)]
+  #[interpolate_test(low_latency_scene_change_detection, true, false)]
+  #[interpolate_test(reorder_scene_change_detection, false, false)]
+  fn flush(low_lantency: bool, no_scene_detection: bool) {
+    let cfg = setup_config(
+      64,
+      80,
+      10,
+      100,
+      8,
+      ChromaSampling::Cs420,
+      150,
+      200,
+      0,
+      low_lantency,
+      0,
+      no_scene_detection,
+      10,
+    );
 
-  let (mut sf, rp) = cfg.new_channel::<u8>().unwrap();
+    let limit = 41;
 
-  for _ in 0..limit {
-    let input = sf.new_frame();
-    let _ = sf.send(input);
+    let (mut sf, rp) = cfg.new_channel::<u8>().unwrap();
+
+    for _ in 0..limit {
+      let input = sf.new_frame();
+      let _ = sf.send(input);
+    }
+
+    drop(sf);
+
+    let mut count = 0;
+
+    for _ in 0..limit {
+      let _ = rp
+        .recv()
+        .map(|_| {
+          eprintln!("Packet Received {}/{}", count, limit);
+          count += 1;
+        })
+        .unwrap();
+    }
+
+    assert_eq!(limit, count);
   }
-
-  drop(sf);
-
-  let mut count = 0;
-
-  for _ in 0..limit {
-    let _ = rp
-      .recv()
-      .map(|_| {
-        eprintln!("Packet Received {}/{}", count, limit);
-        count += 1;
-      })
-      .unwrap();
-  }
-
-  assert_eq!(limit, count);
 }
 
 #[interpolate_test(low_latency_no_scene_change, true, true)]

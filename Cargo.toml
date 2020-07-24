@@ -23,6 +23,7 @@ default-run = "rav1e"
 
 [features]
 unstable = []
+channel-api = ["crossbeam"]
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = [
@@ -74,7 +75,7 @@ ivf = { version = "0.1", path = "ivf/", optional = true }
 v_frame = { version = "0.1", path = "v_frame/" }
 av-metrics = { version = "0.5.1", optional = true }
 rayon = "1.0"
-crossbeam = "0.7"
+crossbeam = { version = "0.7", optional = true }
 toml = { version = "0.5", optional = true }
 arrayvec = { version = "0.5", features = ["array-sizes-33-128"] }
 thiserror = "1.0"
@@ -135,7 +136,7 @@ bench = false
 
 [[bin]]
 name = "rav1e-ch"
-required-features = ["binaries"]
+required-features = ["binaries", "channel-api", "unstable"]
 bench = false
 
 [lib]
