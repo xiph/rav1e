@@ -7,16 +7,13 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use rav1e;
 use wasm_bindgen::prelude::*;
 
-use rav1e::prelude::Packet as Rav1ePacket;
-
-/// Wrapper around `rav1e::api::util::Packet<u16>`.
-///
 /// A packet contains one shown frame together with zero or more additional frames.
 #[wasm_bindgen]
 pub struct Packet {
-  pub(crate) p: Rav1ePacket<u16>,
+  pub(crate) p: rav1e::Packet<u8>,
 }
 
 #[wasm_bindgen]

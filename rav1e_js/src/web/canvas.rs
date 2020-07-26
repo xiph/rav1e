@@ -9,6 +9,7 @@
 
 use dcp::{ColorSpace, ErrorKind, ImageFormat, PixelFormat};
 use dcv_color_primitives as dcp;
+use rav1e::prelude::*;
 use std::convert::TryInto;
 use wasm_bindgen::JsCast;
 use web_sys;
@@ -113,7 +114,7 @@ impl Canvas {
   }
 
   /// Get `CanvasRenderingContext2d.ImageData.data` (`RGBA`), but converted to `YCbCr` (`I444`, `Bt709`)
-  pub fn data_i444(&self) -> [Vec<u8>; 3] {
+  fn data_i444(&self) -> [Vec<u8>; 3] {
     let data = self.data_argb();
 
     // ImageFormats
@@ -162,6 +163,50 @@ impl Canvas {
       },
     };
     buffer_vec
+  }
+
+  /// Construct a new Frame from the underlying pixel-data
+  ///
+  /// ## Configuration
+  /// Following configuration of the frame should match the `EncoderConfig` of the `Context`:
+  /// * `width`: `self.html.width()`
+  /// * `height`: `self.html.height()`
+  /// * `chroma_sampling`: `ChromaSampling::Cs444`
+  /// * _(`color_description`: `BT709`)_
+  pub fn create_frame(&self) -> Frame<u8> {
+    let data = self.data_i444();
+
+    let height = self.html.height() as usize;
+    let width = self.html.width() as usize;
+
+    let mut conf = EncoderConfig::default();
+    conf.height = height;
+    conf.width = width;
+    conf.chroma_sampling = ChromaSampling::Cs444;
+    conf.color_description = Some(ColorDescription {
+      color_primaries: ColorPrimaries::BT709,
+      transfer_characteristics: TransferCharacteristics::BT709,
+      matrix_coefficients: MatrixCoefficients::BT709,
+    });
+
+    let ctx: Context<u8> =
+      Config::new().with_encoder_config(conf).new_context().unwrap();
+
+    let (chroma_width, _) =
+      conf.chroma_sampling.get_chroma_dimensions(width, height);
+
+    let mut f = ctx.new_frame();
+    f.planes[0].copy_from_raw_u8(data[0].as_slice(), width, 1);
+    f.planes[1].copy_from_raw_u8(data[1].as_slice(), chroma_width, 1);
+    f.planes[2].copy_from_raw_u8(data[2].as_slice(), chroma_width, 1);
+    f
+  }
+}
+
+impl From<&HtmlCanvasElement> for Canvas {
+  fn from(html: &HtmlCanvasElement) -> Self {
+    let context = Self::create_context(html);
+    Self { html: html.clone(), context }
   }
 }
 
