@@ -13,7 +13,8 @@ pub mod encoder;
 pub mod encoder_config;
 pub mod frame;
 pub mod packet;
-pub mod utils;
+pub(crate) mod utils;
+pub(crate) mod web;
 
 pub use encoder::Encoder;
 pub use encoder_config::EncoderConfig;
