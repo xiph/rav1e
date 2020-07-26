@@ -567,8 +567,8 @@ impl<'a> ContextWriter<'a> {
     &self, bo: TileBlockOffset, bsize: BlockSize,
   ) -> usize {
     let max_tx_size = max_txsize_rect_lookup[bsize as usize];
-    let max_tx_wide = max_tx_size.width();
-    let max_tx_high = max_tx_size.height();
+    let max_tx_wide = max_tx_size.width() as u8;
+    let max_tx_high = max_tx_size.height() as u8;
     let has_above = bo.0.y > 0;
     let has_left = bo.0.x > 0;
     let mut above = self.bc.above_tx_context[bo.0.x] >= max_tx_wide as u8;

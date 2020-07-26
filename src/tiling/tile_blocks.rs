@@ -224,12 +224,12 @@ impl TileBlocksMut<'_> {
 
   #[inline(always)]
   pub fn set_block_size(&mut self, bo: TileBlockOffset, bsize: BlockSize) {
-    let n4_w = bsize.width_mi();
-    let n4_h = bsize.height_mi();
+    let n4_w = bsize.width_mi() as u8;
+    let n4_h = bsize.height_mi() as u8;
     self.for_each(bo, bsize, |block| {
       block.bsize = bsize;
       block.n4_w = n4_w;
-      block.n4_h = n4_h
+      block.n4_h = n4_h;
     });
   }
 

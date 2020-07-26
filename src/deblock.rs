@@ -1132,7 +1132,7 @@ fn filter_v_edge<T: Pixel>(
   let tx_edge = bo.0.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(blocks, bo, &p.as_const());
-    let block_edge = bo.0.x & (block.n4_w - 1) == 0;
+    let block_edge = bo.0.x & (block.n4_w as usize - 1) == 0;
     let filter_size =
       deblock_size(block, prev_block, &p.as_const(), pli, true, block_edge);
     if filter_size > 0 {
@@ -1179,7 +1179,7 @@ fn sse_v_edge<T: Pixel>(
   let tx_edge = bo.0.x >> xdec & (txsize.width_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_left(blocks, bo, rec_plane);
-    let block_edge = bo.0.x & (block.n4_w - 1) == 0;
+    let block_edge = bo.0.x & (block.n4_w as usize - 1) == 0;
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {
@@ -1228,7 +1228,7 @@ fn filter_h_edge<T: Pixel>(
   let tx_edge = bo.0.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(blocks, bo, &p.as_const());
-    let block_edge = bo.0.y & (block.n4_h - 1) == 0;
+    let block_edge = bo.0.y & (block.n4_h as usize - 1) == 0;
     let filter_size =
       deblock_size(block, prev_block, &p.as_const(), pli, false, block_edge);
     if filter_size > 0 {
@@ -1275,7 +1275,7 @@ fn sse_h_edge<T: Pixel>(
   let tx_edge = bo.0.y >> ydec & (txsize.height_mi() - 1) == 0;
   if tx_edge {
     let prev_block = deblock_up(blocks, bo, rec_plane);
-    let block_edge = bo.0.y & (block.n4_h - 1) == 0;
+    let block_edge = bo.0.y & (block.n4_h as usize - 1) == 0;
     let filter_size =
       deblock_size(block, prev_block, rec_plane, pli, true, block_edge);
     if filter_size > 0 {

@@ -167,11 +167,11 @@ pub struct Block {
   pub ref_frames: [RefType; 2],
   pub mv: [MotionVector; 2],
   // note: indexes are reflist index, NOT the same as libaom
-  pub neighbors_ref_counts: [usize; INTER_REFS_PER_FRAME],
+  pub neighbors_ref_counts: [u8; INTER_REFS_PER_FRAME],
   pub cdef_index: u8,
   pub bsize: BlockSize,
-  pub n4_w: usize, /* block width in the unit of mode_info */
-  pub n4_h: usize, /* block height in the unit of mode_info */
+  pub n4_w: u8, /* block width in the unit of mode_info */
+  pub n4_h: u8, /* block height in the unit of mode_info */
   pub txsize: TxSize,
   // The block-level deblock_deltas are left-shifted by
   // fi.deblock.block_delta_shift and added to the frame-configured
@@ -200,8 +200,8 @@ impl Default for Block {
       neighbors_ref_counts: [0; INTER_REFS_PER_FRAME],
       cdef_index: 0,
       bsize: BLOCK_64X64,
-      n4_w: BLOCK_64X64.width_mi(),
-      n4_h: BLOCK_64X64.height_mi(),
+      n4_w: BLOCK_64X64.width_mi() as u8,
+      n4_h: BLOCK_64X64.height_mi() as u8,
       txsize: TX_64X64,
       deblock_deltas: [0, 0, 0, 0],
       segmentation_idx: 0,
@@ -956,7 +956,7 @@ impl<'a> ContextWriter<'a> {
       let cand =
         &bc.blocks[bo.with_offset(col_offset + i as isize, row_offset)];
 
-      let n4_w = cand.n4_w;
+      let n4_w = cand.n4_w as usize;
       let mut len = cmp::min(target_n4_w, n4_w);
       if use_step_16 {
         len = cmp::max(n4_w_16, len);
@@ -1022,7 +1022,7 @@ impl<'a> ContextWriter<'a> {
     while i < end_mi {
       let cand =
         &bc.blocks[bo.with_offset(col_offset, row_offset + i as isize)];
-      let n4_h = cand.n4_h;
+      let n4_h = cand.n4_h as usize;
       let mut len = cmp::min(target_n4_h, n4_h);
       if use_step_16 {
         len = cmp::max(n4_h_16, len);
@@ -1286,7 +1286,7 @@ impl<'a> ContextWriter<'a> {
             &mut ref_diff_mvs,
           );
 
-          idx += if pass == 0 { blk.n4_w } else { blk.n4_h };
+          idx += if pass == 0 { blk.n4_w } else { blk.n4_h } as usize;
         }
       }
 
@@ -1427,7 +1427,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn ref_count_ctx(counts0: usize, counts1: usize) -> usize {
+  pub fn ref_count_ctx(counts0: u8, counts1: u8) -> usize {
     if counts0 < counts1 {
       0
     } else if counts0 == counts1 {
