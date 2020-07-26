@@ -10,6 +10,7 @@
 use rav1e::prelude::Frame as Rav1eFrame;
 use wasm_bindgen::prelude::*;
 
+use crate::web;
 use crate::web::Canvas;
 
 /// Wrapper around `v_frame::frame::Frame<u16>`.
@@ -27,8 +28,29 @@ impl Frame {
   }
 }
 
+use wasm_bindgen::JsCast;
+use web_sys;
+use web_sys::{Element, HtmlImageElement};
+
 #[wasm_bindgen]
 pub fn do_sth() -> String {
-  let canvas = Canvas::from_id("canvas");
-  format!("{:?}", canvas)
+  let img_id = "octocat";
+  let img = web::document()
+    .get_element_by_id(img_id)
+    .unwrap()
+    .dyn_into::<HtmlImageElement>()
+    .map_err(|e: Element| {
+      panic!("Err while casting document.getElementById(\"{}\") to HtmlImageElement: {:?}", img_id, e)
+    })
+    .unwrap();
+
+  let canvas = Canvas::new(img.width(), img.height());
+  canvas.draw_image(&img);
+  let data = canvas.data_i444();
+
+  let mut ret = String::new();
+  for i in data.iter() {
+    ret.push_str(&*format!("{:?}\n\n", i));
+  }
+  ret
 }
