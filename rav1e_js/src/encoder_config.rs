@@ -9,29 +9,23 @@
 
 #![allow(non_snake_case)]
 
-use rav1e::prelude::{
-  ChromaSamplePosition, ContentLight, EncoderConfig as Rav1eEncoderConfig,
-  PixelRange, Rational, SpeedSettings, Tune,
-};
+use rav1e::prelude::*;
 use serde_json;
 use v_frame::pixel::ChromaSampling;
-
 use wasm_bindgen::prelude::*;
 
-/// Wrapper around the encoder configuration (`rav1e::api::config::encoder::EncoderConfig`).
-///
 /// Encoder settings which impact the produced bitstream.
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct EncoderConfig {
-  pub(crate) conf: Rav1eEncoderConfig,
+  pub(crate) conf: rav1e::EncoderConfig,
 }
 
 #[wasm_bindgen]
 impl EncoderConfig {
   #[wasm_bindgen(constructor)]
   pub fn new() -> Self {
-    EncoderConfig { conf: Rav1eEncoderConfig::default() }
+    EncoderConfig { conf: rav1e::EncoderConfig::default() }
   }
 
   pub fn debug(&self) -> String {

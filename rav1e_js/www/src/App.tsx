@@ -9,14 +9,61 @@
 
 import React, { useEffect } from 'react';
 
-import { do_sth } from "rav1e";
+import { ChromaSampling, Encoder, EncoderConfig, Frame } from "rav1e";
 
 export default function App() {
+	// useEffect, because then it runs after the browser rendered the display content
 	useEffect(() => {
-		console.log(do_sth());
+		// create Frame from ferris.png
+		// Hint: all frames need to have the same dimensions!
+		const ferris_img = document.getElementById("ferris") as HTMLImageElement;
+		const ferris_f = Frame.from_img(ferris_img);
+		console.log(ferris_f.debug());
+
+		// create Frame from octocat.png
+		const octocat_img = document.getElementById("octocat") as HTMLImageElement;
+		const octocat_f = Frame.from_img(octocat_img);
+		console.log(octocat_f.debug());
+
+		// configure encoder
+		const enc = new Encoder(
+			new EncoderConfig()
+				.setDim(ferris_img.width, ferris_img.height)
+				// .setColorDescription(...) (is not available yet)
+				.setChromaSampling(ChromaSampling.Cs444)
+		);
+
+		// send ferris frames to encoder
+		for (let i = 0; i < 10; i++) {
+			enc.sendFrame(ferris_f);
+		}
+		// send octocat frames to encoder
+		for (let i = 0; i < 10; i++) {
+			enc.sendFrame(octocat_f);
+		}
+
+		// flush the encoder
+		enc.flush();
+		console.log("flushed")
+
+		// encode frames
+		const receivePacket = () => {
+			try {
+				const p = enc.receivePacket();
+				console.log(p.display());
+			} catch (e) {
+				if (e === "encoded") {
+					console.warn(e);
+					receivePacket();
+				} else {
+					console.warn(e);
+				}
+			}
+		}
+		for (let i = 0; i < 25; i++) {
+			receivePacket();
+		}
 	})
 
-	return (
-		<></>
-	);
+	return (<></>);
 }

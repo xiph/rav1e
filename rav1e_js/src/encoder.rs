@@ -9,19 +9,16 @@
 
 #![allow(non_snake_case)]
 
-use rav1e::prelude::{Config, Context, EncoderStatus};
-
+use rav1e::prelude::*;
 use wasm_bindgen::prelude::*;
 
 use crate::utils::construct_js_err;
 use crate::{EncoderConfig, Frame, Packet};
 
-/// Wrapper around the encoder context (`rav1e::api::context::Context<u16>`).
-///
-/// Contains the encoding state.
+/// Contains the encoding state
 #[wasm_bindgen]
 pub struct Encoder {
-  ctx: Context<u16>,
+  ctx: Context<u8>,
 }
 
 #[wasm_bindgen]
