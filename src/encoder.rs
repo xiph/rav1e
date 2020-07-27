@@ -3048,8 +3048,6 @@ pub(crate) fn build_half_res_pmvs<T: Pixel>(
   tile_sbo: TileSuperBlockOffset,
   tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
 ) -> BlockPmv {
-  let estimate_motion_ss2 = crate::me::DiamondSearch::estimate_motion_ss2;
-
   let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
   let mut pmvs: BlockPmv = [[None; REF_FRAMES]; 5];
 
@@ -3200,8 +3198,6 @@ pub(crate) fn build_full_res_pmvs<T: Pixel>(
   tile_sbo: TileSuperBlockOffset,
   half_res_pmvs: &[[[Option<MotionVector>; REF_FRAMES]; 5]],
 ) {
-  let estimate_motion = crate::me::DiamondSearch::estimate_motion;
-
   let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
   let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
   let half_res_pmvs_this_block = half_res_pmvs[sby * ts.sb_width + sbx];
