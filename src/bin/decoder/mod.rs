@@ -16,7 +16,7 @@ pub mod y4m;
 pub trait Decoder {
   fn get_video_details(&self) -> VideoDetails;
   fn read_frame<T: Pixel>(
-    &mut self, cfg: &VideoDetails,
+    &mut self, ctx: &Context<T>, cfg: &VideoDetails,
   ) -> Result<Frame<T>, DecodeError>;
 }
 

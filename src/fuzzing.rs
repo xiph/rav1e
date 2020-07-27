@@ -153,13 +153,8 @@ pub fn fuzz_encode(data: &[u8]) {
   let mut context: Context<u8> = res.unwrap();
 
   let frame_count = g.g::<u8>() % 3 + 1;
+  let mut frame = context.new_frame();
   let frames = (0..frame_count).map(|_| {
-    let mut frame = Frame::new(
-      config.enc.width,
-      config.enc.height,
-      config.enc.chroma_sampling,
-    );
-
     for plane in &mut frame.planes {
       let stride = plane.cfg.stride;
       for row in plane.data_origin_mut().chunks_mut(stride) {
@@ -169,7 +164,7 @@ pub fn fuzz_encode(data: &[u8]) {
       }
     }
 
-    frame
+    frame.clone()
   });
 
   let _ = encode_frames(&mut context, frames);
