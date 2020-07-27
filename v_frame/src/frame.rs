@@ -13,10 +13,20 @@ use crate::plane::*;
 use crate::serialize::{Deserialize, Serialize};
 
 // One video frame.
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Frame<T: Pixel> {
   /// Planes constituting the frame.
   pub planes: [Plane<T>; 3],
+  /// Frame configuration
+  pub config: Option<FrameConfig>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct FrameConfig {
+  /// Width (of the luma plane)
+  pub width: usize,
+  /// Height (of the luma plane)
+  pub height: usize,
 }
 
 impl<T: Pixel> Frame<T> {
@@ -57,6 +67,7 @@ impl<T: Pixel> Frame<T> {
           chroma_padding_y,
         ),
       ],
+      config: Some(FrameConfig { width: luma_width, height: luma_height }),
     }
   }
 }

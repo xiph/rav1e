@@ -9,14 +9,14 @@
 
 use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
+use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::{FrameInvariants, FrameState};
 use crate::frame::*;
 use crate::hawktracer::*;
+use crate::rayon::iter::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 
-use crate::cpu_features::CpuFeatureLevel;
-use crate::rayon::iter::*;
 use std::cmp;
 
 cfg_if::cfg_if! {
@@ -335,6 +335,7 @@ pub fn cdef_block8_frame<T: Pixel>(
         Plane::new(w_8 << 3 >> xdec, h_8 << 3 >> ydec, xdec, ydec, 0, 0)
       },
     ],
+    config: None,
   }
 }
 
@@ -363,6 +364,7 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
         };
         [new_plane(0), new_plane(1), new_plane(2)]
       },
+      config: None,
     }
   };
   // Copy data into padded frame
@@ -420,6 +422,7 @@ pub fn cdef_padded_frame_copy<T: Pixel>(in_frame: &Frame<T>) -> Frame<u16> {
       };
       [new_plane(0), new_plane(1), new_plane(2)]
     },
+    config: None,
   };
 
   for p in 0..MAX_PLANES {
@@ -657,6 +660,7 @@ pub fn cdef_filter_tile<T: Pixel>(
       };
       [new_plane(0), new_plane(1), new_plane(2)]
     },
+    config: None,
   };
 
   for p in 0..planes {

@@ -216,11 +216,21 @@ impl<T: Pixel> fmt::Display for Packet<T> {
 pub trait IntoFrame<T: Pixel> {
   /// Converts the type into a tuple of frame and parameters.
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>);
+
+  /// Get frame configuration
+  fn config(&self) -> Option<FrameConfig>;
 }
 
 impl<T: Pixel> IntoFrame<T> for Option<Arc<Frame<T>>> {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (self, None)
+  }
+
+  fn config(&self) -> Option<FrameConfig> {
+    match self {
+      Some(frame) => frame.config,
+      None => None,
+    }
   }
 }
 
@@ -228,11 +238,19 @@ impl<T: Pixel> IntoFrame<T> for Arc<Frame<T>> {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(self), None)
   }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.config
+  }
 }
 
 impl<T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, FrameParameters) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(self.0), Some(self.1))
+  }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.0.config
   }
 }
 
@@ -240,11 +258,19 @@ impl<T: Pixel> IntoFrame<T> for (Arc<Frame<T>>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(self.0), self.1)
   }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.0.config
+  }
 }
 
 impl<T: Pixel> IntoFrame<T> for Frame<T> {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self)), None)
+  }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.config
   }
 }
 
@@ -252,10 +278,18 @@ impl<T: Pixel> IntoFrame<T> for (Frame<T>, FrameParameters) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self.0)), Some(self.1))
   }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.0.config
+  }
 }
 
 impl<T: Pixel> IntoFrame<T> for (Frame<T>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self.0)), self.1)
+  }
+
+  fn config(&self) -> Option<FrameConfig> {
+    self.0.config
   }
 }

@@ -119,6 +119,16 @@ impl<T: Pixel> Context<T> {
       self.is_flushing = true;
     }
 
+    // validate frame
+    let ec = self.config;
+    match frame.config() {
+      Some(fc) => {
+        assert!(ec.width == fc.width);
+        assert!(ec.height == fc.height);
+      }
+      None => {}
+    };
+
     let inner = &mut self.inner;
     let pool = &mut self.pool;
 

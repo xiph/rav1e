@@ -8,12 +8,12 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use num_derive::FromPrimitive;
+pub use v_frame::frame::*;
 
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
-use crate::util::*;
-
 use crate::tiling::*;
+use crate::util::*;
 
 mod plane;
 pub use plane::*;
@@ -42,8 +42,6 @@ pub struct FrameParameters {
   pub opaque: Option<Box<dyn std::any::Any + Send>>,
 }
 
-pub use v_frame::frame::Frame;
-
 /// Public Trait Interface for Frame Allocation
 pub trait FrameAlloc {
   /// Initialise new frame default type
@@ -58,12 +56,7 @@ impl<T: Pixel> FrameAlloc for Frame<T> {
   fn new(
     width: usize, height: usize, chroma_sampling: ChromaSampling,
   ) -> Self {
-    v_frame::frame::Frame::new_with_padding(
-      width,
-      height,
-      chroma_sampling,
-      LUMA_PADDING,
-    )
+    Frame::new_with_padding(width, height, chroma_sampling, LUMA_PADDING)
   }
 }
 
