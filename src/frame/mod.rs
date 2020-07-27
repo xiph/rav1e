@@ -45,7 +45,7 @@ pub struct FrameParameters {
 pub use v_frame::frame::Frame;
 
 /// Public Trait Interface for Frame Allocation
-pub trait FrameAlloc {
+pub(crate) trait FrameAlloc {
   /// Initialise new frame default type
   fn new(width: usize, height: usize, chroma_sampling: ChromaSampling)
     -> Self;

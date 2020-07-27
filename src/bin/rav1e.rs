@@ -109,7 +109,7 @@ impl<D: Decoder> Source<D> {
       }
     }
 
-    match self.input.read_frame(&video_info) {
+    match self.input.read_frame(ctx, &video_info) {
       Ok(frame) => {
         match video_info.bit_depth {
           8 | 10 | 12 => {}

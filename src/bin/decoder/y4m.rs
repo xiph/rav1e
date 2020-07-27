@@ -37,14 +37,13 @@ impl Decoder for y4m::Decoder<Box<dyn Read>> {
   }
 
   fn read_frame<T: Pixel>(
-    &mut self, cfg: &VideoDetails,
+    &mut self, ctx: &Context<T>, cfg: &VideoDetails,
   ) -> Result<Frame<T>, DecodeError> {
     let bytes = self.get_bytes_per_sample();
     self
       .read_frame()
       .map(|frame| {
-        let mut f: Frame<T> =
-          Frame::new(cfg.width, cfg.height, cfg.chroma_sampling);
+        let mut f = ctx.new_frame();
 
         let (chroma_width, _) =
           cfg.chroma_sampling.get_chroma_dimensions(cfg.width, cfg.height);
