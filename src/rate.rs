@@ -476,26 +476,27 @@ impl RCDeserialize {
   }
 
   // Read metrics for the next frame.
-  fn parse_metrics(&mut self) -> Result<RCFrameMetrics, ()> {
+  fn parse_metrics(&mut self) -> Result<RCFrameMetrics, String> {
     debug_assert!(self.pass2_buffer_fill >= TWOPASS_PACKET_SZ);
     let ft_val = self.unbuffer_val(4);
     let show_frame = (ft_val >> 31) != 0;
     let fti = (ft_val & 0x7FFFFFFF) as usize;
     // Make sure the frame type is valid.
     if fti > FRAME_NSUBTYPES {
-      return Err(());
+      return Err("Invalid frame type".to_string());
     }
     let log_scale_q24 = self.unbuffer_val(4) as i32;
     Ok(RCFrameMetrics { log_scale_q24, fti, show_frame })
   }
 
   // Read the summary header data.
-  pub(crate) fn parse_summary(&mut self) -> Result<RCSummary, ()> {
+  pub(crate) fn parse_summary(&mut self) -> Result<RCSummary, String> {
     // check the magic value and version number.
-    if self.unbuffer_val(4) != TWOPASS_MAGIC as i64
-      || self.unbuffer_val(4) != TWOPASS_VERSION as i64
-    {
-      return Err(());
+    if self.unbuffer_val(4) != TWOPASS_MAGIC as i64 {
+      return Err("Magic value mismatch".to_string());
+    }
+    if self.unbuffer_val(4) != TWOPASS_VERSION as i64 {
+      return Err("Version number mismatch".to_string());
     }
     let mut s = RCSummary::default();
 
@@ -504,22 +505,24 @@ impl RCDeserialize {
     // Otherwise we probably got the placeholder data from an aborted
     //  pass 1.
     if s.ntus < 1 {
-      return Err(());
+      return Err("No TUs found in first pass summary".to_string());
     }
     let mut total: i32 = 0;
     for nframes in s.nframes.iter_mut() {
       let n = self.unbuffer_val(4) as i32;
       if n < 0 {
-        return Err(());
+        return Err("Got negative frame count".to_string());
       }
-      total = total.checked_add(n).ok_or(())?;
+      total = total
+        .checked_add(n)
+        .ok_or_else(|| "Frame count too large".to_string())?;
 
       *nframes = n;
     }
 
     // We can't have more TUs than frames.
     if s.ntus > total {
-      return Err(());
+      return Err("More TUs than frames".to_string());
     }
 
     for exp in s.exp.iter_mut() {
@@ -529,7 +532,7 @@ impl RCDeserialize {
     for scale_sum in s.scale_sum.iter_mut() {
       *scale_sum = self.unbuffer_val(8);
       if *scale_sum < 0 {
-        return Err(());
+        return Err("Got negative scale sum".to_string());
       }
     }
     Ok(s)
@@ -1563,7 +1566,7 @@ impl RCState {
   //
   // It returns the amount of data consumed in the process or
   // an empty error on parsing failure.
-  fn twopass_parse_summary(&mut self, buf: &[u8]) -> Result<usize, ()> {
+  fn twopass_parse_summary(&mut self, buf: &[u8]) -> Result<usize, String> {
     let consumed = self.des.buffer_fill(buf, 0, TWOPASS_HEADER_SZ);
     if self.des.pass2_buffer_fill >= TWOPASS_HEADER_SZ {
       self.des.pass2_buffer_pos = 0;
@@ -1622,9 +1625,9 @@ impl RCState {
 
   pub(crate) fn parse_frame_data_packet(
     &mut self, buf: &[u8],
-  ) -> Result<(), ()> {
+  ) -> Result<(), String> {
     if buf.len() != TWOPASS_PACKET_SZ {
-      return Err(());
+      return Err("Incorrect buffer size".to_string());
     }
 
     self.des.buffer_fill(buf, 0, TWOPASS_PACKET_SZ);
@@ -1642,8 +1645,9 @@ impl RCState {
 
       if frames_needed > 0 {
         if self.nframe_metrics >= self.frame_metrics.len() {
-          // We read too many frames without finding enough TUs.
-          return Err(());
+          return Err(
+            "Read too many frames without finding enough TUs".to_string(),
+          );
         }
 
         let mut fmi = self.frame_metrics_head + self.nframe_metrics;
@@ -1665,7 +1669,7 @@ impl RCState {
           self.cur_metrics = self.frame_metrics[self.frame_metrics_head];
         }
       } else {
-        return Err(());
+        return Err("No frames needed".to_string());
       }
     }
 
@@ -1681,7 +1685,7 @@ impl RCState {
   // consumed in the process or an empty error on parsing failure.
   fn twopass_parse_frame_data(
     &mut self, maybe_buf: Option<&[u8]>, mut consumed: usize,
-  ) -> Result<usize, ()> {
+  ) -> Result<usize, String> {
     {
       if self.frame_metrics.is_empty() {
         // We're using a whole-file buffer.
@@ -1718,8 +1722,10 @@ impl RCState {
               let m = self.des.parse_metrics()?;
               // Add them to the circular buffer.
               if self.nframe_metrics >= self.frame_metrics.len() {
-                // We read too many frames without finding enough TUs.
-                return Err(());
+                return Err(
+                  "Read too many frames without finding enough TUs"
+                    .to_string(),
+                );
               }
               let mut fmi = self.frame_metrics_head + self.nframe_metrics;
               if fmi >= self.frame_metrics.len() {
@@ -1774,7 +1780,7 @@ impl RCState {
   // if the buffer hadn't been enough or other errors happened.
   pub(crate) fn twopass_in(
     &mut self, maybe_buf: Option<&[u8]>,
-  ) -> Result<usize, ()> {
+  ) -> Result<usize, String> {
     let mut consumed = 0;
     self.init_second_pass();
     // If we haven't got a valid summary header yet, try to parse one.
