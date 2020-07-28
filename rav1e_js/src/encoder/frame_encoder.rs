@@ -10,72 +10,76 @@
 #![allow(non_snake_case)]
 
 use rav1e::prelude::*;
+use std::ops::{Deref, DerefMut};
 use wasm_bindgen::prelude::*;
 
+use crate::encoder::Encoder;
 use crate::utils::construct_js_err;
 use crate::{EncoderConfig, Frame, Packet};
 
 /// Contains the encoding state
 #[wasm_bindgen]
-pub struct Encoder {
+pub struct FrameEncoder {
   ctx: Context<u8>,
 }
 
+impl Encoder for FrameEncoder {
+  fn ctx<'a>(&'a self) -> Box<dyn Deref<Target = Context<u8>> + 'a> {
+    Box::new(&self.ctx)
+  }
+
+  fn ctx_mut<'a>(
+    &'a mut self,
+  ) -> Box<dyn DerefMut<Target = Context<u8>> + 'a> {
+    Box::new(&mut self.ctx)
+  }
+}
+
 #[wasm_bindgen]
-impl Encoder {
+impl FrameEncoder {
   #[wasm_bindgen(constructor)]
-  pub fn fromEncoderConfig(conf: EncoderConfig) -> Result<Encoder, JsValue> {
+  pub fn fromEncoderConfig(
+    conf: EncoderConfig,
+  ) -> Result<FrameEncoder, JsValue> {
     let cfg = Config::new().with_encoder_config(conf.conf);
 
     match cfg.new_context() {
-      Ok(c) => Ok(Encoder { ctx: c }),
+      Ok(ctx) => Ok(Self { ctx }),
       Err(e) => Err(construct_js_err(e, "Invalid EncoderConfig")),
     }
   }
 
-  pub fn default() -> Result<Encoder, JsValue> {
+  pub fn default() -> Result<FrameEncoder, JsValue> {
     Self::fromEncoderConfig(EncoderConfig::new())
   }
 
   pub fn debug(&self) -> String {
-    format!("{:?}", self.ctx)
+    self.debug_msg()
   }
 
   /// Allocates and returns a new frame.
   pub fn newFrame(&self) -> Frame {
-    Frame { f: self.ctx.new_frame() }
+    self.new_frame()
   }
 
   /// Sends the frame for encoding.
   ///
   /// This method adds the frame into the frame queue and runs the first passes of the look-ahead computation.
   pub fn sendFrame(&mut self, frame: &Frame) -> Result<(), JsValue> {
-    match self.ctx.send_frame(frame.f.clone()) {
-      Ok(_) => Ok(()),
-      Err(e) => match e {
-        EncoderStatus::EnoughData => Err(construct_js_err(
-          e,
-          "Unable to append frame to the internal queue",
-        )),
-        _ => Err(construct_js_err(e, "")),
-      },
-    }
+    self.send_frame(frame)
   }
 
   /// Flushes the encoder.
   ///
   /// Flushing signals the end of the video. After the encoder has been flushed, no additional frames are accepted.
   pub fn flush(&mut self) {
-    self.ctx.flush();
+    self.flush_it();
   }
 
   /// Encodes the next frame and returns the encoded data.
   ///
   /// This method is where the main encoding work is done.
   pub fn receivePacket(&mut self) -> Result<Packet, JsValue> {
-    match self.ctx.receive_packet() {
-      Ok(packet) => Ok(Packet { p: packet }),
-      Err(e) => Err(construct_js_err(e, "")),
-    }
+    self.receive_packet()
   }
 }

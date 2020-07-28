@@ -9,7 +9,7 @@
 
 import React, { useEffect } from 'react';
 
-import { ChromaSampling, Encoder, EncoderConfig, Frame } from "rav1e";
+import { ChromaSampling, FrameEncoder, EncoderConfig, Frame } from "rav1e";
 
 export default function App() {
 	// useEffect, because then it runs after the browser rendered the display content
@@ -26,7 +26,7 @@ export default function App() {
 		console.log(octocat_f.debug());
 
 		// configure encoder
-		const enc = new Encoder(
+		const enc = new FrameEncoder(
 			new EncoderConfig()
 				.setDim(ferris_img.width, ferris_img.height)
 				// .setColorDescription(...) (is not available yet)
