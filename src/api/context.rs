@@ -376,13 +376,15 @@ impl<T: Pixel> Context<T> {
   /// enum.EncoderStatus.html#variant.LimitReached
   ///
   /// It will return a `RcData::Summary` once the encoder is flushed.
-  pub fn rc_receive_pass_data(&mut self) -> RcData {
+  pub fn rc_receive_pass_data(&mut self) -> Option<RcData> {
     if self.inner.done_processing() && self.inner.rc_state.pass1_data_retrieved
     {
       let data = self.inner.rc_state.emit_summary();
-      RcData::Summary(data.to_vec().into_boxed_slice())
+      Some(RcData::Summary(data.to_vec().into_boxed_slice()))
+    } else if self.inner.rc_state.pass1_data_retrieved {
+      None
     } else if let Some(data) = self.inner.rc_state.emit_frame_data() {
-      RcData::Frame(data.to_vec().into_boxed_slice())
+      Some(RcData::Frame(data.to_vec().into_boxed_slice()))
     } else {
       unreachable!(
         "The encoder received more frames than its internal limit allows"
