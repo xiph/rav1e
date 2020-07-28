@@ -18,8 +18,8 @@ pub enum Error {
   #[error("Incompatible version {0}")]
   InvalidVersion(i64),
   /// The summary provided is possibly corrupted
-  #[error("The summary content is invalid")]
-  CorruptedSummary,
+  #[error("The summary content is invalid: {0}")]
+  CorruptedSummary(String),
 }
 
 /// Rate control configuration
@@ -33,12 +33,11 @@ pub use crate::rate::RCSummary as RateControlSummary;
 
 impl RateControlSummary {
   /// Deserializes a byte slice into a RateControlSummary
-  // TODO: improve the error reporting later
   pub(crate) fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
     let mut de = RCDeserialize::default();
     let _ = de.buffer_fill(bytes, 0, TWOPASS_HEADER_SZ);
 
-    de.parse_summary().map_err(|_| Error::CorruptedSummary)
+    de.parse_summary().map_err(Error::CorruptedSummary)
   }
 }
 
