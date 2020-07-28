@@ -21,8 +21,12 @@ PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 <body>
   <noscript>You need to enable JavaScript to run this app.</noscript>
 
-  <img src="octocat.png" alt="Octocat" id="octocat" width="200px" height="200px"></img>
-  <img src="ferris.png" alt="Ferris" id="ferris" width="200px" height="200px"></img>
+  <video id="video" controls>
+    <!-- from https://test-videos.co.uk/ -->
+    <source src="bunny.webm" type="video/webm">
+    <source src="bunny.mp4" type="video/mp4">
+    Sorry, your browser doesn't support embedded webm and mp4 videos.
+  </video>
 
   <div id="root"></div>
 </body>

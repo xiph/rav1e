@@ -15,6 +15,7 @@ use wasm_bindgen::JsCast;
 use web_sys;
 use web_sys::{
   CanvasRenderingContext2d, Element, HtmlCanvasElement, HtmlImageElement,
+  HtmlVideoElement,
 };
 
 use crate::web;
@@ -61,7 +62,26 @@ impl Canvas {
     let dx = 0.0;
     let dy = 0.0;
 
-    self.context.draw_image_with_html_image_element(img, dx, dy).unwrap();
+    self
+      .context
+      .draw_image_with_html_image_element(img, dx, dy)
+      .expect("failed to draw image onto HtmlImageElement");
+  }
+
+  /// Draw an `HtmlImageElement` onto the canvas
+  ///
+  /// ## Read more
+  /// * [`CanvasRenderingContext2D.drawImage()`](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage)
+  pub fn draw_video_frame(&self, video: &HtmlVideoElement) {
+    // The x- and y-axis coordinates in the destination canvas at which to place the top-left
+    // corner of the source image.
+    let dx = 0.0;
+    let dy = 0.0;
+
+    self
+      .context
+      .draw_image_with_html_video_element(video, dx, dy)
+      .expect("failed to draw video frame onto HtmlCanvasElement");
   }
 
   /// Get `CanvasRenderingContext2d.ImageData.data` (`RGBA`)

@@ -9,7 +9,7 @@
 
 use rav1e;
 use wasm_bindgen::prelude::*;
-use web_sys::{HtmlCanvasElement, HtmlImageElement};
+use web_sys::{HtmlCanvasElement, HtmlImageElement, HtmlVideoElement};
 
 use crate::web::Canvas;
 
@@ -34,6 +34,12 @@ impl Frame {
 
   pub fn from_canvas(canvas: &HtmlCanvasElement) -> Self {
     let canvas = Canvas::from(canvas);
+    Frame { f: canvas.create_frame() }
+  }
+
+  pub fn from_video(video: &HtmlVideoElement) -> Self {
+    let canvas = Canvas::new(video.video_width(), video.video_height());
+    canvas.draw_video_frame(video);
     Frame { f: canvas.create_frame() }
   }
 }

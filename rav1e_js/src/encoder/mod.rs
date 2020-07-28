@@ -17,6 +17,9 @@ use crate::{Frame, Packet};
 mod frame_encoder;
 pub use frame_encoder::FrameEncoder;
 
+mod video_encoder;
+pub use video_encoder::VideoEncoder;
+
 /// Implements basic encoder functionality.
 ///
 /// ## Workaround
