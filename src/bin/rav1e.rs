@@ -204,7 +204,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   if let Some(passfile) = pass1file.as_mut() {
     if emit_pass_data {
       match ctx.rc_receive_pass_data() {
-        RcData::Frame(outbuf) => {
+        Some(RcData::Frame(outbuf)) => {
           let len = outbuf.len() as u64;
           passfile.write_all(&len.to_be_bytes()).map_err(|e| {
             e.context("Unable to write to two-pass data file.")
@@ -214,7 +214,7 @@ fn process_frame<T: Pixel, D: Decoder>(
             e.context("Unable to write to two-pass data file.")
           })?;
         }
-        RcData::Summary(outbuf) => {
+        Some(RcData::Summary(outbuf)) => {
           // The last packet of rate control data we get is the summary data.
           // Let's put it at the start of the file.
           passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
@@ -230,6 +230,7 @@ fn process_frame<T: Pixel, D: Decoder>(
             e.context("Unable to write to two-pass data file.")
           })?;
         }
+        None => {}
       }
     }
   }

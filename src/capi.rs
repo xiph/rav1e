@@ -264,7 +264,7 @@ impl EncContext {
     }
   }
 
-  fn rc_receive_pass_data(&mut self) -> rav1e::RcData {
+  fn rc_receive_pass_data(&mut self) -> Option<rav1e::RcData> {
     match self {
       EncContext::U8(ctx) => ctx.rc_receive_pass_data(),
       EncContext::U16(ctx) => ctx.rc_receive_pass_data(),
@@ -873,6 +873,11 @@ pub enum RcDataKind {
   /// The information contained is required to encode its matching
   /// frame in a second pass encoding.
   Frame,
+  /// There is no pass data available for now
+  ///
+  /// This is emitted if rav1e_rc_receive_pass_data is called more
+  /// often than it should.
+  Empty,
 }
 
 /// Return the Rate Control Summary Packet size
@@ -900,8 +905,9 @@ pub unsafe extern fn rav1e_rc_receive_pass_data(
 ) -> RcDataKind {
   use crate::api::RcData::*;
   let (buf, kind) = match (*ctx).ctx.rc_receive_pass_data() {
-    Summary(data) => (data, RcDataKind::Summary),
-    Frame(data) => (data, RcDataKind::Frame),
+    Some(Summary(data)) => (data, RcDataKind::Summary),
+    Some(Frame(data)) => (data, RcDataKind::Frame),
+    None => return RcDataKind::Empty,
   };
 
   let mut full_buf = Vec::with_capacity(buf.len() + 8);
