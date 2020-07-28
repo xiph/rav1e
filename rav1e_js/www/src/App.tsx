@@ -7,63 +7,61 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-import React, { useEffect } from 'react';
+import React from 'react';
 
-import { ChromaSampling, FrameEncoder, EncoderConfig, Frame } from "rav1e";
+import { ChromaSampling, EncoderConfig, VideoEncoder } from "rav1e";
 
 export default function App() {
-	// useEffect, because then it runs after the browser rendered the display content
-	useEffect(() => {
-		// create Frame from ferris.png
-		// Hint: all frames need to have the same dimensions!
-		const ferris_img = document.getElementById("ferris") as HTMLImageElement;
-		const ferris_f = Frame.from_img(ferris_img);
-		console.log(ferris_f.debug());
+	const video = document.getElementById("video") as HTMLVideoElement;
 
-		// create Frame from octocat.png
-		const octocat_img = document.getElementById("octocat") as HTMLImageElement;
-		const octocat_f = Frame.from_img(octocat_img);
-		console.log(octocat_f.debug());
+	let init = () => {
+		console.log(video.videoWidth, video.videoHeight);
 
 		// configure encoder
-		const enc = new FrameEncoder(
+		const enc = new VideoEncoder(
 			new EncoderConfig()
-				.setDim(ferris_img.width, ferris_img.height)
+				.setSpeed(10)
+				.setDim(video.videoWidth, video.videoHeight)
 				// .setColorDescription(...) (is not available yet)
+				// ChromaSampling needs to fit to the ChromaSampling of the Frame
 				.setChromaSampling(ChromaSampling.Cs444)
 		);
+		enc.sendVideo(video);
 
-		// send ferris frames to encoder
-		for (let i = 0; i < 10; i++) {
-			enc.sendFrame(ferris_f);
-		}
-		// send octocat frames to encoder
-		for (let i = 0; i < 10; i++) {
-			enc.sendFrame(octocat_f);
-		}
+		video.addEventListener("ended", (e) => {
+			enc.flush()
 
-		// flush the encoder
-		enc.flush();
-		console.log("flushed")
-
-		// encode frames
-		const receivePacket = () => {
-			try {
-				const p = enc.receivePacket();
-				console.log(p.display());
-			} catch (e) {
-				if (e === "encoded") {
-					console.warn(e);
-					receivePacket();
-				} else {
-					console.warn(e);
+			// encode all frames
+			while (true) {
+				try {
+					const p = enc.receivePacket();
+					console.log(p.display());
+				} catch (e) {
+					if (e === "encoded") {
+						console.warn(e);
+					} else if (e === "limit reached") {
+						console.warn(e);
+						break;
+					} else {
+						console.error(e);
+					}
 				}
 			}
-		}
-		for (let i = 0; i < 25; i++) {
-			receivePacket();
-		}
-	})
+		})
+	}
 
-	return (<></>);
+	// this is needed to support more browsers
+	if (video.videoWidth !== 0 && video.videoHeight !== 0) {
+		init()
+	} else {
+		video.onloadedmetadata = init;
+	}
+
+
+
+	return (<>
+		<p>
+			Please open your developer console and start the video!
+		</p>
+	</>);
 }
