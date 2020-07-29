@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -636,7 +636,7 @@ impl<T: Pixel> ContextInner<T> {
         input_hres: fs.input_hres.clone(),
         input_qres: fs.input_qres.clone(),
         cdfs: fs.cdfs,
-        frame_mvs: fs.frame_mvs.clone(),
+        frame_me_stats: fs.frame_me_stats.clone(),
         output_frameno,
         segmentation: fs.segmentation,
       });
@@ -667,7 +667,7 @@ impl<T: Pixel> ContextInner<T> {
     compute_motion_vectors(fi, fs, &self.inter_cfg);
 
     // Save the motion vectors to FrameInvariants.
-    fi.lookahead_mvs = fs.frame_mvs.clone();
+    fi.lookahead_me_stats = fs.frame_me_stats.clone();
 
     #[cfg(feature = "dump_lookahead_data")]
     {
@@ -686,15 +686,15 @@ impl<T: Pixel> ContextInner<T> {
       // backwards lower reference (so the closest previous frame).
       let index = if second_ref_frame.to_index() != 0 { 0 } else { 1 };
 
-      let mvs = &fs.frame_mvs[index];
+      let me_stats = &fs.frame_me_stats[index];
       use byteorder::{NativeEndian, WriteBytesExt};
       // dynamic allocation: debugging only
       let mut buf = vec![];
-      buf.write_u64::<NativeEndian>(mvs.rows as u64).unwrap();
-      buf.write_u64::<NativeEndian>(mvs.cols as u64).unwrap();
-      for y in 0..mvs.rows {
-        for x in 0..mvs.cols {
-          let mv = mvs[y][x];
+      buf.write_u64::<NativeEndian>(me_stats.rows as u64).unwrap();
+      buf.write_u64::<NativeEndian>(me_stats.cols as u64).unwrap();
+      for y in 0..me_stats.rows {
+        for x in 0..me_stats.cols {
+          let mv = me_stats[y][x].mv;
           buf.write_i16::<NativeEndian>(mv.row).unwrap();
           buf.write_i16::<NativeEndian>(mv.col).unwrap();
         }
@@ -715,7 +715,7 @@ impl<T: Pixel> ContextInner<T> {
       input_hres: fs.input_hres.clone(),
       input_qres: fs.input_qres.clone(),
       cdfs: fs.cdfs,
-      frame_mvs: fs.frame_mvs.clone(),
+      frame_me_stats: fs.frame_me_stats.clone(),
       output_frameno,
       segmentation: fs.segmentation,
     });
@@ -862,7 +862,7 @@ impl<T: Pixel> ContextInner<T> {
           fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
         let reference_frame = &reference.frame;
         let reference_output_frameno = reference.output_frameno;
-        let mvs = &fi.lookahead_mvs[mv_index];
+        let me_stats = &fi.lookahead_me_stats[mv_index];
 
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
@@ -873,7 +873,7 @@ impl<T: Pixel> ContextInner<T> {
         {
           update_block_importances(
             fi,
-            mvs,
+            me_stats,
             frame,
             reference_frame,
             bit_depth,
@@ -884,7 +884,7 @@ impl<T: Pixel> ContextInner<T> {
 
           #[hawktracer(update_block_importances)]
           fn update_block_importances<T: Pixel>(
-            fi: &FrameInvariants<T>, mvs: &crate::me::FrameMotionVectors,
+            fi: &FrameInvariants<T>, me_stats: &crate::me::FrameMEStats,
             frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
             bsize: BlockSize, len: usize,
             reference_frame_block_importances: &mut [f32],
@@ -897,7 +897,7 @@ impl<T: Pixel> ContextInner<T> {
               .zip(fi.block_importances.chunks_exact(fi.w_in_imp_b))
               .for_each(|((y, lookahead_intra_costs), block_importances)| {
                 (0..fi.w_in_imp_b).for_each(|x| {
-                  let mv = mvs[y * 2][x * 2];
+                  let mv = me_stats[y * 2][x * 2].mv;
 
                   // Coordinates of the top-left corner of the reference block, in MV
                   // units.

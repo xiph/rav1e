@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -14,44 +14,44 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 
-/// Tiled view of FrameMotionVectors
+/// Tiled view of FrameMEStats
 #[derive(Debug)]
-pub struct TileMotionVectors<'a> {
-  data: *const MotionVector,
+pub struct TileMEStats<'a> {
+  data: *const MEStats,
   // expressed in mi blocks
   // private to guarantee borrowing rules
   x: usize,
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameMotionVectors
+  stride: usize, // number of cols in the underlying FrameMEStats
   phantom: PhantomData<&'a MotionVector>,
 }
 
-/// Mutable tiled view of FrameMotionVectors
+/// Mutable tiled view of FrameMEStats
 #[derive(Debug)]
-pub struct TileMotionVectorsMut<'a> {
-  data: *mut MotionVector,
+pub struct TileMEStatsMut<'a> {
+  data: *mut MEStats,
   // expressed in mi blocks
   // private to guarantee borrowing rules
   x: usize,
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameMotionVectors
+  stride: usize, // number of cols in the underlying FrameMEStats
   phantom: PhantomData<&'a mut MotionVector>,
 }
 
 // common impl for TileMotionVectors and TileMotionVectorsMut
-macro_rules! tile_motion_vectors_common {
-  // $name: TileMotionVectors or TileMotionVectorsMut
+macro_rules! tile_me_stats_common {
+  // $name: TileMEStats or TileMEStatsMut
   // $opt_mut: nothing or mut
   ($name:ident $(,$opt_mut:tt)?) => {
     impl<'a> $name<'a> {
 
       #[inline(always)]
       pub fn new(
-        frame_mvs: &'a $($opt_mut)? FrameMotionVectors,
+        frame_mvs: &'a $($opt_mut)? FrameMEStats,
         x: usize,
         y: usize,
         cols: usize,
@@ -95,7 +95,7 @@ macro_rules! tile_motion_vectors_common {
     unsafe impl Sync for $name<'_> {}
 
     impl Index<usize> for $name<'_> {
-      type Output = [MotionVector];
+      type Output = [MEStats];
 
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
@@ -109,13 +109,13 @@ macro_rules! tile_motion_vectors_common {
   }
 }
 
-tile_motion_vectors_common!(TileMotionVectors);
-tile_motion_vectors_common!(TileMotionVectorsMut, mut);
+tile_me_stats_common!(TileMEStats);
+tile_me_stats_common!(TileMEStatsMut, mut);
 
-impl TileMotionVectorsMut<'_> {
+impl TileMEStatsMut<'_> {
   #[inline(always)]
-  pub const fn as_const(&self) -> TileMotionVectors<'_> {
-    TileMotionVectors {
+  pub const fn as_const(&self) -> TileMEStats<'_> {
+    TileMEStats {
       data: self.data,
       x: self.x,
       y: self.y,
@@ -127,7 +127,7 @@ impl TileMotionVectorsMut<'_> {
   }
 }
 
-impl IndexMut<usize> for TileMotionVectorsMut<'_> {
+impl IndexMut<usize> for TileMEStatsMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rows);

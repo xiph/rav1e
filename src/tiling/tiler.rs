@@ -731,27 +731,27 @@ pub mod test {
 
       {
         // block (8, 5) of the top-left tile (of the first ref frame)
-        let mvs = &mut tile_states[0].mvs[0];
-        mvs[5][8] = MotionVector { col: 42, row: 38 };
-        println!("{:?}", mvs[5][8]);
+        let me_stats = &mut tile_states[0].me_stats[0];
+        me_stats[5][8].mv = MotionVector { col: 42, row: 38 };
+        println!("{:?}", me_stats[5][8].mv);
       }
 
       {
         // block (4, 2) of the middle-right tile (of ref frame 2)
-        let mvs = &mut tile_states[5].mvs[2];
-        mvs[2][3] = MotionVector { col: 2, row: 14 };
+        let me_stats = &mut tile_states[5].me_stats[2];
+        me_stats[2][3].mv = MotionVector { col: 2, row: 14 };
       }
     }
 
     // check that writes on tiled views affected the underlying motion vectors
 
-    let mvs = &fs.frame_mvs[0];
-    assert_eq!(MotionVector { col: 42, row: 38 }, mvs[5][8]);
+    let me_stats = &fs.frame_me_stats[0];
+    assert_eq!(MotionVector { col: 42, row: 38 }, me_stats[5][8].mv);
 
-    let mvs = &fs.frame_mvs[2];
+    let me_stats = &fs.frame_me_stats[2];
     let mix = (128 >> MI_SIZE_LOG2) + 3;
     let miy = (64 >> MI_SIZE_LOG2) + 2;
-    assert_eq!(MotionVector { col: 2, row: 14 }, mvs[miy][mix]);
+    assert_eq!(MotionVector { col: 2, row: 14 }, me_stats[miy][mix].mv);
   }
 
   #[test]

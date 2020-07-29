@@ -1,5 +1,5 @@
 // Copyright (c) 2001-2016, Alliance for Open Media. All rights reserved
-// Copyright (c) 2017-2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -1122,17 +1122,6 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   let mut mv_stacks = ArrayVec::<[_; 20]>::new();
   let mut mode_contexts = ArrayVec::<[_; 7]>::new();
 
-  let pmv_idxs = {
-    let SuperBlockOffset { x: sbx, y: sby } = tile_bo.sb_offset().0;
-    let inner_idx = if bsize > BlockSize::BLOCK_32X32 {
-      0
-    } else {
-      ((tile_bo.0.x & 32) >> 5) + ((tile_bo.0.y & 32) >> 4) + 1
-    };
-    (sby * ts.sb_width + sbx, inner_idx)
-  };
-  let pmvs = ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1];
-
   for (i, &ref_frames) in ref_frames_set.iter().enumerate() {
     let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
     mode_contexts.push(cw.find_mvrefs(
@@ -1151,17 +1140,9 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     if mv_stack.len() > 1 {
       pmv[1] = mv_stack[1].this_mv;
     }
-    let ref_slot = ref_slot_set[i] as usize;
-    let cmv = pmvs[ref_slot].unwrap_or_else(Default::default);
 
-    let b_me =
-      motion_estimation(fi, ts, bsize, tile_bo, ref_frames[0], cmv, pmv);
-
-    if !fi.config.speed_settings.encode_bottomup
-      && (bsize == BlockSize::BLOCK_32X32 || bsize == BlockSize::BLOCK_64X64)
-    {
-      ts.half_res_pmvs[pmv_idxs.0][pmv_idxs.1][ref_slot] = Some(b_me);
-    };
+    let res = motion_estimation(fi, ts, bsize, tile_bo, ref_frames[0], pmv);
+    let b_me = res.0;
 
     mvs_from_me.push([b_me, MotionVector::default()]);
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -62,8 +62,7 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub qc: QuantizationContext,
   pub segmentation: &'a SegmentationState,
   pub restoration: TileRestorationStateMut<'a>,
-  pub half_res_pmvs: &'a mut Vec<BlockPmv>,
-  pub mvs: Vec<TileMotionVectorsMut<'a>>,
+  pub me_stats: Vec<TileMEStatsMut<'a>>,
   pub coded_block_info: MiTileState,
   pub integral_buffer: IntegralImageBuffer,
   pub inter_compound_buffers: InterCompoundBuffers,
@@ -148,12 +147,6 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     };
     let sb_width = width.align_power_of_two_and_shift(sb_size_log2);
     let sb_height = height.align_power_of_two_and_shift(sb_size_log2);
-    if !fs.half_res_pmvs.iter().any(|&(key, _)| key == sbo) {
-      // Initialize a blank array in the slot for this tile in the FrameState.
-      // This will immediately be overridden with the half_res_pmvs
-      // computed in the lookahead, so no need to allocate here.
-      fs.half_res_pmvs.push((sbo, Vec::new()));
-    }
 
     Self {
       sbo,
@@ -178,16 +171,10 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         sb_width,
         sb_height,
       ),
-      half_res_pmvs: &mut fs
-        .half_res_pmvs
-        .iter_mut()
-        .find(|(key, _)| *key == sbo)
-        .unwrap()
-        .1,
-      mvs: Arc::make_mut(&mut fs.frame_mvs)
+      me_stats: Arc::make_mut(&mut fs.frame_me_stats)
         .iter_mut()
         .map(|fmvs| {
-          TileMotionVectorsMut::new(
+          TileMEStatsMut::new(
             fmvs,
             sbo.0.x << (sb_size_log2 - MI_SIZE_LOG2),
             sbo.0.y << (sb_size_log2 - MI_SIZE_LOG2),

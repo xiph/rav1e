@@ -81,7 +81,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub input_hres: Arc<Plane<T>>,
   pub input_qres: Arc<Plane<T>>,
   pub cdfs: CDFContext,
-  pub frame_mvs: Arc<Vec<FrameMotionVectors>>,
+  pub frame_me_stats: Arc<Vec<FrameMEStats>>,
   pub output_frameno: u64,
   pub segmentation: SegmentationState,
 }
@@ -340,8 +340,6 @@ impl Default for Sequence {
   }
 }
 
-pub type BlockPmv = [[Option<MotionVector>; REF_FRAMES]; 5];
-
 #[derive(Debug, Clone)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
@@ -357,8 +355,7 @@ pub struct FrameState<T: Pixel> {
   pub restoration: RestorationState,
   // Because we only reference these within a tile context,
   // these are stored per-tile for easier access.
-  pub half_res_pmvs: Vec<(PlaneSuperBlockOffset, Vec<BlockPmv>)>,
-  pub frame_mvs: Arc<Vec<FrameMotionVectors>>,
+  pub frame_me_stats: Arc<Vec<FrameMEStats>>,
   pub enc_stats: EncoderStats,
 }
 
@@ -397,11 +394,10 @@ impl<T: Pixel> FrameState<T> {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
-      half_res_pmvs: Vec::with_capacity(fi.tiling.cols * fi.tiling.rows),
-      frame_mvs: {
+      frame_me_stats: {
         let mut vec = Vec::with_capacity(REF_FRAMES);
         for _ in 0..REF_FRAMES {
-          vec.push(FrameMotionVectors::new(fi.w_in_b, fi.h_in_b));
+          vec.push(FrameMEStats::new(fi.w_in_b, fi.h_in_b));
         }
         Arc::new(vec)
       },
@@ -546,7 +542,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub invalid: bool,
   /// Motion vectors to the _original_ reference frames (not reconstructed).
   /// Used for lookahead purposes.
-  pub lookahead_mvs: Arc<Vec<FrameMotionVectors>>,
+  pub lookahead_me_stats: Arc<Vec<FrameMEStats>>,
   /// The lookahead version of `rec_buffer`, used for storing and propagating
   /// the original reference frames (rather than reconstructed ones). The
   /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
@@ -739,13 +735,10 @@ impl<T: Pixel> FrameInvariants<T> {
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
-      lookahead_mvs: {
-        let mut vec = Vec::with_capacity(REF_FRAMES);
-        for _ in 0..REF_FRAMES {
-          vec.push(FrameMotionVectors::new(w_in_b, h_in_b));
-        }
-        Arc::new(vec)
-      },
+      lookahead_me_stats: Arc::new(vec![
+        FrameMEStats::new(w_in_b, h_in_b);
+        REF_FRAMES
+      ]),
       lookahead_rec_buffer: ReferenceFramesSet::new(),
       w_in_imp_b,
       h_in_imp_b,
@@ -1565,12 +1558,12 @@ pub fn save_block_motion<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, bsize: BlockSize, tile_bo: TileBlockOffset,
   ref_frame: usize, mv: MotionVector,
 ) {
-  let tile_mvs = &mut ts.mvs[ref_frame];
+  let tile_me_stats = &mut ts.me_stats[ref_frame];
   let tile_bo_x_end = (tile_bo.0.x + bsize.width_mi()).min(ts.mi_width);
   let tile_bo_y_end = (tile_bo.0.y + bsize.height_mi()).min(ts.mi_height);
   for mi_y in tile_bo.0.y..tile_bo_y_end {
     for mi_x in tile_bo.0.x..tile_bo_x_end {
-      tile_mvs[mi_y][mi_x] = mv;
+      tile_me_stats[mi_y][mi_x].mv = mv;
     }
   }
 }
@@ -2964,37 +2957,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
 }
 
-#[inline(always)]
-pub(crate) fn build_coarse_pmvs<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, inter_cfg: &InterConfig,
-) -> Vec<[Option<MotionVector>; REF_FRAMES]> {
-  assert!(!fi.sequence.use_128x128_superblock);
-  if ts.mi_width >= 16 && ts.mi_height >= 16 {
-    let mut frame_pmvs = Vec::with_capacity(ts.sb_width * ts.sb_height);
-    for sby in 0..ts.sb_height {
-      for sbx in 0..ts.sb_width {
-        let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-        let bo = sbo.block_offset(0, 0);
-        let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-        for i in inter_cfg.allowed_ref_frames().iter().map(|rf| rf.to_index())
-        {
-          let r = fi.ref_frames[i] as usize;
-          if pmvs[r].is_none() {
-            pmvs[r] =
-              estimate_motion_ss4(fi, ts, BlockSize::BLOCK_64X64, r, bo);
-          }
-        }
-        frame_pmvs.push(pmvs);
-      }
-    }
-    frame_pmvs
-  } else {
-    // the block use for motion estimation would be smaller than the whole image
-    // dynamic allocation: once per frmae
-    vec![[None; REF_FRAMES]; ts.sb_width * ts.sb_height]
-  }
-}
-
 fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
   let cdf = if fi.primary_ref_frame == PRIMARY_REF_NONE {
     None
@@ -3139,291 +3101,6 @@ fn build_raw_tile_group(
     bw.write_bytes(raw_tile).unwrap();
   }
   raw
-}
-
-pub(crate) fn build_half_res_pmvs<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  tile_sbo: TileSuperBlockOffset,
-  tile_pmvs: &[[Option<MotionVector>; REF_FRAMES]],
-) -> BlockPmv {
-  let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
-  let mut pmvs: BlockPmv = [[None; REF_FRAMES]; 5];
-
-  // The pmvs array stores 5 motion vectors in the following order:
-  //
-  //       64×64
-  // ┌───────┬───────┐
-  // │       │       │
-  // │   1   │   2   │
-  // │       ╵       │
-  // ├────── 0 ──────┤
-  // │       ╷       │
-  // │   3   │   4   │
-  // │       │       │
-  // └───────┴───────┘
-  //
-  // That is, 0 is the motion vector for the whole 64×64 block, obtained from
-  // the quarter-resolution search, and 1 through 4 are the motion vectors for
-  // the 32×32 blocks, obtained below from the half-resolution search.
-  //
-  // Each of the four half-resolution searches uses three quarter-resolution
-  // candidates: one from the current 64×64 block and two from the two
-  // immediately adjacent 64×64 blocks.
-  //
-  //          ┌───────┐
-  //          │       │
-  //          │   n   │
-  //          │       │
-  //          └───────┘
-  // ┌───────┐┌───┬───┐┌───────┐
-  // │       ││ 1 ╵ 2 ││       │
-  // │   w   │├── 0 ──┤│   e   │
-  // │       ││ 3 ╷ 4 ││       │
-  // └───────┘└───┴───┘└───────┘
-  //          ┌───────┐
-  //          │       │
-  //          │   s   │
-  //          │       │
-  //          └───────┘
-
-  if ts.mi_width >= 8 && ts.mi_height >= 8 {
-    for &i in ALL_INTER_REFS.iter() {
-      let r = fi.ref_frames[i.to_index()] as usize;
-      if pmvs[0][r].is_none() {
-        pmvs[0][r] = tile_pmvs[sby * ts.sb_width + sbx][r];
-        if let Some(pmv) = pmvs[0][r] {
-          let pmv_w = if sbx > 0 {
-            tile_pmvs[sby * ts.sb_width + sbx - 1][r]
-          } else {
-            None
-          };
-          let pmv_e = if sbx < ts.sb_width - 1 {
-            tile_pmvs[sby * ts.sb_width + sbx + 1][r]
-          } else {
-            None
-          };
-          let pmv_n = if sby > 0 {
-            tile_pmvs[sby * ts.sb_width + sbx - ts.sb_width][r]
-          } else {
-            None
-          };
-          let pmv_s = if sby < ts.sb_height - 1 {
-            tile_pmvs[sby * ts.sb_width + sbx + ts.sb_width][r]
-          } else {
-            None
-          };
-
-          assert!(!fi.sequence.use_128x128_superblock);
-          pmvs[1][r] = estimate_motion_ss2(
-            fi,
-            ts,
-            BlockSize::BLOCK_32X32,
-            tile_sbo.block_offset(0, 0),
-            &[Some(pmv), pmv_w, pmv_n],
-            i,
-          );
-          pmvs[2][r] = estimate_motion_ss2(
-            fi,
-            ts,
-            BlockSize::BLOCK_32X32,
-            tile_sbo.block_offset(8, 0),
-            &[Some(pmv), pmv_e, pmv_n],
-            i,
-          );
-          pmvs[3][r] = estimate_motion_ss2(
-            fi,
-            ts,
-            BlockSize::BLOCK_32X32,
-            tile_sbo.block_offset(0, 8),
-            &[Some(pmv), pmv_w, pmv_s],
-            i,
-          );
-          pmvs[4][r] = estimate_motion_ss2(
-            fi,
-            ts,
-            BlockSize::BLOCK_32X32,
-            tile_sbo.block_offset(8, 8),
-            &[Some(pmv), pmv_e, pmv_s],
-            i,
-          );
-
-          if let Some(mv) = pmvs[1][r] {
-            save_block_motion(
-              ts,
-              BlockSize::BLOCK_32X32,
-              tile_sbo.block_offset(0, 0),
-              i.to_index(),
-              mv,
-            );
-          }
-          if let Some(mv) = pmvs[2][r] {
-            save_block_motion(
-              ts,
-              BlockSize::BLOCK_32X32,
-              tile_sbo.block_offset(8, 0),
-              i.to_index(),
-              mv,
-            );
-          }
-          if let Some(mv) = pmvs[3][r] {
-            save_block_motion(
-              ts,
-              BlockSize::BLOCK_32X32,
-              tile_sbo.block_offset(0, 8),
-              i.to_index(),
-              mv,
-            );
-          }
-          if let Some(mv) = pmvs[4][r] {
-            save_block_motion(
-              ts,
-              BlockSize::BLOCK_32X32,
-              tile_sbo.block_offset(8, 8),
-              i.to_index(),
-              mv,
-            );
-          }
-        }
-      }
-    }
-  }
-
-  pmvs
-}
-
-pub(crate) fn build_full_res_pmvs<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  tile_sbo: TileSuperBlockOffset,
-  half_res_pmvs: &[[[Option<MotionVector>; REF_FRAMES]; 5]],
-) {
-  let TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby }) = tile_sbo;
-  let mut pmvs: [Option<MotionVector>; REF_FRAMES] = [None; REF_FRAMES];
-  let half_res_pmvs_this_block = half_res_pmvs[sby * ts.sb_width + sbx];
-
-  if ts.mi_width >= 8 && ts.mi_height >= 8 {
-    for &i in ALL_INTER_REFS.iter() {
-      let r = fi.ref_frames[i.to_index()] as usize;
-      if pmvs[r].is_none() {
-        pmvs[r] = half_res_pmvs_this_block[0][r];
-        if let Some(pmv) = pmvs[r] {
-          assert!(!fi.sequence.use_128x128_superblock);
-
-          let pmvs_w = if sbx > 0 {
-            half_res_pmvs[sby * ts.sb_width + sbx - 1]
-          } else {
-            [[None; REF_FRAMES]; 5]
-          };
-          let pmvs_e = if sbx < ts.sb_width - 1 {
-            half_res_pmvs[sby * ts.sb_width + sbx + 1]
-          } else {
-            [[None; REF_FRAMES]; 5]
-          };
-          let pmvs_n = if sby > 0 {
-            half_res_pmvs[sby * ts.sb_width + sbx - ts.sb_width]
-          } else {
-            [[None; REF_FRAMES]; 5]
-          };
-          let pmvs_s = if sby < ts.sb_height - 1 {
-            half_res_pmvs[sby * ts.sb_width + sbx + ts.sb_width]
-          } else {
-            [[None; REF_FRAMES]; 5]
-          };
-
-          for y in 0..4 {
-            for x in 0..4 {
-              let bo = tile_sbo.block_offset(x * 4, y * 4);
-
-              // We start from half_res_pmvs which include five motion vectors
-              // for a 64×64 block, as described in build_half_res_pmvs. In
-              // this loop we go one level down and search motion vectors for
-              // 16×16 blocks using the full-resolution frames:
-              //
-              //               64×64
-              // ┏━━━━━━━┯━━━━━━━┳━━━━━━━┯━━━━━━━┓
-              // ┃       │       ┃       │       ┃
-              // ┃       │       ┃       │       ┃
-              // ┃       ╵       ┃       ╵       ┃
-              // ┠────── 1 ──────╂────── 2 ──────┨
-              // ┃       ╷       ┃       ╷       ┃
-              // ┃       │       ┃       │       ┃
-              // ┃       │       ╹       │       ┃
-              // ┣━━━━━━━┿━━━━━━ 0 ━━━━━━┿━━━━━━━┫
-              // ┃       │       ╻       │       ┃
-              // ┃       │       ┃       │       ┃
-              // ┃       ╵       ┃       ╵       ┃
-              // ┠────── 3 ──────╂────── 4 ──────┨
-              // ┃       ╷       ┃       ╷       ┃
-              // ┃       │       ┃       │       ┃
-              // ┃       │       ┃       │       ┃
-              // ┗━━━━━━━┷━━━━━━━┻━━━━━━━┷━━━━━━━┛
-              //
-              // Each search receives all covering and adjacent motion vectors
-              // as candidates. Additionally, the middle two rows of blocks
-              // also receive the 32×32 motion vectors from neighboring 64×64
-              // blocks, even though not directly adjacent; same with middle
-              // two columns.
-              let covering_half_res = match (x, y) {
-                (0..=1, 0..=1) => (half_res_pmvs_this_block[1][r]),
-                (2..=3, 0..=1) => (half_res_pmvs_this_block[2][r]),
-                (0..=1, 2..=3) => (half_res_pmvs_this_block[3][r]),
-                (2..=3, 2..=3) => (half_res_pmvs_this_block[4][r]),
-                _ => unreachable!(),
-              };
-
-              let (vertical_candidate_1, vertical_candidate_2) = match (x, y) {
-                (0..=1, 0) => (pmvs_n[0][r], pmvs_n[3][r]),
-                (2..=3, 0) => (pmvs_n[0][r], pmvs_n[4][r]),
-                (0..=1, 1) => (pmvs_n[3][r], half_res_pmvs_this_block[3][r]),
-                (2..=3, 1) => (pmvs_n[4][r], half_res_pmvs_this_block[4][r]),
-                (0..=1, 2) => (pmvs_s[1][r], half_res_pmvs_this_block[1][r]),
-                (2..=3, 2) => (pmvs_s[2][r], half_res_pmvs_this_block[2][r]),
-                (0..=1, 3) => (pmvs_s[0][r], pmvs_s[1][r]),
-                (2..=3, 3) => (pmvs_s[0][r], pmvs_s[2][r]),
-                _ => unreachable!(),
-              };
-
-              let (horizontal_candidate_1, horizontal_candidate_2) =
-                match (x, y) {
-                  (0, 0..=1) => (pmvs_w[0][r], pmvs_w[2][r]),
-                  (0, 2..=3) => (pmvs_w[0][r], pmvs_w[4][r]),
-                  (1, 0..=1) => (pmvs_w[2][r], half_res_pmvs_this_block[2][r]),
-                  (1, 2..=3) => (pmvs_w[4][r], half_res_pmvs_this_block[4][r]),
-                  (2, 0..=1) => (pmvs_e[1][r], half_res_pmvs_this_block[1][r]),
-                  (2, 2..=3) => (pmvs_e[3][r], half_res_pmvs_this_block[3][r]),
-                  (3, 0..=1) => (pmvs_e[0][r], pmvs_e[2][r]),
-                  (3, 2..=3) => (pmvs_e[0][r], pmvs_e[4][r]),
-                  _ => unreachable!(),
-                };
-
-              if let Some(mv) = estimate_motion(
-                fi,
-                ts,
-                BlockSize::BLOCK_16X16,
-                bo,
-                &[
-                  Some(pmv),
-                  covering_half_res,
-                  vertical_candidate_1,
-                  vertical_candidate_2,
-                  horizontal_candidate_1,
-                  horizontal_candidate_2,
-                ],
-                i,
-              ) {
-                save_block_motion(
-                  ts,
-                  BlockSize::BLOCK_16X16,
-                  bo,
-                  i.to_index(),
-                  mv,
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-  }
 }
 
 pub struct SBSQueueEntry {
@@ -3816,7 +3493,7 @@ pub fn update_rec_buffer<T: Pixel>(
     input_hres: fs.input_hres.clone(),
     input_qres: fs.input_qres.clone(),
     cdfs: fs.cdfs,
-    frame_mvs: fs.frame_mvs.clone(),
+    frame_me_stats: fs.frame_me_stats.clone(),
     output_frameno,
     segmentation: fs.segmentation,
   });
