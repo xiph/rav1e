@@ -32,6 +32,11 @@ Analyze `.ivf`-files with `AOM Analyzer`:
 - Detection Algorithm
 - Desired Improvements
 
+## [Tile on Frame Boundary](TILE_ON_FRAME_BOUNDARY.md)
+- Accessing Tiled-pixels outside of a frame
+- How bounding box is enforced to a PlaneRegion and now it allows accessing the frame outside pixels
+- When does rav1e access outside frame tiled-input and output pixels?
+
 ## [Glossary](GLOSSARY.md)
 Explanation of various special terms.
 
