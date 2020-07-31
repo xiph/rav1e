@@ -117,12 +117,15 @@ pub fn get_subset_predictors<T: Pixel>(
   // for subset A.
   // Sample the middle of bordering side of the left and top blocks.
 
+  let clipped_half_w = (w >> 1).min(tile_mvs.cols() - 1 - tile_bo.0.x);
+  let clipped_half_h = (h >> 1).min(tile_mvs.rows() - 1 - tile_bo.0.y);
+
   if tile_bo.0.x > 0 {
-    let left = tile_mvs[tile_bo.0.y + (h >> 1)][tile_bo.0.x - 1];
+    let left = tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x - 1];
     add_cand(&mut predictors, left);
   }
   if tile_bo.0.y > 0 {
-    let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + (w >> 1)];
+    let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + clipped_half_w];
     add_cand(&mut predictors, top);
 
     if tile_bo.0.x < tile_mvs.cols() - w {
@@ -143,25 +146,32 @@ pub fn get_subset_predictors<T: Pixel>(
       x: tile_mvs.x() + tile_bo.0.x,
       y: tile_mvs.y() + tile_bo.0.y,
     });
+    let clipped_half_w = (w >> 1).min(prev_frame_mvs.cols - 1 - frame_bo.0.x);
+    let clipped_half_h = (h >> 1).min(prev_frame_mvs.rows - 1 - frame_bo.0.y);
+
     if frame_bo.0.x > 0 {
-      let left = prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x - 1];
+      let left =
+        prev_frame_mvs[frame_bo.0.y + clipped_half_h][frame_bo.0.x - 1];
       add_cand(&mut predictors, left);
     }
     if frame_bo.0.y > 0 {
-      let top = prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x + (w >> 1)];
+      let top =
+        prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x + clipped_half_w];
       add_cand(&mut predictors, top);
     }
     if frame_bo.0.x < prev_frame_mvs.cols - w {
-      let right = prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x + w];
+      let right =
+        prev_frame_mvs[frame_bo.0.y + clipped_half_h][frame_bo.0.x + w];
       add_cand(&mut predictors, right);
     }
     if frame_bo.0.y < prev_frame_mvs.rows - h {
-      let bottom = prev_frame_mvs[frame_bo.0.y + h][frame_bo.0.x + (w >> 1)];
+      let bottom =
+        prev_frame_mvs[frame_bo.0.y + h][frame_bo.0.x + clipped_half_w];
       add_cand(&mut predictors, bottom);
     }
 
-    let previous =
-      prev_frame_mvs[frame_bo.0.y + (h >> 1)][frame_bo.0.x + (w >> 1)];
+    let previous = prev_frame_mvs[frame_bo.0.y + clipped_half_h]
+      [frame_bo.0.x + clipped_half_w];
     add_cand(&mut predictors, previous);
   }
 
@@ -187,8 +197,9 @@ pub fn motion_estimation<T: Pixel>(
       // Full-pixel motion estimation
 
       let po = frame_bo.to_luma_plane_offset();
+      let area = Area::BlockStartingAt { bo: tile_bo.0 };
       let org_region: &PlaneRegion<T> =
-        &ts.input.planes[0].region(Area::StartingAt { x: po.x, y: po.y });
+        &ts.input_tile.planes[0].subregion(area);
       let p_ref: &Plane<T> = &rec.frame.planes[0];
 
       let mut best = full_pixel_me(
@@ -305,9 +316,8 @@ pub fn estimate_motion<T: Pixel>(
     // 0.5 is a fudge factor
     let lambda = (fi.me_lambda * 256.0 * 0.5) as u32;
 
-    let po = frame_bo_adj.to_luma_plane_offset();
-    let org_region =
-      &ts.input.planes[0].region(Area::StartingAt { x: po.x, y: po.y });
+    let area = Area::BlockStartingAt { bo: tile_bo_adj.0 };
+    let org_region: &PlaneRegion<T> = &ts.input_tile.planes[0].subregion(area);
 
     let MVSearchResult { mv: best_mv, .. } = full_pixel_me(
       fi,
