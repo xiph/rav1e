@@ -85,7 +85,8 @@ jobs:
             - name: Build
               if: matrix.conf == 'build'
               working-directory: rav1e_js
-              run: wasm-pack build
+              # --dev needed, because of https://github.com/rustwasm/wasm-pack/issues/886
+              run: wasm-pack build --dev
 
             - name: Pack
               if: matrix.conf == 'build'
