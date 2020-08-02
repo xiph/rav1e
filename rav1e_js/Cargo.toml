@@ -1,6 +1,6 @@
 [package]
 name = "rav1e_js"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Urhengulas <johann.hemmann@code.berlin>"]
 edition = "2018"
 description = "JavaScript bindings for rav1e"
@@ -14,17 +14,12 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-dcv-color-primitives = "0.1.14"
+console_error_panic_hook = { version = "0.1", optional = true }
+dcv-color-primitives = "0.1"
 rav1e = { path = "..", features = ["serialize", "wasm"] }
-serde_json = "1.0.56"
+serde_json = "1.0"
 v_frame = { path = "../v_frame/", features = ["wasm"]}
-wasm-bindgen = "0.2.63"
-
-# The `console_error_panic_hook` crate provides better debugging of panics by
-# logging them with `console.error`. This is great for development, but requires
-# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
-# code size when deploying.
-console_error_panic_hook = { version = "0.1.6", optional = true }
+wasm-bindgen = "0.2"
 
 [dependencies.web-sys]
 version = "0.3"
@@ -41,4 +36,7 @@ features = [
 ]
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.13"
+wasm-bindgen-test = "0.3"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-O", "--enable-mutable-globals"]

@@ -97,7 +97,7 @@ jobs:
 
             # TESTING
             - name: Use Node.js 14
-              if: matrix.conf == 'node'
+              if: matrix.conf == 'node' || matrix.conf == 'build'
               uses: actions/setup-node@v1
               with:
                   node-version: 14
