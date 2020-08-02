@@ -16,7 +16,7 @@ use wasm_bindgen::prelude::*;
 
 /// Encoder settings which impact the produced bitstream.
 #[wasm_bindgen]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct EncoderConfig {
   pub(crate) conf: rav1e::EncoderConfig,
 }
@@ -25,7 +25,7 @@ pub struct EncoderConfig {
 impl EncoderConfig {
   #[wasm_bindgen(constructor)]
   pub fn new() -> Self {
-    EncoderConfig { conf: rav1e::EncoderConfig::default() }
+    Self::default()
   }
 
   pub fn debug(&self) -> String {
