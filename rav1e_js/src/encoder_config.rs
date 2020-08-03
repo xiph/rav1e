@@ -107,15 +107,27 @@ impl EncoderConfig {
   //   self.clone()
   // }
 
-  // /// High dynamic range mastering display color volume
-  // ///
-  // /// As defined by CIE 1931
-  // pub fn setMasteringDisplay(
-  //   &mut self, mastering_display: MasteringDisplay,
-  // ) -> Self {
-  //   self.conf.mastering_display = Some(mastering_display);
-  //   self.clone()
-  // }
+  /// High dynamic range mastering display color volume
+  ///
+  /// As defined by CIE 1931
+  ///
+  /// * primaries (red, green, blue): `ChromaticityPoint`
+  /// * `white_point`: `ChromaticityPoint`,
+  /// * `max_luminance`: 24.8 fixed-point maximum luminance in candelas per square meter
+  /// * `min_luminance`: 18.14 fixed-point minimum luminance in candelas per square meter
+  pub fn setMasteringDisplay(
+    &mut self, primaries_red: ChromaticityPoint,
+    primaries_green: ChromaticityPoint, primaries_blue: ChromaticityPoint,
+    white_point: ChromaticityPoint, max_luminance: u32, min_luminance: u32,
+  ) -> Self {
+    self.conf.mastering_display = Some(MasteringDisplay {
+      primaries: [primaries_red, primaries_green, primaries_blue],
+      white_point,
+      max_luminance,
+      min_luminance,
+    });
+    self.clone()
+  }
 
   /// HDR content light parameters.
   ///

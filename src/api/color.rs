@@ -217,6 +217,7 @@ pub struct ContentLight {
 
 /// Chromaticity coordinates as defined by CIE 1931, expressed as 0.16
 /// fixed-point values.
+#[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ChromaticityPoint {
@@ -224,6 +225,17 @@ pub struct ChromaticityPoint {
   pub x: u16,
   /// The Y coordinate.
   pub y: u16,
+}
+
+#[wasm_bindgen]
+#[cfg(feature = "wasm")]
+impl ChromaticityPoint {
+  /// Chromaticity coordinates as defined by CIE 1931, expressed as 0.16
+  /// fixed-point values.
+  #[wasm_bindgen(constructor)]
+  pub fn new(x: u16, y: u16) -> Self {
+    Self { x, y }
+  }
 }
 
 /// High dynamic range mastering display color volume
