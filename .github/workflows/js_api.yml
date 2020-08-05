@@ -16,6 +16,7 @@ jobs:
                 include:
                     - conf: firefox
                       headless: --headless
+                      driver: --geckodriver ./geckodriver
                     - conf: chrome
                       headless: --headless
 
@@ -101,10 +102,21 @@ jobs:
               with:
                   node-version: 14
 
+            # needed because of # https://github.com/rustwasm/wasm-bindgen/issues/2261
+            - name: Install geckodriver
+              if: matrix.conf == 'firefox'
+              working-directory: ${{ env.RAV1E_JS_DIR }}
+              env:
+                  LINK: https://github.com/mozilla/geckodriver/releases/download
+                  GECKO_VERSION: v0.26.0
+              run: |
+                  GECKO_FILE=geckodriver-$GECKO_VERSION-linux64
+                  curl -L "$LINK/$GECKO_VERSION/$GECKO_FILE.tar.gz" | tar xz
+
             - name: Test ${{ matrix.conf }} (${{ matrix.headless }})
               if: matrix.conf != 'build'
               working-directory: ${{ env.RAV1E_JS_DIR }}
-              run: wasm-pack test --${{ matrix.conf }} ${{ matrix.headless }}
+              run: wasm-pack test --${{ matrix.conf }} ${{ matrix.headless }} ${{ matrix.driver }}
 
             - name: Install and Build JavaScript
               if: matrix.conf == 'build'
