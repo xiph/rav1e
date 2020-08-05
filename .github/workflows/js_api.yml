@@ -25,6 +25,7 @@ jobs:
             SCCACHE_CACHE_SIZE: 300M
             SCCACHE_DIR: /home/runner/.cache/sccache
             SCCACHE_IDLE_TIMEOUT: 0
+            RAV1E_JS_DIR: rav1e_js
 
         runs-on: ubuntu-latest
 
@@ -84,13 +85,13 @@ jobs:
             # BUILD & PACK
             - name: Build
               if: matrix.conf == 'build'
-              working-directory: rav1e_js
+              working-directory: ${{ env.RAV1E_JS_DIR }}
               # --dev needed, because of https://github.com/rustwasm/wasm-pack/issues/886
               run: wasm-pack build --dev
 
             - name: Pack
               if: matrix.conf == 'build'
-              working-directory: rav1e_js
+              working-directory: ${{ env.RAV1E_JS_DIR }}
               run: wasm-pack pack
 
             # TESTING
@@ -102,8 +103,15 @@ jobs:
 
             - name: Test ${{ matrix.conf }} (${{ matrix.headless }})
               if: matrix.conf != 'build'
-              working-directory: rav1e_js
+              working-directory: ${{ env.RAV1E_JS_DIR }}
               run: wasm-pack test --${{ matrix.conf }} ${{ matrix.headless }}
+
+            - name: Install and Build JavaScript
+              if: matrix.conf == 'build'
+              working-directory: ${{ env.RAV1E_JS_DIR }}/www
+              run: |
+                  yarn install
+                  yarn build
 
             # STOP SCCACHE
             - name: Stop sccache server
