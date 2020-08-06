@@ -90,13 +90,13 @@ pub fn get_subset_predictors<T: Pixel>(
   tile_bo: TileBlockOffset, cmvs: ArrayVec<[MotionVector; 7]>,
   tile_mvs: &TileMotionVectors<'_>, frame_ref_opt: Option<&ReferenceFrame<T>>,
   ref_frame_id: usize, bsize: BlockSize,
-) -> ArrayVec<[MotionVector; 16]> {
-  let mut predictors = ArrayVec::<[_; 16]>::new();
+) -> ArrayVec<[MotionVector; 17]> {
+  let mut predictors = ArrayVec::<[_; 17]>::new();
   let w = bsize.width_mi();
   let h = bsize.height_mi();
 
   // Add a candidate predictor, aligning to fullpel and filtering out zero mvs.
-  let add_cand = |predictors: &mut ArrayVec<[MotionVector; 16]>,
+  let add_cand = |predictors: &mut ArrayVec<[MotionVector; 17]>,
                   cand_mv: MotionVector| {
     let cand_mv = cand_mv.quantize_to_fullpel();
     if !cand_mv.is_zero() {
@@ -112,26 +112,49 @@ pub fn get_subset_predictors<T: Pixel>(
     add_cand(&mut predictors, mv);
   }
 
-  // EPZS subset A and B predictors.
-  // Since everything is being pushed, a median doesn't need to be calculated
-  // for subset A.
-  // Sample the middle of bordering side of the left and top blocks.
+  // Get predictors from the same frame.
 
   let clipped_half_w = (w >> 1).min(tile_mvs.cols() - 1 - tile_bo.0.x);
   let clipped_half_h = (h >> 1).min(tile_mvs.rows() - 1 - tile_bo.0.y);
 
-  if tile_bo.0.x > 0 {
-    let left = tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x - 1];
-    add_cand(&mut predictors, left);
-  }
-  if tile_bo.0.y > 0 {
-    let top = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + clipped_half_w];
-    add_cand(&mut predictors, top);
+  // Sample the center of the current block.
+  add_cand(
+    &mut predictors,
+    tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x + clipped_half_w],
+  );
 
-    if tile_bo.0.x < tile_mvs.cols() - w {
-      let top_right = tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + w];
-      add_cand(&mut predictors, top_right);
-    }
+  // Sample the middle of all blocks bordering this one.
+  // Note: If motion vectors haven't been precomputed to a given blocksize, then
+  // the right and bottom edges will be duplicates of the center predictor when
+  // processing in raster order.
+
+  // left
+  if tile_bo.0.x > 0 {
+    add_cand(
+      &mut predictors,
+      tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x - 1],
+    );
+  }
+  // top
+  if tile_bo.0.y > 0 {
+    add_cand(
+      &mut predictors,
+      tile_mvs[tile_bo.0.y - 1][tile_bo.0.x + clipped_half_w],
+    );
+  }
+  // right
+  if tile_bo.0.x < tile_mvs.cols() - w {
+    add_cand(
+      &mut predictors,
+      tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x + w],
+    );
+  }
+  // bottom
+  if tile_bo.0.y < tile_mvs.rows() - h {
+    add_cand(
+      &mut predictors,
+      tile_mvs[tile_bo.0.y + h][tile_bo.0.x + clipped_half_w],
+    );
   }
 
   // EPZS subset C predictors.
