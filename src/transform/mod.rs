@@ -52,7 +52,6 @@ pub mod consts {
 pub const TX_TYPES: usize = 16;
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
-#[repr(C)]
 pub enum TxType {
   DCT_DCT = 0,   // DCT  in both horizontal and vertical
   ADST_DCT = 1,  // ADST in vertical, DCT in horizontal
@@ -74,7 +73,6 @@ pub enum TxType {
 
 /// Transform Size
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
-#[repr(C)]
 pub enum TxSize {
   TX_4X4,
   TX_8X8,
