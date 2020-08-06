@@ -15,7 +15,6 @@ const MAX_NEIGHBORS: usize = 2;
 
 use crate::transform::*;
 
-#[repr(C)]
 pub struct SCAN_ORDER {
   pub scan: &'static [u16],
 }
