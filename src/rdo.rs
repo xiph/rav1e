@@ -1410,8 +1410,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     let ref_frames = [INTRA_FRAME, NONE_FRAME];
     let mode_set_chroma = [best.pred_mode_chroma];
     let mv_stack = ArrayVec::<[_; 9]>::new();
-    let mut best_angle_delta_y = best.angle_delta.y;
-    let mut angle_delta_rdo = |y, uv| -> i8 {
+    let mut best_angle_delta = best.angle_delta;
+    let mut angle_delta_rdo = |y, uv| -> AngleDelta {
       if best.angle_delta.y != y || best.angle_delta.uv != uv {
         luma_chroma_mode_rdo(
           best.pred_mode_luma,
@@ -1432,19 +1432,18 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           AngleDelta { y, uv },
         );
       }
-      best.angle_delta.y
+      best.angle_delta
     };
 
     for i in 0..luma_deltas {
       let angle_delta_y =
         if luma_deltas == 1 { 0 } else { i - MAX_ANGLE_DELTA as i8 };
-      let angle_delta_uv = if chroma_deltas == 1 { 0 } else { angle_delta_y };
-      best_angle_delta_y = angle_delta_rdo(angle_delta_y, angle_delta_uv);
+      best_angle_delta = angle_delta_rdo(angle_delta_y, best_angle_delta.uv);
     }
     for j in 0..chroma_deltas {
       let angle_delta_uv =
         if chroma_deltas == 1 { 0 } else { j - MAX_ANGLE_DELTA as i8 };
-      angle_delta_rdo(best_angle_delta_y, angle_delta_uv);
+      best_angle_delta = angle_delta_rdo(best_angle_delta.y, angle_delta_uv);
     }
   }
 
