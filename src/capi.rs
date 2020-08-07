@@ -560,12 +560,15 @@ pub unsafe extern fn rav1e_config_set_content_light(
 /// min_luminance is a 18.14 fixed point value.
 ///
 /// Returns a negative value on error or 0.
+/// cbindgen:ptrs-as-arrays=[[primaries;3]]
 #[no_mangle]
 pub unsafe extern fn rav1e_config_set_mastering_display(
-  cfg: *mut Config, primaries: [rav1e::ChromaticityPoint; 3],
+  cfg: *mut Config, primaries: *const rav1e::ChromaticityPoint,
   white_point: rav1e::ChromaticityPoint, max_luminance: u32,
   min_luminance: u32,
 ) -> c_int {
+  let primaries = *(primaries as *const [rav1e::ChromaticityPoint; 3]);
+
   (*cfg).cfg.enc.mastering_display = Some(rav1e::MasteringDisplay {
     primaries,
     white_point,
