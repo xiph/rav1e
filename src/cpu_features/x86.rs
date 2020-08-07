@@ -20,6 +20,7 @@ pub enum CpuFeatureLevel {
   SSE4_1,
   AVX2,
   AVX512,
+  #[arg_enum(alias = "avx512vpclmulqdq")]
   AVX512ICL,
 }
 
@@ -44,15 +45,17 @@ impl Default for CpuFeatureLevel {
         && is_x86_feature_detected!("avx512vl")
     }
     fn avx512icl_detected() -> bool {
-      false
-      // avx512_detected()
-      // && is_x86_feature_detected!("avx512bitalg")
-      // && is_x86_feature_detected!("avx512clmulqdq")
-      // && is_x86_feature_detected!("avx512ifma")
-      // && is_x86_feature_detected!("avx512vaes")
-      // && is_x86_feature_detected!("avx512vbmi")
-      // && is_x86_feature_detected!("avx512vbmi2")
-      // && is_x86_feature_detected!("avx512vpopcntdq")
+      // Per dav1d, these are the flags needed.
+      avx512_detected()
+        && is_x86_feature_detected!("avx512vnni")
+        && is_x86_feature_detected!("avx512ifma")
+        && is_x86_feature_detected!("avx512vbmi")
+        && is_x86_feature_detected!("avx512vbmi2")
+        && is_x86_feature_detected!("avx512vpopcntdq")
+        && is_x86_feature_detected!("avx512bitalg")
+        && is_x86_feature_detected!("avx512gfni")
+        && is_x86_feature_detected!("avx512vaes")
+        && is_x86_feature_detected!("avx512vpclmulqdq")
     }
 
     let detected: CpuFeatureLevel = if avx512icl_detected() {
