@@ -1789,6 +1789,7 @@ pub fn encode_block_post_cdef<T: Pixel>(
         );
       }
     } else {
+      debug_assert!(bsize == BlockSize::BLOCK_4X4 || (is_inter && skip));
       cw.bc.update_tx_size_context(tile_bo, bsize, tx_size, is_inter && skip);
     }
   }
@@ -2214,7 +2215,6 @@ pub fn encode_block_with_modes<T: Pixel>(
   let mvs = mode_decision.mvs;
   let mut skip = mode_decision.skip;
   let mut cdef_coded = cw.bc.cdef_coded;
-  let (tx_size, tx_type) = (mode_decision.tx_size, mode_decision.tx_type);
 
   // Set correct segmentation ID before encoding and before
   // rdo_tx_size_type().
@@ -2225,9 +2225,15 @@ pub fn encode_block_with_modes<T: Pixel>(
   let mode_context =
     cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
 
-  if !mode_decision.skip && !mode_decision.has_coeff {
+  let (tx_size, tx_type) = if !mode_decision.skip && !mode_decision.has_coeff {
     skip = true;
-  }
+    rdo_tx_size_type(
+      fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
+    )
+  } else {
+    (mode_decision.tx_size, mode_decision.tx_type)
+  };
+
   cdef_coded = encode_block_pre_cdef(
     &fi.sequence,
     ts,
@@ -2667,7 +2673,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, part_decision.sidx);
 
       // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
-      // because, with top-down partition RDO, the neighnoring contexts
+      // because, with top-down partition RDO, the neighboring contexts
       // of current partition can change, i.e. neighboring partitions can split down more.
       let (tx_size, tx_type) = rdo_tx_size_type(
         fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
