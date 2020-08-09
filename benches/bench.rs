@@ -138,11 +138,11 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
-  let in_padded_frame = cdef_padded_frame_copy(&fs.rec);
+  let in_frame = fs.rec.clone();
   let mut ts = fs.as_tile_state_mut();
 
   b.iter(|| {
-    cdef_filter_tile(&fi, &mut ts.rec, &fb.as_tile_blocks(), &in_padded_frame)
+    cdef_filter_tile(&fi, &mut ts.rec, &fb.as_tile_blocks(), &in_frame)
   });
 }
 

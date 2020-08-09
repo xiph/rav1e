@@ -38,6 +38,14 @@ impl Rect {
       height: self.height >> ydec,
     }
   }
+  pub const fn to_area(&self) -> Area {
+    Area::Rect{
+      x: self.x,
+      y: self.y,
+      width: self.width,
+      height: self.height,
+    }
+  }
 }
 
 // Structure to describe a rectangle area in several ways
@@ -263,6 +271,26 @@ macro_rules! plane_region_common {
           data,
           plane_cfg: &self.plane_cfg,
           rect: absolute_rect,
+          phantom: PhantomData,
+        }
+      }
+
+      // Return an equivalent PlaneRegion with origin homed to 0,0.  Data
+      // pointer is not moved (0,0 points to the same pixel previously
+      // pointed to by old x,y).
+      #[inline(always)]
+      pub fn home(&self) -> Self {
+        let home_rect = Rect {
+          x: 0,
+          y: 0,
+          width: self.rect.width,
+          height: self.rect.height,
+        };
+        
+        Self {
+          data: self.data,
+          plane_cfg: &self.plane_cfg,
+          rect: home_rect,
           phantom: PhantomData,
         }
       }

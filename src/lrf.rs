@@ -22,7 +22,7 @@ use crate::frame::{
   AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
 };
 use crate::hawktracer::*;
-use crate::tiling::{Area, PlaneRegionMut, Rect};
+use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 
 use crate::api::SGRComplexityLevel;
@@ -808,8 +808,8 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
-  integral_image_buffer: &IntegralImageBuffer, input: &PlaneSlice<u16>,
-  cdeffed: &PlaneSlice<u16>, cdef_w: usize, cdef_h: usize,
+  integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
+  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
 
