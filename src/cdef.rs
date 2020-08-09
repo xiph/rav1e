@@ -383,7 +383,10 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
       out.planes[pli].region_mut(Area::StartingAt { x: -ipad, y: -ipad });
     for yi in 0..(out_height + pad * 2) as isize {
       let out_row = &mut out_region[yi as usize];
-      if y + yi - ipad < 0 || y + yi - ipad >= in_height as isize {
+      if yi < ipad ||
+        yi >= out_height as isize + ipad ||
+        y + yi - ipad < 0 ||
+        y + yi - ipad >= in_height as isize {
         // above or below the visible frame, fill with flag.
         // This flag needs to go away (since it forces us to use a 16-bit range)
         // but that requires some deep changes to the filtering code
@@ -394,7 +397,10 @@ pub fn cdef_padded_tile_copy<T: Pixel>(
       } else {
         let in_row = &tile.planes[pli][(y + yi - ipad) as usize];
         for xi in 0..out_width as isize + ipad * 2 {
-          if x + xi - ipad >= 0 && x + xi - ipad < in_width as isize {
+          if xi >= ipad &&
+            xi < out_width as isize + ipad &&
+            x + xi - ipad >= 0 &&
+            x + xi - ipad < in_width as isize {
             out_row[xi as usize] =
               u16::cast_from(in_row[(x + xi - ipad) as usize]);
           } else {
