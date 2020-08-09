@@ -131,6 +131,65 @@ macro_rules! tile_common {
           ],
         }
       }
+
+      // Return a view to a subregion of a Tile
+      //
+      // The subregion must be included in (i.e. must not exceed) this Tile.
+      //
+      // It is described by an `Area`, relative to the luma plane of
+      // this region.
+      #[inline(always)]
+      pub fn subregion(&self, area: Area) -> Tile<'_, T> {
+        let tile_rect = area.to_rect(
+          0,
+          0,
+          self.planes[0].rect().width,
+          self.planes[0].rect().height,
+        );
+        Tile {
+          planes: {
+            let sub_plane = |pli: usize| {
+              let plane = &self.planes[pli];
+              let &PlaneConfig { xdec, ydec, .. } = self.planes[pli].plane_cfg;
+              let rect = tile_rect.decimated(xdec, ydec);
+              assert!(rect.x >= 0 && rect.x as usize <= plane.rect().width);
+              assert!(rect.y >= 0 && rect.y as usize <= plane.rect().height);
+              assert!(rect.x as usize + rect.width <=
+                      plane.rect().x as usize + plane.rect().width);
+              assert!(rect.y as usize + rect.height <=
+                      plane.rect().y as usize + plane.rect().height);
+              plane.subregion(rect.to_area())
+            };
+            [sub_plane(0), sub_plane(1), sub_plane(2)]
+          },
+        }
+      }
+
+      // Return an equivalent Tile with origin homed to 0,0.  Data
+      // pointer is not moved (0,0 points to the same pixel previously
+      // pointed to by old x,y).
+      #[inline(always)]
+      pub fn home(&self) -> Self {
+        Self {
+          planes: [
+            self.planes[0].home(),
+            self.planes[1].home(),
+            self.planes[2].home(),
+          ],
+        }
+      }
+
+      // Return a copy of this tile's contents in a new backing frame.
+      #[inline(always)]
+      pub(crate) fn scratch_copy(&self) -> Frame<T> {
+        Frame {
+          planes: [
+            self.planes[0].scratch_copy(),
+            self.planes[1].scratch_copy(),
+            self.planes[2].scratch_copy(),
+          ],
+        }
+      }
     }
   }
 }

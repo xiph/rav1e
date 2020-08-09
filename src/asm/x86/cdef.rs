@@ -24,6 +24,17 @@ type CdefFilterFn = unsafe extern fn(
   damping: i32,
 );
 
+type CdefFilterLBDFn = unsafe extern fn(
+  dst: *mut u8,
+  dst_stride: isize,
+  tmp: *const u8,
+  tmp_stride: isize,
+  pri_strength: i32,
+  sec_strength: i32,
+  dir: i32,
+  damping: i32,
+);
+
 type CdefFilterHBDFn = unsafe extern fn(
   dst: *mut u16,
   dst_stride: isize,
@@ -42,9 +53,9 @@ const fn decimate_index(xdec: usize, ydec: usize) -> usize {
 }
 
 pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
-  dst: &mut PlaneRegionMut<'_, T>, src: *const u16, src_stride: isize,
+  dst: &mut PlaneRegionMut<'_, T>, src: *const T, src_stride: isize,
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-  bit_depth: usize, xdec: usize, ydec: usize, cpu: CpuFeatureLevel,
+  bit_depth: usize, xdec: usize, ydec: usize, edges: u8, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<T>| {
     rust::cdef_filter_block(
@@ -58,59 +69,66 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
       bit_depth,
       xdec,
       ydec,
+      edges,
       cpu,
     );
   };
-  #[cfg(feature = "check_asm")]
-  let ref_dst = {
-    let mut copy = dst.scratch_copy();
-    call_rust(&mut copy.as_region_mut());
-    copy
-  };
-  match T::type_enum() {
-    PixelType::U8 => {
-      match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-          );
+
+  // TODO: handle padding in the fast path
+  if edges != CDEF_HAVE_ALL {
+    call_rust(dst);
+  } else {
+    #[cfg(feature = "check_asm")]
+    let ref_dst = {
+      let mut copy = dst.scratch_copy();
+      call_rust(&mut copy.as_region_mut());
+      copy
+    };
+    match T::type_enum() {
+      PixelType::U8 => {
+        match CDEF_FILTER_LBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
+          Some(func) => {
+            (func)(
+              dst.data_ptr_mut() as *mut _,
+              T::to_asm_stride(dst.plane_cfg.stride),
+              src as *const _,
+              src_stride,
+              pri_strength,
+              sec_strength,
+              dir as i32,
+              damping,
+            );
+          }
+          None => call_rust(dst),
         }
-        None => call_rust(dst),
+      }
+      PixelType::U16 => {
+        match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
+          Some(func) => {
+            (func)(
+              dst.data_ptr_mut() as *mut _,
+              T::to_asm_stride(dst.plane_cfg.stride),
+              src as *const _,
+              src_stride,
+              pri_strength,
+              sec_strength,
+              dir as i32,
+              damping,
+              (1 << bit_depth) - 1,
+            );
+          }
+          None => call_rust(dst),
+        }
       }
     }
-    PixelType::U16 => {
-      match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-        Some(func) => {
-          (func)(
-            dst.data_ptr_mut() as *mut _,
-            T::to_asm_stride(dst.plane_cfg.stride),
-            src,
-            src_stride,
-            pri_strength,
-            sec_strength,
-            dir as i32,
-            damping,
-            (1 << bit_depth) - 1,
-          );
-        }
-        None => call_rust(dst),
-      }
-    }
-  }
-  #[cfg(feature = "check_asm")]
-  {
-    for (dst_row, ref_row) in
-      dst.rows_iter().zip(ref_dst.as_region().rows_iter())
+    #[cfg(feature = "check_asm")]
     {
-      for (dst, reference) in dst_row.iter().zip(ref_row) {
-        assert_eq!(*dst, *reference);
+      for (dst_row, ref_row) in
+        dst.rows_iter().zip(ref_dst.as_region().rows_iter())
+      {
+        for (dst, reference) in dst_row.iter().zip(ref_row) {
+          assert_eq!(*dst, *reference);
+        }
       }
     }
   }
@@ -142,9 +160,10 @@ static CDEF_FILTER_FNS_AVX2: [Option<CdefFilterFn>; 4] = {
 };
 
 cpu_function_lookup_table!(
-  CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
+  CDEF_FILTER_LBD_FNS: [[Option<CdefFilterLBDFn>; 4]],
   default: [None; 4],
-  [AVX2]
+  []
+  //[AVX2]
 );
 
 cpu_function_lookup_table!(
@@ -153,13 +172,15 @@ cpu_function_lookup_table!(
   []
 );
 
-type CdefDirFn =
+type CdefDirLBDFn =
+  unsafe extern fn(tmp: *const u8, tmp_stride: isize, var: *mut u32) -> i32;
+type CdefDirHBDFn =
   unsafe extern fn(tmp: *const u16, tmp_stride: isize, var: *mut u32) -> i32;
 
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub(crate) fn cdef_find_dir<T: Pixel>(
-  img: &PlaneSlice<'_, u16>, var: &mut u32, coeff_shift: usize,
+  img: &PlaneSlice<'_, T>, var: &mut u32, coeff_shift: usize,
   cpu: CpuFeatureLevel,
 ) -> i32 {
   let call_rust =
@@ -174,13 +195,13 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
 
   let dir = match T::type_enum() {
     PixelType::U8 => {
-      if let Some(func) = CDEF_DIR_FNS[cpu.as_index()] {
+      if let Some(func) = CDEF_DIR_LBD_FNS[cpu.as_index()] {
         unsafe {
           // Different from the version in dav1d. This version takes 16-bit
           // input, even when working with 8 bit input. Mostly done to limit
           // the amount of code being impacted.
           (func)(
-            img.as_ptr() as *const u16,
+            img.as_ptr() as *const _,
             u16::to_asm_stride(img.plane.cfg.stride),
             var as *mut u32,
           )
@@ -189,7 +210,22 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
         call_rust(var)
       }
     }
-    PixelType::U16 => call_rust(var),
+    PixelType::U16 => {
+      if let Some(func) = CDEF_DIR_HBD_FNS[cpu.as_index()] {
+        unsafe {
+          // Different from the version in dav1d. This version takes 16-bit
+          // input, even when working with 8 bit input. Mostly done to limit
+          // the amount of code being impacted.
+          (func)(
+            img.as_ptr() as *const _,
+            u16::to_asm_stride(img.plane.cfg.stride),
+            var as *mut u32,
+          )
+        }
+      } else {
+        call_rust(var)
+      }
+    }
   };
 
   #[cfg(feature = "check_asm")]
@@ -208,9 +244,17 @@ extern {
 }
 
 cpu_function_lookup_table!(
-  CDEF_DIR_FNS: [Option<CdefDirFn>],
+  CDEF_DIR_LBD_FNS: [Option<CdefDirLBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_cdef_dir_avx2))]
+  []
+  //[(AVX2, Some(rav1e_cdef_dir_avx2))]
+);
+
+cpu_function_lookup_table!(
+  CDEF_DIR_HBD_FNS: [Option<CdefDirHBDFn>],
+  default: None,
+  []
+  //[(AVX2, Some(rav1e_cdef_dir_avx2))]
 );
 
 #[cfg(test)]
