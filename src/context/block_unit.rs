@@ -324,7 +324,7 @@ impl<'a> BlockContext<'a> {
     let n4_h = bsize.height_mi();
 
     let (tx_w, tx_h) = if skip {
-      (n4_w as u8, n4_h as u8)
+      ((n4_w * MI_SIZE) as u8, (n4_h * MI_SIZE) as u8)
     } else {
       (tx_size.width() as u8, tx_size.height() as u8)
     };
