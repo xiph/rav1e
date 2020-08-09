@@ -143,14 +143,14 @@ pub fn get_subset_predictors<T: Pixel>(
     );
   }
   // right
-  if tile_bo.0.x < tile_mvs.cols() - w {
+  if tile_mvs.cols() > w && tile_bo.0.x < tile_mvs.cols() - w {
     add_cand(
       &mut predictors,
       tile_mvs[tile_bo.0.y + clipped_half_h][tile_bo.0.x + w],
     );
   }
   // bottom
-  if tile_bo.0.y < tile_mvs.rows() - h {
+  if tile_mvs.rows() > h && tile_bo.0.y < tile_mvs.rows() - h {
     add_cand(
       &mut predictors,
       tile_mvs[tile_bo.0.y + h][tile_bo.0.x + clipped_half_w],
@@ -182,12 +182,12 @@ pub fn get_subset_predictors<T: Pixel>(
         prev_frame_mvs[frame_bo.0.y - 1][frame_bo.0.x + clipped_half_w];
       add_cand(&mut predictors, top);
     }
-    if frame_bo.0.x < prev_frame_mvs.cols - w {
+    if prev_frame_mvs.cols > w && frame_bo.0.x < prev_frame_mvs.cols - w {
       let right =
         prev_frame_mvs[frame_bo.0.y + clipped_half_h][frame_bo.0.x + w];
       add_cand(&mut predictors, right);
     }
-    if frame_bo.0.y < prev_frame_mvs.rows - h {
+    if prev_frame_mvs.rows > h && frame_bo.0.y < prev_frame_mvs.rows - h {
       let bottom =
         prev_frame_mvs[frame_bo.0.y + h][frame_bo.0.x + clipped_half_w];
       add_cand(&mut predictors, bottom);
