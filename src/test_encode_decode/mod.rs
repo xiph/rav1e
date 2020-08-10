@@ -678,7 +678,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
 macro_rules! test_high_bit_depth {
   ($($B:expr),+) => {
     $(
-      paste::item_with_macros!{
+      paste::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         #[ignore]
@@ -709,7 +709,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 macro_rules! test_chroma_sampling {
   ($(($S:expr, $I:expr)),+) => {
     $(
-      paste::item_with_macros!{
+      paste::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         #[ignore]
