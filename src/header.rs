@@ -442,7 +442,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
     }
 
-    self.write_bit(seq.separate_uv_delta_q)?;
+    self.write_bit(true)?; // separate_uv_delta_q
 
     Ok(())
   }
@@ -750,15 +750,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_delta_q(fi.dc_delta_q[0])?;
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
       assert!(fi.ac_delta_q[0] == 0);
-      let diff_uv_delta = fi.sequence.separate_uv_delta_q
-        && (fi.dc_delta_q[1] != fi.dc_delta_q[2]
-          || fi.ac_delta_q[1] != fi.ac_delta_q[2]);
-      if fi.sequence.separate_uv_delta_q {
-        self.write_bit(diff_uv_delta)?;
-      } else {
-        assert!(fi.dc_delta_q[1] == fi.dc_delta_q[2]);
-        assert!(fi.ac_delta_q[1] == fi.ac_delta_q[2]);
-      }
+      let diff_uv_delta = fi.dc_delta_q[1] != fi.dc_delta_q[2]
+        || fi.ac_delta_q[1] != fi.ac_delta_q[2];
+      self.write_bit(diff_uv_delta)?;
       self.write_delta_q(fi.dc_delta_q[1])?;
       self.write_delta_q(fi.ac_delta_q[1])?;
       if diff_uv_delta {
