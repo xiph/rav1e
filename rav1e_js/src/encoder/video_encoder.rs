@@ -44,9 +44,7 @@ impl Encoder for VideoEncoder {
 #[wasm_bindgen]
 impl VideoEncoder {
   #[wasm_bindgen(constructor)]
-  pub fn fromEncoderConfig(
-    conf: EncoderConfig,
-  ) -> Result<VideoEncoder, JsValue> {
+  pub fn new(conf: &EncoderConfig) -> Result<VideoEncoder, JsValue> {
     let cfg = Config::new().with_encoder_config(conf.conf);
 
     match cfg.new_context() {
@@ -59,10 +57,6 @@ impl VideoEncoder {
       }),
       Err(e) => Err(construct_js_err(e, "Invalid EncoderConfig")),
     }
-  }
-
-  pub fn default() -> Result<VideoEncoder, JsValue> {
-    Self::fromEncoderConfig(EncoderConfig::new())
   }
 
   /// Capture data of `HtmlVideoElement`, while it's playing.

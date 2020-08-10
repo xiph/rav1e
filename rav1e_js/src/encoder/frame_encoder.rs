@@ -38,19 +38,13 @@ impl Encoder for FrameEncoder {
 #[wasm_bindgen]
 impl FrameEncoder {
   #[wasm_bindgen(constructor)]
-  pub fn fromEncoderConfig(
-    conf: EncoderConfig,
-  ) -> Result<FrameEncoder, JsValue> {
+  pub fn new(conf: &EncoderConfig) -> Result<FrameEncoder, JsValue> {
     let cfg = Config::new().with_encoder_config(conf.conf);
 
     match cfg.new_context() {
       Ok(ctx) => Ok(Self { ctx }),
       Err(e) => Err(construct_js_err(e, "Invalid EncoderConfig")),
     }
-  }
-
-  pub fn default() -> Result<FrameEncoder, JsValue> {
-    Self::fromEncoderConfig(EncoderConfig::new())
   }
 
   pub fn debug(&self) -> String {

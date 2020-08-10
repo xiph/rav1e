@@ -1,6 +1,6 @@
 [package]
 name = "rav1e_js"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Urhengulas <johann.hemmann@code.berlin>"]
 edition = "2018"
 description = "JavaScript bindings for rav1e"

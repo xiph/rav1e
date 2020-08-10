@@ -19,56 +19,28 @@ pub fn simple_encoding(repeats: u32) {
 
   let cfg = Config::new().with_encoder_config(enc);
   let mut ctx: Context<u16> = cfg.new_context().unwrap();
-  rav1e_js::log!("Instantiated new encoder (config: {:?})", cfg);
 
   let f = ctx.new_frame();
-  rav1e_js::log!("Generated new frame: {:?}", f);
 
   for i in 0..repeats {
-    rav1e_js::log!("Sending frame {}", i);
     match ctx.send_frame(f.clone()) {
       Ok(_) => {}
       Err(e) => match e {
-        EncoderStatus::EnoughData => {
-          rav1e_js::log!(
-            "Warn: Unable to append frame {} to the internal queue",
-            i
-          );
-        }
+        EncoderStatus::EnoughData => {}
         _ => {
           panic!("Unable to send frame {}", i);
         }
       },
     }
   }
-  rav1e_js::log!("Successfully send {} frames to the encoder", repeats);
-
   ctx.flush();
-  rav1e_js::log!("Flush encoder");
 
   loop {
     match ctx.receive_packet() {
-      Ok(packet) => {
-        // Mux the packet.
-        rav1e_js::log!("Received packet: {}", packet)
-      }
-      Err(EncoderStatus::Encoded) => {
-        // A frame was encoded without emitting a packet. This is normal,
-        // just proceed as usual.
-      }
-      Err(EncoderStatus::LimitReached) => {
-        // All frames have been encoded. Time to break out of the loop.
-        break;
-      }
-      Err(EncoderStatus::NeedMoreData) => {
-        // The encoder has requested additional frames. Push the next frame
-        // in, or flush the encoder if there are no frames left (on None).
-        ctx.flush();
-      }
-      Err(e) => {
-        panic!(e);
-      }
+      Ok(_packet) => {}
+      Err(EncoderStatus::Encoded) => {}
+      Err(EncoderStatus::LimitReached) => break,
+      Err(e) => panic!(e),
     }
   }
-  rav1e_js::log!("Done encoding the same tiny blank frame {} times.", repeats);
 }
