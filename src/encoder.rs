@@ -176,7 +176,6 @@ pub struct Sequence {
   pub tier: [usize; MAX_NUM_OPERATING_POINTS], // seq_tier in the spec. One bit: 0
   // or 1.
   pub film_grain_params_present: bool,
-  pub separate_uv_delta_q: bool,
   pub timing_info_present: bool,
 }
 
@@ -256,7 +255,6 @@ impl Sequence {
       level,
       tier,
       film_grain_params_present: false,
-      separate_uv_delta_q: true,
       timing_info_present: config.enable_timing_info,
     }
   }
