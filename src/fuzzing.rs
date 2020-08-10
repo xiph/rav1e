@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use arbitrary::*;
+use arbitrary::{Arbitrary, Unstructured};
 
 use crate::prelude::*;
 
@@ -41,12 +41,12 @@ use crate::prelude::*;
 
 // A helper for generating arbitrary data.
 struct Generator<'a> {
-  buffer: RingBuffer<'a>,
+  buffer: Unstructured<'a>,
 }
 
 impl<'a> Generator<'a> {
-  fn new(data: &'a [u8]) -> Result<Self, BufferError> {
-    Ok(Self { buffer: RingBuffer::new(data, data.len())? })
+  fn new(data: &'a [u8]) -> Self {
+    Self { buffer: Unstructured::new(data) }
   }
 
   fn g<T: Arbitrary>(&mut self) -> T {
@@ -56,11 +56,7 @@ impl<'a> Generator<'a> {
 
 macro_rules! create_generator {
   ($data:expr) => {{
-    let g = Generator::new($data);
-    if g.is_err() {
-      return;
-    }
-    g.unwrap()
+    Generator::new($data)
   }};
 }
 
