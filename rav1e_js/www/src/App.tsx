@@ -9,7 +9,7 @@
 
 import React from 'react';
 
-import { ChromaSampling, EncoderConfig, VideoEncoder } from "rav1e";
+import { ChromaSampling, ColorPrimaries, EncoderConfig, MatrixCoefficients, TransferCharacteristics, VideoEncoder } from "rav1e";
 
 export default function App() {
 	const video = document.getElementById("video") as HTMLVideoElement;
@@ -22,7 +22,11 @@ export default function App() {
 			new EncoderConfig()
 				.setSpeed(10)
 				.setDim(video.videoWidth, video.videoHeight)
-				// .setColorDescription(...) (is not available yet)
+				.setColorDescription(
+					ColorPrimaries.BT709,
+					TransferCharacteristics.BT709,
+					MatrixCoefficients.BT709
+				)
 				// ChromaSampling needs to fit to the ChromaSampling of the Frame
 				.setChromaSampling(ChromaSampling.Cs444)
 		);

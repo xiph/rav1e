@@ -99,13 +99,126 @@ impl EncoderConfig {
     self.clone()
   }
 
-  // /// Content color description (primaries, transfer characteristics, matrix).
-  // pub fn setColorDescription(
-  //   &mut self, color_description: ColorDescription,
-  // ) -> Self {
-  //   self.conf.color_description = Some(color_description);
-  //   self.clone()
-  // }
+  /// Content color description (primaries, transfer characteristics, matrix).
+  ///
+  /// Please supply following enums as input:
+  /// * `color_primaries`: `ColorPrimaries`
+  /// * `transfer_characteristics`: `TransferCharacteristics`
+  /// * `matrix_coefficients`: `MatrixCoefficients`
+  pub fn setColorDescription(
+    &mut self, color_primaries: ColorPrimaries,
+    transfer_characteristics: TransferCharacteristics,
+    matrix_coefficients: MatrixCoefficients,
+  ) -> Self {
+    // these huge match statements are a workaround, they can be removed as
+    // soon https://github.com/rustwasm/wasm-bindgen/issues/2273 gets solved
+    let color_primaries = match color_primaries {
+      ColorPrimaries::BT709 => rav1e::color::ColorPrimaries::BT2020,
+      ColorPrimaries::Unspecified => rav1e::color::ColorPrimaries::Unspecified,
+      ColorPrimaries::BT470M => rav1e::color::ColorPrimaries::BT470M,
+      ColorPrimaries::BT470BG => rav1e::color::ColorPrimaries::BT470BG,
+      ColorPrimaries::BT601 => rav1e::color::ColorPrimaries::BT601,
+      ColorPrimaries::SMPTE240 => rav1e::color::ColorPrimaries::SMPTE240,
+      ColorPrimaries::GenericFilm => rav1e::color::ColorPrimaries::GenericFilm,
+      ColorPrimaries::BT2020 => rav1e::color::ColorPrimaries::BT2020,
+      ColorPrimaries::XYZ => rav1e::color::ColorPrimaries::XYZ,
+      ColorPrimaries::SMPTE431 => rav1e::color::ColorPrimaries::SMPTE431,
+      ColorPrimaries::SMPTE432 => rav1e::color::ColorPrimaries::SMPTE432,
+      ColorPrimaries::EBU3213 => rav1e::color::ColorPrimaries::EBU3213,
+    };
+    let transfer_characteristics = match transfer_characteristics {
+      TransferCharacteristics::BT709 => {
+        rav1e::color::TransferCharacteristics::BT709
+      }
+      TransferCharacteristics::Unspecified => {
+        rav1e::color::TransferCharacteristics::Unspecified
+      }
+      TransferCharacteristics::BT470M => {
+        rav1e::color::TransferCharacteristics::BT470M
+      }
+      TransferCharacteristics::BT470BG => {
+        rav1e::color::TransferCharacteristics::BT470BG
+      }
+      TransferCharacteristics::BT601 => {
+        rav1e::color::TransferCharacteristics::BT601
+      }
+      TransferCharacteristics::SMPTE240 => {
+        rav1e::color::TransferCharacteristics::SMPTE240
+      }
+      TransferCharacteristics::Linear => {
+        rav1e::color::TransferCharacteristics::Linear
+      }
+      TransferCharacteristics::Log100 => {
+        rav1e::color::TransferCharacteristics::Log100
+      }
+      TransferCharacteristics::Log100Sqrt10 => {
+        rav1e::color::TransferCharacteristics::Log100Sqrt10
+      }
+      TransferCharacteristics::IEC61966 => {
+        rav1e::color::TransferCharacteristics::IEC61966
+      }
+      TransferCharacteristics::BT1361 => {
+        rav1e::color::TransferCharacteristics::BT1361
+      }
+      TransferCharacteristics::SRGB => {
+        rav1e::color::TransferCharacteristics::SRGB
+      }
+      TransferCharacteristics::BT2020_10Bit => {
+        rav1e::color::TransferCharacteristics::BT2020_10Bit
+      }
+      TransferCharacteristics::BT2020_12Bit => {
+        rav1e::color::TransferCharacteristics::BT2020_12Bit
+      }
+      TransferCharacteristics::SMPTE2084 => {
+        rav1e::color::TransferCharacteristics::SMPTE2084
+      }
+      TransferCharacteristics::SMPTE428 => {
+        rav1e::color::TransferCharacteristics::SMPTE428
+      }
+      TransferCharacteristics::HLG => {
+        rav1e::color::TransferCharacteristics::HLG
+      }
+    };
+    let matrix_coefficients = match matrix_coefficients {
+      MatrixCoefficients::Identity => {
+        rav1e::color::MatrixCoefficients::Identity
+      }
+      MatrixCoefficients::BT709 => rav1e::color::MatrixCoefficients::BT709,
+      MatrixCoefficients::Unspecified => {
+        rav1e::color::MatrixCoefficients::Unspecified
+      }
+      MatrixCoefficients::FCC => rav1e::color::MatrixCoefficients::FCC,
+      MatrixCoefficients::BT470BG => rav1e::color::MatrixCoefficients::BT470BG,
+      MatrixCoefficients::BT601 => rav1e::color::MatrixCoefficients::BT601,
+      MatrixCoefficients::SMPTE240 => {
+        rav1e::color::MatrixCoefficients::SMPTE240
+      }
+      MatrixCoefficients::YCgCo => rav1e::color::MatrixCoefficients::YCgCo,
+      MatrixCoefficients::BT2020NCL => {
+        rav1e::color::MatrixCoefficients::BT2020NCL
+      }
+      MatrixCoefficients::BT2020CL => {
+        rav1e::color::MatrixCoefficients::BT2020CL
+      }
+      MatrixCoefficients::SMPTE2085 => {
+        rav1e::color::MatrixCoefficients::SMPTE2085
+      }
+      MatrixCoefficients::ChromatNCL => {
+        rav1e::color::MatrixCoefficients::ChromatNCL
+      }
+      MatrixCoefficients::ChromatCL => {
+        rav1e::color::MatrixCoefficients::ChromatCL
+      }
+      MatrixCoefficients::ICtCp => rav1e::color::MatrixCoefficients::ICtCp,
+    };
+
+    self.conf.color_description = Some(ColorDescription {
+      color_primaries,
+      transfer_characteristics,
+      matrix_coefficients,
+    });
+    self.clone()
+  }
 
   /// High dynamic range mastering display color volume
   ///
@@ -281,4 +394,110 @@ impl EncoderConfig {
     self.conf.speed_settings = SpeedSettings::from_preset(speed);
     self.clone()
   }
+}
+
+/// Supported Color Primaries
+///
+/// As defined by “Color primaries” section of ISO/IEC 23091-4/ITU-T H.273
+#[wasm_bindgen]
+pub enum ColorPrimaries {
+  /// BT.709
+  BT709,
+  /// Unspecified, must be signaled or inferred outside of the bitstream
+  Unspecified,
+  /// BT.470 System M (historical)
+  BT470M,
+  /// BT.470 System B, G (historical)
+  BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
+  BT601,
+  /// SMPTE 240M (historical)
+  SMPTE240,
+  /// Generic film
+  GenericFilm,
+  /// BT.2020, BT.2100
+  BT2020,
+  /// SMPTE 248 (CIE 1921 XYZ)
+  XYZ,
+  /// SMPTE RP 431-2
+  SMPTE431,
+  /// SMPTE EG 432-1
+  SMPTE432,
+  /// EBU Tech. 3213-E
+  EBU3213,
+}
+
+/// Supported Transfer Characteristics
+///
+/// As defined by “Transfer characteristics” section of ISO/IEC 23091-4/ITU-TH.273.
+#[wasm_bindgen]
+pub enum TransferCharacteristics {
+  /// BT.709
+  BT709,
+  /// Unspecified, must be signaled or inferred outside of the bitstream
+  Unspecified,
+  /// BT.470 System M (historical)
+  BT470M,
+  /// BT.470 System B, G (historical)
+  BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
+  BT601,
+  /// SMPTE 240 M
+  SMPTE240,
+  /// Linear
+  Linear,
+  /// Logarithmic (100:1 range)
+  Log100,
+  /// Logarithmic ((100 * √10):1 range)
+  Log100Sqrt10,
+  /// IEC 61966-2-4
+  IEC61966,
+  /// BT.1361 extended color gamut system (historical)
+  BT1361,
+  /// sRGB or sYCC
+  SRGB,
+  /// BT.2020 10-bit systems
+  BT2020_10Bit,
+  /// BT.2020 12-bit systems
+  BT2020_12Bit,
+  /// SMPTE ST 2084, ITU BT.2100 PQ
+  SMPTE2084,
+  /// SMPTE ST 428
+  SMPTE428,
+  /// BT.2100 HLG (Hybrid Log Gamma), ARIB STD-B67
+  HLG,
+}
+/// Matrix coefficients
+///
+/// As defined by the “Matrix coefficients” section of ISO/IEC 23091-4/ITU-TH.273.
+#[wasm_bindgen]
+pub enum MatrixCoefficients {
+  /// Identity matrix
+  Identity,
+  /// BT.709
+  BT709,
+  /// Unspecified, must be signaled or inferred outside of the bitstream.
+  Unspecified,
+  /// US FCC 73.628
+  FCC,
+  /// BT.470 System B, G (historical)
+  BT470BG,
+  /// BT.601-7 525 (SMPTE 170 M)
+  BT601,
+  /// SMPTE 240 M
+  SMPTE240,
+  /// YCgCo
+  YCgCo,
+  /// BT.2020 non-constant luminance, BT.2100 YCbCr
+  BT2020NCL,
+  /// BT.2020 constant luminance
+  BT2020CL,
+  /// SMPTE ST 2085 YDzDx
+  SMPTE2085,
+  /// Chromaticity-derived non-constant luminance
+  ChromatNCL,
+  /// Chromaticity-derived constant luminance
+  ChromatCL,
+  /// BT.2020 ICtCp
+  ICtCp,
 }
