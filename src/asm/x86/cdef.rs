@@ -24,17 +24,6 @@ type CdefFilterFn = unsafe extern fn(
   damping: i32,
 );
 
-type CdefFilterLBDFn = unsafe extern fn(
-  dst: *mut u8,
-  dst_stride: isize,
-  tmp: *const u8,
-  tmp_stride: isize,
-  pri_strength: i32,
-  sec_strength: i32,
-  dir: i32,
-  damping: i32,
-);
-
 type CdefFilterHBDFn = unsafe extern fn(
   dst: *mut u16,
   dst_stride: isize,
@@ -86,13 +75,29 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     };
     match T::type_enum() {
       PixelType::U8 => {
-        match CDEF_FILTER_LBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
+        match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
           Some(func) => {
+            // current cdef_filter_block asm does 16->8 for historical
+            // reasons.  Copy into tmp space for now (also handling
+                // padding) until asm is updated
+            let tmpstride = 16; /* 128-bit alignment greater than 2 * (8>>xdec) + 2 */
+            let mut tmp : Aligned<[u16; (2+8+2)*16+16]> =
+              Aligned::new([CDEF_VERY_LARGE; (2+8+2)*16+16]);
+            rust::pad_into_tmp16 (
+              tmp.data.as_mut_ptr().offset(-2), // points to
+              // *padding* upper left; the -2 is to make sure the
+              // block area is SIMD-aligned, not the padding
+              tmpstride,
+              src,  // points to *block* upper left
+              src_stride,
+              8 >> xdec,
+              8 >> ydec,
+              edges);
             (func)(
               dst.data_ptr_mut() as *mut _,
               T::to_asm_stride(dst.plane_cfg.stride),
-              src as *const _,
-              src_stride,
+              tmp.data.as_ptr().offset(2*tmpstride+2-2) as *const u16,
+              tmpstride,
               pri_strength,
               sec_strength,
               dir as i32,
@@ -160,10 +165,9 @@ static CDEF_FILTER_FNS_AVX2: [Option<CdefFilterFn>; 4] = {
 };
 
 cpu_function_lookup_table!(
-  CDEF_FILTER_LBD_FNS: [[Option<CdefFilterLBDFn>; 4]],
+  CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
   default: [None; 4],
-  []
-  //[AVX2]
+  [AVX2]
 );
 
 cpu_function_lookup_table!(
@@ -197,12 +201,9 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
     PixelType::U8 => {
       if let Some(func) = CDEF_DIR_LBD_FNS[cpu.as_index()] {
         unsafe {
-          // Different from the version in dav1d. This version takes 16-bit
-          // input, even when working with 8 bit input. Mostly done to limit
-          // the amount of code being impacted.
           (func)(
             img.as_ptr() as *const _,
-            u16::to_asm_stride(img.plane.cfg.stride),
+            T::to_asm_stride(img.plane.cfg.stride),
             var as *mut u32,
           )
         }
@@ -213,12 +214,9 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
     PixelType::U16 => {
       if let Some(func) = CDEF_DIR_HBD_FNS[cpu.as_index()] {
         unsafe {
-          // Different from the version in dav1d. This version takes 16-bit
-          // input, even when working with 8 bit input. Mostly done to limit
-          // the amount of code being impacted.
           (func)(
             img.as_ptr() as *const _,
-            u16::to_asm_stride(img.plane.cfg.stride),
+            T::to_asm_stride(img.plane.cfg.stride),
             var as *mut u32,
           )
         }
@@ -238,7 +236,13 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
 }
 
 extern {
-  fn rav1e_cdef_dir_avx2(
+  fn rav1e_cdef_dir_8_avx2(
+    tmp: *const u8, tmp_stride: isize, var: *mut u32,
+  ) -> i32;
+}
+
+extern {
+  fn rav1e_cdef_dir_16_avx2(
     tmp: *const u16, tmp_stride: isize, var: *mut u32,
   ) -> i32;
 }
@@ -246,15 +250,13 @@ extern {
 cpu_function_lookup_table!(
   CDEF_DIR_LBD_FNS: [Option<CdefDirLBDFn>],
   default: None,
-  []
-  //[(AVX2, Some(rav1e_cdef_dir_avx2))]
+  [(AVX2, Some(rav1e_cdef_dir_8_avx2))]
 );
 
 cpu_function_lookup_table!(
   CDEF_DIR_HBD_FNS: [Option<CdefDirHBDFn>],
   default: None,
-  []
-  //[(AVX2, Some(rav1e_cdef_dir_avx2))]
+  [(AVX2, Some(rav1e_cdef_dir_16_avx2))]
 );
 
 #[cfg(test)]

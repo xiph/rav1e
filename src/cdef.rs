@@ -158,7 +158,7 @@ pub(crate) mod rust {
     }
   }
 
-  unsafe fn conditional_pad_copy<T: Pixel>(
+  pub unsafe fn pad_into_tmp16<T: Pixel>(
     dst: *mut u16,
     dst_stride: isize,
     src: *const T,
@@ -213,7 +213,7 @@ pub(crate) mod rust {
       //println!("slowpath padding: flags={}", edges);
       //println!("                  dst= {}x{} @ {},{}",
       //         dst.rect().width, dst.rect().height, dst.rect().x, dst.rect().y);
-      conditional_pad_copy (
+      pad_into_tmp16 (
         tmp.as_mut_ptr(), // points to *padding* upper left
         tmpstride,
         input,  // points to *block* upper left
