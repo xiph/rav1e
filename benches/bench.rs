@@ -142,7 +142,7 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   let mut ts = fs.as_tile_state_mut();
 
   b.iter(|| {
-    cdef_filter_tile(&fi, &mut ts.rec, &fb.as_tile_blocks(), &in_frame)
+    cdef_filter_tile(&fi, &in_frame, &fb.as_tile_blocks(), &mut ts.rec)
   });
 }
 
