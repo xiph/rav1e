@@ -2068,11 +2068,14 @@ pub fn rdo_loop_decision<T: Pixel>(
   // without recomputing the entire stack.  Construct
   // largest-LRU-sized frames for each, accounting for padding
   // required by deblocking, cdef and [optionally] LR.
-  let mut rec_subset = ts.rec.subregion(Area::BlockRect{
-    bo: base_sbo.block_offset(0, 0).0,
-    width: (pixel_w + 7) >> 3 << 3,
-    height: (pixel_h + 7) >> 3 << 3,
-  }).scratch_copy();
+  let mut rec_subset = ts
+    .rec
+    .subregion(Area::BlockRect {
+      bo: base_sbo.block_offset(0, 0).0,
+      width: (pixel_w + 7) >> 3 << 3,
+      height: (pixel_h + 7) >> 3 << 3,
+    })
+    .scratch_copy();
 
   // sub-setted region of the TileBlocks for our working frame area.
   // Note that the size of this subset is what signals CDEF as to the
@@ -2086,12 +2089,14 @@ pub fn rdo_loop_decision<T: Pixel>(
 
   // const, no need to copy, just need the subregion (but do zero the
   // origin to match the other copies/new backing frames).
-  let src_subset = ts.input_tile.subregion(
-    Area::BlockRect{
+  let src_subset = ts
+    .input_tile
+    .subregion(Area::BlockRect {
       bo: base_sbo.block_offset(0, 0).0,
       width: (pixel_w + 7) >> 3 << 3,
       height: (pixel_h + 7) >> 3 << 3,
-    }).home();
+    })
+    .home();
 
   if deblock_p {
     // Find a good deblocking filter solution for the passed in area.
@@ -2125,13 +2130,10 @@ pub fn rdo_loop_decision<T: Pixel>(
     }
   }
 
-  let mut cdef_work = if fi.sequence.enable_cdef {
-    Some(rec_subset.clone())
-  } else {
-    None
-  };
+  let mut cdef_work =
+    if fi.sequence.enable_cdef { Some(rec_subset.clone()) } else { None };
   let mut lrf_work = if fi.sequence.enable_restoration {
-    Some( Frame {
+    Some(Frame {
       planes: {
         let new_plane = |pli: usize| {
           let PlaneConfig { xdec, ydec, width, height, .. } =
@@ -2139,7 +2141,7 @@ pub fn rdo_loop_decision<T: Pixel>(
           Plane::new(width, height, xdec, ydec, 0, 0)
         };
         [new_plane(0), new_plane(1), new_plane(2)]
-      }
+      },
     })
   } else {
     None
@@ -2182,8 +2184,8 @@ pub fn rdo_loop_decision<T: Pixel>(
           let mut best_cost = -1.;
           let mut best_new_index = -1i8;
 
-          /* offset of the superblock we're currently testing within the larger 
-             analysis area */
+          /* offset of the superblock we're currently testing within the larger
+          analysis area */
           let loop_sbo =
             TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
 
@@ -2468,7 +2470,8 @@ pub fn rdo_loop_decision<T: Pixel>(
                   set,
                   fi,
                   &ts.integral_buffer,
-                  &src_plane.subregion(Area::StartingAt{x: lrf_po.x, y: lrf_po.y}),
+                  &src_plane
+                    .subregion(Area::StartingAt { x: lrf_po.x, y: lrf_po.y }),
                   &lrf_in_plane.slice(lrf_po),
                   vis_width,
                   vis_height,

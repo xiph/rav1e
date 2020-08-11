@@ -39,12 +39,7 @@ impl Rect {
     }
   }
   pub const fn to_area(&self) -> Area {
-    Area::Rect{
-      x: self.x,
-      y: self.y,
-      width: self.width,
-      height: self.height,
-    }
+    Area::Rect { x: self.x, y: self.y, width: self.width, height: self.height }
   }
 }
 
@@ -286,7 +281,7 @@ macro_rules! plane_region_common {
           width: self.rect.width,
           height: self.rect.height,
         };
-        
+
         Self {
           data: self.data,
           plane_cfg: &self.plane_cfg,
