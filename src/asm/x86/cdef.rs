@@ -261,6 +261,7 @@ cpu_function_lookup_table!(
 
 #[cfg(test)]
 mod test {
+  pub const CDEF_HAVE_NONE: u8 = 0;
   use super::*;
   use crate::frame::{AsRegion, Plane};
   use interpolate_name::interpolate_test;
@@ -289,11 +290,11 @@ mod test {
             let height = 8 >> $YDEC;
             let area = width * height;
             // dynamic allocation: test
-            let mut src = vec![0u16; area];
+            let mut src = vec![0u8; area];
             // dynamic allocation: test
             let mut dst = Plane::from_slice(&vec![0u8; area], width);
             for (s, d) in src.iter_mut().zip(dst.data.iter_mut()) {
-              *s = random::<u8>() as u16;
+              *s = random::<u8>();
               *d = random::<u8>();
             }
             let mut rust_dst = dst.clone();
@@ -305,8 +306,8 @@ mod test {
             let bit_depth = 8;
 
             unsafe {
-              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CpuFeatureLevel::RUST);
+              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
               assert_eq!(rust_dst.data_origin(), dst.data_origin());
             }
           }
