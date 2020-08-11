@@ -242,12 +242,6 @@ extern {
   ) -> i32;
 }
 
-extern {
-  fn rav1e_cdef_dir_16_avx2(
-    tmp: *const u16, tmp_stride: isize, var: *mut u32,
-  ) -> i32;
-}
-
 cpu_function_lookup_table!(
   CDEF_DIR_LBD_FNS: [Option<CdefDirLBDFn>],
   default: None,
@@ -257,7 +251,7 @@ cpu_function_lookup_table!(
 cpu_function_lookup_table!(
   CDEF_DIR_HBD_FNS: [Option<CdefDirHBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_cdef_dir_16_avx2))]
+  []
 );
 
 #[cfg(test)]
