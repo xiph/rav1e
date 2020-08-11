@@ -19,7 +19,7 @@ use std::ops::{Index, IndexMut};
 use std::slice;
 
 /// Rectangle of a plane region, in pixels
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Rect {
   // coordinates relative to the plane origin (xorigin, yorigin)
   pub x: isize,
@@ -141,13 +141,17 @@ macro_rules! plane_region_common {
   ($name:ident, $as_ptr:ident $(,$opt_mut:tt)?) => {
     impl<'a, T: Pixel> $name<'a, T> {
       #[inline(always)]
+      pub fn is_null(&self) -> bool {
+        self.data.is_null()
+      }
+      #[inline(always)]
       pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect:
         Rect) -> Self {
         if cfg.width == 0 || cfg.height == 0 {
           return Self {
             data: unsafe { std::ptr::null_mut::<T>() },
             plane_cfg: cfg,
-            rect,
+            rect: Rect::default(),
             phantom: PhantomData,
           }
         }
@@ -245,28 +249,37 @@ macro_rules! plane_region_common {
       // ```
       #[inline(always)]
       pub fn subregion(&self, area: Area) -> PlaneRegion<'_, T> {
-        let rect = area.to_rect(
-          self.plane_cfg.xdec,
-          self.plane_cfg.ydec,
-          self.rect.width,
-          self.rect.height,
-        );
-        assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
-        assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
-        let data = unsafe {
-          self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
-        };
-        let absolute_rect = Rect {
-          x: self.rect.x + rect.x,
-          y: self.rect.y + rect.y,
-          width: rect.width,
-          height: rect.height,
-        };
-        PlaneRegion {
-          data,
-          plane_cfg: &self.plane_cfg,
-          rect: absolute_rect,
-          phantom: PhantomData,
+        if self.data.is_null() {
+          PlaneRegion {
+            data: self.data,
+            plane_cfg: &self.plane_cfg,
+            rect: Rect::default(),
+            phantom: PhantomData,
+          }
+        } else {
+          let rect = area.to_rect(
+            self.plane_cfg.xdec,
+            self.plane_cfg.ydec,
+            self.rect.width,
+            self.rect.height,
+          );
+          assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
+          assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
+          let data = unsafe {
+            self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
+          };
+          let absolute_rect = Rect {
+            x: self.rect.x + rect.x,
+            y: self.rect.y + rect.y,
+            width: rect.width,
+            height: rect.height,
+          };
+          PlaneRegion {
+            data,
+            plane_cfg: &self.plane_cfg,
+            rect: absolute_rect,
+            phantom: PhantomData,
+          }
         }
       }
 

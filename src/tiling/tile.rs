@@ -150,14 +150,16 @@ macro_rules! tile_common {
           planes: {
             let sub_plane = |pli: usize| {
               let plane = &self.planes[pli];
-              let &PlaneConfig { xdec, ydec, .. } = self.planes[pli].plane_cfg;
+              let &PlaneConfig { xdec, ydec, .. } = plane.plane_cfg;
               let rect = tile_rect.decimated(xdec, ydec);
-              assert!(rect.x >= 0 && rect.x as usize <= plane.rect().width);
-              assert!(rect.y >= 0 && rect.y as usize <= plane.rect().height);
-              assert!(rect.x as usize + rect.width <=
-                      plane.rect().x as usize + plane.rect().width);
-              assert!(rect.y as usize + rect.height <=
-                      plane.rect().y as usize + plane.rect().height);
+              if !plane.is_null() {
+                assert!(rect.x >= 0 && rect.x as usize <= plane.rect().width);
+                assert!(rect.y >= 0 && rect.y as usize <= plane.rect().height);
+                assert!(rect.x as usize + rect.width <=
+                        plane.rect().x as usize + plane.rect().width);
+                assert!(rect.y as usize + rect.height <=
+                        plane.rect().y as usize + plane.rect().height);
+              }
               plane.subregion(rect.to_area())
             };
             [sub_plane(0), sub_plane(1), sub_plane(2)]
