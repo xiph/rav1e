@@ -262,11 +262,9 @@ CDEF_FILTER 8, 8
 CDEF_FILTER 4, 8
 CDEF_FILTER 4, 4
 
-%macro CDEF_DIR 1 ; LBD == 8, HBD == 16
 INIT_YMM avx2
-cglobal cdef_dir_%1, 3, 4, 15, src, stride, var, stride3
+cglobal cdef_dir_8, 3, 4, 15, src, stride, var, stride3
     lea       stride3q, [strideq*3]
-%if %1 == 8
     movq           xm0, [srcq+strideq*0]
     movq           xm1, [srcq+strideq*1]
     movq           xm2, [srcq+strideq*2]
@@ -288,18 +286,6 @@ cglobal cdef_dir_%1, 3, 4, 15, src, stride, var, stride3
     punpcklbw       m1, m9
     punpcklbw       m2, m9
     punpcklbw       m3, m9
-%else
-    mova           xm0, [srcq+strideq*0]
-    mova           xm1, [srcq+strideq*1]
-    mova           xm2, [srcq+strideq*2]
-    mova           xm3, [srcq+stride3q]
-    lea           srcq, [srcq+strideq*4]
-    vinserti128     m3, [srcq+strideq*0], 1
-    vinserti128     m2, [srcq+strideq*1], 1
-    vinserti128     m1, [srcq+strideq*2], 1
-    vinserti128     m0, [srcq+stride3q], 1
-    vpbroadcastd    m8, [pw_128]
-%endif
     psubw           m0, m8
     psubw           m1, m8
     psubw           m2, m8
@@ -479,9 +465,5 @@ cglobal cdef_dir_%1, 3, 4, 15, src, stride, var, stride3
     psrld          xm2, 10
     movd        [varq], xm2
     RET
-%endmacro
-
-CDEF_DIR 8
-CDEF_DIR 16
 
 %endif ; ARCH_X86_64
