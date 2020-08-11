@@ -206,9 +206,6 @@ pub(crate) mod rust {
       let tmpstride = 2 + (8 >> xdec) + 2;
       let mut tmp = [CDEF_VERY_LARGE; (2 + 8 + 2) * (2 + 8 + 2)];
       // copy in what pixels we have/are allowed to use
-      //println!("slowpath padding: flags={}", edges);
-      //println!("                  dst= {}x{} @ {},{}",
-      //         dst.rect().width, dst.rect().height, dst.rect().x, dst.rect().y);
       pad_into_tmp16(
         tmp.as_mut_ptr(), // points to *padding* upper left
         tmpstride,
@@ -233,9 +230,6 @@ pub(crate) mod rust {
         _cpu,
       );
     } else {
-      //println!("FASTPATH");
-      //println!("                  dst= {}x{} @ {},{}",
-      //         dst.rect().width, dst.rect().height, dst.rect().x, dst.rect().y);
       let xsize = (8 >> xdec) as isize;
       let ysize = (8 >> ydec) as isize;
       let coeff_shift = bit_depth as usize - 8;
@@ -514,17 +508,6 @@ pub fn cdef_filter_superblock<T: Pixel>(
                 0
               }
             };
-
-            //println!("                  flags: {}{}{}{}",
-            //         if edges&CDEF_HAVE_TOP>0 {"HAVE_TOP "}else{""},
-            //         if edges&CDEF_HAVE_BOTTOM>0 {"HAVE_BOTTOM "}else{""},
-            //         if edges&CDEF_HAVE_LEFT>0 {"HAVE_LEFT "}else{""},
-            //         if edges&CDEF_HAVE_RIGHT>0 {"HAVE_RIGHT "}else{""});
-            //println!("                  src= {}x{} @ {},{}",
-            //         in_plane.cfg.width, in_plane.cfg.height, in_po.x, in_po.y);
-            //println!("                  tile_sbo= {},{}",tile_sbo.0.x,tile_sbo.0.y);
-            //println!("                  tile_rect= {}x{} @ {},{}",
-            //         tile_rect.width, tile_rect.height, tile_rect.x, tile_rect.y);
 
             unsafe {
               assert!(
