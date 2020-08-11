@@ -2404,7 +2404,7 @@ pub fn rdo_loop_decision<T: Pixel>(
             ) {
               let src_plane = &src_subset.planes[pli]; // uncompressed input for reference
               let lrf_in_plane = &lrf_input.planes[pli];
-              let lrf_po = loop_sbo.plane_offset(&src_plane.plane_cfg);
+              let lrf_po = loop_sbo.plane_offset(src_plane.plane_cfg);
               let mut best_new_lrf = best_lrf[lru_y * lru_w[pli] + lru_x][pli];
               let mut best_cost =
                 best_lrf_cost[lru_y * lru_w[pli] + lru_x][pli];

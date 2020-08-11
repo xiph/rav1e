@@ -421,7 +421,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
     cdef_sec_uv_strength += 1;
   }
 
-  let tile_rect = output.planes[0].rect().clone();
+  let tile_rect = *output.planes[0].rect();
   let input_xoffset =
     tile_rect.x + tile_sbo.plane_offset(&input.planes[0].cfg).x;
   let input_yoffset =
@@ -623,7 +623,7 @@ pub fn cdef_filter_tile<T: Pixel>(
       // the input Frame.
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
       let cdef_index = tb.get_cdef(tile_sbo);
-      let cdef_dirs = cdef_analyze_superblock(fi, &input, tb, tile_sbo);
+      let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
 
       cdef_filter_superblock(
         fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
