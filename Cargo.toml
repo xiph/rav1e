@@ -150,7 +150,7 @@ incremental = true
 incremental = true
 
 [workspace]
-members = [".", "ivf", "rav1e_js", "v_frame"]
+members = [".", "ivf", "rav1e_js", "v_frame", "tools/process-vstats"]
 
 [package.metadata.docs.rs]
 no-default-features = true
