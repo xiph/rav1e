@@ -55,6 +55,13 @@ impl MotionVector {
   pub fn is_zero(self) -> bool {
     self.row == 0 && self.col == 0
   }
+
+  #[inline]
+  pub fn is_valid(self) -> bool {
+    use crate::context::{MV_LOW, MV_UPP};
+    ((MV_LOW as i16) < self.row && self.row < (MV_UPP as i16))
+      && ((MV_LOW as i16) < self.col && self.col < (MV_UPP as i16))
+  }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]

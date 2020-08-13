@@ -3573,6 +3573,9 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, mv: MotionVector, ref_mv: MotionVector,
     mv_precision: MvSubpelPrecision,
   ) {
+    // <https://aomediacodec.github.io/av1-spec/#assign-mv-semantics>
+    assert!(mv.is_valid());
+
     let diff =
       MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
     let j: MvJointType = av1_get_mv_joint(diff);
@@ -4364,8 +4367,8 @@ const MV_MAX: usize = (1 << MV_MAX_BITS) - 1;
 const MV_VALS: usize = (MV_MAX << 1) + 1;
 
 const MV_IN_USE_BITS: usize = 14;
-const MV_UPP: i32 = 1 << MV_IN_USE_BITS;
-const MV_LOW: i32 = -(1 << MV_IN_USE_BITS);
+pub const MV_UPP: i32 = 1 << MV_IN_USE_BITS;
+pub const MV_LOW: i32 = -(1 << MV_IN_USE_BITS);
 
 #[inline(always)]
 pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
@@ -4423,6 +4426,7 @@ pub fn encode_mv_component(
   precision: MvSubpelPrecision,
 ) {
   assert!(comp != 0);
+  assert!(MV_LOW <= comp && comp <= MV_UPP);
   let mut offset: u32 = 0;
   let sign: u32 = if comp < 0 { 1 } else { 0 };
   let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
