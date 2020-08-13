@@ -62,7 +62,7 @@ impl IndexMut<usize> for FrameMotionVectors {
   }
 }
 
-const fn get_mv_range(
+fn get_mv_range(
   w_in_b: usize, h_in_b: usize, bo: PlaneBlockOffset, blk_w: usize,
   blk_h: usize,
 ) -> (isize, isize, isize, isize) {
@@ -77,7 +77,14 @@ const fn get_mv_range(
     * (8 * MI_SIZE) as isize
     + border_h;
 
-  (mvx_min, mvx_max, mvy_min, mvy_max)
+  // <https://aomediacodec.github.io/av1-spec/#assign-mv-semantics>
+  use crate::context::{MV_LOW, MV_UPP};
+  (
+    mvx_min.max(MV_LOW as isize + 1),
+    mvx_max.min(MV_UPP as isize - 1),
+    mvy_min.max(MV_LOW as isize + 1),
+    mvy_max.min(MV_UPP as isize - 1),
+  )
 }
 
 pub fn get_subset_predictors<T: Pixel>(
