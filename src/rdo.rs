@@ -767,6 +767,16 @@ pub fn rdo_tx_size_type<T: Pixel>(
 }
 
 #[inline]
+fn dmv_in_range(mv: MotionVector, ref_mv: MotionVector) -> bool {
+  let diff_row = mv.row as i32 - ref_mv.row as i32;
+  let diff_col = mv.col as i32 - ref_mv.col as i32;
+  diff_row >= MV_LOW
+    && diff_row <= MV_UPP
+    && diff_col >= MV_LOW
+    && diff_col <= MV_UPP
+}
+
+#[inline]
 fn luma_chroma_mode_rdo<T: Pixel>(
   luma_mode: PredictionMode, fi: &FrameInvariants<T>, bsize: BlockSize,
   tile_bo: TileBlockOffset, ts: &mut TileStateMut<'_, T>,
@@ -781,6 +791,29 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
   let is_chroma_block =
     has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+
+  if !luma_mode_is_intra {
+    let ref_mvs = if mv_stack.len() > 0 {
+      [mv_stack[0].this_mv, mv_stack[0].comp_mv]
+    } else {
+      [MotionVector::default(); 2]
+    };
+
+    if (luma_mode == PredictionMode::NEWMV
+      || luma_mode == PredictionMode::NEW_NEWMV
+      || luma_mode == PredictionMode::NEW_NEARESTMV)
+      && !dmv_in_range(mvs[0], ref_mvs[0])
+    {
+      return;
+    }
+
+    if (luma_mode == PredictionMode::NEW_NEWMV
+      || luma_mode == PredictionMode::NEAREST_NEWMV)
+      && !dmv_in_range(mvs[1], ref_mvs[1])
+    {
+      return;
+    }
+  }
 
   // Find the best chroma prediction mode for the current luma prediction mode
   let mut chroma_rdo = |skip: bool| -> bool {

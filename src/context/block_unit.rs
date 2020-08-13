@@ -1687,6 +1687,9 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, mv: MotionVector, ref_mv: MotionVector,
     mv_precision: MvSubpelPrecision,
   ) {
+    // <https://aomediacodec.github.io/av1-spec/#assign-mv-semantics>
+    assert!(mv.is_valid());
+
     let diff =
       MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
     let j: MvJointType = av1_get_mv_joint(diff);
