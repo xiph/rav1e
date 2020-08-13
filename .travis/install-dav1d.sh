@@ -1,8 +1,8 @@
 #!/bin/bash
 set -ex
 
-DAV1D_VERSION="0.7.0-dmo1"
-PKG_URL="http://www.deb-multimedia.org/pool/main/d/dav1d-dmo"
+DAV1D_VERSION="0.7.1-dmo1"
+PKG_URL="https://www.deb-multimedia.org/pool/main/d/dav1d-dmo"
 
 case "$ARCH" in
   x86_64) ARCH=amd64 ;;
@@ -17,10 +17,10 @@ curl -O "$PKG_URL/libdav1d-dev_${DAV1D_VERSION}_$ARCH.deb" \
      -O "$PKG_URL/libdav1d4_${DAV1D_VERSION}_$ARCH.deb"
 
 sha256sum --check --ignore-missing <<EOF
-ade22c88d7a2307f4b6351f59bb6696504062ef5aaed88a2c0b6fe37085a20d1  libdav1d4_0.7.0-dmo1_amd64.deb
-2db8f62c68f90bb0aafa2c6f183900d75d635ea9c99df15c8d9e5a606e036e74  libdav1d4_0.7.0-dmo1_arm64.deb
-9ac5d588ad5db9cb6cd64eeb896305655f676838eef66115b82ab01272c3a504  libdav1d-dev_0.7.0-dmo1_amd64.deb
-610ff6ec885a7f62f7d0256f640bb2a135c13a781b82f9aa267a0bd8a8749424  libdav1d-dev_0.7.0-dmo1_arm64.deb
+6be3f602340dfcac1ce637dfd10cc7ab181e6b0d0089d934f9ebffffedc5d614  libdav1d-dev_${DAV1D_VERSION}_amd64.deb
+e3c89addfc9df116558b1862954daea2ff9e1b621da9af76532dc1f72e5ec427  libdav1d-dev_${DAV1D_VERSION}_arm64.deb
+47c8dbca45a5255799628ed994a7f8538fb10d18d231db5c4b8f75422f17e440  libdav1d4_${DAV1D_VERSION}_amd64.deb
+09c4313a6f104af29d6b2aa66c64de494b96006df2216cd0196e91a590218856  libdav1d4_${DAV1D_VERSION}_arm64.deb
 EOF
 
 sudo dpkg -i "libdav1d4_${DAV1D_VERSION}_$ARCH.deb" \

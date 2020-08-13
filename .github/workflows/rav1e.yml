@@ -120,7 +120,7 @@ jobs:
         matrix.conf == '1.43.1-tests' || matrix.conf == 'aom-tests' ||
         matrix.conf == 'grcov-coveralls'
       env:
-        LINK: http://www.deb-multimedia.org/pool/main/a/aom-dmo
+        LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
         AOM_VERSION: 2.0.0-dmo0~bpo10+1
         AOM_DEV_SHA256: >-
           86d3ff73e10a61dc0b9effe73c0b3cf618b2d8a229f5bb57cad5cda7b12950b8
@@ -136,12 +136,12 @@ jobs:
         matrix.conf == '1.43.1-tests' || matrix.conf == 'dav1d-tests' ||
         matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz'
       env:
-        LINK: http://www.deb-multimedia.org/pool/main/d/dav1d-dmo
-        DAV1D_VERSION: 0.7.1-dmo0~bpo10+1
+        LINK: https://www.deb-multimedia.org/pool/main/d/dav1d-dmo
+        DAV1D_VERSION: 0.7.1-dmo1
         DAV1D_DEV_SHA256: >-
-          2a1005c191f9ff41f53a5cea10b836e9e18f7f1390d81d935ef7de8a89223e02
+          6be3f602340dfcac1ce637dfd10cc7ab181e6b0d0089d934f9ebffffedc5d614
         DAV1D_LIB_SHA256: >-
-          7274ea2516b32ca7714979a9a39073ec189dd9a874ccac70730fd1026bbc9b05
+          47c8dbca45a5255799628ed994a7f8538fb10d18d231db5c4b8f75422f17e440
       run: |
         echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
         echo "$LINK/libdav1d4_${DAV1D_VERSION}_amd64.deb" >> DEBS

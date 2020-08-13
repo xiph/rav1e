@@ -2,7 +2,7 @@
 set -ex
 
 AOM_VERSION="2.0.0-dmo0~bpo10+1"
-PKG_URL="http://www.deb-multimedia.org/pool/main/a/aom-dmo"
+PKG_URL="https://www.deb-multimedia.org/pool/main/a/aom-dmo"
 ARCH="arm64"
 
 cd "$DEPS_DIR"
