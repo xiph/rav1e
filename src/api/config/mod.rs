@@ -140,10 +140,10 @@ impl Config {
     self
   }
 
-  #[cfg(features = "unstable")]
+  #[cfg(feature = "unstable")]
   /// Use the provided threadpool
   pub fn with_thread_pool(mut self, pool: Arc<ThreadPool>) -> Self {
-    self.threadpool = Some(pool);
+    self.pool = Some(pool);
     self
   }
 }
