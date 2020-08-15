@@ -703,7 +703,7 @@ fn chroma_offset(
 impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
-    chroma_sampling: ChromaSampling,
+    chroma_sampling: ChromaSampling, _is_intra: bool,
   ) -> QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
     let quantizer = bexp64(log_target_q + scale);
@@ -895,6 +895,7 @@ impl RCState {
       log_q,
       bit_depth,
       chroma_sampling,
+      fti == 0,
     )
   }
 
@@ -932,6 +933,7 @@ impl RCState {
         log_q,
         bit_depth,
         chroma_sampling,
+        fti == 0,
       )
     } else {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
@@ -1216,6 +1218,7 @@ impl RCState {
         log_q,
         bit_depth,
         chroma_sampling,
+        fti == 0,
       )
     }
   }
