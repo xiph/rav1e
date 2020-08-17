@@ -314,47 +314,52 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   })
 }
 
-fn init_logger() {
-  use std::str::FromStr;
-  fn level_colored(l: log::Level) -> console::StyledObject<&'static str> {
-    use console::style;
-    use log::Level;
-    match l {
-      Level::Trace => style("??").dim(),
-      Level::Debug => style("? ").dim(),
-      Level::Info => style("> ").green(),
-      Level::Warn => style("! ").yellow(),
-      Level::Error => style("!!").red(),
-    }
+use tracing::Subscriber;
+use tracing::{Event, Level};
+use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::{filter::EnvFilter, fmt};
+
+fn level_colored(l: &tracing::Level) -> console::StyledObject<&'static str> {
+  use console::style;
+  match *l {
+    Level::TRACE => style("??").dim(),
+    Level::DEBUG => style("? ").dim(),
+    Level::INFO => style("> ").green(),
+    Level::WARN => style("! ").yellow(),
+    Level::ERROR => style("!!").red(),
   }
+}
 
-  // this can be changed to flatten
-  let level = std::env::var("RAV1E_LOG")
-    .ok()
-    .map(|l| log::LevelFilter::from_str(&l).ok())
-    .unwrap_or(Some(log::LevelFilter::Info))
-    .unwrap();
+struct T {}
 
-  fern::Dispatch::new()
-    .format(move |out, message, record| {
-      out.finish(format_args!(
-        "{level} {message}",
-        level = level_colored(record.level()),
-        message = message,
-      ));
-    })
-    // set the default log level. to filter out verbose log messages from dependencies, set
-    // this to Warn and overwrite the log level for your crate.
-    .level(log::LevelFilter::Warn)
-    // change log levels for individual modules. Note: This looks for the record's target
-    // field which defaults to the module path but can be overwritten with the `target`
-    // parameter:
-    // `info!(target="special_target", "This log message is about special_target");`
-    .level_for("rav1e", level)
-    // output to stdout
-    .chain(std::io::stderr())
-    .apply()
-    .unwrap();
+impl<S, N> FormatEvent<S, N> for T
+where
+  S: Subscriber + for<'a> LookupSpan<'a>,
+  N: for<'a> FormatFields<'a> + 'static,
+{
+  fn format_event(
+    &self, ctx: &FmtContext<'_, S, N>, w: &mut dyn std::fmt::Write,
+    e: &Event<'_>,
+  ) -> std::fmt::Result {
+    let meta = e.metadata();
+    write!(w, "{} ", level_colored(meta.level()))?;
+    ctx.format_fields(w, e)?;
+    writeln!(w)
+  }
+}
+
+fn init_logger() {
+  let filter = EnvFilter::try_from_env("RAV1E_LOG")
+    .unwrap_or_else(|_| EnvFilter::new("info"));
+
+  let t = T {};
+
+  fmt()
+    .with_env_filter(filter)
+    .event_format(t)
+    .with_writer(std::io::stderr)
+    .init();
 }
 
 cfg_if::cfg_if! {
