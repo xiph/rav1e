@@ -15,9 +15,8 @@ use crate::predict::{
 use crate::tiling::PlaneRegionMut;
 use crate::transform::TxSize;
 use crate::util::Aligned;
-use crate::Pixel;
+use crate::{Pixel, PixelType};
 use libc;
-use std::mem::size_of;
 
 macro_rules! decl_angular_ipred_fn {
   ($($f:ident),+) => {
@@ -45,6 +44,34 @@ decl_angular_ipred_fn! {
   rav1e_ipred_paeth_8bpc_neon
 }
 
+macro_rules! decl_angular_ipred_hbd_fn {
+  ($($f:ident),+) => {
+    extern {
+      $(
+        fn $f(
+          dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,
+          width: libc::c_int, height: libc::c_int, angle: libc::c_int,
+          max_width: libc::c_int, max_height: libc::c_int,
+          bit_depth_max: libc::c_int,
+        );
+      )*
+    }
+  };
+}
+
+decl_angular_ipred_hbd_fn! {
+  rav1e_ipred_dc_16bpc_neon,
+  rav1e_ipred_dc_128_16bpc_neon,
+  rav1e_ipred_dc_left_16bpc_neon,
+  rav1e_ipred_dc_top_16bpc_neon,
+  rav1e_ipred_v_16bpc_neon,
+  rav1e_ipred_h_16bpc_neon,
+  rav1e_ipred_smooth_16bpc_neon,
+  rav1e_ipred_smooth_v_16bpc_neon,
+  rav1e_ipred_smooth_h_16bpc_neon,
+  rav1e_ipred_paeth_16bpc_neon
+}
+
 macro_rules! decl_cfl_pred_fn {
   ($($f:ident),+) => {
     extern {
@@ -66,6 +93,27 @@ decl_cfl_pred_fn! {
   rav1e_ipred_cfl_top_8bpc_neon
 }
 
+macro_rules! decl_cfl_pred_hbd_fn {
+  ($($f:ident),+) => {
+    extern {
+      $(
+        fn $f(
+          dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,
+          width: libc::c_int, height: libc::c_int, ac: *const u16,
+          alpha: libc::c_int, bit_depth_max: libc::c_int,
+        );
+      )*
+    }
+  };
+}
+
+decl_cfl_pred_hbd_fn! {
+  rav1e_ipred_cfl_16bpc_neon,
+  rav1e_ipred_cfl_128_16bpc_neon,
+  rav1e_ipred_cfl_left_16bpc_neon,
+  rav1e_ipred_cfl_top_16bpc_neon
+}
+
 #[inline(always)]
 pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
@@ -80,21 +128,24 @@ pub fn dispatch_predict_intra<T: Pixel>(
     );
   };
 
-  if size_of::<T>() != 1 {
+  if cpu < CpuFeatureLevel::NEON {
     return call_rust(dst);
   }
 
   unsafe {
     let dst_ptr = dst.data_ptr_mut() as *mut _;
-    let stride = dst.plane_cfg.stride as libc::ptrdiff_t;
+    let dst_u16 = dst.data_ptr_mut() as *mut u16;
+    let stride = T::to_asm_stride(dst.plane_cfg.stride) as libc::ptrdiff_t;
     let edge_ptr =
       edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
+    let edge_u16 =
+      edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const u16;
     let w = tx_size.width() as libc::c_int;
     let h = tx_size.height() as libc::c_int;
     let angle = angle as libc::c_int;
-
-    if cpu >= CpuFeatureLevel::NEON {
-      match mode {
+    let bd_max = (1 << bit_depth) - 1;
+    match T::type_enum() {
+      PixelType::U8 => match mode {
         PredictionMode::DC_PRED => {
           (match variant {
             PredictionVariant::NONE => rav1e_ipred_dc_128_8bpc_neon,
@@ -135,9 +186,57 @@ pub fn dispatch_predict_intra<T: Pixel>(
           })(dst_ptr, stride, edge_ptr, w, h, ac_ptr, angle);
         }
         _ => call_rust(dst),
-      }
-    } else {
-      call_rust(dst);
+      },
+      PixelType::U16 => match mode {
+        PredictionMode::DC_PRED => {
+          (match variant {
+            PredictionVariant::NONE => rav1e_ipred_dc_128_16bpc_neon,
+            PredictionVariant::LEFT => rav1e_ipred_dc_left_16bpc_neon,
+            PredictionVariant::TOP => rav1e_ipred_dc_top_16bpc_neon,
+            PredictionVariant::BOTH => rav1e_ipred_dc_16bpc_neon,
+          })(dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max);
+        }
+        PredictionMode::V_PRED if angle == 90 => {
+          rav1e_ipred_v_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::H_PRED if angle == 180 => {
+          rav1e_ipred_h_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::SMOOTH_PRED => {
+          rav1e_ipred_smooth_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::SMOOTH_V_PRED => {
+          rav1e_ipred_smooth_v_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::SMOOTH_H_PRED => {
+          rav1e_ipred_smooth_h_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::PAETH_PRED => {
+          rav1e_ipred_paeth_16bpc_neon(
+            dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::UV_CFL_PRED => {
+          let ac_ptr = ac.as_ptr() as *const _;
+          (match variant {
+            PredictionVariant::NONE => rav1e_ipred_cfl_128_16bpc_neon,
+            PredictionVariant::LEFT => rav1e_ipred_cfl_left_16bpc_neon,
+            PredictionVariant::TOP => rav1e_ipred_cfl_top_16bpc_neon,
+            PredictionVariant::BOTH => rav1e_ipred_cfl_16bpc_neon,
+          })(dst_u16, stride, edge_u16, w, h, ac_ptr, angle, bd_max);
+        }
+        _ => call_rust(dst),
+      },
     }
   }
 }
