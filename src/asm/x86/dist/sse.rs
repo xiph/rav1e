@@ -145,8 +145,8 @@ pub fn get_weighted_sse<T: Pixel>(
   #[cfg(feature = "check_asm")]
   assert_eq!(
     dist, ref_dist,
-    "Weighted SSE {}: Assembly doesn't match reference code.",
-    bsize
+    "Weighted SSE {:?}: Assembly doesn't match reference code.",
+    bsize_opt
   );
 
   dist
