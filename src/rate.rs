@@ -716,10 +716,9 @@ impl QuantizerParameters {
     let quantizer_v = bexp64(log_q_v + scale);
     let lambda = (::std::f64::consts::LN_2 / 6.0)
       * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp();
-    let lambda_u = (::std::f64::consts::LN_2 / 6.0)
-      * ((log_q_u as f64) * Q57_SQUARE_EXP_SCALE).exp();
-    let lambda_v = (::std::f64::consts::LN_2 / 6.0)
-      * ((log_q_v as f64) * Q57_SQUARE_EXP_SCALE).exp();
+
+    let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
+    let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
 
     let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
 
@@ -743,7 +742,7 @@ impl QuantizerParameters {
         if mono { 0 } else { clamp_qi(select_ac_qi(quantizer_v, bit_depth)) },
       ],
       lambda,
-      dist_scale: [1.0, lambda / lambda_u, lambda / lambda_v],
+      dist_scale,
     }
   }
 }
