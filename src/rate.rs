@@ -706,19 +706,20 @@ impl QuantizerParameters {
     chroma_sampling: ChromaSampling, _is_intra: bool,
   ) -> QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
-    let quantizer = bexp64(log_target_q + scale);
-    let (offset_u, offset_v) = chroma_offset(log_target_q, chroma_sampling);
+    let log_q_y = log_target_q;
+    let quantizer = bexp64(log_q_y + scale);
+    let (offset_u, offset_v) = chroma_offset(log_q_y, chroma_sampling);
     let mono = chroma_sampling == ChromaSampling::Cs400;
-    let log_target_q_u = log_target_q + offset_u;
-    let log_target_q_v = log_target_q + offset_v;
-    let quantizer_u = bexp64(log_target_q_u + scale);
-    let quantizer_v = bexp64(log_target_q_v + scale);
+    let log_q_u = log_q_y + offset_u;
+    let log_q_v = log_q_y + offset_v;
+    let quantizer_u = bexp64(log_q_u + scale);
+    let quantizer_v = bexp64(log_q_v + scale);
     let lambda = (::std::f64::consts::LN_2 / 6.0)
       * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp();
     let lambda_u = (::std::f64::consts::LN_2 / 6.0)
-      * ((log_target_q_u as f64) * Q57_SQUARE_EXP_SCALE).exp();
+      * ((log_q_u as f64) * Q57_SQUARE_EXP_SCALE).exp();
     let lambda_v = (::std::f64::consts::LN_2 / 6.0)
-      * ((log_target_q_v as f64) * Q57_SQUARE_EXP_SCALE).exp();
+      * ((log_q_v as f64) * Q57_SQUARE_EXP_SCALE).exp();
 
     let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
 
