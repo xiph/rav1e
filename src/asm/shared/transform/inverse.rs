@@ -14,6 +14,10 @@ use crate::util::*;
 pub type InvTxfmFunc =
   unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
 
+#[cfg(asm_neon)]
+pub type InvTxfmHBDFunc =
+  unsafe extern fn(*mut u16, libc::ptrdiff_t, *mut i16, i32);
+
 pub fn call_inverse_func<T: Pixel>(
   func: InvTxfmFunc, input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
   eob: usize, width: usize, height: usize, bd: usize,
@@ -36,6 +40,36 @@ pub fn call_inverse_func<T: Pixel>(
     func(
       output.data_ptr_mut() as *mut _,
       output.plane_cfg.stride as isize,
+      copied.data.as_mut_ptr() as *mut _,
+      eob as i32,
+    );
+  }
+}
+
+#[cfg(asm_neon)]
+pub fn call_inverse_hbd_func<T: Pixel>(
+  func: InvTxfmHBDFunc, input: &[T::Coeff],
+  output: &mut PlaneRegionMut<'_, T>, eob: usize, width: usize, height: usize,
+  bd: usize,
+) {
+  debug_assert!(bd == 10);
+
+  // Only use at most 32 columns and 32 rows of input coefficients.
+  let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
+
+  let mut copied: Aligned<[T::Coeff; 32 * 32]> = Aligned::uninitialized();
+
+  // Convert input to 16-bits.
+  // TODO: Remove by changing inverse assembly to not overwrite its input
+  for (a, b) in copied.data.iter_mut().zip(input) {
+    *a = *b;
+  }
+
+  // perform the inverse transform
+  unsafe {
+    func(
+      output.data_ptr_mut() as *mut _,
+      T::to_asm_stride(output.plane_cfg.stride) as isize,
       copied.data.as_mut_ptr() as *mut _,
       eob as i32,
     );
