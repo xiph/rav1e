@@ -49,6 +49,11 @@ Overview of quality and speed-features for rav1e and other state-of-the-art enco
 Notebook documenting how rate-control constants were derived from empirical data.
 These constants determine the initial values of `RCState::log_scale`, `RCState::exp` and `RCState::scalefilter`.
 
+## [Quantizer Weight Analysis](quantizer-weight-analysis.ipynb)
+Notebook documenting the quantizer averaging weight analysis and derivation of
+constants of linear models used to compute the luma quantizer from the target
+quantizer.
+
 ## [File Structure](STRUCTURE.md)
 - High-level directory structure
 - Overview of `src/*`
