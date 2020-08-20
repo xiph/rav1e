@@ -130,6 +130,8 @@ pub struct Sequence {
   pub content_light: Option<ContentLight>,
   pub max_frame_width: u32,
   pub max_frame_height: u32,
+  pub render_width: u32,
+  pub render_height: u32,
   pub frame_id_numbers_present_flag: bool,
   pub frame_id_length: u32,
   pub delta_frame_id_length: u32,
@@ -186,6 +188,14 @@ impl Sequence {
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 
+    let sar = config.sample_aspect_ratio.as_f64();
+
+    let (render_width, render_height) = if sar > 1.0 {
+      ((config.width as f64 * sar).round() as u32, config.height as u32)
+    } else {
+      (config.width as u32, (config.height as f64 / sar).round() as u32)
+    };
+
     let profile = if config.bit_depth == 12
       || config.chroma_sampling == ChromaSampling::Cs422
     {
@@ -224,6 +234,8 @@ impl Sequence {
       content_light: config.content_light,
       max_frame_width: config.width as u32,
       max_frame_height: config.height as u32,
+      render_width: render_width as u32,
+      render_height: render_height as u32,
       frame_id_numbers_present_flag: false,
       frame_id_length: FRAME_ID_LENGTH,
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,

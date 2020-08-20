@@ -19,6 +19,7 @@ impl Decoder for y4m::Decoder<Box<dyn Read>> {
   fn get_video_details(&self) -> VideoDetails {
     let width = self.get_width();
     let height = self.get_height();
+    let aspect_ratio = self.get_pixel_aspect();
     let color_space = self.get_colorspace();
     let bit_depth = color_space.get_bit_depth();
     let (chroma_sampling, chroma_sample_position) =
@@ -29,6 +30,10 @@ impl Decoder for y4m::Decoder<Box<dyn Read>> {
     VideoDetails {
       width,
       height,
+      sample_aspect_ratio: Rational::new(
+        aspect_ratio.num as u64,
+        aspect_ratio.den as u64,
+      ),
       bit_depth,
       chroma_sampling,
       chroma_sample_position,

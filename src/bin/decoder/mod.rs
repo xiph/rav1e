@@ -34,6 +34,7 @@ pub enum DecodeError {
 pub struct VideoDetails {
   pub width: usize,
   pub height: usize,
+  pub sample_aspect_ratio: Rational,
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
@@ -45,6 +46,7 @@ impl Default for VideoDetails {
     VideoDetails {
       width: 640,
       height: 480,
+      sample_aspect_ratio: Rational { num: 1, den: 1 },
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
