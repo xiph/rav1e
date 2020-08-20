@@ -15,17 +15,8 @@ for arg in "$@"; do
   esac
 done
 
-if [ -z "$SEQ" ] && SEQ=nyan.y4m && [ ! -f nyan.y4m ]; then
-  #SEQ10=nyan10.y4m
-  #SEQ12=nyan12.y4m
-
-  if ! wget -nc https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m &&
-    ! curl -fkLs https://mf4.xiph.org/~ltrudeau/videos/nyan.y4m -o nyan.y4m; then
-    echo "wget and curl not found or failed!" >&2
-    exit 1
-  fi
-  #wget -nc https://people.xiph.org/~tdaede/nyan10.y4m
-  #wget -nc https://people.xiph.org/~tdaede/nyan12.y4m
+if [ -z "$SEQ" ] && SEQ=small_input.y4m; then
+  SEQ=tests/small_input.y4m
 fi
 
 if [ ! -f $SEQ ]; then
@@ -97,14 +88,3 @@ EOF
 type mpv > /dev/null 2>&1 && mpv --loop $DEC_FILE
 
 cat << 'EOF' > /dev/null
-# Repeat for high bit depth clips
-cargo run --bin rav1e --release -- $SEQ10 -o $ENC_FILE -s 3 -r $REC_FILE
-aomdec $ENC_FILE -o $DEC_FILE
-cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
-mpv --loop $DEC_FILE
-
-cargo run --bin rav1e --release -- $SEQ12 -o $ENC_FILE -s 3 -r $REC_FILE
-aomdec $ENC_FILE -o $DEC_FILE
-cmp <(tail -n+2 $DEC_FILE) <(tail -n+2 $REC_FILE)
-mpv --loop $DEC_FILE
-EOF
