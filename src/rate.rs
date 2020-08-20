@@ -77,6 +77,34 @@ const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
   (2.0 * (33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
 ];
 
+// For 8-bit-depth inter frames, log_q_y is derived from log_target_q with a
+//  linear model:
+//  log_q_y = log_target_q + (log_target_q >> 32) * Q_MODEL_MUL + Q_MODEL_ADD
+// Derivation of the linear models:
+//  https://github.com/xiph/rav1e/blob/d02bdbd3b0b7b2cb9fc301031cc6a4e67a567a5c/doc/quantizer-weight-analysis.ipynb
+#[rustfmt::skip]
+const Q_MODEL_ADD: [i64; 4] = [
+  // 4:2:0
+  -0x24_4FE7_ECB3_DD90,
+  // 4:2:2
+  -0x37_41DA_38AD_0924,
+  // 4:4:4
+  -0x70_83BD_A626_311C,
+  // 4:0:0
+  0,
+];
+#[rustfmt::skip]
+const Q_MODEL_MUL: [i64; 4] = [
+  // 4:2:0
+  0x8A0_50DD,
+  // 4:2:2
+  0x887_7666,
+  // 4:4:4
+  0x8D4_A712,
+  // 4:0:0
+  0,
+];
+
 // Convert an integer into a Q57 fixed-point fraction.
 // The integer must be in the range -64 to 63, inclusive.
 pub(crate) const fn q57(v: i32) -> i64 {
@@ -703,10 +731,17 @@ fn chroma_offset(
 impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
-    chroma_sampling: ChromaSampling, _is_intra: bool,
+    chroma_sampling: ChromaSampling, is_intra: bool,
   ) -> QuantizerParameters {
     let scale = q57(QSCALE + bit_depth as i32 - 8);
-    let log_q_y = log_target_q;
+
+    let mut log_q_y = log_target_q;
+    if !is_intra && bit_depth == 8 {
+      log_q_y = log_target_q
+        + (log_target_q >> 32) * Q_MODEL_MUL[chroma_sampling as usize]
+        + Q_MODEL_ADD[chroma_sampling as usize];
+    }
+
     let quantizer = bexp64(log_q_y + scale);
     let (offset_u, offset_v) = chroma_offset(log_q_y, chroma_sampling);
     let mono = chroma_sampling == ChromaSampling::Cs400;
