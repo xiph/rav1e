@@ -37,6 +37,12 @@ pub enum InvalidConfig {
   /// The height is invalid.
   #[error("invalid height {0} (expected >= 16, <= 32767)")]
   InvalidHeight(usize),
+  /// Aspect ratio numerator is invalid.
+  #[error("invalid aspect ratio numerator {0} (expected > 0)")]
+  InvalidAspectRatioNum(usize),
+  /// Aspect ratio denominator is invalid.
+  #[error("invalid aspect ratio denominator {0} (expected > 0)")]
+  InvalidAspectRatioDen(usize),
   /// RDO lookahead frame count is invalid.
   #[error(
     "invalid rdo lookahead frames {actual} (expected <= {max} and >= {min})"
@@ -238,6 +244,17 @@ impl Config {
     }
     if config.height < 16 || config.height > u16::max_value() as usize {
       return Err(InvalidHeight(config.height));
+    }
+
+    if config.sample_aspect_ratio.num == 0 {
+      return Err(InvalidAspectRatioNum(
+        config.sample_aspect_ratio.num as usize,
+      ));
+    }
+    if config.sample_aspect_ratio.den == 0 {
+      return Err(InvalidAspectRatioDen(
+        config.sample_aspect_ratio.den as usize,
+      ));
     }
 
     if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES

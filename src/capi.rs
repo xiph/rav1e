@@ -457,6 +457,16 @@ pub unsafe extern fn rav1e_config_set_emit_data(
   (*cfg).cfg.rate_control.emit_pass_data = emit != 0;
 }
 
+/// Set the display aspect ratio of the stream
+///
+/// Needed for anamorphic video.
+#[no_mangle]
+pub unsafe extern fn rav1e_config_set_sample_aspect_ratio(
+  cfg: *mut Config, sample_aspect_ratio: Rational,
+) {
+  (*cfg).cfg.enc.sample_aspect_ratio = sample_aspect_ratio
+}
+
 /// Set the time base of the stream
 ///
 /// Needed for rate control.

@@ -599,7 +599,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     }
 
     // if KEY or INTRA_ONLY frame
-    // FIXME: Not sure whether putting frame/render size here is good idea
     if fi.intra_only {
       if frame_size_override_flag {
         self.write_frame_size_override(fi);
@@ -607,8 +606,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if fi.sequence.enable_superres {
         unimplemented!();
       }
-      self.write_bit(false)?; // render_and_frame_size_different
-                              // if render_and_frame_size_different { }
+      let render_and_frame_size_different = fi.sequence.render_width
+        != fi.sequence.max_frame_width
+        || fi.sequence.render_height != fi.sequence.max_frame_height;
+      self.write_bit(render_and_frame_size_different)?;
+      if render_and_frame_size_different {
+        self.write(16, fi.sequence.render_width - 1);
+        self.write(16, fi.sequence.render_height - 1);
+      }
       if fi.allow_screen_content_tools != 0 {
         // TODO: && UpscaledWidth == FrameWidth.
         self.write_bit(fi.allow_intrabc)?;
@@ -644,7 +649,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if fi.sequence.enable_superres {
           unimplemented!();
         }
-        self.write_bit(false)?; // render_and_frame_size_different
+        let render_and_frame_size_different = fi.sequence.render_width
+          != fi.sequence.max_frame_width
+          || fi.sequence.render_height != fi.sequence.max_frame_height;
+        self.write_bit(render_and_frame_size_different)?;
+        if render_and_frame_size_different {
+          self.write(16, fi.sequence.render_width - 1);
+          self.write(16, fi.sequence.render_height - 1);
+        }
       }
 
       if fi.force_integer_mv == 0 {

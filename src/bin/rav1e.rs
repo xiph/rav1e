@@ -411,6 +411,10 @@ fn run() -> Result<(), error::CliError> {
         ),
       )
       .with_colorspace(y4m_dec.get_colorspace())
+      .with_pixel_aspect(y4m::Ratio {
+        num: video_info.sample_aspect_ratio.num as usize,
+        den: video_info.sample_aspect_ratio.den as usize,
+      })
       .write_header(rec)
       .unwrap(),
     ),
@@ -419,6 +423,7 @@ fn run() -> Result<(), error::CliError> {
 
   cli.enc.width = video_info.width;
   cli.enc.height = video_info.height;
+  cli.enc.sample_aspect_ratio = video_info.sample_aspect_ratio;
   cli.enc.bit_depth = video_info.bit_depth;
   cli.enc.chroma_sampling = video_info.chroma_sampling;
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;

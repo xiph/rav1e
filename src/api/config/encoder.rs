@@ -29,6 +29,8 @@ pub struct EncoderConfig {
   pub width: usize,
   /// Height of the frames in pixels.
   pub height: usize,
+  /// Sample aspect ratio (for anamorphic video).
+  pub sample_aspect_ratio: Rational,
   /// Video time base.
   pub time_base: Rational,
 
@@ -129,6 +131,8 @@ impl EncoderConfig {
     EncoderConfig {
       width: 640,
       height: 480,
+      sample_aspect_ratio: Rational { num: 1, den: 1 },
+      time_base: Rational { num: 1, den: 30 },
 
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
@@ -144,8 +148,6 @@ impl EncoderConfig {
 
       error_resilient: false,
       switch_frame_interval: 0,
-
-      time_base: Rational { num: 1, den: 30 },
 
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
