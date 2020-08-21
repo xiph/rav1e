@@ -2230,7 +2230,11 @@ pub fn write_tx_tree<T: Pixel>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  let uv_tx_type = if partition_has_coeff { tx_type } else { TxType::DCT_DCT }; // if inter mode, uv_tx_type == tx_type
+  let uv_tx_type = if partition_has_coeff {
+    tx_type.uv_inter(uv_tx_size)
+  } else {
+    TxType::DCT_DCT
+  };
 
   for p in 1..3 {
     ts.qc.update(

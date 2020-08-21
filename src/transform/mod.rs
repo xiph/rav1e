@@ -71,6 +71,29 @@ pub enum TxType {
   H_FLIPADST = 15,
 }
 
+impl TxType {
+  /// Compute transform type for inter chroma.
+  ///
+  /// <https://aomediacodec.github.io/av1-spec/#compute-transform-type-function>
+  #[inline]
+  pub fn uv_inter(self: Self, uv_tx_size: TxSize) -> Self {
+    use TxType::*;
+    if uv_tx_size.sqr_up() == TX_32X32 {
+      match self {
+        IDTX => IDTX,
+        _ => DCT_DCT,
+      }
+    } else if uv_tx_size.sqr() == TX_16X16 {
+      match self {
+        V_ADST | H_ADST | V_FLIPADST | H_FLIPADST => DCT_DCT,
+        _ => self,
+      }
+    } else {
+      self
+    }
+  }
+}
+
 /// Transform Size
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub enum TxSize {
