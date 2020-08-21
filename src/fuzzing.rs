@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use arbitrary::{Arbitrary, Unstructured};
+use libfuzzer_sys::arbitrary::{Arbitrary, Unstructured};
 
 use crate::prelude::*;
 
