@@ -864,14 +864,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   ) -> io::Result<()> {
     // width_bits and height_bits will have to be moved to the sequence header OBU
     // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
+    let width = fi.width - 1;
+    let height = fi.height - 1;
+    let width_bits = 32 - (width as u32).leading_zeros();
+    let height_bits = 32 - (height as u32).leading_zeros();
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
     self.write(4, width_bits - 1)?;
     self.write(4, height_bits - 1)?;
-    self.write(width_bits, (fi.width - 1) as u16)?;
-    self.write(height_bits, (fi.height - 1) as u16)?;
+    self.write(width_bits, width as u16)?;
+    self.write(height_bits, height as u16)?;
     Ok(())
   }
 
@@ -880,12 +882,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   ) -> io::Result<()> {
     // width_bits and height_bits will have to be moved to the sequence header OBU
     // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
+    let width = fi.width - 1;
+    let height = fi.height - 1;
+    let width_bits = 32 - (width as u32).leading_zeros();
+    let height_bits = 32 - (height as u32).leading_zeros();
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
-    self.write(width_bits, (fi.width - 1) as u16)?;
-    self.write(height_bits, (fi.height - 1) as u16)?;
+    self.write(width_bits, width as u16)?;
+    self.write(height_bits, height as u16)?;
     Ok(())
   }
 
