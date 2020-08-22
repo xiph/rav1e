@@ -80,14 +80,18 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             // current cdef_filter_block asm does 16->8 for historical
             // reasons.  Copy into tmp space for now (also handling
             // padding) until asm is updated
-            let tmpstride = 16; /* 128-bit alignment greater than 2 * (8>>xdec) + 2 */
-            let mut tmp: Aligned<[u16; (2 + 8 + 2) * 16 + 16]> =
-              Aligned::new([CDEF_VERY_LARGE; (2 + 8 + 2) * 16 + 16]);
+            const TMPSTRIDE: isize =
+              std::mem::align_of::<Aligned<u16>>() as isize;
+            /* 256 or 512-bit alignment, greater than 2 * (8>>xdec) + 2 */
+            const TMPSIZE: usize =
+              ((2 + 8 + 2) * TMPSTRIDE + TMPSTRIDE) as usize;
+            let mut tmp: Aligned<[u16; TMPSIZE]> =
+              Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
             rust::pad_into_tmp16(
               tmp.data.as_mut_ptr().offset(-2), // points to
               // *padding* upper left; the -2 is to make sure the
               // block area is SIMD-aligned, not the padding
-              tmpstride,
+              TMPSTRIDE,
               src, // points to *block* upper left
               src_stride,
               8 >> xdec,
@@ -97,8 +101,8 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             (func)(
               dst.data_ptr_mut() as *mut _,
               T::to_asm_stride(dst.plane_cfg.stride),
-              tmp.data.as_ptr().offset(2 * tmpstride + 2 - 2) as *const u16,
-              tmpstride,
+              tmp.data.as_ptr().offset(2 * TMPSTRIDE + 2 - 2) as *const u16,
+              TMPSTRIDE,
               pri_strength,
               sec_strength,
               dir as i32,
