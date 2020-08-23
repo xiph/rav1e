@@ -29,6 +29,13 @@ pub struct EncoderConfig {
   pub width: usize,
   /// Height of the frames in pixels.
   pub height: usize,
+  /// Maximum width of the frames in pixels (for seq header)
+  /// 0 means to use the width setting instead.
+  /// Used for multiple renditions when switch frames are in use.
+  /// Set all renditions to have identical max_width / max_height.
+  pub max_width: usize,
+  /// Maximum height of the frames in pixels (for seq header)
+  pub max_height: usize,
   /// Video time base.
   pub time_base: Rational,
 
@@ -129,7 +136,8 @@ impl EncoderConfig {
     EncoderConfig {
       width: 640,
       height: 480,
-
+      max_width: 0,
+      max_height: 0,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,

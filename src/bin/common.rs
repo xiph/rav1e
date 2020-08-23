@@ -241,6 +241,20 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("0")
     )
     .arg(
+      Arg::with_name("MAX_WIDTH")
+        .help("Maximum width coded in the sequence header. 0 uses the input video width.")
+        .long("max-width")
+        .takes_value(true)
+        .default_value("0")
+    )
+    .arg(
+      Arg::with_name("MAX_HEIGHT")
+        .help("Maximum height coded in the sequence header. 0 uses the input video width.")
+        .long("max-height")
+        .takes_value(true)
+        .default_value("0")
+    )
+    .arg(
       Arg::with_name("TILES")
         .help("Number of tiles. Tile-cols and tile-rows are overridden\n\
                so that the video has at least this many tiles.")
@@ -654,6 +668,9 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();
   cfg.tile_rows = matches.value_of("TILE_ROWS").unwrap().parse().unwrap();
+
+  cfg.max_width = matches.value_of("MAX_WIDTH").unwrap().parse().unwrap();
+  cfg.max_height = matches.value_of("MAX_HEIGHT").unwrap().parse().unwrap();
 
   cfg.tiles = matches.value_of("TILES").unwrap().parse().unwrap();
 

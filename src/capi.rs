@@ -635,6 +635,12 @@ unsafe fn option_match(
   match key {
     "width" => enc.width = check_frame_size(value.parse().map_err(|_| ()))?,
     "height" => enc.height = check_frame_size(value.parse().map_err(|_| ()))?,
+    "max_width" => {
+      enc.max_width = check_frame_size(value.parse().map_err(|_| ()))?
+    }
+    "max_height" => {
+      enc.max_height = check_frame_size(value.parse().map_err(|_| ()))?
+    }
     "speed" => {
       enc.speed_settings =
         rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?)

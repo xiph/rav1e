@@ -862,10 +862,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_size<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()> {
-    // width_bits and height_bits will have to be moved to the sequence header OBU
-    // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
+    let width_bits = fi.sequence.num_bits_width;
+    let height_bits = fi.sequence.num_bits_height;
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
     self.write(4, width_bits - 1)?;
@@ -878,10 +876,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_size_override<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()> {
-    // width_bits and height_bits will have to be moved to the sequence header OBU
-    // when we add support for it.
-    let width_bits = 32 - (fi.width as u32).leading_zeros();
-    let height_bits = 32 - (fi.height as u32).leading_zeros();
+    let width_bits = fi.sequence.num_bits_width;
+    let height_bits = fi.sequence.num_bits_height;
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
     self.write(width_bits, (fi.width - 1) as u16)?;

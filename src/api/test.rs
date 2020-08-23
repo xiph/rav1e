@@ -1802,6 +1802,8 @@ fn log_q_exp_overflow() {
   let enc = EncoderConfig {
     width: 16,
     height: 16,
+    max_width: 0,
+    max_height: 0,
     bit_depth: 8,
     chroma_sampling: ChromaSampling::Cs420,
     chroma_sample_position: ChromaSamplePosition::Unknown,
@@ -1866,6 +1868,8 @@ fn guess_frame_subtypes_assert() {
   let enc = EncoderConfig {
     width: 16,
     height: 16,
+    max_width: 0,
+    max_height: 0,
     bit_depth: 8,
     chroma_sampling: ChromaSampling::Cs420,
     chroma_sample_position: ChromaSamplePosition::Unknown,

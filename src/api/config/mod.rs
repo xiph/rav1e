@@ -240,6 +240,13 @@ impl Config {
       return Err(InvalidHeight(config.height));
     }
 
+    if config.max_width != 0 && config.width > config.max_width {
+      return Err(InvalidWidth(config.width));
+    }
+    if config.max_height != 0 && config.height > config.max_height {
+      return Err(InvalidHeight(config.height));
+    }
+
     if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
       || config.rdo_lookahead_frames < 1
     {
