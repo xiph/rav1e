@@ -8,6 +8,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use av_data::rational::Rational64;
 use rav1e::prelude::*;
 use std::io;
 
@@ -37,7 +38,7 @@ pub struct VideoDetails {
   pub bit_depth: usize,
   pub chroma_sampling: ChromaSampling,
   pub chroma_sample_position: ChromaSamplePosition,
-  pub time_base: Rational,
+  pub time_base: Rational64,
 }
 
 impl Default for VideoDetails {
@@ -48,7 +49,7 @@ impl Default for VideoDetails {
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
-      time_base: Rational { num: 30, den: 1 },
+      time_base: Rational64::new(30, 1),
     }
   }
 }

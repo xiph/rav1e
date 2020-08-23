@@ -290,8 +290,8 @@ impl<T: Pixel> ContextInner<T> {
       rc_state: RCState::new(
         enc.width as i32,
         enc.height as i32,
-        enc.time_base.den as i64,
-        enc.time_base.num as i64,
+        *enc.time_base.denom() as i64,
+        *enc.time_base.numer() as i64,
         enc.bitrate,
         maybe_ac_qi_max,
         enc.min_quantizer,

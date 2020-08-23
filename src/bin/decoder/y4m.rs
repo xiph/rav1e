@@ -13,6 +13,7 @@ use std::io::Read;
 use crate::color::ChromaSampling::Cs400;
 use crate::decoder::{DecodeError, Decoder, VideoDetails};
 use crate::Frame;
+use av_data::rational::Rational64;
 use rav1e::prelude::*;
 
 impl Decoder for y4m::Decoder<Box<dyn Read>> {
@@ -24,7 +25,8 @@ impl Decoder for y4m::Decoder<Box<dyn Read>> {
     let (chroma_sampling, chroma_sample_position) =
       map_y4m_color_space(color_space);
     let framerate = self.get_framerate();
-    let time_base = Rational::new(framerate.den as u64, framerate.num as u64);
+    let time_base =
+      Rational64::new(framerate.den as i64, framerate.num as i64);
 
     VideoDetails {
       width,

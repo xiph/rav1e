@@ -25,7 +25,8 @@ unstable = []
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = [
-    "ivf",
+    "av-ivf",
+    "av-format",
     "y4m",
     "clap",
     "scan_fmt",
@@ -36,7 +37,7 @@ binaries = [
 default = ["binaries", "asm", "signal_support"]
 asm = ["nasm-rs", "cc", "regex"]
 signal_support = ["signal-hook"]
-dump_ivf = ["ivf"]
+dump_ivf = ["av-ivf", "av-format"]
 quick_test = []
 desync_finder = ["backtrace"]
 bench = []
@@ -69,7 +70,9 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.3.2", optional = true }
 aom-sys = { version = "0.2.1", optional = true }
 scan_fmt = { version = "0.2.3", optional = true, default-features = false }
-ivf = { version = "0.1", path = "ivf/", optional = true }
+av-ivf = { version = "0.2.1", optional = true }
+av-format = { version = "0.3", optional = true }
+av-data = "0.2"
 v_frame = { version = "0.1", path = "v_frame/" }
 av-metrics = { version = "0.5.1", optional = true }
 rayon = "1.0"
@@ -150,7 +153,7 @@ incremental = true
 incremental = true
 
 [workspace]
-members = [".", "ivf", "rav1e_js", "v_frame"]
+members = [".", "rav1e_js", "v_frame"]
 
 [package.metadata.docs.rs]
 no-default-features = true

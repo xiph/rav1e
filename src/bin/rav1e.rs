@@ -45,6 +45,14 @@ use rav1e::prelude::*;
 
 use crate::decoder::{Decoder, VideoDetails};
 use crate::muxer::*;
+use av_data::params::{CodecParams, MediaKind, VideoInfo};
+use av_data::pixel::ColorModel::Trichromatic;
+use av_data::pixel::TrichromaticEncodingSystem::YUV;
+use av_data::pixel::YUVRange::Limited;
+use av_data::pixel::YUVSystem::YCbCr;
+use av_data::pixel::{formats, Chromaton, Formaton};
+use av_format::common::GlobalInfo;
+use av_format::stream::Stream;
 use std::fs::File;
 use std::io::{Read, Seek, Write};
 use std::sync::Arc;
@@ -129,8 +137,9 @@ impl<D: Decoder> Source<D> {
 // Encode and write a frame.
 // Returns frame information in a `Result`.
 fn process_frame<T: Pixel, D: Decoder>(
-  ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
-  pass1file: Option<&mut File>, pass2file: Option<&mut File>,
+  ctx: &mut Context<T>, output: &mut dyn Write, muxer: &mut dyn Muxer,
+  source: &mut Source<D>, pass1file: Option<&mut File>,
+  pass2file: Option<&mut File>,
   mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write>>>,
   metrics_cli: MetricsEnabled,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
@@ -161,11 +170,12 @@ fn process_frame<T: Pixel, D: Decoder>(
   let pkt_wrapped = ctx.receive_packet();
   let (ret, emit_pass_data) = match pkt_wrapped {
     Ok(pkt) => {
-      output_file.write_frame(
-        pkt.input_frameno as u64,
-        pkt.data.as_ref(),
-        pkt.frame_type,
-      );
+      muxer
+        .write_packet(output, Arc::new(av_data::packet::Packet::from(&pkt)))
+        .map_err(|e| CliError::Generic {
+          msg: "Failed to write packet".to_string(),
+          e: e.to_string(),
+        })?;
       if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
         (y4m_enc.as_mut(), &pkt.rec)
       {
@@ -239,8 +249,8 @@ fn process_frame<T: Pixel, D: Decoder>(
 
 fn do_encode<T: Pixel, D: Decoder>(
   cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
-  output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
-  mut pass2file: Option<File>,
+  output: &mut dyn Write, muxer: &mut dyn Muxer, mut source: Source<D>,
+  mut pass1file: Option<File>, mut pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write>>>,
   metrics_enabled: MetricsEnabled,
 ) -> Result<(), CliError> {
@@ -263,7 +273,8 @@ fn do_encode<T: Pixel, D: Decoder>(
 
   while let Some(frame_info) = process_frame(
     &mut ctx,
-    &mut *output,
+    output,
+    muxer,
     &mut source,
     pass1file.as_mut(),
     pass2file.as_mut(),
@@ -405,8 +416,8 @@ fn run() -> Result<(), error::CliError> {
         video_info.width,
         video_info.height,
         y4m::Ratio::new(
-          video_info.time_base.den as usize,
-          video_info.time_base.num as usize,
+          *video_info.time_base.denom() as usize,
+          *video_info.time_base.numer() as usize,
         ),
       )
       .with_colorspace(y4m_dec.get_colorspace())
@@ -484,26 +495,76 @@ fn run() -> Result<(), error::CliError> {
     }
   }
 
-  cli.io.output.write_header(
-    video_info.width,
-    video_info.height,
-    cli.enc.time_base.den as usize,
-    cli.enc.time_base.num as usize,
-  );
+  cli
+    .io
+    .muxer
+    .set_global_info(GlobalInfo {
+      duration: None,
+      timebase: Some(cli.enc.time_base),
+      streams: vec![Stream::from_params(
+        &CodecParams {
+          kind: Some(MediaKind::Video(VideoInfo {
+            width: video_info.width,
+            height: video_info.height,
+            format: Some(Arc::new(
+              match (video_info.chroma_sampling, video_info.bit_depth) {
+                (ChromaSampling::Cs444, 8) => *formats::YUV444,
+                (ChromaSampling::Cs422, 8) => *formats::YUV422,
+                (ChromaSampling::Cs420, 8) => *formats::YUV420,
+                (ChromaSampling::Cs444, _) => *formats::YUV444_10,
+                (ChromaSampling::Cs422, _) => *formats::YUV422_10,
+                (ChromaSampling::Cs420, _) => *formats::YUV420_10,
+                (ChromaSampling::Cs400, _) => Formaton::new(
+                  Trichromatic(YUV(YCbCr(Limited))),
+                  &[Chromaton::new(0, 0, false, 8, 0, 0, 1)],
+                  0,
+                  false,
+                  false,
+                  false,
+                ),
+              },
+            )),
+          })),
+          codec_id: Some("av1".to_string()),
+          extradata: Default::default(),
+          bit_rate: Default::default(),
+          convergence_window: Default::default(),
+          delay: Default::default(),
+        },
+        cli.enc.time_base,
+      )],
+    })
+    .map_err(|e| CliError::Generic {
+      msg: "Failed to set muxer global info".to_string(),
+      e: e.to_string(),
+    })?;
+  cli.io.muxer.configure().map_err(|e| CliError::Generic {
+    msg: "Failed to configure muxer".to_string(),
+    e: e.to_string(),
+  })?;
+  cli.io.muxer.write_header(&mut cli.io.output).map_err(|e| {
+    CliError::Generic {
+      msg: "Failed to write header".to_string(),
+      e: e.to_string(),
+    }
+  })?;
 
   info!(
     "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",
     video_info.width,
     video_info.height,
-    video_info.time_base.den,
-    video_info.time_base.num,
+    *video_info.time_base.denom(),
+    *video_info.time_base.numer(),
     video_info.chroma_sampling,
     video_info.bit_depth
   );
   info!("Encoding settings: {}", cli.enc);
 
   let progress = ProgressInfo::new(
-    Rational { num: video_info.time_base.den, den: video_info.time_base.num },
+    av_metrics::video::Rational {
+      num: *video_info.time_base.denom() as u64,
+      den: *video_info.time_base.numer() as u64,
+    },
     if cli.limit == 0 { None } else { Some(cli.limit) },
     cli.metrics_enabled,
   );
@@ -525,6 +586,7 @@ fn run() -> Result<(), error::CliError> {
       cli.verbose,
       progress,
       &mut *cli.io.output,
+      &mut *cli.io.muxer,
       source,
       pass1file,
       pass2file,
@@ -537,6 +599,7 @@ fn run() -> Result<(), error::CliError> {
       cli.verbose,
       progress,
       &mut *cli.io.output,
+      &mut *cli.io.muxer,
       source,
       pass1file,
       pass2file,

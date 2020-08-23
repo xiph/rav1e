@@ -9,7 +9,6 @@
 
 use av_metrics::video::*;
 use rav1e::data::EncoderStats;
-use rav1e::prelude::Rational;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
 use std::fmt;

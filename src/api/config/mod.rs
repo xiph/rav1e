@@ -263,19 +263,19 @@ impl Config {
       return Err(InvalidTileRows(config.tile_rows));
     }
 
-    if config.time_base.num == 0
-      || config.time_base.num > u32::max_value() as u64
+    if *config.time_base.numer() == 0
+      || *config.time_base.numer() > u32::max_value() as i64
     {
       return Err(InvalidFrameRateNum {
-        actual: config.time_base.num,
+        actual: *config.time_base.numer() as u64,
         max: u32::max_value() as u64,
       });
     }
-    if config.time_base.den == 0
-      || config.time_base.den > u32::max_value() as u64
+    if *config.time_base.denom() == 0
+      || *config.time_base.denom() > u32::max_value() as i64
     {
       return Err(InvalidFrameRateDen {
-        actual: config.time_base.den,
+        actual: *config.time_base.denom() as u64,
         max: u32::max_value() as u64,
       });
     }

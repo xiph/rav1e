@@ -8,21 +8,22 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::error::*;
-use crate::muxer::{create_muxer, Muxer};
+use crate::muxer::{create_muxer, open_output, Muxer};
 use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
+use av_data::rational::Rational64;
 use clap::{App, AppSettings, Arg, ArgMatches, Shell, SubCommand};
 use rav1e::prelude::*;
 use rav1e::version;
 use scan_fmt::scan_fmt;
-
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
 pub struct EncoderIO {
   pub input: Box<dyn Read>,
-  pub output: Box<dyn Muxer>,
+  pub output: Box<dyn Write>,
+  pub muxer: Box<dyn Muxer>,
   pub rec: Option<Box<dyn Write>>,
 }
 
@@ -440,6 +441,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     None => None,
   };
 
+  let output_path = matches.value_of("OUTPUT").unwrap();
   let io = EncoderIO {
     input: match matches.value_of("INPUT").unwrap() {
       "-" => Box::new(io::stdin()) as Box<dyn Read>,
@@ -447,10 +449,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         File::open(&f).map_err(|e| e.context("Cannot open input file"))?,
       ) as Box<dyn Read>,
     },
-    output: create_muxer(
-      matches.value_of("OUTPUT").unwrap(),
-      matches.is_present("OVERWRITE"),
-    )?,
+    muxer: create_muxer(output_path)?,
+    output: open_output(output_path, matches.is_present("OVERWRITE"))?,
     rec,
   };
 
@@ -662,7 +662,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   if let Some(frame_rate) = matches.value_of("FRAME_RATE") {
-    cfg.time_base = Rational::new(
+    cfg.time_base = Rational64::new(
       matches.value_of("TIME_SCALE").unwrap().parse().unwrap(),
       frame_rate.parse().unwrap(),
     );

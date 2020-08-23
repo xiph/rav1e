@@ -227,12 +227,11 @@ pub mod prelude {
 
 /// Basic data structures
 pub mod data {
-  pub use crate::api::{
-    ChromaticityPoint, EncoderStatus, FrameType, Packet, Rational,
-  };
+  pub use crate::api::{ChromaticityPoint, EncoderStatus, FrameType, Packet};
   pub use crate::frame::{Frame, FrameParameters};
   pub use crate::stats::EncoderStats;
   pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
+  pub use av_data::rational::Rational64 as Rational;
 }
 
 pub use crate::api::color;

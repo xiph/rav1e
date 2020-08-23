@@ -16,57 +16,8 @@ use crate::util::Pixel;
 use std::fmt;
 use std::sync::Arc;
 
+use av_data::timeinfo::TimeInfo;
 use thiserror::*;
-
-// TODO: use the num crate?
-/// A rational number.
-#[derive(Clone, Copy, Debug)]
-#[repr(C)]
-pub struct Rational {
-  /// Numerator.
-  pub num: u64,
-  /// Denominator.
-  pub den: u64,
-}
-
-impl Rational {
-  /// Creates a rational number from the given numerator and denominator.
-  pub const fn new(num: u64, den: u64) -> Self {
-    Rational { num, den }
-  }
-
-  /// Returns a rational number that is the reciprocal of the given one.
-  pub const fn from_reciprocal(reciprocal: Self) -> Self {
-    Rational { num: reciprocal.den, den: reciprocal.num }
-  }
-
-  /// Returns the rational number as a floating-point number.
-  pub fn as_f64(self) -> f64 {
-    self.num as f64 / self.den as f64
-  }
-}
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for Rational {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: serde::Serializer,
-  {
-    (self.num, self.den).serialize(serializer)
-  }
-}
-
-#[cfg(feature = "serialize")]
-impl<'a> serde::Deserialize<'a> for Rational {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'a>,
-  {
-    let (num, den) = serde::Deserialize::deserialize(deserializer)?;
-
-    Ok(Rational::new(num, den))
-  }
-}
 
 /// Possible types of a frame.
 #[allow(dead_code, non_camel_case_types)]
@@ -202,6 +153,19 @@ impl<T: Pixel> fmt::Display for Packet<T> {
       self.frame_type,
       self.data.len()
     )
+  }
+}
+
+impl<'a, T: Pixel> From<&'a Packet<T>> for av_data::packet::Packet {
+  fn from(packet: &'a Packet<T>) -> Self {
+    av_data::packet::Packet {
+      data: packet.data.clone(),
+      pos: Some(packet.input_frameno as usize),
+      stream_index: 0,
+      t: TimeInfo::default(),
+      is_key: packet.frame_type == FrameType::KEY,
+      is_corrupted: false,
+    }
   }
 }
 

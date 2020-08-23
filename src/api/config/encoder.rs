@@ -7,13 +7,12 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use itertools::*;
-
 use crate::api::color::*;
-use crate::api::{Rational, SpeedSettings};
+use crate::api::SpeedSettings;
 use crate::encoder::Tune;
 use crate::serialize::{Deserialize, Serialize};
-
+use av_data::rational::Rational64;
+use itertools::*;
 use std::fmt;
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
@@ -30,7 +29,7 @@ pub struct EncoderConfig {
   /// Height of the frames in pixels.
   pub height: usize,
   /// Video time base.
-  pub time_base: Rational,
+  pub time_base: Rational64,
 
   // data format and ancillary color information
   /// Bit depth.
@@ -145,7 +144,7 @@ impl EncoderConfig {
       error_resilient: false,
       switch_frame_interval: 0,
 
-      time_base: Rational { num: 1, den: 30 },
+      time_base: Rational64::new_raw(1, 30),
 
       min_key_frame_interval: 12,
       max_key_frame_interval: 240,
@@ -180,8 +179,10 @@ impl EncoderConfig {
   /// Returns the video frame rate computed from [`time_base`].
   ///
   /// [`time_base`]: #structfield.time_base
+  #[inline]
   pub fn frame_rate(&self) -> f64 {
-    Rational::from_reciprocal(self.time_base).as_f64()
+    let recip = self.time_base.recip();
+    *recip.numer() as f64 / *recip.denom() as f64
   }
 
   /// Is temporal RDO enabled ?
