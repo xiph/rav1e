@@ -606,13 +606,12 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if fi.sequence.enable_superres {
         unimplemented!();
       }
-      let render_and_frame_size_different = fi.sequence.render_width
-        != fi.sequence.max_frame_width
-        || fi.sequence.render_height != fi.sequence.max_frame_height;
+      let render_and_frame_size_different = fi.render_width != fi.width as u32
+        || fi.render_height != fi.height as u32;
       self.write_bit(render_and_frame_size_different)?;
       if render_and_frame_size_different {
-        self.write(16, fi.sequence.render_width - 1);
-        self.write(16, fi.sequence.render_height - 1);
+        self.write(16, fi.render_width - 1);
+        self.write(16, fi.render_height - 1);
       }
       if fi.allow_screen_content_tools != 0 {
         // TODO: && UpscaledWidth == FrameWidth.
@@ -649,13 +648,13 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if fi.sequence.enable_superres {
           unimplemented!();
         }
-        let render_and_frame_size_different = fi.sequence.render_width
-          != fi.sequence.max_frame_width
-          || fi.sequence.render_height != fi.sequence.max_frame_height;
+        let render_and_frame_size_different = fi.render_width
+          != fi.width as u32
+          || fi.render_height != fi.height as u32;
         self.write_bit(render_and_frame_size_different)?;
         if render_and_frame_size_different {
-          self.write(16, fi.sequence.render_width - 1);
-          self.write(16, fi.sequence.render_height - 1);
+          self.write(16, fi.render_width - 1);
+          self.write(16, fi.render_height - 1);
         }
       }
 

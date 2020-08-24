@@ -130,8 +130,6 @@ pub struct Sequence {
   pub content_light: Option<ContentLight>,
   pub max_frame_width: u32,
   pub max_frame_height: u32,
-  pub render_width: u32,
-  pub render_height: u32,
   pub frame_id_numbers_present_flag: bool,
   pub frame_id_length: u32,
   pub delta_frame_id_length: u32,
@@ -188,14 +186,6 @@ impl Sequence {
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 
-    let sar = config.sample_aspect_ratio.as_f64();
-
-    let (render_width, render_height) = if sar > 1.0 {
-      ((config.width as f64 * sar).round() as u32, config.height as u32)
-    } else {
-      (config.width as u32, (config.height as f64 / sar).round() as u32)
-    };
-
     let profile = if config.bit_depth == 12
       || config.chroma_sampling == ChromaSampling::Cs422
     {
@@ -234,8 +224,6 @@ impl Sequence {
       content_light: config.content_light,
       max_frame_width: config.width as u32,
       max_frame_height: config.height as u32,
-      render_width: render_width as u32,
-      render_height: render_height as u32,
       frame_id_numbers_present_flag: false,
       frame_id_length: FRAME_ID_LENGTH,
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
@@ -490,6 +478,8 @@ pub struct FrameInvariants<T: Pixel> {
   pub sequence: Sequence,
   pub width: usize,
   pub height: usize,
+  pub render_width: u32,
+  pub render_height: u32,
   pub sb_width: usize,
   pub sb_height: usize,
   pub w_in_b: usize,
@@ -600,6 +590,16 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence.bit_depth <= mem::size_of::<T>() * 8,
       "bit depth cannot fit into u8"
     );
+
+    let (width, height) = (config.width, config.height);
+
+    let sar = config.sample_aspect_ratio.as_f64();
+    let (render_width, render_height) = if sar > 1.0 {
+      ((width as f64 * sar).round() as u32, height as u32)
+    } else {
+      (width as u32, (height as f64 / sar).round() as u32)
+    };
+
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion =
       config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
@@ -611,8 +611,8 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let mut tiling = TilingInfo::from_target_tiles(
       sequence.sb_size_log2(),
-      config.width,
-      config.height,
+      width,
+      height,
       frame_rate,
       TilingInfo::tile_log2(1, config.tile_cols).unwrap(),
       TilingInfo::tile_log2(1, config.tile_rows).unwrap(),
@@ -627,8 +627,8 @@ impl<T: Pixel> FrameInvariants<T> {
       {
         tiling = TilingInfo::from_target_tiles(
           sequence.sb_size_log2(),
-          config.width,
-          config.height,
+          width,
+          height,
           frame_rate,
           tile_cols_log2,
           tile_rows_log2,
@@ -656,10 +656,12 @@ impl<T: Pixel> FrameInvariants<T> {
 
     Self {
       sequence,
-      width: config.width,
-      height: config.height,
-      sb_width: config.width.align_power_of_two_and_shift(6),
-      sb_height: config.height.align_power_of_two_and_shift(6),
+      width,
+      height,
+      render_width,
+      render_height,
+      sb_width: width.align_power_of_two_and_shift(6),
+      sb_height: height.align_power_of_two_and_shift(6),
       w_in_b,
       h_in_b,
       tiling,
