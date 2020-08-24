@@ -286,14 +286,7 @@ impl_itx_hbd_fns!(
   [(TxType::DCT_DCT, dct, dct)],
   [(64, 64), (64, 32), (32, 64), (16, 64), (64, 16)],
   // 32x
-  // TODO: We are excluding identity transform as tests are failing with
-  // memory misalignment for 4 cases:
-  // inv_txfm2d_add_identity_identity_16x32_neon,
-  // inv_txfm2d_add_identity_identity_32x16_neon,
-  // inv_txfm2d_add_identity_identity_32x32_neon,
-  // inv_txfm2d_add_identity_identity_8x32_neon
-  //[(TxType::IDTX, identity, identity)],
-  [],
+  [(TxType::IDTX, identity, identity)],
   [(32, 32), (32, 16), (16, 32), (32, 8), (8, 32)],
   // 16x16
   [
