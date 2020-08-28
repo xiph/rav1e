@@ -176,6 +176,9 @@ pub trait UncompressedHeader {
   fn write_render_size<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()>;
+  fn write_frame_size_with_refs<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()>;
   fn write_deblock_filter_a<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState,
   ) -> io::Result<()>;
@@ -629,7 +632,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       if !fi.error_resilient && fi.frame_size_override_flag {
-        unimplemented!();
+        self.write_frame_size_with_refs(fi)?;
       } else {
         self.write_frame_size(fi)?;
         self.write_render_size(fi)?;
@@ -893,6 +896,36 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.render_and_frame_size_different {
       self.write(16, fi.render_width - 1)?;
       self.write(16, fi.render_height - 1)?;
+    }
+    Ok(())
+  }
+
+  fn write_frame_size_with_refs<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()> {
+    let mut found_ref = false;
+    for i in 0..INTER_REFS_PER_FRAME {
+      if let Some(ref rec) = fi.rec_buffer.frames[fi.ref_frames[i] as usize] {
+        if rec.width == fi.width as u32
+          && rec.height == fi.height as u32
+          && rec.render_width == fi.render_width
+          && rec.render_height == fi.render_height
+        {
+          self.write_bit(true)?;
+          found_ref = true;
+          break;
+        } else {
+          self.write_bit(false)?;
+        }
+      } else {
+        self.write_bit(false)?;
+      }
+    }
+    if !found_ref {
+      self.write_frame_size(fi)?;
+      self.write_render_size(fi)?;
+    } else if fi.sequence.enable_superres {
+      unimplemented!();
     }
     Ok(())
   }
