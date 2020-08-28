@@ -480,6 +480,8 @@ pub struct FrameInvariants<T: Pixel> {
   pub height: usize,
   pub render_width: u32,
   pub render_height: u32,
+  pub frame_size_override_flag: bool,
+  pub render_and_frame_size_different: bool,
   pub sb_width: usize,
   pub sb_height: usize,
   pub w_in_b: usize,
@@ -592,6 +594,8 @@ impl<T: Pixel> FrameInvariants<T> {
     );
 
     let (width, height) = (config.width, config.height);
+    let frame_size_override_flag = width as u32 != sequence.max_frame_width
+      || height as u32 != sequence.max_frame_height;
 
     let sar = config.sample_aspect_ratio.as_f64();
     let (render_width, render_height) = if sar.is_nan() {
@@ -601,6 +605,8 @@ impl<T: Pixel> FrameInvariants<T> {
     } else {
       (width as u32, (height as f64 / sar).round() as u32)
     };
+    let render_and_frame_size_different =
+      render_width != width as u32 || render_height != height as u32;
 
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion =
@@ -662,6 +668,8 @@ impl<T: Pixel> FrameInvariants<T> {
       height,
       render_width,
       render_height,
+      frame_size_override_flag,
+      render_and_frame_size_different,
       sb_width: width.align_power_of_two_and_shift(6),
       sb_height: height.align_power_of_two_and_shift(6),
       w_in_b,
@@ -812,6 +820,12 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     fi.error_resilient =
       if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
+
+    if fi.frame_type == FrameType::SWITCH {
+      fi.frame_size_override_flag = true;
+    } else if fi.sequence.reduced_still_picture_hdr {
+      fi.frame_size_override_flag = false;
+    }
 
     // this is the slot that the current frame is going to be saved into
     let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);

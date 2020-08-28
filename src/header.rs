@@ -538,13 +538,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       //self.write(frame_id_len, fi.current_frame_id);
     }
 
-    let mut frame_size_override_flag = false;
-    if fi.frame_type == FrameType::SWITCH {
-      frame_size_override_flag = true;
-    } else if fi.sequence.reduced_still_picture_hdr {
-      frame_size_override_flag = false;
-    } else {
-      self.write_bit(frame_size_override_flag)?; // frame size overhead flag
+    if fi.frame_type != FrameType::SWITCH
+      && !fi.sequence.reduced_still_picture_hdr
+    {
+      self.write_bit(fi.frame_size_override_flag)?; // frame size overhead flag
     }
 
     if fi.sequence.enable_order_hint {
@@ -600,16 +597,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     // if KEY or INTRA_ONLY frame
     if fi.intra_only {
-      if frame_size_override_flag {
+      if fi.frame_size_override_flag {
         self.write_frame_size_override(fi);
       }
       if fi.sequence.enable_superres {
         unimplemented!();
       }
-      let render_and_frame_size_different = fi.render_width != fi.width as u32
-        || fi.render_height != fi.height as u32;
-      self.write_bit(render_and_frame_size_different)?;
-      if render_and_frame_size_different {
+      self.write_bit(fi.render_and_frame_size_different)?;
+      if fi.render_and_frame_size_different {
         self.write(16, fi.render_width - 1);
         self.write(16, fi.render_height - 1);
       }
@@ -639,20 +634,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         }
       }
 
-      if !fi.error_resilient && frame_size_override_flag {
+      if !fi.error_resilient && fi.frame_size_override_flag {
         unimplemented!();
       } else {
-        if frame_size_override_flag {
+        if fi.frame_size_override_flag {
           self.write_frame_size_override(fi);
         }
         if fi.sequence.enable_superres {
           unimplemented!();
         }
-        let render_and_frame_size_different = fi.render_width
-          != fi.width as u32
-          || fi.render_height != fi.height as u32;
-        self.write_bit(render_and_frame_size_different)?;
-        if render_and_frame_size_different {
+        self.write_bit(fi.render_and_frame_size_different)?;
+        if fi.render_and_frame_size_different {
           self.write(16, fi.render_width - 1);
           self.write(16, fi.render_height - 1);
         }
