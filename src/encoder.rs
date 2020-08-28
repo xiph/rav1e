@@ -826,6 +826,14 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.error_resilient =
       if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
 
+    // force frame_size_with_refs() code path if render size != frame size
+    if fi.frame_type == FrameType::INTER
+      && !fi.error_resilient
+      && fi.render_and_frame_size_different
+    {
+      fi.frame_size_override_flag = true;
+    }
+
     if fi.frame_type == FrameType::SWITCH {
       fi.frame_size_override_flag = true;
     } else if fi.sequence.reduced_still_picture_hdr {
