@@ -631,6 +631,10 @@ impl<T: Pixel> ContextInner<T> {
       // We do want to propagate the lookahead_rec_buffer though.
       let rfs = Arc::new(ReferenceFrame {
         order_hint: fi.order_hint,
+        width: fi.width as u32,
+        height: fi.height as u32,
+        render_width: fi.render_width,
+        render_height: fi.render_height,
         // Use the original frame contents.
         frame: fs.input.clone(),
         input_hres: fs.input_hres.clone(),
@@ -710,6 +714,10 @@ impl<T: Pixel> ContextInner<T> {
     // FrameInvariants to pick it up.
     let rfs = Arc::new(ReferenceFrame {
       order_hint: fi.order_hint,
+      width: fi.width as u32,
+      height: fi.height as u32,
+      render_width: fi.render_width,
+      render_height: fi.render_height,
       // Use the original frame contents.
       frame: fs.input.clone(),
       input_hres: fs.input_hres.clone(),

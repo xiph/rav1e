@@ -77,6 +77,10 @@ pub const IMPORTANCE_BLOCK_SIZE: usize =
 #[derive(Debug, Clone)]
 pub struct ReferenceFrame<T: Pixel> {
   pub order_hint: u32,
+  pub width: u32,
+  pub height: u32,
+  pub render_width: u32,
+  pub render_height: u32,
   pub frame: Arc<Frame<T>>,
   pub input_hres: Arc<Plane<T>>,
   pub input_qres: Arc<Plane<T>>,
@@ -3810,6 +3814,10 @@ pub fn update_rec_buffer<T: Pixel>(
 ) {
   let rfs = Arc::new(ReferenceFrame {
     order_hint: fi.order_hint,
+    width: fi.width as u32,
+    height: fi.height as u32,
+    render_width: fi.render_width,
+    render_height: fi.render_height,
     frame: fs.rec.clone(),
     input_hres: fs.input_hres.clone(),
     input_qres: fs.input_qres.clone(),
