@@ -173,6 +173,9 @@ pub trait UncompressedHeader {
   fn write_frame_size_override<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()>;
+  fn write_render_size<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()>;
   fn write_deblock_filter_a<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, deblock: &DeblockState,
   ) -> io::Result<()>;
@@ -603,11 +606,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if fi.sequence.enable_superres {
         unimplemented!();
       }
-      self.write_bit(fi.render_and_frame_size_different)?;
-      if fi.render_and_frame_size_different {
-        self.write(16, fi.render_width - 1);
-        self.write(16, fi.render_height - 1);
-      }
+      self.write_render_size(fi)?;
       if fi.allow_screen_content_tools != 0 {
         // TODO: && UpscaledWidth == FrameWidth.
         self.write_bit(fi.allow_intrabc)?;
@@ -643,11 +642,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if fi.sequence.enable_superres {
           unimplemented!();
         }
-        self.write_bit(fi.render_and_frame_size_different)?;
-        if fi.render_and_frame_size_different {
-          self.write(16, fi.render_width - 1);
-          self.write(16, fi.render_height - 1);
-        }
+        self.write_render_size(fi)?;
       }
 
       if fi.force_integer_mv == 0 {
@@ -893,6 +888,17 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     assert!(height_bits <= 16);
     self.write(width_bits, width as u16)?;
     self.write(height_bits, height as u16)?;
+    Ok(())
+  }
+
+  fn write_render_size<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()> {
+    self.write_bit(fi.render_and_frame_size_different)?;
+    if fi.render_and_frame_size_different {
+      self.write(16, fi.render_width - 1)?;
+      self.write(16, fi.render_height - 1)?;
+    }
     Ok(())
   }
 
