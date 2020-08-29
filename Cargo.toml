@@ -104,7 +104,7 @@ rustc_version = "0.2"
 regex = { version = "1", optional = true }
 
 [build-dependencies.nasm-rs]
-version = "=0.1.7"
+version = "0.2"
 optional = true
 features = ["parallel"]
 
