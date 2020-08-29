@@ -110,6 +110,9 @@ fn build_nasm_files() {
       "rav1easm",
       asm_files,
       &[&config_include_arg, "-Isrc/"],
+    )
+    .expect(
+      "NASM build failed. Make sure you have nasm installed. https://nasm.us",
     );
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
