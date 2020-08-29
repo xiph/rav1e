@@ -1004,11 +1004,11 @@ function put_neon
         b.gt            2b
         ret
 4:
-        ld1             {v0.8b}, [x2], x3
-        ld1             {v1.8b}, [x2], x3
+        ld1             {v0.4h}, [x2], x3
+        ld1             {v1.4h}, [x2], x3
         subs            w5,  w5,  #2
-        st1             {v0.8b}, [x0], x1
-        st1             {v1.8b}, [x0], x1
+        st1             {v0.4h}, [x0], x1
+        st1             {v1.4h}, [x0], x1
         b.gt            4b
         ret
 80:
@@ -1017,11 +1017,11 @@ function put_neon
         add             x9,  x2,  x3
         lsl             x3,  x3,  #1
 8:
-        ld1             {v0.16b}, [x2], x3
-        ld1             {v1.16b}, [x9], x3
+        ld1             {v0.8h}, [x2], x3
+        ld1             {v1.8h}, [x9], x3
         subs            w5,  w5,  #2
-        st1             {v0.16b}, [x0], x1
-        st1             {v1.16b}, [x8], x1
+        st1             {v0.8h}, [x0], x1
+        st1             {v1.8h}, [x8], x1
         b.gt            8b
         ret
 16:
