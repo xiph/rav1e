@@ -20,9 +20,9 @@ jobs:
     - name: Install nasm
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.14.02-1
+        NASM_VERSION: 2.15.04-1
         NASM_SHA256: >-
-          5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
+          7801f43bc3bce0fba50ecaaa9f5bd337708b5d2335b20feecf52ed6f15e188d2
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
@@ -109,9 +109,9 @@ jobs:
     - name: Add nasm
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.14.02-1
+        NASM_VERSION: 2.15.04-1
         NASM_SHA256: >-
-          5225d0654783134ae616f56ce8649e4df09cba191d612a0300cfd0494bb5a3ef
+          7801f43bc3bce0fba50ecaaa9f5bd337708b5d2335b20feecf52ed6f15e188d2
       run: |
         echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
@@ -399,7 +399,7 @@ jobs:
         echo "::add-path::$Env:GITHUB_WORKSPACE/$SCCACHE_FILE"
     - name: Install nasm
       run: |
-        $NASM_VERSION="2.14.02"
+        $NASM_VERSION="2.15.04"
         $LINK = "https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
         $NASM_FILE = "nasm-$NASM_VERSION-win64"
         curl --ssl-no-revoke -LO "$LINK/$NASM_FILE.zip"
