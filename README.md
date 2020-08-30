@@ -51,7 +51,7 @@ For the foreseeable future, a weekly pre-release of rav1e will be [published](ht
 ### Dependency: NASM
 Some `x86_64`-specific optimizations require [NASM](https://nasm.us/) `2.14.02` or newer and are enabled by default.
 
-The CI is testing against `nasm 2.15.02`, so bugs for other versions might happen. If you find one please open an issue!
+The CI is testing against `nasm 2.15.04`, so bugs for other versions might happen. If you find one please open an issue!
 
 <details>
 <summary>
@@ -72,17 +72,17 @@ sudo ln /usr/lib/nasm-mozilla/bin/nasm /usr/local/bin/
 ```sh
 sudo dnf install nasm
 ```
-**windows** (`nasm 2.15.02`) <br/>
+**windows** (`nasm 2.15.04`) <br/>
 Have a [NASM binary](https://www.nasm.us/pub/nasm/releasebuilds/) in your system PATH.
 ```sh
-$NASM_VERSION="2.15.02" # or newer
+$NASM_VERSION="2.15.04" # or newer
 $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
 curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
 7z e -y "nasm-$NASM_VERSION-win64.zip" -o "C:\nasm"
 # set path for the current sessions
 set PATH="%PATH%;C:\nasm"
 ```
-**macOS** (`nasm 2.15.02`)
+**macOS** (`nasm 2.15.05`)
 ```sh
 brew install nasm
 ```
