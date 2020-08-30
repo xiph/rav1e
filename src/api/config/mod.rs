@@ -246,12 +246,16 @@ impl Config {
       return Err(InvalidHeight(config.height));
     }
 
-    if config.sample_aspect_ratio.num == 0 {
+    if config.sample_aspect_ratio.num == 0
+      && config.sample_aspect_ratio.den != 0
+    {
       return Err(InvalidAspectRatioNum(
         config.sample_aspect_ratio.num as usize,
       ));
     }
-    if config.sample_aspect_ratio.den == 0 {
+    if config.sample_aspect_ratio.den == 0
+      && config.sample_aspect_ratio.num != 0
+    {
       return Err(InvalidAspectRatioDen(
         config.sample_aspect_ratio.den as usize,
       ));
