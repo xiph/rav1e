@@ -27,7 +27,7 @@ jobs:
       rust: stable
       arch: arm64
       script:
-        - cargo test --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+        - cargo test --all --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
     - name: "Ignored Tests (dav1d)"
       rust: stable
       arch: arm64
