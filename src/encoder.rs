@@ -594,7 +594,9 @@ impl<T: Pixel> FrameInvariants<T> {
     let (width, height) = (config.width, config.height);
 
     let sar = config.sample_aspect_ratio.as_f64();
-    let (render_width, render_height) = if sar > 1.0 {
+    let (render_width, render_height) = if sar.is_nan() {
+      (width as u32, height as u32)
+    } else if sar > 1.0 {
       ((width as f64 * sar).round() as u32, height as u32)
     } else {
       (width as u32, (height as f64 / sar).round() as u32)
