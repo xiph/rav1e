@@ -27,11 +27,11 @@ jobs:
       rust: stable
       arch: arm64
       script:
-        - cargo test --all --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
+        - cargo test --workspace --features=decode_test,decode_test_dav1d,quick_test,capi --verbose
     - name: "Ignored Tests (dav1d)"
       rust: stable
       arch: arm64
       script:
-        - travis_wait 60 cargo test --release --features=decode_test_dav1d --verbose --color=always -- --color=always --ignored
+        - travis_wait 60 cargo test --workspace --release --features=decode_test_dav1d --verbose --color=always -- --color=always --ignored
       env:
         - CACHE_NAME=IGNORED_TESTS_DAV1D
