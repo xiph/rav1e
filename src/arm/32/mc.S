@@ -1403,12 +1403,12 @@ L(\type\()_8tap_h_tbl):
         vld1.8          {d24}, [\sr2], \s_strd
         vmovl.u8        q8,  d16
         vmovl.u8        q12, d24
-        vext.8          q9,  q8,  q8,  #2
-        vext.8          q10, q8,  q8,  #4
-        vext.8          q11, q8,  q8,  #6
-        vext.8          q13, q12, q12, #2
-        vext.8          q14, q12, q12, #4
-        vext.8          q15, q12, q12, #6
+        vext.8          d18, d16, d17, #2
+        vext.8          d20, d16, d17, #4
+        vext.8          d22, d16, d17, #6
+        vext.8          d26, d24, d25, #2
+        vext.8          d28, d24, d25, #4
+        vext.8          d30, d24, d25, #6
         subs            \h,  \h,  #2
         vmul.s16        d4,  d16, d0[0]
         vmla.s16        d4,  d18, d0[1]
