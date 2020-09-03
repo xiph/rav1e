@@ -1951,11 +1951,10 @@ L(\type\()_8tap_hv_tbl):
         bl              L(\type\()_8tap_filter_2)
 
         vext.8          d18, d17, d26, #4
-        vmov            d19, d26
         vmull.s16       q2,  d16, d2[0]
         vmlal.s16       q2,  d17, d2[1]
         vmlal.s16       q2,  d18, d2[2]
-        vmlal.s16       q2,  d19, d2[3]
+        vmlal.s16       q2,  d26, d2[3]
 
         vqrshrn.s32     d4,  q2,  #\shift_hv
         vqmovun.s16     d4,  q2
@@ -1964,7 +1963,7 @@ L(\type\()_8tap_hv_tbl):
         vst1.16         {d4[1]}, [\ds2, :16], \d_strd
         ble             0f
         vmov            d16, d18
-        vmov            d17, d19
+        vmov            d17, d26
         b               2b
 
 280:    // 2x8, 2x16, 2x32 hv
@@ -2001,7 +2000,6 @@ L(\type\()_8tap_hv_tbl):
 28:
         bl              L(\type\()_8tap_filter_2)
         vext.8          d22, d21, d26, #4
-        vmov            d23, d26
         vmull.s16       q2,  d16, d2[0]
         vmlal.s16       q2,  d17, d2[1]
         vmlal.s16       q2,  d18, d2[2]
@@ -2009,7 +2007,7 @@ L(\type\()_8tap_hv_tbl):
         vmlal.s16       q2,  d20, d3[0]
         vmlal.s16       q2,  d21, d3[1]
         vmlal.s16       q2,  d22, d3[2]
-        vmlal.s16       q2,  d23, d3[3]
+        vmlal.s16       q2,  d26, d3[3]
 
         vqrshrn.s32     d4,  q2,  #\shift_hv
         vqmovun.s16     d4,  q2
@@ -2022,7 +2020,7 @@ L(\type\()_8tap_hv_tbl):
         vmov            d18, d20
         vmov            d19, d21
         vmov            d20, d22
-        vmov            d21, d23
+        vmov            d21, d26
         b               28b
 
 0:

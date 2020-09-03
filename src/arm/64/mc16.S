@@ -2057,11 +2057,10 @@ L(\type\()_8tap_hv):
         bl              L(\type\()_8tap_filter_2)
 
         ext             v18.16b, v17.16b, v24.16b, #8
-        mov             v19.16b, v24.16b
         mul             v2.4s,   v16.4s,  v1.s[0]
         mla             v2.4s,   v17.4s,  v1.s[1]
         mla             v2.4s,   v18.4s,  v1.s[2]
-        mla             v2.4s,   v19.4s,  v1.s[3]
+        mla             v2.4s,   v24.4s,  v1.s[3]
 
         srshl           v2.4s,   v2.4s,   v29.4s // -(6+intermediate_bits)
         sqxtun          v2.4h,   v2.4s
@@ -2071,7 +2070,7 @@ L(\type\()_8tap_hv):
         st1             {v2.s}[1], [\ds2], \d_strd
         b.le            0f
         mov             v16.16b, v18.16b
-        mov             v17.16b, v19.16b
+        mov             v17.16b, v24.16b
         b               2b
 
 280:    // 2x8, 2x16, 2x32 hv
@@ -2109,7 +2108,6 @@ L(\type\()_8tap_hv):
 28:
         bl              L(\type\()_8tap_filter_2)
         ext             v22.16b, v21.16b, v24.16b, #8
-        mov             v23.16b, v24.16b
         mul             v3.4s,   v16.4s,  v1.s[0]
         mla             v3.4s,   v17.4s,  v1.s[1]
         mla             v3.4s,   v18.4s,  v1.s[2]
@@ -2117,7 +2115,7 @@ L(\type\()_8tap_hv):
         mla             v3.4s,   v20.4s,  v2.s[0]
         mla             v3.4s,   v21.4s,  v2.s[1]
         mla             v3.4s,   v22.4s,  v2.s[2]
-        mla             v3.4s,   v23.4s,  v2.s[3]
+        mla             v3.4s,   v24.4s,  v2.s[3]
 
         srshl           v3.4s,   v3.4s,   v29.4s // -(6+intermediate_bits)
         sqxtun          v3.4h,   v3.4s
@@ -2131,7 +2129,7 @@ L(\type\()_8tap_hv):
         mov             v18.16b, v20.16b
         mov             v19.16b, v21.16b
         mov             v20.16b, v22.16b
-        mov             v21.16b, v23.16b
+        mov             v21.16b, v24.16b
         b               28b
 
 0:
