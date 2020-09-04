@@ -260,10 +260,16 @@ impl Config {
 
     let config = &self.enc;
 
-    if config.width < 16 || config.width > u16::max_value() as usize {
+    if (config.still_picture && config.width < 1)
+      || (!config.still_picture && config.width < 16)
+      || config.width > u16::max_value() as usize
+    {
       return Err(InvalidWidth(config.width));
     }
-    if config.height < 16 || config.height > u16::max_value() as usize {
+    if (config.still_picture && config.height < 1)
+      || (!config.still_picture && config.height < 16)
+      || config.height > u16::max_value() as usize
+    {
       return Err(InvalidHeight(config.height));
     }
 
