@@ -30,10 +30,11 @@ impl Decoder for y4m::Decoder<Box<dyn Read + Send>> {
     VideoDetails {
       width,
       height,
-      sample_aspect_ratio: Rational::new(
-        aspect_ratio.num as u64,
-        aspect_ratio.den as u64,
-      ),
+      sample_aspect_ratio: if aspect_ratio.num == 0 && aspect_ratio.den == 0 {
+        Rational::new(1, 1)
+      } else {
+        Rational::new(aspect_ratio.num as u64, aspect_ratio.den as u64)
+      },
       bit_depth,
       chroma_sampling,
       chroma_sample_position,
