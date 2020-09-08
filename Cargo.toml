@@ -97,7 +97,7 @@ vergen = { version = "3", path = "crates/vergen" }
 rustc_version = "0.2"
 
 [build-dependencies.nasm-rs]
-version = "0.1.7"
+version = "0.2"
 optional = true
 features = ["parallel"]
 
