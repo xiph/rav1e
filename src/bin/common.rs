@@ -472,10 +472,15 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     MetricsEnabled::None
   };
 
+  let limit = matches.value_of("LIMIT").unwrap().parse().unwrap();
+  if enc.still_picture && limit > 1 {
+    panic!("A limit cannot be set above 1 in still picture mode");
+  }
+
   Ok(CliOptions {
     io,
     enc,
-    limit: matches.value_of("LIMIT").unwrap().parse().unwrap(),
+    limit,
     // Use `occurrences_of()` because `is_present()` is always true
     // if a parameter has a default value.
     color_range_specified: matches.occurrences_of("PIXEL_RANGE") > 0,
