@@ -189,7 +189,7 @@ impl TileBlocksMut<'_> {
   #[inline(always)]
   pub fn for_each<F>(&mut self, bo: TileBlockOffset, bsize: BlockSize, f: F)
   where
-    F: Fn(&mut Block) -> (),
+    F: Fn(&mut Block),
   {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();

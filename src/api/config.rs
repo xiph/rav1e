@@ -620,6 +620,7 @@ impl fmt::Display for SGRComplexityLevel {
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
+#[non_exhaustive]
 pub enum InvalidConfig {
   /// The width is invalid.
   #[error("invalid width {0} (expected >= 16, <= 32767)")]
@@ -673,14 +674,6 @@ pub enum InvalidConfig {
     "invalid switch frame interval {0} (must only be used with low latency mode)"
   )]
   InvalidSwitchFrameInterval(u64),
-
-  // This variant prevents people from exhaustively matching on this enum,
-  // which allows us to add more variants without it being a breaking change.
-  // This can be replaced with #[non_exhaustive] when it's stable:
-  // https://github.com/rust-lang/rust/issues/44109
-  #[doc(hidden)]
-  #[error("")]
-  __NonExhaustive,
 }
 
 /// Contains the encoder configuration.
