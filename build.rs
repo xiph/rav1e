@@ -67,7 +67,8 @@ fn build_nasm_files() {
       "src/x86/tables.asm",
     ],
     &[&config_include_arg, "-Isrc/"],
-  );
+  )
+  .unwrap();
   println!("cargo:rustc-link-lib=static=rav1easm");
   rerun_dir("src/x86");
   rerun_dir("src/ext/x86");
