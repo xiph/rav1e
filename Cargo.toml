@@ -1,6 +1,6 @@
 [package]
 name = "rav1e"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 build = "build.rs"
