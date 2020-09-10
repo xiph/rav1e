@@ -156,7 +156,7 @@ impl Arbitrary for DecodeTestParameters {
     Ok(Self {
       w: u8::arbitrary(u)? as usize + 16,
       h: u8::arbitrary(u)? as usize + 16,
-      speed: 10,
+      speed: u8::arbitrary(u)? as usize % 11,
       q: u8::arbitrary(u)? as usize,
       limit: (u8::arbitrary(u)? % 3) as usize + 1,
       bit_depth: 8,
@@ -167,8 +167,8 @@ impl Arbitrary for DecodeTestParameters {
       low_latency: bool::arbitrary(u)?,
       error_resilient: bool::arbitrary(u)?,
       bitrate: u16::arbitrary(u)? as i32,
-      tile_cols_log2: bool::arbitrary(u)? as usize,
-      tile_rows_log2: bool::arbitrary(u)? as usize,
+      tile_cols_log2: bool::arbitrary(u)? as usize + 1,
+      tile_rows_log2: bool::arbitrary(u)? as usize + 1,
       still_picture: bool::arbitrary(u)?,
       seed: Arbitrary::arbitrary(u)?,
     })
@@ -185,7 +185,7 @@ pub fn fuzz_encode_decode(p: DecodeTestParameters) {
     p.h,
     p.speed,
     p.q,
-    p.limit,
+    if p.still_picture { 1 } else { p.limit },
     p.bit_depth,
     p.chroma_sampling,
     p.min_keyint,
