@@ -110,6 +110,12 @@ impl TilingInfo {
       tile_width_sb_pre
     };
 
+    let cols = (frame_width_sb + tile_width_sb - 1) / tile_width_sb;
+
+    // Adjust tile_cols_log2 in case of rounding tile_width_sb to even.
+    let tile_cols_log2 = Self::tile_log2(1, cols).unwrap();
+    assert!(tile_cols_log2 >= min_tile_cols_log2);
+
     let min_tile_rows_log2 = if min_tiles_log2 > tile_cols_log2 {
       min_tiles_log2 - tile_cols_log2
     } else {
@@ -127,7 +133,6 @@ impl TilingInfo {
       .min(max_tile_rows_log2);
     let tile_height_sb = sb_rows.align_power_of_two_and_shift(tile_rows_log2);
 
-    let cols = (frame_width_sb + tile_width_sb - 1) / tile_width_sb;
     let rows = (frame_height_sb + tile_height_sb - 1) / tile_height_sb;
 
     Self {
@@ -817,5 +822,43 @@ pub mod test {
   #[test]
   fn tile_log2_overflow() {
     assert_eq!(TilingInfo::tile_log2(1, usize::max_value()), None);
+  }
+
+  #[test]
+  fn from_target_tiles_422() {
+    let sb_size_log2 = 6;
+    let is_422_p = true;
+    let frame_rate = 60.;
+    let sb_size = 1 << sb_size_log2;
+
+    for frame_height in (sb_size..4352).step_by(sb_size) {
+      for tile_rows_log2 in
+        0..=TilingInfo::tile_log2(1, frame_height >> sb_size_log2).unwrap()
+      {
+        for frame_width in (sb_size..7680).step_by(sb_size) {
+          for tile_cols_log2 in
+            0..=TilingInfo::tile_log2(1, frame_width >> sb_size_log2).unwrap()
+          {
+            let ti = TilingInfo::from_target_tiles(
+              sb_size_log2,
+              frame_width,
+              frame_height,
+              frame_rate,
+              tile_cols_log2,
+              tile_rows_log2,
+              is_422_p,
+            );
+            assert_eq!(
+              ti.tile_cols_log2,
+              TilingInfo::tile_log2(1, ti.cols).unwrap()
+            );
+            assert_eq!(
+              ti.tile_rows_log2,
+              TilingInfo::tile_log2(1, ti.rows).unwrap()
+            );
+          }
+        }
+      }
+    }
   }
 }
