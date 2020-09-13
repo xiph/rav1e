@@ -282,7 +282,8 @@ jobs:
           -Cpanic=abort -Zpanic_abort_tests
       run: |
         cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
-                   --features=decode_test,decode_test_dav1d,quick_test
+                   --features=decode_test_dav1d -- \
+                   --include-ignored -Z unstable-options
     - name: Run unit tests
       if: matrix.conf == 'no-asm-tests'
       run: |
