@@ -262,7 +262,7 @@ pub mod config {
 /// let v1 = Version::new(major, minor, patch);
 /// let v2 = Version::parse(&short).unwrap();
 ///
-/// assert_eq!(v1, v2);
+/// assert_eq!(v1.major, v2.major);
 /// ```
 pub mod version {
   /// Major version component
