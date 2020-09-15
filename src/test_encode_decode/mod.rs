@@ -706,39 +706,40 @@ macro_rules! test_high_bit_depth {
 
 test_high_bit_depth! {10, 12}
 
-fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
+fn chroma_sampling(decoder: &str, cs: ChromaSampling, speed: usize) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
   let w = 64;
   let h = 80;
 
-  // Test as many tools as possible
-  for speed in &[0, 2] {
-    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-    dec.encode_decode(
-      w, h, *speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
-      false, [0; 32],
-    );
-  }
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
+    false, [0; 32],
+  );
 }
 
 macro_rules! test_chroma_sampling {
-  ($(($S:expr, $I:expr)),+) => {
+  ($(($CS:expr, $I:expr, $S:expr)),+) => {
     $(
       paste::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         #[ignore]
-        fn [<chroma_sampling_ $S>](decoder: &str) {
-          chroma_sampling(decoder, $I);
+        fn [<chroma_sampling_ $CS _s $S>](decoder: &str) {
+          chroma_sampling(decoder, $I, $S);
         }
       }
     )*
   }
 }
 
-test_chroma_sampling! {(400, ChromaSampling::Cs400), (420, ChromaSampling::Cs420),
-(422, ChromaSampling::Cs422), (444, ChromaSampling::Cs444)}
+test_chroma_sampling! {
+  (400, ChromaSampling::Cs400, 0), (420, ChromaSampling::Cs420, 0),
+  (422, ChromaSampling::Cs422, 0), (444, ChromaSampling::Cs444, 0),
+  (400, ChromaSampling::Cs400, 2), (420, ChromaSampling::Cs420, 2),
+  (422, ChromaSampling::Cs422, 2), (444, ChromaSampling::Cs444, 2)
+}
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
