@@ -709,15 +709,17 @@ test_high_bit_depth! {10, 12}
 fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
   let quantizer = 100;
   let limit = 3; // Include inter frames
-  let speed = 0; // Test as many tools as possible
   let w = 64;
   let h = 80;
 
-  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-  dec.encode_decode(
-    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
-    false, [0; 32],
-  );
+  // Test as many tools as possible
+  for speed in &[0, 2] {
+    let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+    dec.encode_decode(
+      w, h, *speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
+      false, [0; 32],
+    );
+  }
 }
 
 macro_rules! test_chroma_sampling {
