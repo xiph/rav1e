@@ -372,8 +372,11 @@ fn bitrate(decoder: &str) {
   let h = 80;
   let speed = 10;
 
-  for &q in [172, 220, 252, 255].iter() {
-    for &r in [100, 1000, 10_000].iter() {
+  for &q in [172, 255].iter() {
+    for &r in
+      [1000, 3000, 10_000, 30_000, 100_000, 300_000, 1_000_000, 3_000_000]
+        .iter()
+    {
       let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
       dec.encode_decode(
         w,
