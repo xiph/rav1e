@@ -57,7 +57,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3"
-bitstream-io = "0.8"
+bitstream-io = "0.9"
 cfg-if = "0.1"
 clap = { version = "2", optional = true, default-features = false }
 libc = "0.2"
