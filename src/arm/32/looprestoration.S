@@ -615,8 +615,8 @@ L(copy_narrow_tbl):
         asr             r1,  r1,  #1
 22:
         subs            r4,  r4,  #1
-        vld1.16         {d0[]},  [r2]!
-        vst1.16         {d0[0]}, [r0], r1
+        vld1.16         {d0[]},  [r2, :16]!
+        vst1.16         {d0[0]}, [r0, :16], r1
         bgt             22b
 0:
         pop             {r4,pc}
@@ -644,8 +644,8 @@ L(copy_narrow_tbl):
         ble             0f
         b               42b
 41:
-        vld1.32         {d0[]},  [r2]
-        vst1.32         {d0[0]}, [r0]
+        vld1.32         {d0[]},  [r2, :32]
+        vst1.32         {d0[0]}, [r0, :32]
 0:
         pop             {r4,pc}
 
