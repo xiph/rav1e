@@ -267,7 +267,7 @@ impl<T: Pixel> ContextInner<T> {
     let seq = Sequence::new(enc);
     ContextInner {
       frame_count: 0,
-      limit: if enc.still_picture { Some(1) } else { None },
+      limit: None,
       inter_cfg: InterConfig::new(enc),
       output_frameno: 0,
       frames_processed: 0,
