@@ -84,7 +84,7 @@ jobs:
          - conf: check-extra-feats
            toolchain: stable
          - conf: fuzz
-           toolchain: nightly-2020-05-14
+           toolchain: stable
 
     env:
       RUST_BACKTRACE: full
@@ -263,7 +263,7 @@ jobs:
     - name: Run cargo-fuzz
       if: matrix.conf == 'fuzz'
       run: |
-        cargo fuzz build
+        cargo fuzz build --sanitizer none
     - name: Run cargo clean
       if: matrix.conf == 'grcov-coveralls'
       uses: actions-rs/cargo@v1
