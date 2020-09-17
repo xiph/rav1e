@@ -82,19 +82,24 @@ cargo bench --features=bench
 
 ## Fuzzing
 
-Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets requires nightly Rust, so install that too with `rustup install nightly`.
+Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets with stable Rust requires `--sanitizer=none` or the shorter `-s none`.
 
 * List the fuzz targets with `cargo fuzz list`.
-* Run a fuzz target with `cargo +nightly fuzz run <target>`.
-  * Parallel fuzzing: `cargo +nightly fuzz run --jobs <n> <target> -- -workers=<n>`.
-  * Disable memory leak detection (seems to trigger always): `cargo +nightly fuzz run <target> -- -detect_leaks=0`.
-  * Bump the "slow unit" time limit: `cargo +nightly fuzz run <target> -- -report_slow_units=600`.
-  * Make the fuzzer generate long inputs right away (useful because fuzzing uses a ring buffer for data, so when the fuzzer generates big inputs it has a chance to affect different settings individually): `cargo +nightly fuzz run <target> -- -max_len=256 -len_control=0`.
-  * Release configuration (not really recommended because it disables debug assertions and integer overflow assertions): `RUSTFLAGS='-C codegen-units=1' cargo +nightly fuzz run --release <target>`
-    * `codegen-units=1` fixes https://github.com/rust-fuzz/cargo-fuzz/issues/161.
-  * Just give me the complete command line: `RUSTFLAGS='-C codegen-units=1' cargo +nightly fuzz run -j10 encode -- -workers=10 -detect_leaks=0 -timeout=600 -report_slow_units=600 -max_len=256 -len_control=0`.
+* Run a fuzz target with `cargo fuzz run --santizer=none <target>`.
+  * Parallel fuzzing: `cargo fuzz run -s none --jobs <n> <target> -- -workers=<n>`.
+  * Bump the "slow unit" time limit: `cargo fuzz run -s none <target> -- -report_slow_units=600`.
+  * Make the fuzzer generate long inputs right away: `cargo fuzz run -s none <target> -- -max_len=256 -len_control=0`.
+  * Release configuration (recommended only for `encode_decode` because it disables debug assertions and integer overflow assertions): `cargo fuzz run -s none --release <target>`
+  * Just give me the complete command line: `cargo fuzz run -s none -j10 encode -- -workers=10 -timeout=600 -report_slow_units=600 -max_len=256 -len_control=0`.
 * Run a single artifact with debug output: `RUST_LOG=debug <path/to/fuzz/target/executable> <path/to/artifact>`, for example, `RUST_LOG=debug fuzz/target/x86_64-unknown-linux-gnu/debug/encode fuzz/artifacts/encode/crash-2f5672cb76691b989bbd2022a5349939a2d7b952`.
 * For adding new fuzz targets, see comment at the top of `src/fuzzing.rs`.
+
+### Fuzzing with sanitizers
+
+Running fuzz targets with a sanitizer requires nightly Rust, so install that too with `rustup install nightly`.
+
+* Run a fuzz target with `cargo +nightly fuzz run <target>`. The address sanitizer is the default.
+  * Disable memory leak detection (enabled by default for address and leak sanitizers): `cargo fuzz +nightly run <target> -- -detect_leaks=0`.
 
 ## Finding Desyncs
 
