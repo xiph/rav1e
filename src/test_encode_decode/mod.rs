@@ -191,7 +191,9 @@ fn setup_encoder<T: Pixel>(
   enc.tile_rows = 1 << tile_rows_log2;
   enc.still_picture = still_picture;
 
-  let cfg = Config::new().with_encoder_config(enc);
+  let threads = if cfg!(fuzzing) { 1 } else { 2 };
+
+  let cfg = Config::new().with_encoder_config(enc).with_threads(threads);
 
   cfg.new_context().unwrap()
 }
