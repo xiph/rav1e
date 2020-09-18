@@ -23,6 +23,7 @@ pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
 
 /// Encoder settings which impact the produced bitstream.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct EncoderConfig {
   // output size
   /// Width of the frames in pixels.
