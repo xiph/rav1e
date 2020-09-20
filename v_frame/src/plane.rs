@@ -424,7 +424,6 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  #[allow(clippy::needless_range_loop)]
   pub fn downsampled(
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
@@ -443,23 +442,26 @@ impl<T: Pixel> Plane<T> {
 
     let width = new.cfg.width;
     let height = new.cfg.height;
-    let xorigin = new.cfg.xorigin;
-    let yorigin = new.cfg.yorigin;
-    let stride = new.cfg.stride;
 
     assert!(width * 2 <= src.cfg.stride - src.cfg.xorigin);
     assert!(height * 2 <= src.cfg.alloc_height - src.cfg.yorigin);
 
-    for row in 0..height {
-      let base = (yorigin + row) * stride + xorigin;
-      let dst = &mut new.data[base..base + width];
-
-      for (col, dst) in dst.iter_mut().enumerate() {
+    let data_origin = src.data_origin();
+    for (row_idx, dst_row) in new
+      .mut_slice(PlaneOffset::default())
+      .rows_iter_mut()
+      .enumerate()
+      .take(height)
+    {
+      let src_top_row = &data_origin[(src.cfg.stride * row_idx * 2)..];
+      let src_bottom_row =
+        &data_origin[(src.cfg.stride * (row_idx * 2 + 1))..];
+      for (col, dst) in dst_row.iter_mut().take(width).enumerate() {
         let mut sum = 0;
-        sum += u32::cast_from(src.p(2 * col, 2 * row));
-        sum += u32::cast_from(src.p(2 * col + 1, 2 * row));
-        sum += u32::cast_from(src.p(2 * col, 2 * row + 1));
-        sum += u32::cast_from(src.p(2 * col + 1, 2 * row + 1));
+        sum += u32::cast_from(src_top_row[2 * col]);
+        sum += u32::cast_from(src_top_row[2 * col + 1]);
+        sum += u32::cast_from(src_bottom_row[2 * col]);
+        sum += u32::cast_from(src_bottom_row[2 * col + 1]);
         let avg = (sum + 2) >> 2;
         *dst = T::cast_from(avg);
       }
