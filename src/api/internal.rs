@@ -608,20 +608,24 @@ impl<T: Pixel> ContextInner<T> {
       let data_location = Self::build_dump_properties();
       let plane = &fs.input_qres;
       let mut file_name = format!("{:010}-qres", fi.input_frameno);
-      image::GrayImage::from_fn(
+      let buf: Vec<_> = plane.iter().map(|p| p.as_()).collect();
+      image::GrayImage::from_vec(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
-        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
+        buf,
       )
+      .unwrap()
       .save(data_location.join(file_name).with_extension("png"))
       .unwrap();
       let plane = &fs.input_hres;
       file_name = format!("{:010}-hres", fi.input_frameno);
-      image::GrayImage::from_fn(
+      let buf: Vec<_> = plane.iter().map(|p| p.as_()).collect();
+      image::GrayImage::from_vec(
         plane.cfg.width as u32,
         plane.cfg.height as u32,
-        |x, y| image::Luma([plane.p(x as usize, y as usize).as_()]),
+        buf,
       )
+      .unwrap()
       .save(data_location.join(file_name).with_extension("png"))
       .unwrap();
     }
