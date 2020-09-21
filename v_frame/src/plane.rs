@@ -479,6 +479,13 @@ impl<T: Pixel> Plane<T> {
   pub fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter { plane: self, x: 0, y: 0 }
   }
+
+  /// Return a line
+  pub fn row(&self, y: isize) -> &[T] {
+    let range = self.row_range(0, y);
+
+    &self.data[range]
+  }
 }
 
 /// Iterator over plane pixels, skipping padding.
