@@ -41,6 +41,11 @@ pub struct ArbitraryConfig {
   config: Config,
 }
 
+#[inline]
+fn arbitrary_rational(u: &mut Unstructured<'_>) -> Result<Rational, Error> {
+  Ok(Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?))
+}
+
 impl Arbitrary for ArbitraryConfig {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut enc = EncoderConfig::with_speed_preset(Arbitrary::arbitrary(u)?);
@@ -48,8 +53,7 @@ impl Arbitrary for ArbitraryConfig {
     enc.height = Arbitrary::arbitrary(u)?;
     enc.bit_depth = u.int_in_range(0..=16)?;
     enc.still_picture = Arbitrary::arbitrary(u)?;
-    enc.time_base =
-      Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
+    enc.time_base = arbitrary_rational(u)?;
     enc.min_key_frame_interval = Arbitrary::arbitrary(u)?;
     enc.max_key_frame_interval = Arbitrary::arbitrary(u)?;
     enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
@@ -110,23 +114,39 @@ pub struct ArbitraryEncoder {
 
 impl Arbitrary for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    let mut enc = EncoderConfig::with_speed_preset(10);
+    let mut enc = EncoderConfig::with_speed_preset(u.int_in_range(0..=10)?);
     enc.width = u.int_in_range(1..=256)?;
     enc.height = u.int_in_range(1..=256)?;
     enc.still_picture = Arbitrary::arbitrary(u)?;
-    enc.time_base =
-      Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
+    enc.time_base = arbitrary_rational(u)?;
     enc.min_key_frame_interval = u.int_in_range(0..=3)?;
     enc.max_key_frame_interval = u.int_in_range(1..=4)?;
     enc.low_latency = Arbitrary::arbitrary(u)?;
     enc.quantizer = Arbitrary::arbitrary(u)?;
     enc.min_quantizer = Arbitrary::arbitrary(u)?;
     enc.bitrate = Arbitrary::arbitrary(u)?;
-    // enc.tile_cols = Arbitrary::arbitrary(u)?;
-    // enc.tile_rows = Arbitrary::arbitrary(u)?;
-    // enc.tiles = Arbitrary::arbitrary(u)?;
+    enc.tile_cols = u.int_in_range(0..=2)?;
+    enc.tile_rows = u.int_in_range(0..=2)?;
+    enc.tiles = u.int_in_range(0..=16)?;
     enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
-    let frame_count = u.int_in_range(1..=3)?;
+
+    enc.chroma_sampling = *u.choose(&[
+      ChromaSampling::Cs420,
+      ChromaSampling::Cs422,
+      ChromaSampling::Cs444,
+      ChromaSampling::Cs400,
+    ])?;
+    enc.chroma_sample_position = *u.choose(&[
+      ChromaSamplePosition::Unknown,
+      ChromaSamplePosition::Vertical,
+      ChromaSamplePosition::Colocated,
+    ])?;
+    enc.pixel_range = *u.choose(&[PixelRange::Limited, PixelRange::Full])?;
+    enc.error_resilient = Arbitrary::arbitrary(u)?;
+    enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
+
+    let frame_count =
+      if enc.still_picture { 1 } else { u.int_in_range(1..=3)? };
     if u.is_empty() {
       return Err(Error::NotEnoughData);
     }
