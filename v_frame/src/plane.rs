@@ -891,4 +891,41 @@ pub mod test {
       &plane.data[..]
     );
   }
+
+  #[test]
+  fn test_pixel_iterator() {
+    #[rustfmt::skip]
+    let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 9,
+        width: 4,
+        height: 4,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 2,
+        yorigin: 3,
+      },
+    };
+
+    let pixels: Vec<u8> = plane.iter().collect();
+
+    assert_eq!(
+      &[1, 2, 3, 4, 8, 7, 6, 5, 9, 8, 7, 6, 2, 3, 4, 5,][..],
+      &pixels[..]
+    );
+  }
 }
