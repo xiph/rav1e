@@ -253,8 +253,8 @@ pub(crate) mod rust {
     f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
   ) {
     let line = cdeffed.row(y);
-    for x in start_x..w {
-      f[x] = (u32::cast_from(line[x])) << SGRPROJ_RST_BITS;
+    for (fp, &v) in f[start_x..w].iter_mut().zip(line[start_x..w].iter()) {
+      *fp = u32::cast_from(v) << SGRPROJ_RST_BITS;
     }
   }
 
@@ -308,15 +308,37 @@ pub(crate) mod rust {
     let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
     let line = cdeffed.row(y);
     let line1 = cdeffed.row(y + 1);
-    for x in start_x..w {
-      let a = 5 * (af[0][x] + af[0][x + 2]) + 6 * (af[0][x + 1]);
-      let b = 5 * (bf[0][x] + bf[0][x + 2]) + 6 * (bf[0][x + 1]);
-      let ao = 5 * (af[1][x] + af[1][x + 2]) + 6 * (af[1][x + 1]);
-      let bo = 5 * (bf[1][x] + bf[1][x + 2]) + 6 * (bf[1][x + 1]);
-      let v = (a + ao) * u32::cast_from(line[x]) + b + bo;
-      f0[x] = (v + (1 << shift >> 1)) >> shift;
-      let vo = ao * u32::cast_from(line1[x]) + bo;
-      f1[x] = (vo + (1 << shifto >> 1)) >> shifto;
+
+    let af0 = af[0][start_x..w + 3].windows(3);
+    let af1 = af[1][start_x..w + 3].windows(3);
+    let bf0 = bf[0][start_x..w + 3].windows(3);
+    let bf1 = bf[1][start_x..w + 3].windows(3);
+
+    let af_it = af0.zip(af1);
+    let bf_it = bf0.zip(bf1);
+
+    let in0 = line[start_x..w].iter();
+    let in1 = line1[start_x..w].iter();
+
+    let o0 = f0[start_x..w].iter_mut();
+    let o1 = f1[start_x..w].iter_mut();
+
+    let in_iter = in0.zip(in1);
+    let out_iter = o0.zip(o1);
+
+    let io_iter = out_iter.zip(in_iter);
+
+    for (((o0, o1), (&p0, &p1)), ((af_0, af_1), (bf_0, bf_1))) in
+      io_iter.zip(af_it.zip(bf_it))
+    {
+      let a = 5 * (af_0[0] + af_0[2]) + 6 * af_0[1];
+      let b = 5 * (bf_0[0] + bf_0[2]) + 6 * bf_0[1];
+      let ao = 5 * (af_1[0] + af_1[2]) + 6 * af_1[1];
+      let bo = 5 * (bf_1[0] + bf_1[2]) + 6 * bf_1[1];
+      let v = (a + ao) * u32::cast_from(p0) + b + bo;
+      *o0 = (v + (1 << shift >> 1)) >> shift;
+      let vo = ao * u32::cast_from(p1) + bo;
+      *o1 = (vo + (1 << shifto >> 1)) >> shifto;
     }
   }
 }
@@ -1126,16 +1148,23 @@ fn wiener_stripe_filter<T: Pixel>(
         );
         deblocked.row(ly)
       };
-
+      let start = i32::cast_from(src[0]);
+      let end = i32::cast_from(src[crop_w - 1]);
       for i in 0..3 - xi as isize {
-        acc += hfilter[i as usize] * i32::cast_from(src[0]);
+        acc += hfilter[i as usize] * start;
       }
-      for i in cmp::max(0, 3 - (xi as isize))..n {
-        acc += hfilter[i as usize]
-          * i32::cast_from(src[(xi as isize + i - 3) as usize]);
+
+      let off = 3 - (xi as isize);
+      let s = cmp::max(0, off) as usize;
+      let s1 = (s as isize - off) as usize;
+      let n1 = (n as isize - off) as usize;
+
+      for (hf, &v) in hfilter[s..n as usize].iter().zip(src[s1..n1].iter()) {
+        acc += hf * i32::cast_from(v);
       }
+
       for i in n..7 {
-        acc += hfilter[i as usize] * i32::cast_from(src[crop_w - 1]);
+        acc += hfilter[i as usize] * end;
       }
 
       acc = (acc + (1 << round_h >> 1)) >> round_h;
