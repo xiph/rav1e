@@ -47,7 +47,7 @@ impl Arbitrary for ArbitraryConfig {
     config.threads = 1;
     config.enc.width = Arbitrary::arbitrary(u)?;
     config.enc.height = Arbitrary::arbitrary(u)?;
-    config.enc.bit_depth = (u8::arbitrary(u)? % 17) as usize;
+    config.enc.bit_depth = u.int_in_range(0..=16)?;
     config.enc.still_picture = Arbitrary::arbitrary(u)?;
     config.enc.time_base =
       Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
@@ -114,13 +114,13 @@ impl Arbitrary for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut config = Config::default();
     config.threads = 1;
-    config.enc.width = u8::arbitrary(u)? as usize + 1;
-    config.enc.height = u8::arbitrary(u)? as usize + 1;
+    config.enc.width = u.int_in_range(1..=256)?;
+    config.enc.height = u.int_in_range(1..=256)?;
     config.enc.still_picture = Arbitrary::arbitrary(u)?;
     config.enc.time_base =
       Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
-    config.enc.min_key_frame_interval = (u8::arbitrary(u)? % 4) as u64;
-    config.enc.max_key_frame_interval = (u8::arbitrary(u)? % 4) as u64 + 1;
+    config.enc.min_key_frame_interval = u.int_in_range(0..=3)?;
+    config.enc.max_key_frame_interval = u.int_in_range(1..=4)?;
     config.enc.low_latency = Arbitrary::arbitrary(u)?;
     config.enc.quantizer = Arbitrary::arbitrary(u)?;
     config.enc.min_quantizer = Arbitrary::arbitrary(u)?;
@@ -130,7 +130,7 @@ impl Arbitrary for ArbitraryEncoder {
     // config.enc.tiles = Arbitrary::arbitrary(u)?;
     config.enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
     config.enc.speed_settings = SpeedSettings::from_preset(10);
-    let frame_count = u8::arbitrary(u)? % 3 + 1;
+    let frame_count = u.int_in_range(1..=3)?;
     if u.is_empty() {
       return Err(Error::NotEnoughData);
     }
@@ -187,15 +187,15 @@ pub struct DecodeTestParameters {
 impl Arbitrary for DecodeTestParameters {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     Ok(Self {
-      w: u8::arbitrary(u)? as usize + 16,
-      h: u8::arbitrary(u)? as usize + 16,
+      w: u.int_in_range(16..=16 + 255)?,
+      h: u.int_in_range(16..=16 + 255)?,
       speed: 10,
-      q: u8::arbitrary(u)? as usize,
-      limit: (u8::arbitrary(u)? % 3) as usize + 1,
+      q: u8::arbitrary(u)?.into(),
+      limit: u.int_in_range(1..=3)?,
       bit_depth: 8,
       chroma_sampling: Default::default(),
-      min_keyint: u64::arbitrary(u)? % 4,
-      max_keyint: u64::arbitrary(u)? % 4 + 1,
+      min_keyint: u.int_in_range(0..=3)?,
+      max_keyint: u.int_in_range(1..=4)?,
       switch_frame_interval: 0,
       low_latency: bool::arbitrary(u)?,
       error_resilient: false,
