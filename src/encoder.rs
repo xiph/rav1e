@@ -1007,65 +1007,21 @@ pub fn write_temporal_delimiter(packet: &mut dyn io::Write) -> io::Result<()> {
   Ok(())
 }
 
-fn write_obus<T: Pixel>(
-  packet: &mut dyn io::Write, fi: &FrameInvariants<T>, fs: &FrameState<T>,
-  inter_cfg: &InterConfig,
+fn write_key_frame_obus<T: Pixel>(
+  packet: &mut dyn io::Write, fi: &FrameInvariants<T>, obu_extension: u32,
 ) -> io::Result<()> {
-  let obu_extension = 0 as u32;
-
   let mut buf1 = Vec::new();
-
-  // write sequence header obu if KEY_FRAME, preceded by 4-byte size
-  if fi.frame_type == FrameType::KEY {
-    let mut buf2 = Vec::new();
-    {
-      let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-      bw2.write_sequence_header_obu(fi)?;
-      bw2.write_bit(true)?; // trailing bit
-      bw2.byte_align()?;
-    }
-
-    {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_obu_header(ObuType::OBU_SEQUENCE_HEADER, obu_extension)?;
-    }
-    packet.write_all(&buf1).unwrap();
-    buf1.clear();
-
-    {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_uleb128(buf2.len() as u64)?;
-    }
-    packet.write_all(&buf1).unwrap();
-    buf1.clear();
-
-    packet.write_all(&buf2).unwrap();
-    buf2.clear();
-
-    if fi.sequence.content_light.is_some() {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, fi.sequence)?;
-      packet.write_all(&buf1).unwrap();
-      buf1.clear();
-    }
-
-    if fi.sequence.mastering_display.is_some() {
-      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-      bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, fi.sequence)?;
-      packet.write_all(&buf1).unwrap();
-      buf1.clear();
-    }
-  }
-
   let mut buf2 = Vec::new();
   {
     let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs, inter_cfg)?;
+    bw2.write_sequence_header_obu(fi)?;
+    bw2.write_bit(true)?; // trailing bit
+    bw2.byte_align()?;
   }
 
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(ObuType::OBU_FRAME_HEADER, obu_extension)?;
+    bw1.write_obu_header(ObuType::OBU_SEQUENCE_HEADER, obu_extension)?;
   }
   packet.write_all(&buf1).unwrap();
   buf1.clear();
@@ -1080,6 +1036,20 @@ fn write_obus<T: Pixel>(
 
   packet.write_all(&buf2).unwrap();
   buf2.clear();
+
+  if fi.sequence.content_light.is_some() {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, fi.sequence)?;
+    packet.write_all(&buf1).unwrap();
+    buf1.clear();
+  }
+
+  if fi.sequence.mastering_display.is_some() {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, fi.sequence)?;
+    packet.write_all(&buf1).unwrap();
+    buf1.clear();
+  }
 
   Ok(())
 }
@@ -3449,9 +3419,38 @@ pub fn encode_show_existing_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(fi.show_existing_frame);
+  let obu_extension = 0;
+
   let mut packet = Vec::new();
 
-  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
+  if fi.frame_type == FrameType::KEY {
+    write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
+  }
+
+  let mut buf1 = Vec::new();
+  let mut buf2 = Vec::new();
+  {
+    let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
+    bw2.write_frame_header_obu(fi, fs, inter_cfg).unwrap();
+  }
+
+  {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_obu_header(ObuType::OBU_FRAME_HEADER, obu_extension).unwrap();
+  }
+  packet.write_all(&buf1).unwrap();
+  buf1.clear();
+
+  {
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_uleb128(buf2.len() as u64).unwrap();
+  }
+  packet.write_all(&buf1).unwrap();
+  buf1.clear();
+
+  packet.write_all(&buf2).unwrap();
+  buf2.clear();
+
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
     let fs_rec = Arc::make_mut(&mut fs.rec);
@@ -3484,6 +3483,8 @@ pub fn encode_frame<T: Pixel>(
 ) -> Vec<u8> {
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
+  let obu_extension = 0;
+
   let mut packet = Vec::new();
 
   if fi.enable_segmentation {
@@ -3492,21 +3493,33 @@ pub fn encode_frame<T: Pixel>(
   }
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
-  write_obus(&mut packet, fi, fs, inter_cfg).unwrap();
+  if fi.frame_type == FrameType::KEY {
+    write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
+  }
+
   let mut buf1 = Vec::new();
+  let mut buf2 = Vec::new();
+  {
+    let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
+    bw2.write_frame_header_obu(fi, fs, inter_cfg).unwrap();
+  }
+
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_obu_header(ObuType::OBU_TILE_GROUP, 0).unwrap();
+    bw1.write_obu_header(ObuType::OBU_FRAME, obu_extension).unwrap();
   }
   packet.write_all(&buf1).unwrap();
   buf1.clear();
 
   {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_uleb128(tile_group.len() as u64).unwrap();
+    bw1.write_uleb128((buf2.len() + tile_group.len()) as u64).unwrap();
   }
   packet.write_all(&buf1).unwrap();
   buf1.clear();
+
+  packet.write_all(&buf2).unwrap();
+  buf2.clear();
 
   packet.write_all(&tile_group).unwrap();
   packet

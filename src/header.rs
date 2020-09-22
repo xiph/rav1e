@@ -843,7 +843,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.large_scale_tile {
       unimplemented!();
     }
-    self.write_bit(true)?; // trailing bit
     self.byte_align()?;
 
     Ok(())
