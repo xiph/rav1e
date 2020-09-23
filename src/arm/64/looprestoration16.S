@@ -334,9 +334,9 @@ L(variable_shift_tbl):
         ins             v6.s[1], v7.s[0]
         mvni            v24.4h,  #0x80, lsl #8 // 0x7fff = (1 << 15) - 1
         ushll           v16.4s,  v16.4h,  #7
-        add             v6.4s,   v6.4s,   v30.4s
-        add             v6.4s,   v6.4s,   v16.4s
-        srshl           v6.4s,   v6.4s,   v29.4s
+        add             v6.2s,   v6.2s,   v30.2s
+        add             v6.2s,   v6.2s,   v16.2s
+        srshl           v6.2s,   v6.2s,   v29.2s
         sqxtun          v6.4h,   v6.4s
         umin            v6.4h,   v6.4h,   v24.4h
         sub             v6.4h,   v6.4h,   v31.4h
