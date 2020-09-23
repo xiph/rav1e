@@ -144,7 +144,6 @@ function wiener_filter_h_8bpc_neon, export=1
         b               6f
 
 4:      // Loop horizontally
-.macro filter_8
         // This is tuned as some sort of compromise between Cortex A7, A8,
         // A9 and A53.
         vmul.s16        q3,  q1,  d0[0]
@@ -187,8 +186,6 @@ function wiener_filter_h_8bpc_neon, export=1
         vshr.s16        q10, q10, #3
         vadd.s16        q3,  q3,  q15
         vadd.s16        q10, q10, q15
-.endm
-        filter_8
         vst1.16         {q3},  [r0,  :128]!
         vst1.16         {q10}, [r12, :128]!
 
@@ -363,7 +360,6 @@ L(variable_shift_tbl):
 0:
         vpop            {q4}
         pop             {r4-r11,pc}
-.purgem filter_8
 .purgem filter_4
 endfunc
 
