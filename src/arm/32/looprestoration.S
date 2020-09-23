@@ -203,50 +203,43 @@ function wiener_filter_h_8bpc_neon, export=1
 
 5:      // Filter 4 pixels, 7 <= w < 11
 .macro filter_4
+        vext.8          d20, d2,  d3,  #2
+        vext.8          d21, d2,  d3,  #4
+        vext.8          d22, d2,  d3,  #6
+        vext.8          d23, d3,  d4,  #2
+        vext.8          d8,  d3,  d4,  #4
         vmul.s16        d6,  d2,  d0[0]
-        vext.8          q10, q1,  q2,  #2
-        vext.8          q11, q1,  q2,  #4
         vmla.s16        d6,  d20, d0[1]
-        vmla.s16        d6,  d22, d0[2]
-        vext.8          q10, q1,  q2,  #6
-        vext.8          q11, q1,  q2,  #8
-        vmla.s16        d6,  d20, d0[3]
-        vmla.s16        d6,  d22, d1[0]
-        vext.8          q10, q1,  q2,  #10
-        vext.8          q11, q1,  q2,  #12
-        vmla.s16        d6,  d20, d1[1]
-        vmla.s16        d6,  d22, d1[2]
+        vmla.s16        d6,  d21, d0[2]
+        vmla.s16        d6,  d22, d0[3]
+        vmla.s16        d6,  d3,  d1[0]
+        vmla.s16        d6,  d23, d1[1]
+        vmla.s16        d6,  d8,  d1[2]
 
-        vmul.s16        d20, d16, d0[0]
-        vext.8          q11, q8,  q9,  #2
-        vext.8          q4,  q8,  q9,  #4
-        vmla.s16        d20, d22, d0[1]
-        vmla.s16        d20, d8,  d0[2]
-        vext.8          q11, q8,  q9,  #6
-        vext.8          q4,  q8,  q9,  #8
-        vmla.s16        d20, d22, d0[3]
-        vmla.s16        d20, d8,  d1[0]
-        vext.8          q11, q8,  q9,  #10
-        vext.8          q4,  q8,  q9,  #12
-        vmla.s16        d20, d22, d1[1]
-        vmla.s16        d20, d8,  d1[2]
+        vext.8          d20, d16, d17, #2
+        vext.8          d21, d16, d17, #4
+        vext.8          d22, d16, d17, #6
+        vext.8          d23, d17, d18, #2
+        vext.8          d8,  d17, d18, #4
+        vmul.s16        d7,  d16, d0[0]
+        vmla.s16        d7,  d20, d0[1]
+        vmla.s16        d7,  d21, d0[2]
+        vmla.s16        d7,  d22, d0[3]
+        vmla.s16        d7,  d17, d1[0]
+        vmla.s16        d7,  d23, d1[1]
+        vmla.s16        d7,  d8,  d1[2]
 
-        vext.8          q11, q1,  q2,  #6
-        vshl.s16        d22, d22, #7
-        vsub.s16        d22, d22, d28
-        vqadd.s16       d6,  d6,  d22
-        vext.8          q11, q8,  q9,  #6
-        vshl.s16        d22, d22, #7
-        vsub.s16        d22, d22, d28
-        vqadd.s16       d20, d20, d22
-        vshr.s16        d6,  d6,  #3
-        vshr.s16        d20, d20, #3
-        vadd.s16        d6,  d6,  d30
-        vadd.s16        d20, d20, d30
+        vext.8          d22, d2,  d3,  #6
+        vext.8          d23, d16, d17, #6
+        vshl.s16        q11, q11, #7
+        vsub.s16        q11, q11, q14
+        vqadd.s16       q3,  q3,  q11
+        vshr.s16        q3,  q3,  #3
+        vadd.s16        q3,  q3,  q15
 .endm
         filter_4
         vst1.16         {d6},  [r0,  :64]!
-        vst1.16         {d20}, [r12, :64]!
+        vst1.16         {d7},  [r12, :64]!
 
         subs            r5,  r5,  #4 // 3 <= w < 7
         vext.8          q1,  q1,  q2,  #8
@@ -320,7 +313,7 @@ L(variable_shift_tbl):
         // w >= 4, filter 4 pixels
         filter_4
         vst1.16         {d6},  [r0,  :64]!
-        vst1.16         {d20}, [r12, :64]!
+        vst1.16         {d7},  [r12, :64]!
         subs            r5,  r5,  #4 // 0 <= w < 4
         vext.8          q1,  q1,  q2,  #8
         vext.8          q8,  q8,  q9,  #8
