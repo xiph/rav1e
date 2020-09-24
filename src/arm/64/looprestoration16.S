@@ -172,13 +172,13 @@ function wiener_filter_h_16bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
+        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v17.16b, v2.16b,  v3.16b, #4
-        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v19.16b, v2.16b,  v3.16b, #8
         ext             v20.16b, v2.16b,  v3.16b, #10
-        ext             v21.16b, v2.16b,  v3.16b, #12
         ushll_sz        v6,  v7,  v18, #7, \wd
+        ext             v21.16b, v2.16b,  v3.16b, #12
         smlal           v6.4s,   v2.4h,   v0.h[0]
         smlal           v6.4s,   v16.4h,  v0.h[1]
         smlal           v6.4s,   v17.4h,  v0.h[2]
@@ -195,13 +195,13 @@ function wiener_filter_h_16bpc_neon, export=1
         smlal2          v7.4s,   v20.8h,  v0.h[5]
         smlal2          v7.4s,   v21.8h,  v0.h[6]
 .endif
+        ext             v21.16b, v4.16b,  v5.16b, #6
         ext             v19.16b, v4.16b,  v5.16b, #2
         ext             v20.16b, v4.16b,  v5.16b, #4
-        ext             v21.16b, v4.16b,  v5.16b, #6
         ext             v22.16b, v4.16b,  v5.16b, #8
         ext             v23.16b, v4.16b,  v5.16b, #10
-        ext             v24.16b, v4.16b,  v5.16b, #12
         ushll_sz        v16, v17, v21, #7, \wd
+        ext             v24.16b, v4.16b,  v5.16b, #12
         smlal           v16.4s,  v4.4h,   v0.h[0]
         smlal           v16.4s,  v19.4h,  v0.h[1]
         smlal           v16.4s,  v20.4h,  v0.h[2]
