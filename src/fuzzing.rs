@@ -43,27 +43,25 @@ pub struct ArbitraryConfig {
 
 impl Arbitrary for ArbitraryConfig {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    let mut config = Config::default();
-    config.threads = 1;
-    config.enc.width = Arbitrary::arbitrary(u)?;
-    config.enc.height = Arbitrary::arbitrary(u)?;
-    config.enc.bit_depth = u.int_in_range(0..=16)?;
-    config.enc.still_picture = Arbitrary::arbitrary(u)?;
-    config.enc.time_base =
+    let mut enc = EncoderConfig::with_speed_preset(Arbitrary::arbitrary(u)?);
+    enc.width = Arbitrary::arbitrary(u)?;
+    enc.height = Arbitrary::arbitrary(u)?;
+    enc.bit_depth = u.int_in_range(0..=16)?;
+    enc.still_picture = Arbitrary::arbitrary(u)?;
+    enc.time_base =
       Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
-    config.enc.min_key_frame_interval = Arbitrary::arbitrary(u)?;
-    config.enc.max_key_frame_interval = Arbitrary::arbitrary(u)?;
-    config.enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
-    config.enc.low_latency = Arbitrary::arbitrary(u)?;
-    config.enc.quantizer = Arbitrary::arbitrary(u)?;
-    config.enc.min_quantizer = Arbitrary::arbitrary(u)?;
-    config.enc.bitrate = Arbitrary::arbitrary(u)?;
-    config.enc.tile_cols = Arbitrary::arbitrary(u)?;
-    config.enc.tile_rows = Arbitrary::arbitrary(u)?;
-    config.enc.tiles = Arbitrary::arbitrary(u)?;
-    config.enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
-    config.enc.speed_settings =
-      SpeedSettings::from_preset(Arbitrary::arbitrary(u)?);
+    enc.min_key_frame_interval = Arbitrary::arbitrary(u)?;
+    enc.max_key_frame_interval = Arbitrary::arbitrary(u)?;
+    enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
+    enc.low_latency = Arbitrary::arbitrary(u)?;
+    enc.quantizer = Arbitrary::arbitrary(u)?;
+    enc.min_quantizer = Arbitrary::arbitrary(u)?;
+    enc.bitrate = Arbitrary::arbitrary(u)?;
+    enc.tile_cols = Arbitrary::arbitrary(u)?;
+    enc.tile_rows = Arbitrary::arbitrary(u)?;
+    enc.tiles = Arbitrary::arbitrary(u)?;
+    enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
+    let config = Config::new().with_encoder_config(enc).with_threads(1);
     Ok(Self { config })
   }
 }
@@ -112,29 +110,28 @@ pub struct ArbitraryEncoder {
 
 impl Arbitrary for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    let mut config = Config::default();
-    config.threads = 1;
-    config.enc.width = u.int_in_range(1..=256)?;
-    config.enc.height = u.int_in_range(1..=256)?;
-    config.enc.still_picture = Arbitrary::arbitrary(u)?;
-    config.enc.time_base =
+    let mut enc = EncoderConfig::with_speed_preset(10);
+    enc.width = u.int_in_range(1..=256)?;
+    enc.height = u.int_in_range(1..=256)?;
+    enc.still_picture = Arbitrary::arbitrary(u)?;
+    enc.time_base =
       Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?);
-    config.enc.min_key_frame_interval = u.int_in_range(0..=3)?;
-    config.enc.max_key_frame_interval = u.int_in_range(1..=4)?;
-    config.enc.low_latency = Arbitrary::arbitrary(u)?;
-    config.enc.quantizer = Arbitrary::arbitrary(u)?;
-    config.enc.min_quantizer = Arbitrary::arbitrary(u)?;
-    config.enc.bitrate = Arbitrary::arbitrary(u)?;
-    // config.enc.tile_cols = Arbitrary::arbitrary(u)?;
-    // config.enc.tile_rows = Arbitrary::arbitrary(u)?;
-    // config.enc.tiles = Arbitrary::arbitrary(u)?;
-    config.enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
-    config.enc.speed_settings = SpeedSettings::from_preset(10);
+    enc.min_key_frame_interval = u.int_in_range(0..=3)?;
+    enc.max_key_frame_interval = u.int_in_range(1..=4)?;
+    enc.low_latency = Arbitrary::arbitrary(u)?;
+    enc.quantizer = Arbitrary::arbitrary(u)?;
+    enc.min_quantizer = Arbitrary::arbitrary(u)?;
+    enc.bitrate = Arbitrary::arbitrary(u)?;
+    // enc.tile_cols = Arbitrary::arbitrary(u)?;
+    // enc.tile_rows = Arbitrary::arbitrary(u)?;
+    // enc.tiles = Arbitrary::arbitrary(u)?;
+    enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
     let frame_count = u.int_in_range(1..=3)?;
     if u.is_empty() {
       return Err(Error::NotEnoughData);
     }
     let pixels = u.get_bytes(u.len())?.to_vec().into_boxed_slice();
+    let config = Config::new().with_encoder_config(enc).with_threads(1);
     Ok(Self { config, frame_count, pixels })
   }
 }
