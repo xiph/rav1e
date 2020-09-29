@@ -605,6 +605,14 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     let render_and_frame_size_different =
       render_width != width as u32 || render_height != height as u32;
+    assert!(
+      render_width <= std::u16::MAX as u32,
+      "rendered frame width is too large"
+    );
+    assert!(
+      render_height <= std::u16::MAX as u32,
+      "rendered frame height is too large"
+    );
 
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion =
