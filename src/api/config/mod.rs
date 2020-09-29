@@ -94,6 +94,10 @@ pub enum InvalidConfig {
   )]
   InvalidSwitchFrameInterval(u64),
 
+  /// An option unsupported in still picture mode was enabled along with it.
+  #[error("invalid option {0} specified with still picture mode")]
+  InvalidOptionWithStillPicture(&'static str),
+
   /// The rate control needs a target bitrate in order to produce results
   #[error("The rate control requires a target bitrate")]
   TargetBitrateNeeded,
@@ -316,6 +320,10 @@ impl Config {
 
     if config.switch_frame_interval > 0 && !config.low_latency {
       return Err(InvalidSwitchFrameInterval(config.switch_frame_interval));
+    }
+
+    if config.enable_timing_info && config.still_picture {
+      return Err(InvalidOptionWithStillPicture("enable_timing_info"));
     }
 
     // TODO: add more validation
