@@ -43,6 +43,12 @@ pub enum InvalidConfig {
   /// Aspect ratio denominator is invalid.
   #[error("invalid aspect ratio denominator {0} (expected > 0)")]
   InvalidAspectRatioDen(usize),
+  /// The render width (width adjusted based on the aspect ratio) is invalid.
+  #[error("invalid render width {0} (expected >= 1, <= 32767")]
+  InvalidRenderWidth(usize),
+  /// The render height (height adjusted based on the aspect ratio) is invalid.
+  #[error("invalid render height {0} (expected >= 1, <= 32767")]
+  InvalidRenderHeight(usize),
   /// RDO lookahead frame count is invalid.
   #[error(
     "invalid rdo lookahead frames {actual} (expected <= {max} and >= {min})"
@@ -270,6 +276,14 @@ impl Config {
       return Err(InvalidAspectRatioDen(
         config.sample_aspect_ratio.den as usize,
       ));
+    }
+
+    let (render_width, render_height) = config.render_size();
+    if render_width == 0 || render_width > u16::max_value() as usize {
+      return Err(InvalidRenderWidth(render_width));
+    }
+    if render_height == 0 || render_height > u16::max_value() as usize {
+      return Err(InvalidRenderHeight(render_height));
     }
 
     if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES

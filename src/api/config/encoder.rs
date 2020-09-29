@@ -186,6 +186,22 @@ impl EncoderConfig {
     Rational::from_reciprocal(self.time_base).as_f64()
   }
 
+  /// Computes the render width and height of the stream based
+  /// on [`width`], [`height`], and [`sample_aspect_ratio`].
+  ///
+  /// [`width`]: #structfield.width
+  /// [`height`]: #structfield.height
+  /// [`sample_aspect_ratio`]: #structfield.sample_aspect_ratio
+  pub fn render_size(&self) -> (usize, usize) {
+    let sar = self.sample_aspect_ratio.as_f64();
+
+    if sar > 1.0 {
+      ((self.width as f64 * sar).round() as usize, self.height)
+    } else {
+      (self.width, (self.height as f64 / sar).round() as usize)
+    }
+  }
+
   /// Is temporal RDO enabled ?
   #[inline]
   pub const fn temporal_rdo(&self) -> bool {

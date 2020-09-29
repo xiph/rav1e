@@ -597,24 +597,9 @@ impl<T: Pixel> FrameInvariants<T> {
     let frame_size_override_flag = width as u32 != sequence.max_frame_width
       || height as u32 != sequence.max_frame_height;
 
-    let sar = config.sample_aspect_ratio.as_f64();
-    let (render_width, render_height) = if sar > 1.0 {
-      (((width as f64 * sar).round() as u32), height as u32)
-    } else {
-      (width as u32, ((height as f64 / sar).round() as u32))
-    };
+    let (render_width, render_height) = config.render_size();
     let render_and_frame_size_different =
-      render_width != width as u32 || render_height != height as u32;
-    assert!(render_width > 0, "rendered frame width is 0");
-    assert!(render_height > 0, "rendered frame height is 0");
-    assert!(
-      render_width <= std::u16::MAX as u32,
-      "rendered frame width is too large"
-    );
-    assert!(
-      render_height <= std::u16::MAX as u32,
-      "rendered frame height is too large"
-    );
+      render_width != width || render_height != height;
 
     let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
     let use_tx_domain_distortion =
@@ -674,8 +659,8 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence,
       width,
       height,
-      render_width,
-      render_height,
+      render_width: render_width as u32,
+      render_height: render_height as u32,
       frame_size_override_flag,
       render_and_frame_size_different,
       sb_width: width.align_power_of_two_and_shift(6),
