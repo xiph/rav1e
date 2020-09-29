@@ -599,12 +599,14 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let sar = config.sample_aspect_ratio.as_f64();
     let (render_width, render_height) = if sar > 1.0 {
-      ((width as f64 * sar).round() as u32, height as u32)
+      (((width as f64 * sar).round() as u32), height as u32)
     } else {
-      (width as u32, (height as f64 / sar).round() as u32)
+      (width as u32, ((height as f64 / sar).round() as u32))
     };
     let render_and_frame_size_different =
       render_width != width as u32 || render_height != height as u32;
+    assert!(render_width > 0, "rendered frame width is 0");
+    assert!(render_height > 0, "rendered frame height is 0");
     assert!(
       render_width <= std::u16::MAX as u32,
       "rendered frame width is too large"
