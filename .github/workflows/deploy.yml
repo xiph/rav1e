@@ -31,7 +31,7 @@ jobs:
 
     - name: Install nasm
       run: |
-        $NASM_VERSION="2.15.04"
+        $NASM_VERSION="2.15.05"
         $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
         curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
@@ -150,9 +150,9 @@ jobs:
       if: matrix.target == 'x86_64-unknown-linux-musl'
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.15.04-1
+        NASM_VERSION: 2.15.05-1
         NASM_SHA256: >-
-          7801f43bc3bce0fba50ecaaa9f5bd337708b5d2335b20feecf52ed6f15e188d2
+          c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
