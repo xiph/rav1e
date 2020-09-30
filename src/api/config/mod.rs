@@ -32,10 +32,10 @@ pub use speedsettings::*;
 #[non_exhaustive]
 pub enum InvalidConfig {
   /// The width is invalid.
-  #[error("invalid width {0} (expected >= 16, <= 32767)")]
+  #[error("invalid width {0} (expected >= 16, <= 65535)")]
   InvalidWidth(usize),
   /// The height is invalid.
-  #[error("invalid height {0} (expected >= 16, <= 32767)")]
+  #[error("invalid height {0} (expected >= 16, <= 65535)")]
   InvalidHeight(usize),
   /// Aspect ratio numerator is invalid.
   #[error("invalid aspect ratio numerator {0} (expected > 0)")]
@@ -44,10 +44,10 @@ pub enum InvalidConfig {
   #[error("invalid aspect ratio denominator {0} (expected > 0)")]
   InvalidAspectRatioDen(usize),
   /// The render width (width adjusted based on the aspect ratio) is invalid.
-  #[error("invalid render width {0} (expected >= 1, <= 32767")]
+  #[error("invalid render width {0} (expected >= 1, <= 65535")]
   InvalidRenderWidth(usize),
   /// The render height (height adjusted based on the aspect ratio) is invalid.
-  #[error("invalid render height {0} (expected >= 1, <= 32767")]
+  #[error("invalid render height {0} (expected >= 1, <= 65535")]
   InvalidRenderHeight(usize),
   /// RDO lookahead frame count is invalid.
   #[error(
