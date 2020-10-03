@@ -604,6 +604,26 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
         f64
       )
       .expect("Cannot parse the mastering display option");
+
+    /* AV1 spec sec. 6.7.4 "Metadata high dynamic range mastering display color volume semantics"
+     * specifies chromaticity coords as 0.16 fixed-point numbers, which have a max float value
+     * of 0.9999847412109375 (rounding to 1).
+     */
+    let chromaticity_range = 0.0..=1.0;
+    if !chromaticity_range.contains(&g_x)
+      || !chromaticity_range.contains(&g_y)
+      || !chromaticity_range.contains(&b_x)
+      || !chromaticity_range.contains(&b_y)
+      || !chromaticity_range.contains(&r_x)
+      || !chromaticity_range.contains(&r_y)
+      || !chromaticity_range.contains(&wp_x)
+      || !chromaticity_range.contains(&wp_y)
+    {
+      warn!(
+        "Chromaticity coordinates will be trimmed to the range 0.0 to 1.0 (see AV1 spec sec. 6.7.4)."
+      );
+    }
+
     Some(MasteringDisplay {
       primaries: [
         ChromaticityPoint {
