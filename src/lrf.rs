@@ -139,13 +139,7 @@ impl Default for RestorationFilter {
 impl RestorationFilter {
   pub fn notequal(self, cmp: RestorationFilter) -> bool {
     match self {
-      RestorationFilter::None {} => {
-        if let RestorationFilter::None {} = cmp {
-          false
-        } else {
-          true
-        }
-      }
+      RestorationFilter::None {} => !matches!(cmp, RestorationFilter::None {}),
       RestorationFilter::Sgrproj { set, xqd } => {
         if let RestorationFilter::Sgrproj { set: set2, xqd: xqd2 } = cmp {
           !(set == set2 && xqd[0] == xqd2[0] && xqd[1] == xqd2[1])

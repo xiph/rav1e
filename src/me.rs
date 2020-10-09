@@ -365,8 +365,8 @@ fn get_subset_predictors<T: Pixel>(
       subset_b.iter().map(|&a| a.row).collect();
     let mut cols: ArrayVec<[i16; 3]> =
       subset_b.iter().map(|&a| a.col).collect();
-    rows.as_mut_slice().sort();
-    cols.as_mut_slice().sort();
+    rows.as_mut_slice().sort_unstable();
+    cols.as_mut_slice().sort_unstable();
     Some(MotionVector { row: rows[1], col: cols[1] })
   };
 
