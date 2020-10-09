@@ -184,9 +184,8 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
     .tile_iter_mut(fs, &mut blocks)
     .collect::<Vec<_>>()
     .into_par_iter()
-    .map(|mut ctx| {
+    .for_each(|mut ctx| {
       let ts = &mut ctx.ts;
       estimate_tile_motion(fi, ts, inter_cfg);
-    })
-    .collect::<Vec<_>>();
+    });
 }
