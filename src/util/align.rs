@@ -9,6 +9,7 @@
 
 use std::alloc::{alloc, dealloc, Layout};
 use std::mem::MaybeUninit;
+use std::ops::{Deref, DerefMut};
 use std::ptr;
 use std::{fmt, mem};
 
@@ -36,6 +37,20 @@ impl<T> Aligned<T> {
   #[allow(clippy::uninit_assumed_init)]
   pub fn uninitialized() -> Self {
     Self::new(unsafe { MaybeUninit::uninit().assume_init() })
+  }
+}
+
+impl<T> Deref for Aligned<T> {
+  type Target = T;
+
+  fn deref(&self) -> &T {
+    &self.data
+  }
+}
+
+impl<T> DerefMut for Aligned<T> {
+  fn deref_mut(&mut self) -> &mut T {
+    &mut self.data
   }
 }
 

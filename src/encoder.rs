@@ -43,7 +43,6 @@ use bitstream_io::{BigEndian, BitWriter};
 
 use std::collections::VecDeque;
 use std::io::Write;
-use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::{fmt, io, mem};
 
@@ -1219,16 +1218,14 @@ pub fn encode_tx_block<T: Pixel>(
   // consider doing so only pixels outside of visible frame.
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
-  let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
+  let mut qcoeffs_storage: Aligned<[Uninit<T::Coeff>; 32 * 32]> =
     Aligned::uninitialized();
   let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
     Aligned::uninitialized();
   let residual = &mut residual_storage.data[..tx_size.area()];
   let coeffs = &mut coeffs_storage.data[..tx_size.area()];
-  let qcoeffs = init_slice_repeat_mut(
-    &mut qcoeffs_storage.data[..coded_tx_area],
-    T::Coeff::cast_from(0),
-  );
+  let qcoeffs =
+    qcoeffs_storage.init_slice_mut(..coded_tx_area, T::Coeff::cast_from(0));
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
