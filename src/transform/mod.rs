@@ -76,7 +76,7 @@ impl TxType {
   ///
   /// <https://aomediacodec.github.io/av1-spec/#compute-transform-type-function>
   #[inline]
-  pub fn uv_inter(self: Self, uv_tx_size: TxSize) -> Self {
+  pub fn uv_inter(self, uv_tx_size: TxSize) -> Self {
     use TxType::*;
     if uv_tx_size.sqr_up() == TX_32X32 {
       match self {
