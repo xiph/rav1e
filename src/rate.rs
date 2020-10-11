@@ -12,6 +12,7 @@ use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{clamp, ILog, Pixel};
+use std::cmp::max;
 
 // The number of frame sub-types for which we track distinct parameters.
 // This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
@@ -949,38 +950,32 @@ impl RCState {
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
     maybe_prev_log_base_q: Option<i64>,
   ) -> QuantizerParameters {
+    // Rate control is not active.
+    // Derive quantizer directly from frame type.
+    // TODO: Rename "quantizer" something that indicates it is a quantizer
+    //  index, and move it somewhere more sensible (or choose a better way to
+    //  parameterize a "quality" configuration parameter).
+    let base_qi = ctx.config.quantizer;
+    let bit_depth = ctx.config.bit_depth;
+    let chroma_sampling = ctx.config.chroma_sampling;
+    // We use the AC quantizer as the source quantizer since its quantizer
+    //  tables have unique entries, while the DC tables do not.
+    let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
+    // Pick the nearest DC entry since an exact match may be unavailable.
+    let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
+    let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
+    // Get the log quantizers as Q57.
+    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    // Target the midpoint of the chosen entries.
+    let min_log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
+    // Adjust the quantizer for the frame type, result is Q57:
+    let min_log_q = ((min_log_base_q + (1i64 << 11)) >> 12)
+      * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+
     // Is rate control active?
-    if self.target_bitrate <= 0 {
-      // Rate control is not active.
-      // Derive quantizer directly from frame type.
-      // TODO: Rename "quantizer" something that indicates it is a quantizer
-      //  index, and move it somewhere more sensible (or choose a better way to
-      //  parameterize a "quality" configuration parameter).
-      let base_qi = ctx.config.quantizer;
-      let bit_depth = ctx.config.bit_depth;
-      let chroma_sampling = ctx.config.chroma_sampling;
-      // We use the AC quantizer as the source quantizer since its quantizer
-      //  tables have unique entries, while the DC tables do not.
-      let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
-      // Pick the nearest DC entry since an exact match may be unavailable.
-      let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-      let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
-      // Get the log quantizers as Q57.
-      let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      // Target the midpoint of the chosen entries.
-      let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
-      // Adjust the quantizer for the frame type, result is Q57:
-      let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
-        + DQP_Q57[fti];
-      QuantizerParameters::new_from_log_q(
-        log_base_q,
-        log_q,
-        bit_depth,
-        chroma_sampling,
-        fti == 0,
-      )
-    } else {
+    if self.target_bitrate > 0 {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
       let mut log_scale: [i64; FRAME_NSUBTYPES] = self.log_scale;
       let mut reservoir_tus = self.reservoir_frame_delay.min(self.ntus_left);
@@ -1260,14 +1255,22 @@ impl RCState {
         }
       }
 
-      QuantizerParameters::new_from_log_q(
-        log_base_q,
-        log_q,
+      return QuantizerParameters::new_from_log_q(
+        max(min_log_base_q, log_base_q),
+        max(min_log_q, log_q),
         bit_depth,
         chroma_sampling,
         fti == 0,
-      )
+      );
     }
+
+    QuantizerParameters::new_from_log_q(
+      min_log_base_q,
+      min_log_q,
+      bit_depth,
+      chroma_sampling,
+      fti == 0,
+    )
   }
 
   pub fn update_state(
