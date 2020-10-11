@@ -230,6 +230,13 @@ impl fmt::Display for EncoderConfig {
       ("keyint_max", self.max_key_frame_interval.to_string()),
       ("quantizer", self.quantizer.to_string()),
       ("bitrate", self.bitrate.to_string()),
+      (
+        "vbv_maxrate",
+        self
+          .vbv_maxrate
+          .map(|val| val.to_string())
+          .unwrap_or_else(|| "None".to_string()),
+      ),
       ("min_quantizer", self.min_quantizer.to_string()),
       ("low_latency", self.low_latency.to_string()),
       ("tune", self.tune.to_string()),
