@@ -293,6 +293,7 @@ impl<T: Pixel> ContextInner<T> {
         enc.time_base.den as i64,
         enc.time_base.num as i64,
         enc.bitrate,
+        enc.vbv_maxrate,
         maybe_ac_qi_max,
         enc.min_quantizer,
         enc.max_key_frame_interval as i32,

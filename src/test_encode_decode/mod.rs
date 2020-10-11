@@ -68,7 +68,8 @@ pub(crate) trait TestDecoder<T: Pixel> {
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
     min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
     low_latency: bool, error_resilient: bool, bitrate: i32,
-    tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
+    vbv_maxrate: Option<i32>, tile_cols_log2: usize, tile_rows_log2: usize,
+    still_picture: bool,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -85,6 +86,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
       low_latency,
       error_resilient,
       bitrate,
+      vbv_maxrate,
       tile_cols_log2,
       tile_rows_log2,
       still_picture,
@@ -171,8 +173,8 @@ fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
-  bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
-  still_picture: bool,
+  bitrate: i32, vbv_maxrate: Option<i32>, tile_cols_log2: usize,
+  tile_rows_log2: usize, still_picture: bool,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -187,6 +189,7 @@ fn setup_encoder<T: Pixel>(
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
+  enc.vbv_maxrate = vbv_maxrate;
   enc.tile_cols = 1 << tile_cols_log2;
   enc.tile_rows = 1 << tile_rows_log2;
   enc.still_picture = still_picture;
@@ -226,6 +229,7 @@ fn speed(s: usize, decoder: &str) {
       true,
       false,
       0,
+      None,
       0,
       0,
       false,
@@ -313,6 +317,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -341,6 +346,7 @@ fn quantizer(decoder: &str, q: usize) {
       true,
       false,
       0,
+      None,
       0,
       0,
       false,
@@ -363,6 +369,52 @@ macro_rules! test_quantizer {
 }
 
 test_quantizer! {60, 80, 100, 120}
+
+fn quantizer_with_max_rate(decoder: &str, q: usize) {
+  let limit = 5;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+
+  for b in DIMENSION_OFFSETS.iter() {
+    let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
+    dec.encode_decode(
+      w + b.0,
+      h + b.1,
+      speed,
+      q,
+      limit,
+      8,
+      Default::default(),
+      15,
+      15,
+      0,
+      true,
+      false,
+      0,
+      Some(1500),
+      0,
+      0,
+      false,
+    );
+  }
+}
+
+macro_rules! test_quantizer_with_max_rate {
+  ($($Q:expr),+) => {
+    $(
+      paste::item!{
+        #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+        #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+        fn [<quantizer_with_max_rate_ $Q>](decoder: &str) {
+          quantizer_with_max_rate(decoder, $Q);
+        }
+      }
+    )*
+  }
+}
+
+test_quantizer_with_max_rate! {60, 80, 100, 120}
 
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
@@ -390,6 +442,42 @@ fn bitrate(decoder: &str) {
         true,
         false,
         r,
+        None,
+        0,
+        0,
+        false,
+      );
+    }
+  }
+}
+
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
+fn bitrate_with_max_rate(decoder: &str) {
+  let limit = 5;
+  let w = 64;
+  let h = 80;
+  let speed = 10;
+
+  for &q in [172, 220, 252, 255].iter() {
+    for &r in [100, 1000, 10_000].iter() {
+      let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+      dec.encode_decode(
+        w,
+        h,
+        speed,
+        q,
+        limit,
+        8,
+        Default::default(),
+        15,
+        15,
+        0,
+        true,
+        false,
+        r,
+        Some(r * 15 / 10),
         0,
         0,
         false,
@@ -422,6 +510,7 @@ fn keyframes(decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -453,6 +542,7 @@ fn reordering(decoder: &str) {
       false,
       false,
       0,
+      None,
       0,
       0,
       false,
@@ -486,6 +576,7 @@ fn reordering_short_video(decoder: &str) {
     false,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -517,6 +608,7 @@ fn error_resilient(decoder: &str) {
     true,
     true,
     0,
+    None,
     0,
     0,
     false,
@@ -548,6 +640,7 @@ fn error_resilient_reordering(decoder: &str) {
       false,
       true,
       0,
+      None,
       0,
       0,
       false,
@@ -580,6 +673,7 @@ fn switch_frame(decoder: &str) {
     true,
     true,
     0,
+    None,
     0,
     0,
     false,
@@ -611,6 +705,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -643,6 +738,7 @@ fn low_bit_depth(decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -671,6 +767,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -703,8 +800,8 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
-    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
-    false,
+    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, None, 0,
+    0, false,
   );
 }
 
@@ -752,6 +849,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     true,
     false,
     0,
+    None,
     2,
     2,
     false,
@@ -782,6 +880,7 @@ fn still_picture_mode(decoder: &str) {
     false,
     false,
     0,
+    None,
     0,
     0,
     true,
@@ -825,6 +924,7 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,
@@ -856,6 +956,7 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
     true,
     false,
     0,
+    None,
     0,
     0,
     false,

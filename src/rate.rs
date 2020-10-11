@@ -12,6 +12,7 @@ use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{clamp, ILog, Pixel};
+use std::cmp::max;
 
 // The number of frame sub-types for which we track distinct parameters.
 // This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
@@ -573,6 +574,8 @@ impl RCDeserialize {
 pub struct RCState {
   // The target bit-rate in bits per second.
   target_bitrate: i32,
+  // The maximum bit-rate in bits per second.
+  max_bitrate: Option<i32>,
   // The number of TUs over which to distribute the reservoir usage.
   // We use TUs because in our leaky bucket model, we only add bits to the
   //  reservoir on TU boundaries.
@@ -802,8 +805,8 @@ pub(crate) struct TwoPassOutParams {
 impl RCState {
   pub fn new(
     frame_width: i32, frame_height: i32, framerate_num: i64,
-    framerate_den: i64, target_bitrate: i32, maybe_ac_qi_max: Option<u8>,
-    ac_qi_min: u8, max_key_frame_interval: i32,
+    framerate_den: i64, target_bitrate: i32, max_bitrate: Option<i32>,
+    maybe_ac_qi_max: Option<u8>, ac_qi_min: u8, max_key_frame_interval: i32,
     maybe_reservoir_frame_delay: Option<i32>,
   ) -> RCState {
     // The default buffer size is set equal to 1.5x the keyframe interval, or 240
@@ -830,9 +833,16 @@ impl RCState {
       40,
       0x4000_0000_0000,
     ) - (TEMPORAL_DELIMITER.len() * 8) as i64;
-    let reservoir_max = bits_per_tu * (reservoir_frame_delay as i64);
+    let max_bits_per_tu = clamp(
+      (max_bitrate.unwrap_or(0) as i64) * framerate_den / framerate_num,
+      40,
+      0x4000_0000_0000,
+    ) - (TEMPORAL_DELIMITER.len() * 8) as i64;
+    let reservoir_max =
+      max(bits_per_tu, max_bits_per_tu) * (reservoir_frame_delay as i64);
     // Start with a buffer fullness and fullness target of 50%.
-    let reservoir_target = (reservoir_max + 1) >> 1;
+    let reservoir_target =
+      ((bits_per_tu * reservoir_frame_delay as i64) + 1) >> 1;
     // Pick exponents and initial scales for quantizer selection.
     let ibpp = npixels / bits_per_tu;
     // These have been derived by encoding many clips at every quantizer
@@ -869,6 +879,7 @@ impl RCState {
     // TODO: Add support for "golden" P frames.
     RCState {
       target_bitrate,
+      max_bitrate,
       reservoir_frame_delay,
       reservoir_frame_delay_is_set: maybe_reservoir_frame_delay.is_some(),
       maybe_ac_qi_max,
@@ -943,37 +954,7 @@ impl RCState {
     maybe_prev_log_base_q: Option<i64>,
   ) -> QuantizerParameters {
     // Is rate control active?
-    if self.target_bitrate <= 0 {
-      // Rate control is not active.
-      // Derive quantizer directly from frame type.
-      // TODO: Rename "quantizer" something that indicates it is a quantizer
-      //  index, and move it somewhere more sensible (or choose a better way to
-      //  parameterize a "quality" configuration parameter).
-      let base_qi = ctx.config.quantizer;
-      let bit_depth = ctx.config.bit_depth;
-      let chroma_sampling = ctx.config.chroma_sampling;
-      // We use the AC quantizer as the source quantizer since its quantizer
-      //  tables have unique entries, while the DC tables do not.
-      let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
-      // Pick the nearest DC entry since an exact match may be unavailable.
-      let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-      let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
-      // Get the log quantizers as Q57.
-      let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      // Target the midpoint of the chosen entries.
-      let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
-      // Adjust the quantizer for the frame type, result is Q57:
-      let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
-        + DQP_Q57[fti];
-      QuantizerParameters::new_from_log_q(
-        log_base_q,
-        log_q,
-        bit_depth,
-        chroma_sampling,
-        fti == 0,
-      )
-    } else {
+    if self.target_bitrate > 0 || self.max_bitrate.is_some() {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
       let mut log_scale: [i64; FRAME_NSUBTYPES] = self.log_scale;
       let mut reservoir_tus = self.reservoir_frame_delay.min(self.ntus_left);
@@ -1194,6 +1175,8 @@ impl RCState {
       let mut log_q = ((log_base_q + (1i64 << 11)) >> 12)
         * (MQP_Q12[fti] as i64)
         + DQP_Q57[fti];
+
+      let mut vbv_max_hit = false;
       // The above allocation looks only at the total rate we'll accumulate
       //  in the next reservoir_frame_delay frames.
       // However, we could overflow the bit reservoir on the very next
@@ -1224,6 +1207,7 @@ impl RCState {
               * ((margin.min(soft_limit) << 32) / margin);
             log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
           }
+          vbv_max_hit = true;
         }
       }
       // We just checked we don't overflow the reservoir next frame, now
@@ -1251,14 +1235,48 @@ impl RCState {
           // If that target is unreasonable, oh well; we'll have to drop.
         }
       }
-      QuantizerParameters::new_from_log_q(
-        log_base_q,
-        log_q,
-        bit_depth,
-        chroma_sampling,
-        fti == 0,
-      )
+
+      if vbv_max_hit || self.target_bitrate > 0 {
+        return QuantizerParameters::new_from_log_q(
+          log_base_q,
+          log_q,
+          bit_depth,
+          chroma_sampling,
+          fti == 0,
+        );
+      }
     }
+
+    // Rate control is not active,
+    // or we are in QP mode and max bitrate is not hit.
+    // Derive quantizer directly from frame type.
+    // TODO: Rename "quantizer" something that indicates it is a quantizer
+    //  index, and move it somewhere more sensible (or choose a better way to
+    //  parameterize a "quality" configuration parameter).
+    let base_qi = ctx.config.quantizer;
+    let bit_depth = ctx.config.bit_depth;
+    let chroma_sampling = ctx.config.chroma_sampling;
+    // We use the AC quantizer as the source quantizer since its quantizer
+    //  tables have unique entries, while the DC tables do not.
+    let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
+    // Pick the nearest DC entry since an exact match may be unavailable.
+    let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
+    let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
+    // Get the log quantizers as Q57.
+    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    // Target the midpoint of the chosen entries.
+    let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
+    // Adjust the quantizer for the frame type, result is Q57:
+    let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+    QuantizerParameters::new_from_log_q(
+      log_base_q,
+      log_q,
+      bit_depth,
+      chroma_sampling,
+      fti == 0,
+    )
   }
 
   pub fn update_state(
@@ -1271,7 +1289,7 @@ impl RCState {
     }
     let mut dropped = false;
     // Update rate control only if rate control is active.
-    if self.target_bitrate > 0 {
+    if self.target_bitrate > 0 || self.max_bitrate.is_some() {
       let mut estimated_bits = 0;
       let mut bits = bits;
       let mut droppable = droppable;
@@ -1424,7 +1442,8 @@ impl RCState {
   }
 
   pub fn needs_trial_encode(&self, fti: usize) -> bool {
-    self.target_bitrate > 0 && self.nframes[fti] == 0
+    (self.target_bitrate > 0 || self.max_bitrate.is_some())
+      && self.nframes[fti] == 0
   }
 
   pub(crate) fn ready(&self) -> bool {
@@ -1646,7 +1665,7 @@ impl RCState {
   // Return the number of frame data packets to be parsed before
   // the encoding process can continue.
   pub(crate) fn twopass_in_frames_needed(&self) -> i32 {
-    if self.target_bitrate <= 0 {
+    if self.target_bitrate <= 0 && self.max_bitrate.is_none() {
       return 0;
     }
     if self.frame_metrics.is_empty() {
