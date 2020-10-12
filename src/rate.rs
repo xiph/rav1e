@@ -574,6 +574,8 @@ impl RCDeserialize {
 pub struct RCState {
   // The target bit-rate in bits per second.
   target_bitrate: i32,
+  // The maximum local bitrate in bits per second.
+  max_bitrate: Option<i32>,
   // The number of TUs over which to distribute the reservoir usage.
   // We use TUs because in our leaky bucket model, we only add bits to the
   //  reservoir on TU boundaries.
@@ -807,7 +809,9 @@ impl RCState {
     mut maybe_ac_qi_max: Option<u8>, mut ac_qi_min: u8,
     max_key_frame_interval: i32, maybe_reservoir_frame_delay: Option<i32>,
   ) -> RCState {
-    // For this branch, we're only doing VBV maxrate, fuck the rest
+    // If we're in quantizer mode and max_bitrate is specified,
+    // this is the easiest way to apply a max bitrate.
+    // TODO: Support a max bitrate for bitrate encoding mode.
     if let Some(max_bitrate) = max_bitrate {
       target_bitrate = max_bitrate;
       ac_qi_min = maybe_ac_qi_max.unwrap();
@@ -877,6 +881,7 @@ impl RCState {
     // TODO: Add support for "golden" P frames.
     RCState {
       target_bitrate,
+      max_bitrate,
       reservoir_frame_delay,
       reservoir_frame_delay_is_set: maybe_reservoir_frame_delay.is_some(),
       maybe_ac_qi_max,
@@ -950,8 +955,10 @@ impl RCState {
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
     maybe_prev_log_base_q: Option<i64>,
   ) -> QuantizerParameters {
-    // Rate control is not active.
     // Derive quantizer directly from frame type.
+    // We will use this directly if rate control is not active,
+    // or as a minimum when we are in quantizer mode
+    // and max bitrate is specified.
     // TODO: Rename "quantizer" something that indicates it is a quantizer
     //  index, and move it somewhere more sensible (or choose a better way to
     //  parameterize a "quality" configuration parameter).
@@ -974,272 +981,256 @@ impl RCState {
       * (MQP_Q12[fti] as i64)
       + DQP_Q57[fti];
 
-    // Is rate control active?
-    if self.target_bitrate > 0 {
-      let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
-      let mut log_scale: [i64; FRAME_NSUBTYPES] = self.log_scale;
-      let mut reservoir_tus = self.reservoir_frame_delay.min(self.ntus_left);
-      let mut reservoir_frames = 0;
-      let mut log_cur_scale = (self.scalefilter[fti].y[0] as i64) << 33;
-      match self.twopass_state {
-        // First pass of 2-pass mode: use a fixed base quantizer.
-        PASS_1 => {
-          return self.select_first_pass_qi(
-            ctx.config.bit_depth,
-            fti,
-            ctx.config.chroma_sampling,
-          );
-        }
-        // Second pass of 2-pass mode: we know exactly how much of each frame
-        //  type there is in the current buffer window, and have estimates for
-        //  the scales.
-        PASS_2 | PASS_2_PLUS_1 => {
-          let mut scale_window_sum: [i64; FRAME_NSUBTYPES] =
-            self.scale_window_sum;
-          let mut scale_window_nframes: [i32; FRAME_NSUBTYPES + 1] =
-            self.scale_window_nframes;
-          // Intentionally exclude Show Existing Frame frames from this.
-          for ftj in 0..FRAME_NSUBTYPES {
-            reservoir_frames += scale_window_nframes[ftj];
-          }
-          // If we're approaching the end of the file, add some slack to keep
-          //  us from slamming into a rail.
-          // Our rate accuracy goes down, but it keeps the result sensible.
-          // We position the target where the first forced keyframe beyond the
-          //  end of the file would be (for consistency with 1-pass mode).
-          // TODO: let mut buf_pad = self.reservoir_frame_delay.min(...);
-          // if buf_delay < buf_pad {
-          //   buf_pad -= buf_delay;
-          // }
-          // else ...
-          // Otherwise, search for the last keyframe in the buffer window and
-          //  target that.
-          // Currently we only do this when using a finite buffer.
-          // We could save the position of the last keyframe in the stream in
-          //  the summary data and do it with a whole-file buffer as well, but
-          //  it isn't likely to make a difference.
-          if !self.frame_metrics.is_empty() {
-            let mut fm_tail = self.frame_metrics_head + self.nframe_metrics;
-            if fm_tail >= self.frame_metrics.len() {
-              fm_tail -= self.frame_metrics.len();
-            }
-            let mut fmi = fm_tail;
-            loop {
-              if fmi == 0 {
-                fmi += self.frame_metrics.len();
-              }
-              fmi -= 1;
-              // Stop before we remove the first frame.
-              if fmi == self.frame_metrics_head {
-                break;
-              }
-              // If we find a keyframe, remove it and everything past it.
-              if self.frame_metrics[fmi].fti == FRAME_SUBTYPE_I {
-                while fmi != fm_tail {
-                  let m = &self.frame_metrics[fmi];
-                  let ftj = m.fti;
-                  scale_window_nframes[ftj] -= 1;
-                  if ftj < FRAME_NSUBTYPES {
-                    scale_window_sum[ftj] -= bexp_q24(m.log_scale_q24);
-                    reservoir_frames -= 1;
-                  }
-                  if m.show_frame {
-                    reservoir_tus -= 1;
-                  }
-                  fmi += 1;
-                  if fmi >= self.frame_metrics.len() {
-                    fmi = 0;
-                  }
-                }
-                // And stop scanning backwards.
-                break;
-              }
-            }
-          }
-          nframes = scale_window_nframes;
-          // If we're not using the same frame type as in pass 1 (because
-          //  someone changed some encoding parameters), remove that scale
-          //  estimate.
-          // We'll add a replacement for the correct frame type below.
-          if self.cur_metrics.fti != fti {
-            scale_window_nframes[self.cur_metrics.fti] -= 1;
-            if self.cur_metrics.fti != FRAME_SUBTYPE_SEF {
-              scale_window_sum[self.cur_metrics.fti] -=
-                bexp_q24(self.cur_metrics.log_scale_q24);
-            }
-          } else {
-            log_cur_scale = (self.cur_metrics.log_scale_q24 as i64) << 33;
-          }
-          // If we're approaching the end of the file, add some slack to keep
-          //  us from slamming into a rail.
-          // Our rate accuracy goes down, but it keeps the result sensible.
-          // We position the target where the first forced keyframe beyond the
-          //  end of the file would be (for consistency with 1-pass mode).
-          if reservoir_tus >= self.ntus_left
-            && self.ntus_total as u64
-              > ctx.gop_input_frameno_start[&output_frameno]
-          {
-            let nfinal_gop_tus = self.ntus_total
-              - (ctx.gop_input_frameno_start[&output_frameno] as i32);
-            if ctx.config.max_key_frame_interval as i32 > nfinal_gop_tus {
-              let reservoir_pad = (ctx.config.max_key_frame_interval as i32
-                - nfinal_gop_tus)
-                .min(self.reservoir_frame_delay - reservoir_tus);
-              let (guessed_reservoir_frames, guessed_reservoir_tus) = ctx
-                .guess_frame_subtypes(
-                  &mut nframes,
-                  reservoir_tus + reservoir_pad,
-                );
-              reservoir_frames = guessed_reservoir_frames;
-              reservoir_tus = guessed_reservoir_tus;
-            }
-          }
-          // Blend in the low-pass filtered scale according to how many
-          //  frames of each type we need to add compared to the actual sums in
-          //  our window.
-          for ftj in 0..FRAME_NSUBTYPES {
-            let scale = scale_window_sum[ftj]
-              + bexp_q24(self.scalefilter[ftj].y[0])
-                * (nframes[ftj] - scale_window_nframes[ftj]) as i64;
-            log_scale[ftj] = if nframes[ftj] > 0 {
-              blog64(scale) - blog64(nframes[ftj] as i64) - q57(24)
-            } else {
-              -self.log_npixels
-            };
-          }
-        }
-        // Single pass.
-        _ => {
-          // Figure out how to re-distribute bits so that we hit our fullness
-          //  target before the last keyframe in our current buffer window
-          //  (after the current frame), or the end of the buffer window,
-          //  whichever comes first.
-          // Count the various types and classes of frames.
-          let (guessed_reservoir_frames, guessed_reservoir_tus) =
-            ctx.guess_frame_subtypes(&mut nframes, self.reservoir_frame_delay);
-          reservoir_frames = guessed_reservoir_frames;
-          reservoir_tus = guessed_reservoir_tus;
-          // TODO: Scale for VFR.
-        }
-      }
-      // If we've been missing our target, add a penalty term.
-      let rate_bias = (self.rate_bias / (self.nencoded_frames as i64 + 100))
-        * (reservoir_frames as i64);
-      // rate_total is the total bits available over the next
-      //  reservoir_tus TUs.
-      let rate_total = self.reservoir_fullness - self.reservoir_target
-        + rate_bias
-        + (reservoir_tus as i64) * self.bits_per_tu;
-      // Find a target quantizer that meets our rate target for the
-      //  specific mix of frame types we'll have over the next
-      //  reservoir_frame frames.
-      // We model the rate<->quantizer relationship as
-      //  rate = scale*(quantizer**-exp)
-      // In this case, we have our desired rate, an exponent selected in
-      //  setup, and a scale that's been measured over our frame history,
-      //  so we're solving for the quantizer.
-      // Exponentiation with arbitrary exponents is expensive, so we work
-      //  in the binary log domain (binary exp and log aren't too bad):
-      //  rate = exp2(log2(scale) - log2(quantizer)*exp)
-      // There's no easy closed form solution, so we bisection searh for it.
-      let bit_depth = ctx.config.bit_depth;
-      let chroma_sampling = ctx.config.chroma_sampling;
-      // TODO: Proper handling of lossless.
-      let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth) as i64)
-        - q57(QSCALE + bit_depth as i32 - 8);
-      // The AC quantizer tables map to values larger than the DC quantizer
-      //  tables, so we use that as the upper bound to make sure we can use
-      //  the full table if needed.
-      let mut log_qhi =
-        blog64(ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0, bit_depth) as i64)
-          - q57(QSCALE + bit_depth as i32 - 8);
-      let mut log_base_q = (log_qlo + log_qhi) >> 1;
-      while log_qlo < log_qhi {
-        // Count bits contributed by each frame type using the model.
-        let mut bits = 0i64;
-        for ftj in 0..FRAME_NSUBTYPES {
-          // Modulate base quantizer by frame type.
-          let log_q = ((log_base_q + (1i64 << 11)) >> 12)
-            * (MQP_Q12[ftj] as i64)
-            + DQP_Q57[ftj];
-          // All the fields here are Q57 except for the exponent, which is
-          //  Q6.
-          bits += (nframes[ftj] as i64)
-            * bexp64(
-              log_scale[ftj] + self.log_npixels
-                - ((log_q + 32) >> 6) * (self.exp[ftj] as i64),
-            );
-        }
-        // The number of bits for Show Existing Frame frames is constant.
-        bits += (nframes[FRAME_SUBTYPE_SEF] as i64) * SEF_BITS;
-        let diff = bits - rate_total;
-        if diff > 0 {
-          log_qlo = log_base_q + 1;
-        } else if diff < 0 {
-          log_qhi = log_base_q - 1;
-        } else {
-          break;
-        }
-        log_base_q = (log_qlo + log_qhi) >> 1;
-      }
-      // If this was not one of the initial frames, limit the change in
-      //  base quantizer to within [0.8*Q, 1.2*Q] where Q is the previous
-      //  frame's base quantizer.
-      if let Some(prev_log_base_q) = maybe_prev_log_base_q {
-        log_base_q = clamp(
-          log_base_q,
-          prev_log_base_q - 0xA4_D3C2_5E68_DC58,
-          prev_log_base_q + 0xA4_D3C2_5E68_DC58,
+    // If rate control is not active, return using the static quantizers above.
+    if self.target_bitrate <= 0 {
+      return QuantizerParameters::new_from_log_q(
+        min_log_base_q,
+        min_log_q,
+        bit_depth,
+        chroma_sampling,
+        fti == 0,
+      );
+    }
+
+    // If rate control is active, either through bitrate or max-bitrate,
+    // use rate control to determine quantizer for this frame.
+    let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
+    let mut log_scale: [i64; FRAME_NSUBTYPES] = self.log_scale;
+    let mut reservoir_tus = self.reservoir_frame_delay.min(self.ntus_left);
+    let mut reservoir_frames = 0;
+    let mut log_cur_scale = (self.scalefilter[fti].y[0] as i64) << 33;
+    match self.twopass_state {
+      // First pass of 2-pass mode: use a fixed base quantizer.
+      PASS_1 => {
+        return self.select_first_pass_qi(
+          ctx.config.bit_depth,
+          fti,
+          ctx.config.chroma_sampling,
         );
       }
-      // Modulate base quantizer by frame type.
-      let mut log_q = ((log_base_q + (1i64 << 11)) >> 12)
-        * (MQP_Q12[fti] as i64)
-        + DQP_Q57[fti];
-
-      // The above allocation looks only at the total rate we'll accumulate
-      //  in the next reservoir_frame_delay frames.
-      // However, we could overflow the bit reservoir on the very next
-      //  frame.
-      // Check for that here if we're not using a soft target.
-      if self.cap_overflow {
-        // Allow 3% of the buffer for prediction error.
-        // This should be plenty, and we don't mind if we go a bit over.
-        // We only want to keep these bits from being completely wasted.
-        let margin = (self.reservoir_max + 31) >> 5;
-        // We want to use at least this many bits next frame.
-        let soft_limit = self.reservoir_fullness + self.bits_per_tu
-          - (self.reservoir_max - margin);
-        if soft_limit > 0 {
-          let log_soft_limit = blog64(soft_limit);
-          // If we're predicting we won't use that many bits...
-          // TODO: When using frame re-ordering, we should include the rate
-          //  for all of the frames in the current TU.
-          // When there is more than one frame, there will be no direct
-          //  solution for the required adjustment, however.
-          let log_scale_pixels = log_cur_scale + self.log_npixels;
-          let exp = self.exp[fti] as i64;
-          let mut log_q_exp = ((log_q + 32) >> 6) * exp;
-          if log_scale_pixels - log_q_exp < log_soft_limit {
-            // Scale the adjustment based on how far into the margin we are.
-            log_q_exp += ((log_scale_pixels - log_soft_limit - log_q_exp)
-              >> 32)
-              * ((margin.min(soft_limit) << 32) / margin);
-            log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
+      // Second pass of 2-pass mode: we know exactly how much of each frame
+      //  type there is in the current buffer window, and have estimates for
+      //  the scales.
+      PASS_2 | PASS_2_PLUS_1 => {
+        let mut scale_window_sum: [i64; FRAME_NSUBTYPES] =
+          self.scale_window_sum;
+        let mut scale_window_nframes: [i32; FRAME_NSUBTYPES + 1] =
+          self.scale_window_nframes;
+        // Intentionally exclude Show Existing Frame frames from this.
+        for ftj in 0..FRAME_NSUBTYPES {
+          reservoir_frames += scale_window_nframes[ftj];
+        }
+        // If we're approaching the end of the file, add some slack to keep
+        //  us from slamming into a rail.
+        // Our rate accuracy goes down, but it keeps the result sensible.
+        // We position the target where the first forced keyframe beyond the
+        //  end of the file would be (for consistency with 1-pass mode).
+        // TODO: let mut buf_pad = self.reservoir_frame_delay.min(...);
+        // if buf_delay < buf_pad {
+        //   buf_pad -= buf_delay;
+        // }
+        // else ...
+        // Otherwise, search for the last keyframe in the buffer window and
+        //  target that.
+        // Currently we only do this when using a finite buffer.
+        // We could save the position of the last keyframe in the stream in
+        //  the summary data and do it with a whole-file buffer as well, but
+        //  it isn't likely to make a difference.
+        if !self.frame_metrics.is_empty() {
+          let mut fm_tail = self.frame_metrics_head + self.nframe_metrics;
+          if fm_tail >= self.frame_metrics.len() {
+            fm_tail -= self.frame_metrics.len();
+          }
+          let mut fmi = fm_tail;
+          loop {
+            if fmi == 0 {
+              fmi += self.frame_metrics.len();
+            }
+            fmi -= 1;
+            // Stop before we remove the first frame.
+            if fmi == self.frame_metrics_head {
+              break;
+            }
+            // If we find a keyframe, remove it and everything past it.
+            if self.frame_metrics[fmi].fti == FRAME_SUBTYPE_I {
+              while fmi != fm_tail {
+                let m = &self.frame_metrics[fmi];
+                let ftj = m.fti;
+                scale_window_nframes[ftj] -= 1;
+                if ftj < FRAME_NSUBTYPES {
+                  scale_window_sum[ftj] -= bexp_q24(m.log_scale_q24);
+                  reservoir_frames -= 1;
+                }
+                if m.show_frame {
+                  reservoir_tus -= 1;
+                }
+                fmi += 1;
+                if fmi >= self.frame_metrics.len() {
+                  fmi = 0;
+                }
+              }
+              // And stop scanning backwards.
+              break;
+            }
           }
         }
+        nframes = scale_window_nframes;
+        // If we're not using the same frame type as in pass 1 (because
+        //  someone changed some encoding parameters), remove that scale
+        //  estimate.
+        // We'll add a replacement for the correct frame type below.
+        if self.cur_metrics.fti != fti {
+          scale_window_nframes[self.cur_metrics.fti] -= 1;
+          if self.cur_metrics.fti != FRAME_SUBTYPE_SEF {
+            scale_window_sum[self.cur_metrics.fti] -=
+              bexp_q24(self.cur_metrics.log_scale_q24);
+          }
+        } else {
+          log_cur_scale = (self.cur_metrics.log_scale_q24 as i64) << 33;
+        }
+        // If we're approaching the end of the file, add some slack to keep
+        //  us from slamming into a rail.
+        // Our rate accuracy goes down, but it keeps the result sensible.
+        // We position the target where the first forced keyframe beyond the
+        //  end of the file would be (for consistency with 1-pass mode).
+        if reservoir_tus >= self.ntus_left
+          && self.ntus_total as u64
+            > ctx.gop_input_frameno_start[&output_frameno]
+        {
+          let nfinal_gop_tus = self.ntus_total
+            - (ctx.gop_input_frameno_start[&output_frameno] as i32);
+          if ctx.config.max_key_frame_interval as i32 > nfinal_gop_tus {
+            let reservoir_pad = (ctx.config.max_key_frame_interval as i32
+              - nfinal_gop_tus)
+              .min(self.reservoir_frame_delay - reservoir_tus);
+            let (guessed_reservoir_frames, guessed_reservoir_tus) = ctx
+              .guess_frame_subtypes(
+                &mut nframes,
+                reservoir_tus + reservoir_pad,
+              );
+            reservoir_frames = guessed_reservoir_frames;
+            reservoir_tus = guessed_reservoir_tus;
+          }
+        }
+        // Blend in the low-pass filtered scale according to how many
+        //  frames of each type we need to add compared to the actual sums in
+        //  our window.
+        for ftj in 0..FRAME_NSUBTYPES {
+          let scale = scale_window_sum[ftj]
+            + bexp_q24(self.scalefilter[ftj].y[0])
+              * (nframes[ftj] - scale_window_nframes[ftj]) as i64;
+          log_scale[ftj] = if nframes[ftj] > 0 {
+            blog64(scale) - blog64(nframes[ftj] as i64) - q57(24)
+          } else {
+            -self.log_npixels
+          };
+        }
       }
-      // We just checked we don't overflow the reservoir next frame, now
-      //  check we don't underflow and bust the budget (when not using a
-      //  soft target).
-      if self.maybe_ac_qi_max.is_none() {
-        // Compute the maximum number of bits we can use in the next frame.
-        // Allow 50% of the rate for a single frame for prediction error.
-        // This may not be enough for keyframes or sudden changes in
-        //  complexity.
-        let log_hard_limit =
-          blog64(self.reservoir_fullness + (self.bits_per_tu >> 1));
-        // If we're predicting we'll use more than this...
+      // Single pass.
+      _ => {
+        // Figure out how to re-distribute bits so that we hit our fullness
+        //  target before the last keyframe in our current buffer window
+        //  (after the current frame), or the end of the buffer window,
+        //  whichever comes first.
+        // Count the various types and classes of frames.
+        let (guessed_reservoir_frames, guessed_reservoir_tus) =
+          ctx.guess_frame_subtypes(&mut nframes, self.reservoir_frame_delay);
+        reservoir_frames = guessed_reservoir_frames;
+        reservoir_tus = guessed_reservoir_tus;
+        // TODO: Scale for VFR.
+      }
+    }
+    // If we've been missing our target, add a penalty term.
+    let rate_bias = (self.rate_bias / (self.nencoded_frames as i64 + 100))
+      * (reservoir_frames as i64);
+    // rate_total is the total bits available over the next
+    //  reservoir_tus TUs.
+    let rate_total = self.reservoir_fullness - self.reservoir_target
+      + rate_bias
+      + (reservoir_tus as i64) * self.bits_per_tu;
+    // Find a target quantizer that meets our rate target for the
+    //  specific mix of frame types we'll have over the next
+    //  reservoir_frame frames.
+    // We model the rate<->quantizer relationship as
+    //  rate = scale*(quantizer**-exp)
+    // In this case, we have our desired rate, an exponent selected in
+    //  setup, and a scale that's been measured over our frame history,
+    //  so we're solving for the quantizer.
+    // Exponentiation with arbitrary exponents is expensive, so we work
+    //  in the binary log domain (binary exp and log aren't too bad):
+    //  rate = exp2(log2(scale) - log2(quantizer)*exp)
+    // There's no easy closed form solution, so we bisection searh for it.
+    let bit_depth = ctx.config.bit_depth;
+    let chroma_sampling = ctx.config.chroma_sampling;
+    // TODO: Proper handling of lossless.
+    let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth) as i64)
+      - q57(QSCALE + bit_depth as i32 - 8);
+    // The AC quantizer tables map to values larger than the DC quantizer
+    //  tables, so we use that as the upper bound to make sure we can use
+    //  the full table if needed.
+    let mut log_qhi =
+      blog64(ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0, bit_depth) as i64)
+        - q57(QSCALE + bit_depth as i32 - 8);
+    let mut log_base_q = (log_qlo + log_qhi) >> 1;
+    while log_qlo < log_qhi {
+      // Count bits contributed by each frame type using the model.
+      let mut bits = 0i64;
+      for ftj in 0..FRAME_NSUBTYPES {
+        // Modulate base quantizer by frame type.
+        let log_q = ((log_base_q + (1i64 << 11)) >> 12)
+          * (MQP_Q12[ftj] as i64)
+          + DQP_Q57[ftj];
+        // All the fields here are Q57 except for the exponent, which is
+        //  Q6.
+        bits += (nframes[ftj] as i64)
+          * bexp64(
+            log_scale[ftj] + self.log_npixels
+              - ((log_q + 32) >> 6) * (self.exp[ftj] as i64),
+          );
+      }
+      // The number of bits for Show Existing Frame frames is constant.
+      bits += (nframes[FRAME_SUBTYPE_SEF] as i64) * SEF_BITS;
+      let diff = bits - rate_total;
+      if diff > 0 {
+        log_qlo = log_base_q + 1;
+      } else if diff < 0 {
+        log_qhi = log_base_q - 1;
+      } else {
+        break;
+      }
+      log_base_q = (log_qlo + log_qhi) >> 1;
+    }
+    // If this was not one of the initial frames, limit the change in
+    //  base quantizer to within [0.8*Q, 1.2*Q] where Q is the previous
+    //  frame's base quantizer.
+    if let Some(prev_log_base_q) = maybe_prev_log_base_q {
+      log_base_q = clamp(
+        log_base_q,
+        prev_log_base_q - 0xA4_D3C2_5E68_DC58,
+        prev_log_base_q + 0xA4_D3C2_5E68_DC58,
+      );
+    }
+    // Modulate base quantizer by frame type.
+    let mut log_q = ((log_base_q + (1i64 << 11)) >> 12)
+      * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+
+    // The above allocation looks only at the total rate we'll accumulate
+    //  in the next reservoir_frame_delay frames.
+    // However, we could overflow the bit reservoir on the very next
+    //  frame.
+    // Check for that here if we're not using a soft target.
+    if self.cap_overflow {
+      // Allow 3% of the buffer for prediction error.
+      // This should be plenty, and we don't mind if we go a bit over.
+      // We only want to keep these bits from being completely wasted.
+      let margin = (self.reservoir_max + 31) >> 5;
+      // We want to use at least this many bits next frame.
+      let soft_limit = self.reservoir_fullness + self.bits_per_tu
+        - (self.reservoir_max - margin);
+      if soft_limit > 0 {
+        let log_soft_limit = blog64(soft_limit);
+        // If we're predicting we won't use that many bits...
         // TODO: When using frame re-ordering, we should include the rate
         //  for all of the frames in the current TU.
         // When there is more than one frame, there will be no direct
@@ -1247,14 +1238,45 @@ impl RCState {
         let log_scale_pixels = log_cur_scale + self.log_npixels;
         let exp = self.exp[fti] as i64;
         let mut log_q_exp = ((log_q + 32) >> 6) * exp;
-        if log_scale_pixels - log_q_exp > log_hard_limit {
-          // Force the target to hit our limit exactly.
-          log_q_exp = log_scale_pixels - log_hard_limit;
+        if log_scale_pixels - log_q_exp < log_soft_limit {
+          // Scale the adjustment based on how far into the margin we are.
+          log_q_exp += ((log_scale_pixels - log_soft_limit - log_q_exp) >> 32)
+            * ((margin.min(soft_limit) << 32) / margin);
           log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
-          // If that target is unreasonable, oh well; we'll have to drop.
         }
       }
+    }
+    // We just checked we don't overflow the reservoir next frame, now
+    //  check we don't underflow and bust the budget (when not using a
+    //  soft target).
+    if self.maybe_ac_qi_max.is_none() {
+      // Compute the maximum number of bits we can use in the next frame.
+      // Allow 50% of the rate for a single frame for prediction error.
+      // This may not be enough for keyframes or sudden changes in
+      //  complexity.
+      let log_hard_limit =
+        blog64(self.reservoir_fullness + (self.bits_per_tu >> 1));
+      // If we're predicting we'll use more than this...
+      // TODO: When using frame re-ordering, we should include the rate
+      //  for all of the frames in the current TU.
+      // When there is more than one frame, there will be no direct
+      //  solution for the required adjustment, however.
+      let log_scale_pixels = log_cur_scale + self.log_npixels;
+      let exp = self.exp[fti] as i64;
+      let mut log_q_exp = ((log_q + 32) >> 6) * exp;
+      if log_scale_pixels - log_q_exp > log_hard_limit {
+        // Force the target to hit our limit exactly.
+        log_q_exp = log_scale_pixels - log_hard_limit;
+        log_q = ((log_q_exp + (exp >> 1)) / exp) << 6;
+        // If that target is unreasonable, oh well; we'll have to drop.
+      }
+    }
 
+    if self.max_bitrate.is_some() {
+      // In max bitrate mode, we want to clamp the quantizer to
+      // a minimum, which is the default quantizer specified by the user.
+      // TODO: This will need to change to support bitrate mode
+      // with max bitrates.
       return QuantizerParameters::new_from_log_q(
         max(min_log_base_q, log_base_q),
         max(min_log_q, log_q),
@@ -1265,8 +1287,8 @@ impl RCState {
     }
 
     QuantizerParameters::new_from_log_q(
-      min_log_base_q,
-      min_log_q,
+      log_base_q,
+      log_q,
       bit_depth,
       chroma_sampling,
       fti == 0,

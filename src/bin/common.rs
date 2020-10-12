@@ -164,9 +164,9 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("VBV_MAXRATE")
+      Arg::with_name("MAX_BITRATE")
         .help("Max local bitrate (kbps)")
-        .long("vbv-maxrate")
+        .long("max-bitrate")
         .takes_value(true)
     )
     .arg(
@@ -540,20 +540,18 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     panic!("Quantizer must be between 0-255");
   }
 
-  let vbv_maxrate = match matches.value_of_int("VBV_MAXRATE") {
+  let max_bitrate = match matches.value_of_int("MAX_BITRATE") {
     Some(Err(_)) => {
-      panic!("vbv-maxrate must be a valid, positive integer");
+      panic!("max-bitrate must be a valid, positive integer");
     }
-    Some(Ok(vbv_maxrate)) if vbv_maxrate <= 0 => {
-      panic!("vbv-maxrate must be a valid, positive integer");
+    Some(Ok(max_bitrate)) if max_bitrate <= 0 => {
+      panic!("max-bitrate must be a valid, positive integer");
     }
-    Some(Ok(vbv_maxrate)) if bitrate > 0 && vbv_maxrate <= bitrate => {
-      warn!(
-        "vbv-maxrate less than target bitrate, assuming target bitrate is max"
-      );
-      Some(bitrate)
+    Some(Ok(_)) if bitrate > 0 => {
+      warn!("max-bitrate is currently only supported in quantizer mode, ignoring max-bitrate setting");
+      None
     }
-    Some(Ok(vbv_maxrate)) => Some(vbv_maxrate),
+    Some(Ok(max_bitrate)) => Some(max_bitrate),
     None => None,
   };
 
@@ -669,7 +667,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.min_quantizer =
     matches.value_of("MINQP").unwrap_or("0").parse().unwrap();
   cfg.bitrate = bitrate.checked_mul(1000).expect("Bitrate too high");
-  cfg.vbv_maxrate = vbv_maxrate.map(|maxrate| maxrate.saturating_mul(1000));
+  cfg.max_bitrate = max_bitrate.map(|maxrate| maxrate.saturating_mul(1000));
   cfg.reservoir_frame_delay = matches
     .value_of("RESERVOIR_FRAME_DELAY")
     .map(|reservior_frame_delay| reservior_frame_delay.parse().unwrap());

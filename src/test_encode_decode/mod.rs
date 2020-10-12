@@ -68,7 +68,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
     limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
     min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
     low_latency: bool, error_resilient: bool, bitrate: i32,
-    vbv_maxrate: Option<i32>, tile_cols_log2: usize, tile_rows_log2: usize,
+    max_bitrate: Option<i32>, tile_cols_log2: usize, tile_rows_log2: usize,
     still_picture: bool,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
@@ -86,7 +86,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
       low_latency,
       error_resilient,
       bitrate,
-      vbv_maxrate,
+      max_bitrate,
       tile_cols_log2,
       tile_rows_log2,
       still_picture,
@@ -173,7 +173,7 @@ fn setup_encoder<T: Pixel>(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
-  bitrate: i32, vbv_maxrate: Option<i32>, tile_cols_log2: usize,
+  bitrate: i32, max_bitrate: Option<i32>, tile_cols_log2: usize,
   tile_rows_log2: usize, still_picture: bool,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
@@ -189,7 +189,7 @@ fn setup_encoder<T: Pixel>(
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
-  enc.vbv_maxrate = vbv_maxrate;
+  enc.max_bitrate = max_bitrate;
   enc.tile_cols = 1 << tile_cols_log2;
   enc.tile_rows = 1 << tile_rows_log2;
   enc.still_picture = still_picture;
@@ -443,41 +443,6 @@ fn bitrate(decoder: &str) {
         false,
         r,
         None,
-        0,
-        0,
-        false,
-      );
-    }
-  }
-}
-
-#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
-#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
-#[ignore]
-fn bitrate_with_max_rate(decoder: &str) {
-  let limit = 5;
-  let w = 64;
-  let h = 80;
-  let speed = 10;
-
-  for &q in [172, 220, 252, 255].iter() {
-    for &r in [100, 1000, 10_000].iter() {
-      let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
-      dec.encode_decode(
-        w,
-        h,
-        speed,
-        q,
-        limit,
-        8,
-        Default::default(),
-        15,
-        15,
-        0,
-        true,
-        false,
-        r,
-        Some(r * 15 / 10),
         0,
         0,
         false,

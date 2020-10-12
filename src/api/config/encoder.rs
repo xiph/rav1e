@@ -80,8 +80,8 @@ pub struct EncoderConfig {
   pub min_quantizer: u8,
   /// The target bitrate for the bitrate mode.
   pub bitrate: i32,
-  /// The maximum local bitrate for VBV.
-  pub vbv_maxrate: Option<i32>,
+  /// The maximum local bitrate for a section of the encode.
+  pub max_bitrate: Option<i32>,
   /// Metric to tune the quality for.
   pub tune: Tune,
   /// Number of tiles horizontally. Must be a power of two.
@@ -158,7 +158,7 @@ impl EncoderConfig {
       low_latency: false,
       quantizer: 100,
       bitrate: 0,
-      vbv_maxrate: None,
+      max_bitrate: None,
       tune: Tune::default(),
       tile_cols: 0,
       tile_rows: 0,
@@ -231,9 +231,9 @@ impl fmt::Display for EncoderConfig {
       ("quantizer", self.quantizer.to_string()),
       ("bitrate", self.bitrate.to_string()),
       (
-        "vbv_maxrate",
+        "max_bitrate",
         self
-          .vbv_maxrate
+          .max_bitrate
           .map(|val| val.to_string())
           .unwrap_or_else(|| "None".to_string()),
       ),
