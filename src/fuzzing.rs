@@ -114,36 +114,47 @@ pub struct ArbitraryEncoder {
 
 impl Arbitrary for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    let mut enc = EncoderConfig::with_speed_preset(u.int_in_range(0..=10)?);
-    enc.width = u.int_in_range(1..=256)?;
-    enc.height = u.int_in_range(1..=256)?;
-    enc.still_picture = Arbitrary::arbitrary(u)?;
-    enc.time_base = arbitrary_rational(u)?;
-    enc.min_key_frame_interval = u.int_in_range(0..=3)?;
-    enc.max_key_frame_interval = u.int_in_range(1..=4)?;
-    enc.low_latency = Arbitrary::arbitrary(u)?;
-    enc.quantizer = Arbitrary::arbitrary(u)?;
-    enc.min_quantizer = Arbitrary::arbitrary(u)?;
-    enc.bitrate = Arbitrary::arbitrary(u)?;
-    enc.tile_cols = u.int_in_range(0..=2)?;
-    enc.tile_rows = u.int_in_range(0..=2)?;
-    enc.tiles = u.int_in_range(0..=16)?;
-    enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
+    let enc = EncoderConfig {
+      speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
+      width: u.int_in_range(1..=256)?,
+      height: u.int_in_range(1..=256)?,
+      still_picture: Arbitrary::arbitrary(u)?,
+      time_base: arbitrary_rational(u)?,
+      min_key_frame_interval: u.int_in_range(0..=3)?,
+      max_key_frame_interval: u.int_in_range(1..=4)?,
+      low_latency: Arbitrary::arbitrary(u)?,
+      quantizer: Arbitrary::arbitrary(u)?,
+      min_quantizer: Arbitrary::arbitrary(u)?,
+      bitrate: Arbitrary::arbitrary(u)?,
+      tile_cols: u.int_in_range(0..=2)?,
+      tile_rows: u.int_in_range(0..=2)?,
+      tiles: u.int_in_range(0..=16)?,
+      rdo_lookahead_frames: Arbitrary::arbitrary(u)?,
 
-    enc.chroma_sampling = *u.choose(&[
-      ChromaSampling::Cs420,
-      ChromaSampling::Cs422,
-      ChromaSampling::Cs444,
-      ChromaSampling::Cs400,
-    ])?;
-    enc.chroma_sample_position = *u.choose(&[
-      ChromaSamplePosition::Unknown,
-      ChromaSamplePosition::Vertical,
-      ChromaSamplePosition::Colocated,
-    ])?;
-    enc.pixel_range = *u.choose(&[PixelRange::Limited, PixelRange::Full])?;
-    enc.error_resilient = Arbitrary::arbitrary(u)?;
-    enc.reservoir_frame_delay = Arbitrary::arbitrary(u)?;
+      chroma_sampling: *u.choose(&[
+        ChromaSampling::Cs420,
+        ChromaSampling::Cs422,
+        ChromaSampling::Cs444,
+        ChromaSampling::Cs400,
+      ])?,
+      chroma_sample_position: *u.choose(&[
+        ChromaSamplePosition::Unknown,
+        ChromaSamplePosition::Vertical,
+        ChromaSamplePosition::Colocated,
+      ])?,
+      pixel_range: *u.choose(&[PixelRange::Limited, PixelRange::Full])?,
+      error_resilient: Arbitrary::arbitrary(u)?,
+      reservoir_frame_delay: Arbitrary::arbitrary(u)?,
+
+      sample_aspect_ratio: Rational { num: 1, den: 1 },
+      bit_depth: 8,
+      color_description: None,
+      mastering_display: None,
+      content_light: None,
+      enable_timing_info: false,
+      switch_frame_interval: 0,
+      tune: Tune::default(),
+    };
 
     let frame_count =
       if enc.still_picture { 1 } else { u.int_in_range(1..=3)? };
