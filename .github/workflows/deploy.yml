@@ -24,6 +24,8 @@ jobs:
          - conf: gnu
            toolchain: stable-x86_64-pc-windows-gnu
 
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
+
     runs-on: windows-latest
 
     steps:
@@ -141,6 +143,8 @@ jobs:
            binaries: rav1e
            strip: aarch64-linux-gnu-strip
 
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
+
     runs-on: ubuntu-latest
 
     steps:
@@ -238,6 +242,8 @@ jobs:
 
   macos-binaries:
 
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
+
     runs-on: macos-latest
 
     steps:
@@ -299,6 +305,8 @@ jobs:
   deploy:
 
     needs: [windows-binaries, linux-binaries, macos-binaries]
+
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
 
     runs-on: ubuntu-latest
 
