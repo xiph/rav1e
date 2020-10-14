@@ -11,6 +11,10 @@ on:
 jobs:
   rustfmt-clippy:
 
+    if: >-
+     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+
     runs-on: ubuntu-latest
 
     steps:
@@ -92,6 +96,10 @@ jobs:
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: /home/runner/.cache/sccache
       SCCACHE_IDLE_TIMEOUT: 0
+
+    if: >-
+     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
     runs-on: ubuntu-latest
 
@@ -333,6 +341,10 @@ jobs:
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
 
+    if: >-
+     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+
     runs-on: macos-11.0
 
     steps:
@@ -415,6 +427,10 @@ jobs:
       RUSTC_WRAPPER: sccache
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: C:\sccache
+
+    if: >-
+     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
     runs-on: windows-latest
 
