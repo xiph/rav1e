@@ -28,6 +28,10 @@ jobs:
             SCCACHE_IDLE_TIMEOUT: 0
             RAV1E_JS_DIR: rav1e_js
 
+        if: >-
+         (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+         (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+
         runs-on: ubuntu-latest
 
         steps:
