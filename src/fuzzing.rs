@@ -218,7 +218,7 @@ impl Arbitrary for DecodeTestParameters {
       ])?,
       min_keyint: u.int_in_range(0..=3)?,
       max_keyint: u.int_in_range(1..=4)?,
-      switch_frame_interval: 0,
+      switch_frame_interval: u.int_in_range(0..=3)?,
       low_latency: bool::arbitrary(u)?,
       error_resilient: bool::arbitrary(u)?,
       bitrate: u16::arbitrary(u)?.into(),
@@ -226,6 +226,9 @@ impl Arbitrary for DecodeTestParameters {
       tile_rows_log2: u.int_in_range(0..=2)?,
       still_picture: bool::arbitrary(u)?,
     };
+    if !p.low_latency {
+      p.switch_frame_interval = 0;
+    }
     if p.still_picture {
       p.limit = 1
     }
