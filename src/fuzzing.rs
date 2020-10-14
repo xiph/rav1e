@@ -46,6 +46,108 @@ fn arbitrary_rational(u: &mut Unstructured<'_>) -> Result<Rational, Error> {
   Ok(Rational::new(Arbitrary::arbitrary(u)?, Arbitrary::arbitrary(u)?))
 }
 
+#[inline]
+fn arbitrary_color_description(
+  u: &mut Unstructured<'_>,
+) -> Result<Option<ColorDescription>, Error> {
+  if Arbitrary::arbitrary(u)? {
+    return Ok(None);
+  }
+  Ok(Some(ColorDescription {
+    color_primaries: *u.choose(&[
+      ColorPrimaries::BT709,
+      ColorPrimaries::Unspecified,
+      ColorPrimaries::BT470M,
+      ColorPrimaries::BT470BG,
+      ColorPrimaries::BT601,
+      ColorPrimaries::SMPTE240,
+      ColorPrimaries::GenericFilm,
+      ColorPrimaries::BT2020,
+      ColorPrimaries::XYZ,
+      ColorPrimaries::SMPTE431,
+      ColorPrimaries::SMPTE432,
+      ColorPrimaries::EBU3213,
+    ])?,
+    transfer_characteristics: *u.choose(&[
+      TransferCharacteristics::BT709,
+      TransferCharacteristics::Unspecified,
+      TransferCharacteristics::BT470M,
+      TransferCharacteristics::BT470BG,
+      TransferCharacteristics::BT601,
+      TransferCharacteristics::SMPTE240,
+      TransferCharacteristics::Linear,
+      TransferCharacteristics::Log100,
+      TransferCharacteristics::Log100Sqrt10,
+      TransferCharacteristics::IEC61966,
+      TransferCharacteristics::BT1361,
+      TransferCharacteristics::SRGB,
+      TransferCharacteristics::BT2020_10Bit,
+      TransferCharacteristics::BT2020_12Bit,
+      TransferCharacteristics::SMPTE2084,
+      TransferCharacteristics::SMPTE428,
+      TransferCharacteristics::HLG,
+    ])?,
+    matrix_coefficients: *u.choose(&[
+      MatrixCoefficients::Identity,
+      MatrixCoefficients::BT709,
+      MatrixCoefficients::Unspecified,
+      MatrixCoefficients::FCC,
+      MatrixCoefficients::BT470BG,
+      MatrixCoefficients::BT601,
+      MatrixCoefficients::SMPTE240,
+      MatrixCoefficients::YCgCo,
+      MatrixCoefficients::BT2020NCL,
+      MatrixCoefficients::BT2020CL,
+      MatrixCoefficients::SMPTE2085,
+      MatrixCoefficients::ChromatNCL,
+      MatrixCoefficients::ChromatCL,
+      MatrixCoefficients::ICtCp,
+    ])?,
+  }))
+}
+
+#[inline]
+fn arbitrary_chromacity_point(
+  u: &mut Unstructured<'_>,
+) -> Result<ChromaticityPoint, Error> {
+  Ok(ChromaticityPoint {
+    x: Arbitrary::arbitrary(u)?,
+    y: Arbitrary::arbitrary(u)?,
+  })
+}
+
+#[inline]
+fn arbitrary_mastering_display(
+  u: &mut Unstructured<'_>,
+) -> Result<Option<MasteringDisplay>, Error> {
+  if Arbitrary::arbitrary(u)? {
+    return Ok(None);
+  }
+  Ok(Some(MasteringDisplay {
+    primaries: [
+      arbitrary_chromacity_point(u)?,
+      arbitrary_chromacity_point(u)?,
+      arbitrary_chromacity_point(u)?,
+    ],
+    white_point: arbitrary_chromacity_point(u)?,
+    max_luminance: Arbitrary::arbitrary(u)?,
+    min_luminance: Arbitrary::arbitrary(u)?,
+  }))
+}
+
+#[inline]
+fn arbitrary_content_light(
+  u: &mut Unstructured<'_>,
+) -> Result<Option<ContentLight>, Error> {
+  if Arbitrary::arbitrary(u)? {
+    return Ok(None);
+  }
+  Ok(Some(ContentLight {
+    max_content_light_level: Arbitrary::arbitrary(u)?,
+    max_frame_average_light_level: Arbitrary::arbitrary(u)?,
+  }))
+}
+
 impl Arbitrary for ArbitraryConfig {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut enc = EncoderConfig::with_speed_preset(Arbitrary::arbitrary(u)?);
@@ -146,14 +248,14 @@ impl Arbitrary for ArbitraryEncoder {
       error_resilient: Arbitrary::arbitrary(u)?,
       reservoir_frame_delay: Arbitrary::arbitrary(u)?,
 
-      sample_aspect_ratio: Rational { num: 1, den: 1 },
+      sample_aspect_ratio: arbitrary_rational(u)?,
       bit_depth: 8,
-      color_description: None,
-      mastering_display: None,
-      content_light: None,
-      enable_timing_info: false,
-      switch_frame_interval: 0,
-      tune: Tune::default(),
+      color_description: arbitrary_color_description(u)?,
+      mastering_display: arbitrary_mastering_display(u)?,
+      content_light: arbitrary_content_light(u)?,
+      enable_timing_info: Arbitrary::arbitrary(u)?,
+      switch_frame_interval: u.int_in_range(0..=3)?,
+      tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
     };
 
     let frame_count =
