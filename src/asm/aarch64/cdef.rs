@@ -23,6 +23,16 @@ type CdefPaddingFn = unsafe extern fn(
   edges: isize,
 );
 
+type CdefPaddingHBDFn = unsafe extern fn(
+  tmp: *mut u16,
+  src: *const u16,
+  src_stride: isize,
+  left: *const [u16; 2],
+  top: *const u16,
+  h: i32,
+  edges: isize,
+);
+
 type CdefFilterFn = unsafe extern fn(
   dst: *mut u8,
   dst_stride: isize,
@@ -33,6 +43,19 @@ type CdefFilterFn = unsafe extern fn(
   damping: i32,
   h: i32,
   edges: isize,
+);
+
+type CdefFilterHBDFn = unsafe extern fn(
+  dst: *mut u16,
+  dst_stride: isize,
+  tmp: *const u16,
+  pri_strength: i32,
+  sec_strength: i32,
+  dir: i32,
+  damping: i32,
+  h: i32,
+  edges: isize,
+  bitdepth_max: i32,
 );
 
 #[inline(always)]
@@ -131,7 +154,58 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
       }
     }
     PixelType::U16 => {
-      call_rust(dst);
+      match (CDEF_PAD_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)],
+             CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)]) {
+	// almost exactly as above, but the call convention isn't
+	// quite what we'd need to roll 8 bit and HBD together in one
+	// clause using Rust macros.  See comments above for
+	// indexing/addressing notes.
+        (Some(pad), Some(func)) => {
+	  let h = if ydec == 1 {4} else {8} as i32;
+	  let tmpstride = if xdec == 1 {8} else {16} as isize;
+	    const MAXTMPSTRIDE: isize = 16;
+          const TMPSIZE: usize =
+            (12 * MAXTMPSTRIDE + 8) as usize;
+          let mut tmp: Aligned<[u16; TMPSIZE]> =
+            Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
+          let top = src.offset( -2*src_stride );
+          let mut left: Aligned<[[u16; 2]; 8]> =
+            Aligned::new([[0; 2]; 8]);
+	  
+          if edges & CDEF_HAVE_LEFT != 0 {
+            let mut wptr = src.offset(-2) as *const u16;
+            for i in 0..h {
+	      left.data[i as usize][0] = *wptr;
+	      left.data[i as usize][1] = *wptr.add(1);
+	      wptr = wptr.offset(src_stride);
+            }
+	  }
+
+          (pad) (
+            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
+            src as *const u16,
+            src_stride,
+            left.data.as_ptr() as *const [u16; 2],
+            top as *const u16,
+            8 >> ydec,
+            edges.into(),
+          );
+
+          (func) (
+            dst.data_ptr_mut() as *mut u16,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            tmp.data.as_ptr().offset(2 * tmpstride + 8) as *const u16,
+            pri_strength,
+            sec_strength,
+            dir as i32,
+            damping,
+            8 >> ydec,
+            edges.into(),
+	    bit_depth as i32,
+	  );
+	}
+        _ => call_rust(dst),
+      }
     }
   }
   #[cfg(feature = "check_asm")]
@@ -168,6 +242,28 @@ extern {
     tmp: *mut u16, src: *const u8, src_stride: isize, left: *const [u8; 2],
     top: *const u8, h: i32, edges: isize,
   );
+
+  fn rav1e_cdef_filter4_16bpc_neon(
+    dst: *mut u16, dst_stride: isize, tmp: *const u16,
+    pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
+    h: i32, edges: isize, bd: i32,
+  );
+
+  fn rav1e_cdef_padding4_16bpc_neon(
+    tmp: *mut u16, src: *const u16, src_stride: isize, left: *const [u16; 2],
+    top: *const u16, h: i32, edges: isize,
+  );
+
+  fn rav1e_cdef_filter8_16bpc_neon(
+    dst: *mut u16, dst_stride: isize, tmp: *const u16,
+    pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
+    h: i32, edges: isize, bd: i32,
+  );
+
+  fn rav1e_cdef_padding8_16bpc_neon(
+    tmp: *mut u16, src: *const u16, src_stride: isize, left: *const [u16; 2],
+    top: *const u16, h: i32, edges: isize,
+  );
 }
 
 static CDEF_PAD_FNS_NEON: [Option<CdefPaddingFn>; 4] = {
@@ -186,6 +282,22 @@ static CDEF_FILTER_FNS_NEON: [Option<CdefFilterFn>; 4] = {
   out
 };
 
+static CDEF_PAD_HBD_FNS_NEON: [Option<CdefPaddingHBDFn>; 4] = {
+  let mut out: [Option<CdefPaddingHBDFn>; 4] = [None; 4];
+  out[decimate_index(1, 1)] = Some(rav1e_cdef_padding4_16bpc_neon);
+  out[decimate_index(1, 0)] = Some(rav1e_cdef_padding4_16bpc_neon);
+  out[decimate_index(0, 0)] = Some(rav1e_cdef_padding8_16bpc_neon);
+  out
+};
+
+static CDEF_FILTER_HBD_FNS_NEON: [Option<CdefFilterHBDFn>; 4] = {
+  let mut out: [Option<CdefFilterHBDFn>; 4] = [None; 4];
+  out[decimate_index(1, 1)] = Some(rav1e_cdef_filter4_16bpc_neon);
+  out[decimate_index(1, 0)] = Some(rav1e_cdef_filter4_16bpc_neon);
+  out[decimate_index(0, 0)] = Some(rav1e_cdef_filter8_16bpc_neon);
+  out
+};
+
 cpu_function_lookup_table!(
   CDEF_PAD_FNS: [[Option<CdefPaddingFn>; 4]],
   default: [None; 4],
@@ -194,6 +306,18 @@ cpu_function_lookup_table!(
 
 cpu_function_lookup_table!(
   CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
+  default: [None; 4],
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  CDEF_PAD_HBD_FNS: [[Option<CdefPaddingHBDFn>; 4]],
+  default: [None; 4],
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4]],
   default: [None; 4],
   [NEON]
 );
