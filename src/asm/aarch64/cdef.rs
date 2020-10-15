@@ -13,27 +13,26 @@ use crate::frame::*;
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
 
+type CdefPaddingFn = unsafe extern fn(
+  tmp: *mut u16,
+  src: *const u8,
+  src_stride: isize,
+  left: *const [u8; 2],
+  top: *const u8,
+  h: i32,
+  edges: isize,
+);
+
 type CdefFilterFn = unsafe extern fn(
   dst: *mut u8,
   dst_stride: isize,
   tmp: *const u16,
-  tmp_stride: isize,
   pri_strength: i32,
   sec_strength: i32,
   dir: i32,
   damping: i32,
-);
-
-type CdefFilterHBDFn = unsafe extern fn(
-  dst: *mut u16,
-  dst_stride: isize,
-  tmp: *const u16,
-  tmp_stride: isize,
-  pri_strength: i32,
-  sec_strength: i32,
-  dir: i32,
-  damping: i32,
-  bitdepth_max: i32,
+  h: i32,
+  edges: isize,
 );
 
 #[inline(always)]
@@ -63,123 +62,140 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
     );
   };
 
-  // TODO: handle padding in the fast path
-  if edges != CDEF_HAVE_ALL {
-    call_rust(dst);
-  } else {
-    #[cfg(feature = "check_asm")]
-    let ref_dst = {
-      let mut copy = dst.scratch_copy();
-      call_rust(&mut copy.as_region_mut());
-      copy
-    };
-    match T::type_enum() {
-      PixelType::U8 => {
-        match CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-          Some(func) => {
-            // current cdef_filter_block asm does 16->8 for historical
-            // reasons.  Copy into tmp space for now (also handling
-            // padding) until asm is updated
-            const TMPSTRIDE: isize =
-              std::mem::align_of::<Aligned<u16>>() as isize;
-            /* 256 or 512-bit alignment, greater than 2 * (8>>xdec) + 2 */
-            const TMPSIZE: usize =
-              ((2 + 8 + 2) * TMPSTRIDE + TMPSTRIDE) as usize;
-            let mut tmp: Aligned<[u16; TMPSIZE]> =
-              Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
-            rust::pad_into_tmp16(
-              tmp.data.as_mut_ptr().offset(TMPSTRIDE - 2), // points to
-              // *padding* upper left; the -2 is to make sure the
-              // block area is SIMD-aligned, not the padding
-              TMPSTRIDE,
-              src, // points to *block* upper left
-              src_stride,
-              8 >> xdec,
-              8 >> ydec,
-              edges,
-            );
-            (func)(
-              dst.data_ptr_mut() as *mut _,
-              T::to_asm_stride(dst.plane_cfg.stride),
-              tmp.data.as_ptr().offset(3 * TMPSTRIDE) as *const u16,
-              TMPSTRIDE,
-              pri_strength,
-              sec_strength,
-              dir as i32,
-              damping,
-            );
-          }
-          None => call_rust(dst),
-        }
-      }
-      PixelType::U16 => {
-        match CDEF_FILTER_HBD_FNS[cpu.as_index()][decimate_index(xdec, ydec)] {
-          Some(func) => {
-            (func)(
-              dst.data_ptr_mut() as *mut _,
-              T::to_asm_stride(dst.plane_cfg.stride),
-              src as *const _,
-              src_stride,
-              pri_strength,
-              sec_strength,
-              dir as i32,
-              damping,
-              (1 << bit_depth) - 1,
-            );
-          }
-          None => call_rust(dst),
-        }
+  #[cfg(feature = "check_asm")]
+  let ref_dst = {
+    let mut copy = dst.scratch_copy();
+    call_rust(&mut copy.as_region_mut());
+    copy
+  };
+  match T::type_enum() {
+    PixelType::U8 => {
+      match (CDEF_PAD_FNS[cpu.as_index()][decimate_index(xdec, ydec)],
+             CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)]) {
+        (Some(pad), Some(func)) => {
+	  let h = if ydec == 1 {4} else {8} as i32;
+	  let tmpstride = if xdec == 1 {8} else {16} as isize;
+	  const MAXTMPSTRIDE: isize = 16;
+          const TMPSIZE: usize =
+            (12 * MAXTMPSTRIDE + 8) as usize;
+          let mut tmp: Aligned<[u16; TMPSIZE]> =
+            Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
+          let top = src.offset( -2*src_stride );
+          let mut left: Aligned<[[u8; 2]; 8]> =
+            Aligned::new([[0; 2]; 8]);
+
+          // Rather than modify the dav1d assembly, just swallow our
+	  // pride and copy relevant portions of src into a left
+	  // array.  The array is a monolithic, packed [x=2][y=8],
+	  // though it is aligned to start on a 16-byte boundary.
+          if edges & CDEF_HAVE_LEFT != 0 {
+            let mut wptr = src.offset(-2) as *const u8;
+            for i in 0..h {
+	      left.data[i as usize][0] = *wptr;
+	      left.data[i as usize][1] = *wptr.add(1);
+	      wptr = wptr.offset(src_stride);
+            }
+	  }
+
+	  // dav1d's implicit indexing as of this version: tmp array
+	  // working pointer points to the upper-left of the current
+	  // coded block, not the upper-left of the tmp array storage,
+	  // with an adjustment to ensure UL of the block is 16-byte
+	  // aligned.  src, similarly, points to upper left of src
+	  // block being coded.  top points to coded block minus two
+	  // rows (that is, src.x, src.y-2).  It does _not_ point to
+	  // src.x-2, src.y-2.
+          (pad) (
+            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
+            src as *const u8,
+            src_stride,
+            left.data.as_ptr() as *const [u8; 2],
+            top as *const u8,
+            8 >> ydec,
+            edges.into(),
+          );
+
+          (func) (
+            dst.data_ptr_mut() as *mut u8,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            tmp.data.as_ptr().offset(2 * tmpstride + 8) as *const u16,
+            pri_strength,
+            sec_strength,
+            dir as i32,
+            damping,
+            8 >> ydec,
+            edges.into(),
+	  );
+	}
+        _ => call_rust(dst),
       }
     }
-    #[cfg(feature = "check_asm")]
+    PixelType::U16 => {
+      call_rust(dst);
+    }
+  }
+  #[cfg(feature = "check_asm")]
+  {
+    for (dst_row, ref_row) in
+      dst.rows_iter().zip(ref_dst.as_region().rows_iter())
     {
-      for (dst_row, ref_row) in
-        dst.rows_iter().zip(ref_dst.as_region().rows_iter())
-      {
-        for (dst, reference) in dst_row.iter().zip(ref_row) {
-          assert_eq!(*dst, *reference);
+      for (dst, reference) in dst_row.iter().zip(ref_row) {
+        assert_eq!(*dst, *reference);
         }
-      }
     }
   }
 }
 
 extern {
-  fn rav1e_cdef_filter_4x4_neon(
-    dst: *mut u8, dst_stride: isize, tmp: *const u16, tmp_stride: isize,
+  fn rav1e_cdef_filter4_8bpc_neon(
+    dst: *mut u8, dst_stride: isize, tmp: *const u16,
     pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
+    h: i32, edges: isize,
   );
 
-  fn rav1e_cdef_filter_4x8_neon(
-    dst: *mut u8, dst_stride: isize, tmp: *const u16, tmp_stride: isize,
-    pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
+  fn rav1e_cdef_padding4_8bpc_neon(
+    tmp: *mut u16, src: *const u8, src_stride: isize, left: *const [u8; 2],
+    top: *const u8, h: i32, edges: isize,
   );
 
-  fn rav1e_cdef_filter_8x8_neon(
-    dst: *mut u8, dst_stride: isize, tmp: *const u16, tmp_stride: isize,
+  fn rav1e_cdef_filter8_8bpc_neon(
+    dst: *mut u8, dst_stride: isize, tmp: *const u16,
     pri_strength: i32, sec_strength: i32, dir: i32, damping: i32,
+    h: i32, edges: isize,
+  );
+
+  fn rav1e_cdef_padding8_8bpc_neon(
+    tmp: *mut u16, src: *const u8, src_stride: isize, left: *const [u8; 2],
+    top: *const u8, h: i32, edges: isize,
   );
 }
 
+static CDEF_PAD_FNS_NEON: [Option<CdefPaddingFn>; 4] = {
+  let mut out: [Option<CdefPaddingFn>; 4] = [None; 4];
+  out[decimate_index(1, 1)] = Some(rav1e_cdef_padding4_8bpc_neon);
+  out[decimate_index(1, 0)] = Some(rav1e_cdef_padding4_8bpc_neon);
+  out[decimate_index(0, 0)] = Some(rav1e_cdef_padding8_8bpc_neon);
+  out
+};
+
 static CDEF_FILTER_FNS_NEON: [Option<CdefFilterFn>; 4] = {
   let mut out: [Option<CdefFilterFn>; 4] = [None; 4];
-  out[decimate_index(1, 1)] = Some(rav1e_cdef_filter_4x4_neon);
-  out[decimate_index(1, 0)] = Some(rav1e_cdef_filter_4x8_neon);
-  out[decimate_index(0, 0)] = Some(rav1e_cdef_filter_8x8_neon);
+  out[decimate_index(1, 1)] = Some(rav1e_cdef_filter4_8bpc_neon);
+  out[decimate_index(1, 0)] = Some(rav1e_cdef_filter4_8bpc_neon);
+  out[decimate_index(0, 0)] = Some(rav1e_cdef_filter8_8bpc_neon);
   out
 };
 
 cpu_function_lookup_table!(
-  CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
+  CDEF_PAD_FNS: [[Option<CdefPaddingFn>; 4]],
   default: [None; 4],
-  // [NEON]
-  []
+  [NEON]
 );
 
 cpu_function_lookup_table!(
-  CDEF_FILTER_HBD_FNS: [[Option<CdefFilterHBDFn>; 4]],
+  CDEF_FILTER_FNS: [[Option<CdefFilterFn>; 4]],
   default: [None; 4],
-  []
+  [NEON]
 );
 
 type CdefDirLBDFn =
