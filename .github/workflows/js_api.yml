@@ -12,13 +12,11 @@ jobs:
 
         strategy:
             matrix:
-                conf: [build, firefox, chrome, node]
+                conf: [build, firefox, node]
                 include:
                     - conf: firefox
                       headless: --headless
                       driver: --geckodriver ./geckodriver
-                    - conf: chrome
-                      headless: --headless
 
         env:
             RUST_BACKTRACE: 1
