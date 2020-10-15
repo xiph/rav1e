@@ -12,6 +12,7 @@ use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{clamp, ILog, Pixel};
+use std::cmp;
 
 // The number of frame sub-types for which we track distinct parameters.
 // This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
@@ -946,26 +947,10 @@ impl RCState {
     if self.target_bitrate <= 0 {
       // Rate control is not active.
       // Derive quantizer directly from frame type.
-      // TODO: Rename "quantizer" something that indicates it is a quantizer
-      //  index, and move it somewhere more sensible (or choose a better way to
-      //  parameterize a "quality" configuration parameter).
-      let base_qi = ctx.config.quantizer;
       let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
-      // We use the AC quantizer as the source quantizer since its quantizer
-      //  tables have unique entries, while the DC tables do not.
-      let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
-      // Pick the nearest DC entry since an exact match may be unavailable.
-      let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-      let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
-      // Get the log quantizers as Q57.
-      let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-      // Target the midpoint of the chosen entries.
-      let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
-      // Adjust the quantizer for the frame type, result is Q57:
-      let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
-        + DQP_Q57[fti];
+      let (log_base_q, log_q) =
+        Self::calc_flat_quantizer(ctx.config.quantizer as u8, bit_depth, fti);
       QuantizerParameters::new_from_log_q(
         log_base_q,
         log_q,
@@ -1251,6 +1236,19 @@ impl RCState {
           // If that target is unreasonable, oh well; we'll have to drop.
         }
       }
+
+      if let Some(qi_max) = self.maybe_ac_qi_max {
+        let (max_log_base_q, max_log_q) =
+          Self::calc_flat_quantizer(qi_max, ctx.config.bit_depth, fti);
+        log_base_q = cmp::min(log_base_q, max_log_base_q);
+        log_q = cmp::min(log_q, max_log_q);
+      }
+      if self.ac_qi_min > 0 {
+        let (min_log_base_q, min_log_q) =
+          Self::calc_flat_quantizer(self.ac_qi_min, ctx.config.bit_depth, fti);
+        log_base_q = cmp::max(log_base_q, min_log_base_q);
+        log_q = cmp::max(log_q, min_log_q);
+      }
       QuantizerParameters::new_from_log_q(
         log_base_q,
         log_q,
@@ -1259,6 +1257,32 @@ impl RCState {
         fti == 0,
       )
     }
+  }
+
+  // Computes a quantizer directly from the frame type and base quantizer index,
+  // without consideration for rate control.
+  fn calc_flat_quantizer(
+    base_qi: u8, bit_depth: usize, fti: usize,
+  ) -> (i64, i64) {
+    // TODO: Rename "quantizer" something that indicates it is a quantizer
+    //  index, and move it somewhere more sensible (or choose a better way to
+    //  parameterize a "quality" configuration parameter).
+
+    // We use the AC quantizer as the source quantizer since its quantizer
+    //  tables have unique entries, while the DC tables do not.
+    let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
+    // Pick the nearest DC entry since an exact match may be unavailable.
+    let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
+    let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
+    // Get the log quantizers as Q57.
+    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    // Target the midpoint of the chosen entries.
+    let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
+    // Adjust the quantizer for the frame type, result is Q57:
+    let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
+      + DQP_Q57[fti];
+    (log_base_q, log_q)
   }
 
   pub fn update_state(
