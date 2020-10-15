@@ -131,7 +131,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           (pad)(
             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
             src as *const u8,
-            src_stride,
+            T::to_asm_stride(src_stride as usize),
             left.data.as_ptr() as *const [u8; 2],
             top as *const u8,
             8 >> ydec,
@@ -184,7 +184,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           (pad)(
             tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
             src as *const u16,
-            src_stride,
+            T::to_asm_stride(src_stride as usize),
             left.data.as_ptr() as *const [u16; 2],
             top as *const u16,
             8 >> ydec,
@@ -201,7 +201,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             damping,
             8 >> ydec,
             edges.into(),
-            bit_depth as i32,
+            (1 << bit_depth) - 1,
           );
         }
         _ => call_rust(dst),
@@ -320,8 +320,12 @@ cpu_function_lookup_table!(
 
 type CdefDirLBDFn =
   unsafe extern fn(tmp: *const u8, tmp_stride: isize, var: *mut u32) -> i32;
-type CdefDirHBDFn =
-  unsafe extern fn(tmp: *const u16, tmp_stride: isize, var: *mut u32) -> i32;
+type CdefDirHBDFn = unsafe extern fn(
+  tmp: *const u16,
+  tmp_stride: isize,
+  var: *mut u32,
+  bitdepth_max: i32,
+) -> i32;
 
 #[inline(always)]
 #[allow(clippy::let_and_return)]
@@ -360,6 +364,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
             img.as_ptr() as *const _,
             T::to_asm_stride(img.plane.cfg.stride),
             var as *mut u32,
+            (1 << coeff_shift + 8) - 1,
           )
         }
       } else {
@@ -385,7 +390,7 @@ extern {
 
 extern {
   fn rav1e_cdef_find_dir_16bpc_neon(
-    tmp: *const u16, tmp_stride: isize, var: *mut u32,
+    tmp: *const u16, tmp_stride: isize, var: *mut u32, max_bitdepth: i32,
   ) -> i32;
 }
 
