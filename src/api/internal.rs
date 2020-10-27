@@ -1102,7 +1102,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  fn encode_packet(
+  pub(crate) fn encode_packet(
     &mut self, cur_output_frameno: u64,
   ) -> Result<Packet<T>, EncoderStatus> {
     if self.frame_data.get(&cur_output_frameno).unwrap().fi.show_existing_frame
