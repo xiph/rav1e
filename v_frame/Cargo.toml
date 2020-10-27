@@ -12,7 +12,7 @@ serialize = ["serde"]
 wasm = ["wasm-bindgen"]
 
 [dependencies]
-cfg-if = "0.1"
+cfg-if = "1.0"
 num-traits = "0.2"
 num-derive = "0.3"
 noop_proc_macro = "0.3.0"
