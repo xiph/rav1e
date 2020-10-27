@@ -75,7 +75,7 @@ ivf = { version = "0.1", path = "ivf/", optional = true }
 v_frame = { version = "0.1", path = "v_frame/" }
 av-metrics = { version = "0.5.1", optional = true, default-features = false }
 rayon = "1.0"
-crossbeam = { version = "0.7", optional = true }
+crossbeam = { version = "0.8", optional = true }
 toml = { version = "0.5", optional = true }
 arrayvec = { version = "0.5", features = ["array-sizes-33-128"] }
 thiserror = "1.0"
