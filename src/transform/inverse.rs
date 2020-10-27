@@ -1602,7 +1602,7 @@ pub(crate) mod rust {
 
     // For 64 point transforms, rely on the last 32 columns being initialized
     //   to zero for filling out missing input coeffs.
-    let buffer = &mut [0i32; 64 * 64][..width * height];
+    let mut buffer = vec![0i32; width * height].into_boxed_slice();
     let rect_type = get_rect_tx_log_ratio(width, height);
     let tx_types_1d = get_1d_tx_types(tx_type);
 
