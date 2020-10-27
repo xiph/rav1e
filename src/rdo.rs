@@ -697,10 +697,10 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   let is_chroma_block = has_chroma(tile_bo, bsize, xdec, ydec);
 
   if !luma_mode_is_intra {
-    let ref_mvs = if mv_stack.len() > 0 {
-      [mv_stack[0].this_mv, mv_stack[0].comp_mv]
-    } else {
+    let ref_mvs = if mv_stack.is_empty() {
       [MotionVector::default(); 2]
+    } else {
+      [mv_stack[0].this_mv, mv_stack[0].comp_mv]
     };
 
     if (luma_mode == PredictionMode::NEWMV
