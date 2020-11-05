@@ -219,6 +219,9 @@ impl<T: Pixel> FrameData<T> {
   }
 }
 
+type FrameQueue<T> = BTreeMap<u64, Option<Arc<Frame<T>>>>;
+type FrameDataQueue<T> = BTreeMap<u64, FrameData<T>>;
+
 // the fields pub(super) are accessed only by the tests
 pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) frame_count: u64,
@@ -227,9 +230,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(super) inter_cfg: InterConfig,
   pub(super) frames_processed: u64,
   /// Maps *input_frameno* to frames
-  pub(super) frame_q: BTreeMap<u64, Option<Arc<Frame<T>>>>, //    packet_q: VecDeque<Packet>
+  pub(super) frame_q: FrameQueue<T>,
   /// Maps *output_frameno* to frame data
-  pub(super) frame_data: BTreeMap<u64, FrameData<T>>,
+  pub(super) frame_data: FrameDataQueue<T>,
   /// A list of the input_frameno for keyframes in this encode.
   /// Needed so that we don't need to keep all of the frame_invariants in
   ///  memory for the whole life of the encode.
