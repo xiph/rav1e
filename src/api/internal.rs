@@ -263,6 +263,8 @@ impl<T: Pixel> ContextInner<T> {
   pub fn new(enc: &EncoderConfig) -> Self {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
+    let mut keyframes = BTreeSet::new();
+    keyframes.insert(0);
 
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
@@ -276,7 +278,7 @@ impl<T: Pixel> ContextInner<T> {
       frames_processed: 0,
       frame_q: BTreeMap::new(),
       frame_data: BTreeMap::new(),
-      keyframes: BTreeSet::new(),
+      keyframes,
       keyframes_forced: BTreeSet::new(),
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
@@ -302,7 +304,7 @@ impl<T: Pixel> ContextInner<T> {
         enc.reservoir_frame_delay,
       ),
       maybe_prev_log_base_q: None,
-      next_lookahead_frame: 0,
+      next_lookahead_frame: 1,
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
     }
@@ -328,10 +330,7 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    if self.config.still_picture || self.next_lookahead_frame == 0 {
-      self.keyframes.insert(input_frameno);
-      self.next_lookahead_frame += 1;
-    } else if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
+    if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
