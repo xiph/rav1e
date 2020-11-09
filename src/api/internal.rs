@@ -270,10 +270,12 @@ impl<T: Pixel> ContextInner<T> {
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
     let seq = Sequence::new(enc);
+    let inter_cfg = InterConfig::new(enc);
+    let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
     ContextInner {
       frame_count: 0,
       limit: None,
-      inter_cfg: InterConfig::new(enc),
+      inter_cfg,
       output_frameno: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
@@ -284,10 +286,9 @@ impl<T: Pixel> ContextInner<T> {
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(
-        enc.bit_depth,
-        enc.speed_settings.fast_scene_detection || enc.low_latency,
-        CpuFeatureLevel::default(),
         *enc,
+        CpuFeatureLevel::default(),
+        lookahead_distance,
         seq,
       ),
       config: *enc,
@@ -774,8 +775,6 @@ impl<T: Pixel> ContextInner<T> {
         lookahead_frames,
         self.next_lookahead_frame,
         *self.keyframes.iter().last().unwrap(),
-        &self.config,
-        &self.inter_cfg,
       )
     {
       self.keyframes.insert(self.next_lookahead_frame);
