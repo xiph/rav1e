@@ -13,11 +13,13 @@ use crate::prelude::*;
 use std::sync::Arc;
 
 use interpolate_name::interpolate_test;
+
 fn setup_config(
   w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   bitrate: i32, low_latency: bool, switch_frame_interval: u64,
   no_scene_detection: bool, rdo_lookahead_frames: usize,
+  min_quantizer: Option<u8>,
 ) -> Config {
   let mut enc = EncoderConfig::with_speed_preset(speed);
   enc.quantizer = quantizer;
@@ -32,6 +34,9 @@ fn setup_config(
   enc.bitrate = bitrate;
   enc.speed_settings.no_scene_detection = no_scene_detection;
   enc.rdo_lookahead_frames = rdo_lookahead_frames;
+  if let Some(min_quantizer) = min_quantizer {
+    enc.min_quantizer = min_quantizer;
+  }
 
   Config::new().with_encoder_config(enc).with_threads(1)
 }
@@ -41,6 +46,7 @@ fn setup_encoder<T: Pixel>(
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   bitrate: i32, low_latency: bool, switch_frame_interval: u64,
   no_scene_detection: bool, rdo_lookahead_frames: usize,
+  min_quantizer: Option<u8>,
 ) -> Context<T> {
   let cfg = setup_config(
     w,
@@ -56,6 +62,7 @@ fn setup_encoder<T: Pixel>(
     switch_frame_interval,
     no_scene_detection,
     rdo_lookahead_frames,
+    min_quantizer,
   );
   cfg.new_context().unwrap()
 }
@@ -108,6 +115,7 @@ mod channel {
       0,
       no_scene_detection,
       10,
+      None,
     );
 
     let limit = 41;
@@ -156,6 +164,7 @@ fn flush(low_lantency: bool, no_scene_detection: bool) {
     0,
     no_scene_detection,
     10,
+    None,
   );
   let limit = 41;
 
@@ -210,6 +219,7 @@ fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
     0,
     no_scene_detection,
     10,
+    None,
   );
   let limit = 41;
 
@@ -289,6 +299,7 @@ fn output_frameno_low_latency_minus(missing: u64) {
     0,
     true,
     10,
+    None,
   );
   let limit = 10 - missing;
   send_frames(&mut ctx, limit, 0);
@@ -353,6 +364,7 @@ fn switch_frame_interval() {
     2,
     true,
     10,
+    None,
   );
   let limit = 10;
   send_frames(&mut ctx, limit, 0);
@@ -395,6 +407,7 @@ fn minimum_frame_delay() {
     0,
     true,
     1,
+    None,
   );
 
   let limit = 4; // 4 frames in for 1 frame out (delay of 3 frames)
@@ -427,6 +440,7 @@ fn pyramid_level_low_latency_minus(missing: u64) {
     0,
     true,
     10,
+    None,
   );
   let limit = 10 - missing;
   send_frames(&mut ctx, limit, 0);
@@ -462,6 +476,7 @@ fn output_frameno_reorder_minus(missing: u64) {
     0,
     true,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -591,6 +606,7 @@ fn pyramid_level_reorder_minus(missing: u64) {
     0,
     true,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -719,6 +735,7 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -826,6 +843,7 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -933,6 +951,7 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
     0,
     true,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1064,6 +1083,7 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1179,6 +1199,7 @@ fn test_opaque_delivery() {
     0,
     false,
     10,
+    None,
   );
 
   let kf_at = 3;
@@ -1221,6 +1242,7 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1336,6 +1358,7 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1389,6 +1412,7 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1448,6 +1472,7 @@ fn output_frameno_scene_change_past_max_len_flash() {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1513,6 +1538,7 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
     0,
     false,
     10,
+    None,
   );
 
   // TODO: when we support more pyramid depths, this test will need tweaks.
@@ -1738,6 +1764,7 @@ fn lookahead_size_properly_bounded(
     0,
     true,
     rdo_lookahead,
+    None,
   );
 
   const LIMIT: usize = 60;
@@ -1994,4 +2021,134 @@ fn guess_frame_subtypes_assert() {
   ctx.flush();
 
   ctx.receive_packet().unwrap();
+}
+
+#[test]
+fn min_quantizer_bounds_correctly() {
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    255,
+    8,
+    ChromaSampling::Cs420,
+    25,
+    25,
+    25000,
+    true,
+    0,
+    true,
+    1,
+    Some(100),
+  );
+
+  let limit = 25;
+  send_frames(&mut ctx, limit, 0);
+  ctx.flush();
+
+  for i in 0..limit {
+    ctx.inner.encode_packet(i).unwrap();
+    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    if i == 0 {
+      assert_eq!(79, frame_data.fi.base_q_idx);
+    } else {
+      assert_eq!(103, frame_data.fi.base_q_idx);
+    }
+  }
+
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    255,
+    8,
+    ChromaSampling::Cs420,
+    25,
+    25,
+    2000,
+    true,
+    0,
+    true,
+    1,
+    Some(100),
+  );
+
+  let limit = 25;
+  send_frames(&mut ctx, limit, 0);
+  ctx.flush();
+
+  for i in 0..limit {
+    ctx.inner.encode_packet(i).unwrap();
+    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    if i == 0 {
+      assert!(frame_data.fi.base_q_idx > 79);
+    } else {
+      assert!(frame_data.fi.base_q_idx > 103);
+    }
+  }
+}
+
+#[test]
+fn max_quantizer_bounds_correctly() {
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    120,
+    8,
+    ChromaSampling::Cs420,
+    25,
+    25,
+    2000,
+    true,
+    0,
+    true,
+    1,
+    None,
+  );
+
+  let limit = 25;
+  send_frames(&mut ctx, limit, 0);
+  ctx.flush();
+
+  for i in 0..limit {
+    ctx.inner.encode_packet(i).unwrap();
+    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    if i == 0 {
+      assert_eq!(102, frame_data.fi.base_q_idx);
+    } else {
+      assert_eq!(123, frame_data.fi.base_q_idx);
+    }
+  }
+
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    120,
+    8,
+    ChromaSampling::Cs420,
+    25,
+    25,
+    20000,
+    true,
+    0,
+    true,
+    1,
+    None,
+  );
+
+  let limit = 25;
+  send_frames(&mut ctx, limit, 0);
+  ctx.flush();
+
+  for i in 0..limit {
+    ctx.inner.encode_packet(i).unwrap();
+    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    if i == 0 {
+      assert!(frame_data.fi.base_q_idx < 102);
+    } else {
+      assert!(frame_data.fi.base_q_idx < 123);
+    }
+  }
 }
