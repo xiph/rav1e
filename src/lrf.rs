@@ -1367,15 +1367,15 @@ impl RestorationState {
     let mut y_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift);
     let mut uv_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift);
 
+    let tiling = fi.sequence.tiling;
     // Right now we defer to tiling setup: don't choose an LRU size
     // large enough that a tile is not an integer number of LRUs
     // wide/high.
-    if fi.tiling.cols > 1 || fi.tiling.rows > 1 {
+    if tiling.cols > 1 || tiling.rows > 1 {
       // despite suggestions to the contrary, tiles can be
       // non-powers-of-2.
-      let trailing_h_zeros = fi.tiling.tile_width_sb.trailing_zeros() as usize;
-      let trailing_v_zeros =
-        fi.tiling.tile_height_sb.trailing_zeros() as usize;
+      let trailing_h_zeros = tiling.tile_width_sb.trailing_zeros() as usize;
+      let trailing_v_zeros = tiling.tile_height_sb.trailing_zeros() as usize;
       let tile_aligned_y_unit_size =
         1 << (y_sb_log2 + trailing_h_zeros.min(trailing_v_zeros));
       let tile_aligned_uv_h_unit_size = 1 << (uv_sb_h_log2 + trailing_h_zeros);

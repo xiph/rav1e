@@ -420,14 +420,15 @@ impl<T: Pixel> ContextInner<T> {
     let fi = self.build_frame_properties(output_frameno)?;
 
     if output_frameno == 0 && log_enabled!(Info) {
-      if fi.tiling.tile_count() == 1 {
+      let tiling = fi.sequence.tiling;
+      if tiling.tile_count() == 1 {
         info!("Using 1 tile");
       } else {
         info!(
           "Using {} tiles ({}x{})",
-          fi.tiling.tile_count(),
-          fi.tiling.cols,
-          fi.tiling.rows
+          tiling.tile_count(),
+          tiling.cols,
+          tiling.rows
         );
       }
     }
