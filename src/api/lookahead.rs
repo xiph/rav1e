@@ -180,7 +180,8 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
   fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) {
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-  fi.tiling
+  fi.sequence
+    .tiling
     .tile_iter_mut(fs, &mut blocks)
     .collect::<Vec<_>>()
     .into_par_iter()

@@ -665,7 +665,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // Can we use the uniform spacing tile syntax?  'Uniform spacing'
     // is a slight misnomer; it's more constrained than just a uniform
     // spacing.
-    let ti = &fi.tiling;
+    let ti = &fi.sequence.tiling;
 
     if fi.sb_width.align_power_of_two_and_shift(ti.tile_cols_log2)
       == ti.tile_width_sb

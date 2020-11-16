@@ -181,6 +181,7 @@ pub struct Sequence {
   // or 1.
   pub film_grain_params_present: bool,
   pub timing_info_present: bool,
+  pub tiling: TilingInfo,
 }
 
 impl Sequence {
@@ -214,8 +215,54 @@ impl Sequence {
     // Restoration filters are not useful for very small frame sizes,
     // so disable them in that case.
     let enable_restoration_filters = config.width >= 32 && config.height >= 32;
+    let use_128x128_superblock = false;
+
+    let frame_rate = config.frame_rate();
+    let sb_size_log2 = Self::sb_size_log2(use_128x128_superblock);
+
+    let mut tiling = TilingInfo::from_target_tiles(
+      sb_size_log2,
+      config.width,
+      config.height,
+      frame_rate,
+      TilingInfo::tile_log2(1, config.tile_cols).unwrap(),
+      TilingInfo::tile_log2(1, config.tile_rows).unwrap(),
+      config.chroma_sampling == ChromaSampling::Cs422,
+    );
+
+    if config.tiles > 0 {
+      let mut tile_rows_log2 = 0;
+      let mut tile_cols_log2 = 0;
+      while (tile_rows_log2 < tiling.max_tile_rows_log2)
+        || (tile_cols_log2 < tiling.max_tile_cols_log2)
+      {
+        tiling = TilingInfo::from_target_tiles(
+          sb_size_log2,
+          config.width,
+          config.height,
+          frame_rate,
+          tile_cols_log2,
+          tile_rows_log2,
+          config.chroma_sampling == ChromaSampling::Cs422,
+        );
+
+        if tiling.rows * tiling.cols >= config.tiles {
+          break;
+        };
+
+        if ((tiling.tile_height_sb >= tiling.tile_width_sb)
+          && (tiling.tile_rows_log2 < tiling.max_tile_rows_log2))
+          || (tile_cols_log2 >= tiling.max_tile_cols_log2)
+        {
+          tile_rows_log2 += 1;
+        } else {
+          tile_cols_log2 += 1;
+        }
+      }
+    }
 
     Sequence {
+      tiling,
       profile,
       num_bits_width: width_bits,
       num_bits_height: height_bits,
@@ -231,7 +278,7 @@ impl Sequence {
       frame_id_numbers_present_flag: false,
       frame_id_length: FRAME_ID_LENGTH,
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
-      use_128x128_superblock: false,
+      use_128x128_superblock,
       order_hint_bits_minus_1: 5,
       force_screen_content_tools: if config.still_picture { 2 } else { 0 },
       force_integer_mv: 2,
@@ -333,8 +380,8 @@ impl Sequence {
   }
 
   #[inline(always)]
-  pub const fn sb_size_log2(&self) -> usize {
-    6 + (self.use_128x128_superblock as usize)
+  const fn sb_size_log2(use_128x128_superblock: bool) -> usize {
+    6 + (use_128x128_superblock as usize)
   }
 }
 
@@ -486,7 +533,6 @@ pub struct FrameInvariants<T: Pixel> {
   pub sb_height: usize,
   pub w_in_b: usize,
   pub h_in_b: usize,
-  pub tiling: TilingInfo,
   pub input_frameno: u64,
   pub order_hint: u32,
   pub show_frame: bool,
@@ -608,48 +654,6 @@ impl<T: Pixel> FrameInvariants<T> {
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
-    let frame_rate = config.frame_rate();
-
-    let mut tiling = TilingInfo::from_target_tiles(
-      sequence.sb_size_log2(),
-      width,
-      height,
-      frame_rate,
-      TilingInfo::tile_log2(1, config.tile_cols).unwrap(),
-      TilingInfo::tile_log2(1, config.tile_rows).unwrap(),
-      sequence.chroma_sampling == ChromaSampling::Cs422,
-    );
-
-    if config.tiles > 0 {
-      let mut tile_rows_log2 = 0;
-      let mut tile_cols_log2 = 0;
-      while (tile_rows_log2 < tiling.max_tile_rows_log2)
-        || (tile_cols_log2 < tiling.max_tile_cols_log2)
-      {
-        tiling = TilingInfo::from_target_tiles(
-          sequence.sb_size_log2(),
-          width,
-          height,
-          frame_rate,
-          tile_cols_log2,
-          tile_rows_log2,
-          sequence.chroma_sampling == ChromaSampling::Cs422,
-        );
-
-        if tiling.rows * tiling.cols >= config.tiles {
-          break;
-        };
-
-        if ((tiling.tile_height_sb >= tiling.tile_width_sb)
-          && (tiling.tile_rows_log2 < tiling.max_tile_rows_log2))
-          || (tile_cols_log2 >= tiling.max_tile_cols_log2)
-        {
-          tile_rows_log2 += 1;
-        } else {
-          tile_cols_log2 += 1;
-        }
-      }
-    }
 
     // Width and height are padded to 8×8 block size.
     let w_in_imp_b = w_in_b / 2;
@@ -667,7 +671,6 @@ impl<T: Pixel> FrameInvariants<T> {
       sb_height: height.align_power_of_two_and_shift(6),
       w_in_b,
       h_in_b,
-      tiling,
       input_frameno: 0,
       order_hint: 0,
       show_frame: true,
@@ -982,7 +985,7 @@ impl<T: Pixel> FrameInvariants<T> {
 
   #[inline(always)]
   pub fn sb_size_log2(&self) -> usize {
-    self.sequence.sb_size_log2()
+    self.sequence.tiling.sb_size_log2
   }
 }
 
@@ -3000,7 +3003,7 @@ fn encode_tile_group<T: Pixel>(
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-  let ti = &fi.tiling;
+  let ti = &fi.sequence.tiling;
 
   let initial_cdf = get_initial_cdfcontext(fi);
   // dynamic allocation: once per frame
