@@ -169,8 +169,8 @@ fn build_asm_files() {
 }
 
 fn rustc_version_check() {
-  // This should match the version in .travis.yml
-  const REQUIRED_VERSION: &str = "1.36.0";
+  // This should match the version in the CI
+  const REQUIRED_VERSION: &str = "1.43.1";
   if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
     eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
     exit(1);
