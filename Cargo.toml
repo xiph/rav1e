@@ -154,6 +154,7 @@ opt-level = 1
 [profile.release]
 debug = true
 incremental = true
+lto = "thin"
 
 [profile.bench]
 incremental = true
