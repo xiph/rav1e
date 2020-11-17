@@ -116,7 +116,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
 
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
-  mut config: EncoderConfig, sequence: Sequence,
+  mut config: EncoderConfig, sequence: Arc<Sequence>,
 ) -> Box<[u32]> {
   config.low_latency = true;
   config.speed_settings.multiref = false;

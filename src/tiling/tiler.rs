@@ -253,6 +253,7 @@ pub mod test {
   use crate::lrf::*;
   use crate::mc::MotionVector;
   use crate::predict::PredictionMode;
+  use std::sync::Arc;
 
   #[test]
   fn test_tiling_info_from_tile_count() {
@@ -348,7 +349,7 @@ pub mod test {
     let mut sequence = Sequence::new(&config);
     // These tests are all assuming SB-sized LRUs, so set that.
     sequence.enable_large_lru = false;
-    FrameInvariants::new(config, sequence)
+    FrameInvariants::new(config, Arc::new(sequence))
   }
 
   #[test]

@@ -516,7 +516,7 @@ impl Default for SegmentationState {
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct FrameInvariants<T: Pixel> {
-  pub sequence: Sequence,
+  pub sequence: Arc<Sequence>,
   pub width: usize,
   pub height: usize,
   pub render_width: u32,
@@ -627,7 +627,7 @@ pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 
 impl<T: Pixel> FrameInvariants<T> {
   #[allow(clippy::erasing_op, clippy::identity_op)]
-  pub fn new(config: EncoderConfig, sequence: Sequence) -> Self {
+  pub fn new(config: EncoderConfig, sequence: Arc<Sequence>) -> Self {
     assert!(
       sequence.bit_depth <= mem::size_of::<T>() * 8,
       "bit depth cannot fit into u8"
@@ -654,7 +654,6 @@ impl<T: Pixel> FrameInvariants<T> {
     let h_in_imp_b = h_in_b / 2;
 
     Self {
-      sequence,
       width,
       height,
       render_width: render_width as u32,
@@ -754,11 +753,13 @@ impl<T: Pixel> FrameInvariants<T> {
       activity_mask: Default::default(),
       enable_segmentation: config.speed_settings.enable_segmentation,
       enable_inter_txfm_split: config.speed_settings.enable_inter_tx_split,
+      sequence,
     }
   }
 
   pub fn new_key_frame(
-    config: EncoderConfig, sequence: Sequence, gop_input_frameno_start: u64,
+    config: EncoderConfig, sequence: Arc<Sequence>,
+    gop_input_frameno_start: u64,
   ) -> Self {
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
