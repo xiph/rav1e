@@ -152,7 +152,7 @@ pub trait UncompressedHeader {
     &mut self, obu_type: ObuType, obu_extension: u32,
   ) -> io::Result<()>;
   fn write_metadata_obu(
-    &mut self, obu_meta_type: ObuMetaType, seq: Sequence,
+    &mut self, obu_meta_type: ObuMetaType, seq: &Sequence,
   ) -> io::Result<()>;
   fn write_sequence_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
@@ -218,7 +218,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   }
 
   fn write_metadata_obu(
-    &mut self, obu_meta_type: ObuMetaType, seq: Sequence,
+    &mut self, obu_meta_type: ObuMetaType, seq: &Sequence,
   ) -> io::Result<()> {
     // header
     self.write_obu_header(ObuType::OBU_METADATA, 0)?;
