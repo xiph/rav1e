@@ -517,6 +517,7 @@ impl Default for SegmentationState {
 #[derive(Debug, Clone)]
 pub struct FrameInvariants<T: Pixel> {
   pub sequence: Arc<Sequence>,
+  pub config: Arc<EncoderConfig>,
   pub width: usize,
   pub height: usize,
   pub render_width: u32,
@@ -563,7 +564,6 @@ pub struct FrameInvariants<T: Pixel> {
   pub cdef_y_strengths: [u8; 8],
   pub cdef_uv_strengths: [u8; 8],
   pub delta_q_present: bool,
-  pub config: EncoderConfig,
   pub ref_frames: [u8; INTER_REFS_PER_FRAME],
   pub ref_frame_sign_bias: [bool; INTER_REFS_PER_FRAME],
   pub rec_buffer: ReferenceFramesSet<T>,
@@ -627,7 +627,7 @@ pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 
 impl<T: Pixel> FrameInvariants<T> {
   #[allow(clippy::erasing_op, clippy::identity_op)]
-  pub fn new(config: EncoderConfig, sequence: Arc<Sequence>) -> Self {
+  pub fn new(config: Arc<EncoderConfig>, sequence: Arc<Sequence>) -> Self {
     assert!(
       sequence.bit_depth <= mem::size_of::<T>() * 8,
       "bit depth cannot fit into u8"
@@ -732,7 +732,6 @@ impl<T: Pixel> FrameInvariants<T> {
       idx_in_group_output: 0,
       pyramid_level: 0,
       enable_early_exit: true,
-      config,
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
       invalid: false,
@@ -754,16 +753,18 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_segmentation: config.speed_settings.enable_segmentation,
       enable_inter_txfm_split: config.speed_settings.enable_inter_tx_split,
       sequence,
+      config,
     }
   }
 
   pub fn new_key_frame(
-    config: EncoderConfig, sequence: Arc<Sequence>,
+    config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
     gop_input_frameno_start: u64,
   ) -> Self {
+    let tx_mode_select = config.speed_settings.rdo_tx_decision;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
-    fi.tx_mode_select = fi.config.speed_settings.rdo_tx_decision;
+    fi.tx_mode_select = tx_mode_select;
     fi
   }
 

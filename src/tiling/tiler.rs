@@ -339,13 +339,13 @@ pub mod test {
     // FrameInvariants aligns to the next multiple of 8, so using other values could make tests confusing
     assert!(width & 7 == 0);
     assert!(height & 7 == 0);
-    let config = EncoderConfig {
+    let config = Arc::new(EncoderConfig {
       width,
       height,
       bit_depth: 8,
       chroma_sampling,
       ..Default::default()
-    };
+    });
     let mut sequence = Sequence::new(&config);
     // These tests are all assuming SB-sized LRUs, so set that.
     sequence.enable_large_lru = false;

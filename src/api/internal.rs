@@ -247,7 +247,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
   keyframe_detector: SceneChangeDetector,
-  pub(crate) config: EncoderConfig,
+  pub(crate) config: Arc<EncoderConfig>,
   seq: Arc<Sequence>,
   pub(crate) rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
@@ -292,7 +292,7 @@ impl<T: Pixel> ContextInner<T> {
         seq.clone(),
         true,
       ),
-      config: *enc,
+      config: Arc::new(*enc),
       seq,
       rc_state: RCState::new(
         enc.width as i32,
@@ -553,7 +553,7 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno - self.gop_output_frameno_start[&output_frameno];
     if output_frameno_in_gop == 0 {
       let fi = FrameInvariants::new_key_frame(
-        self.config,
+        self.config.clone(),
         self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
       );
