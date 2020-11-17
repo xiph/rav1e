@@ -385,12 +385,6 @@ impl Sequence {
   }
 }
 
-impl Default for Sequence {
-  fn default() -> Self {
-    Sequence::new(&EncoderConfig::default())
-  }
-}
-
 #[derive(Debug, Clone)]
 pub struct FrameState<T: Pixel> {
   pub sb_size_log2: usize,
