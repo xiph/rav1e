@@ -248,7 +248,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
   keyframe_detector: SceneChangeDetector,
   pub(crate) config: EncoderConfig,
-  seq: Sequence,
+  seq: Arc<Sequence>,
   pub(crate) rc_state: RCState,
   maybe_prev_log_base_q: Option<i64>,
   /// The next `input_frameno` to be processed by lookahead.
@@ -269,7 +269,7 @@ impl<T: Pixel> ContextInner<T> {
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
-    let seq = Sequence::new(enc);
+    let seq = Arc::new(Sequence::new(enc));
     let inter_cfg = InterConfig::new(enc);
     let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
     ContextInner {
@@ -289,7 +289,7 @@ impl<T: Pixel> ContextInner<T> {
         *enc,
         CpuFeatureLevel::default(),
         lookahead_distance,
-        seq,
+        seq.clone(),
         true,
       ),
       config: *enc,
@@ -554,7 +554,7 @@ impl<T: Pixel> ContextInner<T> {
     if output_frameno_in_gop == 0 {
       let fi = FrameInvariants::new_key_frame(
         self.config,
-        self.seq,
+        self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
       );
       assert!(!fi.invalid);

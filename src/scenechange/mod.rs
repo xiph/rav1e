@@ -34,13 +34,13 @@ pub struct SceneChangeDetector {
   cpu_feature_level: CpuFeatureLevel,
   encoder_config: EncoderConfig,
   lookahead_distance: usize,
-  sequence: Sequence,
+  sequence: Arc<Sequence>,
 }
 
 impl SceneChangeDetector {
   pub fn new(
     encoder_config: EncoderConfig, cpu_feature_level: CpuFeatureLevel,
-    lookahead_distance: usize, sequence: Sequence,
+    lookahead_distance: usize, sequence: Arc<Sequence>,
     exclude_scene_flashes: bool,
   ) -> Self {
     // This implementation is based on a Python implementation at
@@ -256,7 +256,7 @@ impl SceneChangeDetector {
         frame1,
         self.bit_depth,
         self.encoder_config,
-        self.sequence,
+        self.sequence.clone(),
       );
       let inter_cost = inter_costs.iter().map(|&cost| cost as u64).sum::<u64>()
         as f64
