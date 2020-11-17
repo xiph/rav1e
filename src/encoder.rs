@@ -981,12 +981,6 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 }
 
-impl<T: Pixel> Default for FrameInvariants<T> {
-  fn default() -> Self {
-    FrameInvariants::new(EncoderConfig::default(), Sequence::default())
-  }
-}
-
 impl<T: Pixel> fmt::Display for FrameInvariants<T> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "Input Frame {} - {}", self.input_frameno, self.frame_type)
