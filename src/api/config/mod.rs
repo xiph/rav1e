@@ -242,7 +242,7 @@ impl Config {
   /// [`Context`]: struct.Context.html
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     let inner = self.new_inner()?;
-    let config = inner.config;
+    let config = *inner.config;
     let pool = if let Some(ref p) = self.pool {
       p.clone()
     } else {
