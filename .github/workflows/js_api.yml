@@ -43,7 +43,7 @@ jobs:
                   mkdir -p $HOME/.local/bin
                   curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
                   mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
-                  echo "::add-path::$HOME/.local/bin"
+                  echo "$HOME/.local/bin"  >> $GITHUB_PATH
 
             - name: Set up Rust
               uses: actions-rs/toolchain@v1

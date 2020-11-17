@@ -100,7 +100,7 @@ jobs:
     - name: Set no-asm-tests env vars
       if: matrix.conf == 'no-asm-tests'
       run: |
-        echo "::set-env name=RAV1E_CPU_TARGET::rust"
+        echo "name=RAV1E_CPU_TARGET::rust" >> $GITHUB_ENV
     - name: Install sccache
       env:
         LINK: https://github.com/mozilla/sccache/releases/download
@@ -110,7 +110,7 @@ jobs:
         mkdir -p $HOME/.local/bin
         curl -L "$LINK/$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
         mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
-        echo "::add-path::$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
     - name: Add nasm
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
@@ -407,7 +407,7 @@ jobs:
         $SCCACHE_FILE = "sccache-0.2.12-x86_64-pc-windows-msvc"
         curl -LO "$LINK/$SCCACHE_FILE.tar.gz"
         tar xzf "$SCCACHE_FILE.tar.gz"
-        echo "::add-path::$Env:GITHUB_WORKSPACE/$SCCACHE_FILE"
+        echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     - name: Install nasm
       run: |
         $NASM_VERSION="2.15.05"
@@ -415,13 +415,13 @@ jobs:
         $NASM_FILE = "nasm-$NASM_VERSION-win64"
         curl --ssl-no-revoke -LO "$LINK/$NASM_FILE.zip"
         7z e -y "$NASM_FILE.zip" -o"C:\nasm"
-        echo "::add-path::C:\nasm"
+        echo "C:\nasm"  | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     - name: Set MSVC x86_64 linker path
       run: |
         $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
         $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
         $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
-        echo "::add-path::$LinkPath"
+        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
     - name: Install ${{ matrix.toolchain }}
       uses: actions-rs/toolchain@v1
       with:

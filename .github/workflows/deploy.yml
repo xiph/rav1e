@@ -37,7 +37,7 @@ jobs:
         $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
         curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
         7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
-        echo "::add-path::C:\nasm"
+        echo "C:\nasm" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Install cargo-c
       run: |
@@ -50,7 +50,7 @@ jobs:
       if: matrix.conf == 'msvc'
       run: |
         $VsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        echo "::add-path::$VsPath;C:\nasm"
+        echo "$VsPath;C:\nasm" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Set MSVC x86_64 linker path
       if: matrix.conf == 'msvc'
@@ -58,7 +58,7 @@ jobs:
         $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
         $LinkPath = vswhere -latest -products * -find "$LinkGlob" |
                     Select-Object -Last 1
-        echo "::add-path::$LinkPath"
+        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Install stable
       uses: actions-rs/toolchain@v1
