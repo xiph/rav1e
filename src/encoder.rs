@@ -2024,7 +2024,7 @@ pub fn write_tx_blocks<T: Pixel>(
 
   if !do_chroma
     || luma_only
-    || fi.config.chroma_sampling == ChromaSampling::Cs400
+    || fi.sequence.chroma_sampling == ChromaSampling::Cs400
   {
     return (partition_has_coeff, tx_dist);
   };
@@ -2187,7 +2187,7 @@ pub fn write_tx_tree<T: Pixel>(
 
   if !has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
     || luma_only
-    || fi.config.chroma_sampling == ChromaSampling::Cs400
+    || fi.sequence.chroma_sampling == ChromaSampling::Cs400
   {
     return (partition_has_coeff, tx_dist);
   };
@@ -2372,7 +2372,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
     if fi.frame_type.has_inter() &&
-      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
       bsize <= BlockSize::BLOCK_8X8 {
       false
     } else {
@@ -2648,7 +2648,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
     if fi.frame_type.has_inter() &&
-      fi.config.chroma_sampling != ChromaSampling::Cs420 &&
+      fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
       bsize <= BlockSize::BLOCK_8X8 {
       false
     } else {

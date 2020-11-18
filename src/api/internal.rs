@@ -763,7 +763,7 @@ impl<T: Pixel> ContextInner<T> {
       .fi
       .lookahead_intra_costs = estimate_intra_costs(
       &*self.frame_q[&fi.input_frameno].as_ref().unwrap(),
-      fi.config.bit_depth,
+      fi.sequence.bit_depth,
       fi.cpu_feature_level,
     );
   }
