@@ -283,8 +283,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(fi.sequence.timing_info_present)?; // timing info present
 
       if fi.sequence.timing_info_present {
-        self.write(32, fi.config.time_base.num)?;
-        self.write(32, fi.config.time_base.den)?;
+        self.write(32, fi.sequence.time_base.num)?;
+        self.write(32, fi.sequence.time_base.den)?;
 
         self.write_bit(true)?; // equal picture interval
         self.write_bit(true)?; // zero interval

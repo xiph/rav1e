@@ -182,6 +182,7 @@ pub struct Sequence {
   pub film_grain_params_present: bool,
   pub timing_info_present: bool,
   pub tiling: TilingInfo,
+  pub time_base: Rational,
 }
 
 impl Sequence {
@@ -307,6 +308,7 @@ impl Sequence {
       tier,
       film_grain_params_present: false,
       timing_info_present: config.enable_timing_info,
+      time_base: config.time_base,
     }
   }
 
