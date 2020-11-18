@@ -1216,10 +1216,7 @@ pub fn encode_tx_block<T: Pixel>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: Aligned<[i16; 64 * 64]> =
-    Aligned::new([0i16; 64 * 64]);
-  // TODO(yushin): When tx size != visible size, instead of init whole residual block as zeros everytime,
-  // consider doing so only pixels outside of visible frame.
+  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
     Aligned::uninitialized();
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
@@ -1250,6 +1247,10 @@ pub fn encode_tx_block<T: Pixel>(
       visible_tx_w,
       visible_tx_h,
     );
+  }
+  let visible_area = visible_tx_w * visible_tx_h;
+  for a in residual[visible_area..].iter_mut() {
+    *a = 0;
   }
 
   forward_transform(
