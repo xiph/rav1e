@@ -194,6 +194,9 @@ mod me;
 mod rate;
 mod recon_intra;
 mod scan_order;
+#[cfg(feature = "scenechange")]
+pub mod scenechange;
+#[cfg(not(feature = "scenechange"))]
 mod scenechange;
 mod segmentation;
 mod stats;
@@ -215,7 +218,7 @@ pub use crate::util::{CastFromPrimitive, Pixel, PixelType};
 /// Commonly used types and traits.
 pub mod prelude {
   pub use crate::api::*;
-  pub use crate::encoder::Tune;
+  pub use crate::encoder::{Sequence, Tune};
   pub use crate::frame::{
     Frame, FrameParameters, FrameTypeOverride, Plane, PlaneConfig,
   };
@@ -243,6 +246,7 @@ pub mod config {
     Config, EncoderConfig, InvalidConfig, PredictionModesSetting,
     RateControlConfig, RateControlError, RateControlSummary, SpeedSettings,
   };
+  pub use crate::cpu_features::CpuFeatureLevel;
 }
 
 /// Version information

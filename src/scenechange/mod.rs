@@ -18,11 +18,13 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 /// Runs keyframe detection on frames from the lookahead queue.
-pub(crate) struct SceneChangeDetector {
+pub struct SceneChangeDetector {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
   threshold: u64,
   /// Fast scene cut detection mode, uses simple SAD instead of encoder cost estimates.
   fast_mode: bool,
+  /// Determine whether or not short scene flashes should be excluded
+  exclude_scene_flashes: bool,
   /// Frames that cannot be marked as keyframes due to the algorithm excluding them.
   /// Storing the frame numbers allows us to avoid looking back more than one frame.
   excluded_frames: BTreeSet<u64>,
@@ -39,6 +41,7 @@ impl SceneChangeDetector {
   pub fn new(
     encoder_config: EncoderConfig, cpu_feature_level: CpuFeatureLevel,
     lookahead_distance: usize, sequence: Sequence,
+    exclude_scene_flashes: bool,
   ) -> Self {
     // This implementation is based on a Python implementation at
     // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
@@ -59,6 +62,7 @@ impl SceneChangeDetector {
     Self {
       threshold: BASE_THRESHOLD * bit_depth as u64 / 8,
       fast_mode,
+      exclude_scene_flashes,
       excluded_frames: BTreeSet::new(),
       bit_depth,
       cpu_feature_level,
@@ -96,7 +100,9 @@ impl SceneChangeDetector {
       return false;
     }
 
-    self.exclude_scene_flashes(frame_set, input_frameno, previous_keyframe);
+    if self.exclude_scene_flashes {
+      self.exclude_scene_flashes(frame_set, input_frameno, previous_keyframe);
+    }
 
     self.is_key_frame(
       frame_set[0].clone(),
