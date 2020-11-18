@@ -290,6 +290,7 @@ impl<T: Pixel> ContextInner<T> {
         CpuFeatureLevel::default(),
         lookahead_distance,
         seq,
+        true,
       ),
       config: *enc,
       seq,

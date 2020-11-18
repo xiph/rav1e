@@ -45,6 +45,7 @@ bench = []
 check_asm = []
 capi = []
 tracing = ["rust_hawktracer"]
+scenechange = []
 serialize = ["serde", "toml", "v_frame/serialize", "arrayvec/serde"]
 wasm = ["wasm-bindgen"]
 
