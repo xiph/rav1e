@@ -272,6 +272,21 @@ impl<T: Pixel> ContextInner<T> {
     let seq = Arc::new(Sequence::new(enc));
     let inter_cfg = InterConfig::new(enc);
     let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
+
+    if log_enabled!(Info) {
+      let tiling = seq.tiling;
+      if tiling.tile_count() == 1 {
+        info!("Using 1 tile");
+      } else {
+        info!(
+          "Using {} tiles ({}x{})",
+          tiling.tile_count(),
+          tiling.cols,
+          tiling.rows
+        );
+      }
+    }
+
     ContextInner {
       frame_count: 0,
       limit: None,
@@ -419,20 +434,6 @@ impl<T: Pixel> ContextInner<T> {
     &mut self, output_frameno: u64,
   ) -> Result<(), EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
-
-    if output_frameno == 0 && log_enabled!(Info) {
-      let tiling = fi.sequence.tiling;
-      if tiling.tile_count() == 1 {
-        info!("Using 1 tile");
-      } else {
-        info!(
-          "Using {} tiles ({}x{})",
-          tiling.tile_count(),
-          tiling.cols,
-          tiling.rows
-        );
-      }
-    }
 
     let frame =
       self.frame_q.get(&fi.input_frameno).as_ref().unwrap().as_ref().unwrap();
