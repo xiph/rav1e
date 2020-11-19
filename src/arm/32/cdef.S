@@ -190,11 +190,9 @@ function cdef_padding\w\()_8bpc_neon, export=1
         beq             1f
         // CDEF_HAVE_LEFT+CDEF_HAVE_RIGHT
 0:
-        ldrh            r12, [r3], #2
-        vldr            \n1, [r1]
-        vdup.16         d2,  r12
+        vld1.16         {d2[]}, [r3, :16]!
         ldrh            r12, [r1, #\w]
-        add             r1,  r1,  r2
+        load_n_incr     d0,  r1,  r2,  \w
         subs            r5,  r5,  #1
         vmov.16         d2[1], r12
         vmovl.u8        q0,  d0
@@ -207,9 +205,8 @@ function cdef_padding\w\()_8bpc_neon, export=1
         b               3f
 1:
         // CDEF_HAVE_LEFT+!CDEF_HAVE_RIGHT
-        ldrh            r12, [r3], #2
+        vld1.16         {d2[]}, [r3, :16]!
         load_n_incr     d0,  r1,  r2,  \w
-        vdup.16         d2,  r12
         subs            r5,  r5,  #1
         vmovl.u8        q0,  d0
         vmovl.u8        q1,  d2
