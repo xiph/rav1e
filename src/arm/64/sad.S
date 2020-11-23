@@ -77,10 +77,9 @@ sad_rect 4, 16
 .macro horizontal_add_16x8
         uaddlp          v0.4s,   v0.8h
         uaddlp          v0.2d,   v0.4s
-        dup             d1,  v0.d[0]
-        dup             d0,  v0.d[1]
+        ext             v1.16b,  v0.16b,  v0.16b,  #8
         add             v0.2s,   v1.2s,   v0.2s
-        umov            w0,  v0.s[0]
+        fmov            w0,  s0
         ret
 .endm
 
@@ -270,16 +269,12 @@ function sad16x16_neon, export=1
         mov             v3.16b,  v0.16b
 L(sad_w16):
         ldr             q1,  [x0]
-        subs            w4,  w4,  #1
         ldr             q2,  [x2]
         add             x0,  x0,  x1
-        dup             d4,  v1.d[0]
         add             x2,  x2,  x3
-        dup             d1,  v1.d[1]
-        dup             d5,  v2.d[0]
-        dup             d2,  v2.d[1]
-        uabal           v3.8h,   v4.8b,   v5.8b
+        subs            w4,  w4,  #1
         uabal           v0.8h,   v1.8b,   v2.8b
+        uabal2          v3.8h,   v1.16b,  v2.16b
         bne             L(sad_w16)
         add             v0.8h,   v0.8h,   v3.8h
         horizontal_add_16x8
