@@ -3234,10 +3234,9 @@ function emu_edge_8bpc_neon, export=1
 .macro v_loop need_left, need_right
 0:
 .if \need_left
-        vld1.8          {d0[]}, [r8]
+        vld1.8          {d0[], d1[]}, [r8]
         mov             r12, r6                // out = dst
         mov             r3,  r4
-        vmov            d1,  d0
 1:
         subs            r3,  r3,  #16
         vst1.8          {q0}, [r12, :128]!
@@ -3259,10 +3258,9 @@ function emu_edge_8bpc_neon, export=1
         add             r3,  r8,  r2           // in + center_w
         sub             r3,  r3,  #1           // in + center_w - 1
         add             r12, r6,  r4           // dst + left_ext
-        vld1.8          {d0[]}, [r3]
+        vld1.8          {d0[], d1[]}, [r3]
         add             r12, r12, r2           // out = dst + left_ext + center_w
         mov             r3,  r11
-        vmov            d1,  d0
 1:
         subs            r3,  r3,  #16
         vst1.8          {q0}, [r12]!
