@@ -694,8 +694,8 @@ L(blend_h_tbl):
         vmlal.u8        q14, d3,  d7
         vrshrn.i16      d2,  q15, #6
         vrshrn.i16      d3,  q14, #6
-        vst1.u8         {q0,  q1},  [r0,  :128]!
         subs            r12, r12, #32
+        vst1.u8         {q0,  q1},  [r0,  :128]!
         bgt             32b
         add             r0,  r0,  r1
         subs            r4,  r4,  #1
