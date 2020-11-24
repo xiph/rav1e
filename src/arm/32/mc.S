@@ -71,8 +71,7 @@
 .macro bidir_fn type
 function \type\()_8bpc_neon, export=1
         push            {r4-r6,lr}
-        ldr             r4, [sp, #16]
-        ldr             r5, [sp, #20]
+        ldrd            r4,  r5,  [sp, #16]
         clz             r4,  r4
 .ifnc \type, avg
         ldr             lr, [sp, #24]
@@ -220,10 +219,8 @@ bidir_fn mask
 .macro w_mask_fn type
 function w_mask_\type\()_8bpc_neon, export=1
         push            {r4-r9,lr}
-        ldr             r4,  [sp, #28]
-        ldr             r5,  [sp, #32]
-        ldr             r6,  [sp, #36]
-        ldr             r7,  [sp, #40]
+        ldrd            r4,  r5,  [sp, #28]
+        ldrd            r6,  r7,  [sp, #36]
         clz             r8,  r4
         adr             r9,  L(w_mask_\type\()_tbl)
         sub             r8,  r8,  #24
@@ -455,8 +452,7 @@ w_mask_fn 420
 
 function blend_8bpc_neon, export=1
         push            {r4-r5,lr}
-        ldr             r4,  [sp, #12]
-        ldr             r5,  [sp, #16]
+        ldrd            r4,  r5,  [sp, #12]
         clz             lr,  r3
         adr             r3,  L(blend_tbl)
         sub             lr,  lr,  #26

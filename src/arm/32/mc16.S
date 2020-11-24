@@ -123,8 +123,7 @@
 .macro bidir_fn type, bdmax
 function \type\()_16bpc_neon, export=1
         push            {r4-r7,lr}
-        ldr             r4,  [sp, #20]
-        ldr             r5,  [sp, #24]
+        ldrd            r4,  r5,  [sp, #20]
         ldr             r6,  [sp, #28]
         clz             r4,  r4
 .ifnc \type, avg
