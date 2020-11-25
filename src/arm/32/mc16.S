@@ -273,6 +273,285 @@ bidir_fn w_avg, r7
 bidir_fn mask, r7
 
 
+.macro w_mask_fn type
+function w_mask_\type\()_16bpc_neon, export=1
+        push            {r4-r10,lr}
+        vpush           {q4-q7}
+        ldrd            r4,  r5,  [sp, #96]
+        ldrd            r6,  r7,  [sp, #104]
+        ldr             r8,  [sp, #112]
+        clz             r9,  r4
+        adr             lr,  L(w_mask_\type\()_tbl)
+        vdup.16         q15, r8       // bitdepth_max
+        sub             r9,  r9,  #24
+        clz             r8,  r8       // clz(bitdepth_max)
+        ldr             r9,  [lr,  r9,  lsl #2]
+        add             r9,  lr,  r9
+        sub             r8,  r8,  #12 // sh = intermediate_bits + 6 = clz(bitdepth_max) - 12
+        mov             r10, #PREP_BIAS*64
+        neg             r8,  r8       // -sh
+        movw            r12, #27615   // (64 + 1 - 38)<<mask_sh - 1 - mask_rnd
+        vdup.32         q14, r8       // -sh
+        vdup.16         q0,  r12
+.if \type == 444
+        vmov.i8         q1,  #64
+.elseif \type == 422
+        vdup.8          d4,  r7
+        vmov.i8         d2,  #129
+        vsub.i16        d2,  d2,  d4
+.elseif \type == 420
+        vdup.16         q2,  r7
+        vmov.i16        q1,  #0x100
+        vsub.i16        q1,  q1,  q2
+.endif
+        add             r12, r0,  r1
+        lsl             r1,  r1,  #1
+        bx              r9
+
+        .align 2
+L(w_mask_\type\()_tbl):
+        .word 1280f - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+        .word 640f  - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+        .word 320f  - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+        .word 160f  - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+        .word 8f    - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+        .word 4f    - L(w_mask_\type\()_tbl) + CONFIG_THUMB
+
+4:
+        vld1.16         {q2, q3}, [r2, :128]! // tmp1 (four rows at once)
+        vld1.16         {q4, q5}, [r3, :128]! // tmp2 (four rows at once)
+        subs            r5,  r5,  #4
+        vdup.32         q13, r10       // PREP_BIAS*64
+        vabd.s16        q6,  q2,  q4   // abs(tmp1 - tmp2)
+        vabd.s16        q7,  q3,  q5
+        vsubl.s16       q8,  d8,  d4   // tmp2 - tmp1 (requires 17 bit)
+        vsubl.s16       q9,  d9,  d5
+        vsubl.s16       q10, d10, d6
+        vsubl.s16       q11, d11, d7
+        vqsub.u16       q6,  q0,  q6   // 27615 - abs()
+        vqsub.u16       q7,  q0,  q7
+        vshll.s16       q5,  d7,  #6   // tmp1 << 6
+        vshll.s16       q4,  d6,  #6
+        vshll.s16       q3,  d5,  #6
+        vshll.s16       q2,  d4,  #6
+        vshr.u16        q6,  q6,  #10  // 64-m = (27615 - abs()) >> mask_sh
+        vshr.u16        q7,  q7,  #10
+        vadd.i32        q2,  q2,  q13  // += PREP_BIAS*64
+        vadd.i32        q3,  q3,  q13
+        vadd.i32        q4,  q4,  q13
+        vadd.i32        q5,  q5,  q13
+        vmovl.u16       q12, d12
+        vmovl.u16       q13, d13
+        vmla.i32        q2,  q8,  q12  // (tmp2-tmp1)*(64-m)
+        vmovl.u16       q12, d14
+        vmla.i32        q3,  q9,  q13
+        vmovl.u16       q13, d15
+        vmla.i32        q4,  q10, q12
+        vmla.i32        q5,  q11, q13
+        vrshl.s32       q2,  q2,  q14  // (tmp1<<6 + (tmp2-tmp1)*(64-m) + (1 << (sh-1)) + PREP_BIAS*64) >> sh
+        vrshl.s32       q3,  q3,  q14
+        vrshl.s32       q4,  q4,  q14
+        vrshl.s32       q5,  q5,  q14
+        vqmovun.s32     d4,  q2        // iclip_pixel
+        vqmovun.s32     d5,  q3
+        vqmovun.s32     d6,  q4
+        vqmovun.s32     d7,  q5
+        vmin.u16        q2,  q2,  q15  // iclip_pixel
+        vmin.u16        q3,  q3,  q15  // iclip_pixel
+.if \type == 444
+        vmovn.i16       d12, q6        // 64 - m
+        vmovn.i16       d13, q7
+        vsub.i16        q6,  q1,  q6   // m
+        vst1.8          {q6}, [r6, :128]!
+.elseif \type == 422
+        vpadd.i16       d12, d12, d13  // (64 - m) + (64 - n) (column wise addition)
+        vpadd.i16       d13, d14, d15
+        vmovn.i16       d12, q6
+        vhsub.u8        d12, d2,  d12  // ((129 - sign) - ((64 - m) + (64 - n)) >> 1
+        vst1.8          {d12}, [r6, :64]!
+.elseif \type == 420
+        vadd.i16        d12, d12, d13  // (64 - my1) + (64 - my2) (row wise addition)
+        vadd.i16        d13, d14, d15
+        vpadd.i16       d12, d12, d13  // (128 - m) + (128 - n) (column wise addition)
+        vsub.i16        d12, d2,  d12  // (256 - sign) - ((128 - m) + (128 - n))
+        vrshrn.i16      d12, q6,  #2   // ((256 - sign) - ((128 - m) + (128 - n)) + 2) >> 2
+        vst1.32         {d12[0]}, [r6, :32]!
+.endif
+        vst1.16         {d4}, [r0,  :64], r1
+        vst1.16         {d5}, [r12, :64], r1
+        vst1.16         {d6}, [r0,  :64], r1
+        vst1.16         {d7}, [r12, :64], r1
+        bgt             4b
+        vpop            {q4-q7}
+        pop             {r4-r10,pc}
+8:
+        vld1.16         {q2, q3}, [r2, :128]! // tmp1
+        vld1.16         {q4, q5}, [r3, :128]! // tmp2
+        subs            r5,  r5,  #2
+        vdup.32         q13, r10       // PREP_BIAS*64
+        vabd.s16        q6,  q2,  q4   // abs(tmp1 - tmp2)
+        vabd.s16        q7,  q3,  q5
+        vsubl.s16       q8,  d8,  d4   // tmp2 - tmp1 (requires 17 bit)
+        vsubl.s16       q9,  d9,  d5
+        vsubl.s16       q10, d10, d6
+        vsubl.s16       q11, d11, d7
+        vqsub.u16       q6,  q0,  q6   // 27615 - abs()
+        vqsub.u16       q7,  q0,  q7
+        vshll.s16       q5,  d7,  #6   // tmp1 << 6
+        vshll.s16       q4,  d6,  #6
+        vshll.s16       q3,  d5,  #6
+        vshll.s16       q2,  d4,  #6
+        vshr.u16        q6,  q6,  #10  // 64-m = (27615 - abs()) >> mask_sh
+        vshr.u16        q7,  q7,  #10
+        vadd.i32        q2,  q2,  q13  // += PREP_BIAS*64
+        vadd.i32        q3,  q3,  q13
+        vadd.i32        q4,  q4,  q13
+        vadd.i32        q5,  q5,  q13
+        vmovl.u16       q12, d12
+        vmovl.u16       q13, d13
+        vmla.i32        q2,  q8,  q12  // (tmp2-tmp1)*(64-m)
+        vmovl.u16       q12, d14
+        vmla.i32        q3,  q9,  q13
+        vmovl.u16       q13, d15
+        vmla.i32        q4,  q10, q12
+        vmla.i32        q5,  q11, q13
+        vrshl.s32       q2,  q2,  q14  // (tmp1<<6 + (tmp2-tmp1)*(64-m) + (1 << (sh-1)) + PREP_BIAS*64) >> sh
+        vrshl.s32       q3,  q3,  q14
+        vrshl.s32       q4,  q4,  q14
+        vrshl.s32       q5,  q5,  q14
+        vqmovun.s32     d4,  q2        // iclip_pixel
+        vqmovun.s32     d5,  q3
+        vqmovun.s32     d6,  q4
+        vqmovun.s32     d7,  q5
+        vmin.u16        q2,  q2,  q15  // iclip_pixel
+        vmin.u16        q3,  q3,  q15  // iclip_pixel
+.if \type == 444
+        vmovn.i16       d12, q6        // 64 - m
+        vmovn.i16       d13, q7
+        vsub.i16        q6,  q1,  q6   // m
+        vst1.8          {q6}, [r6, :128]!
+.elseif \type == 422
+        vpadd.i16       d12, d12, d13  // (64 - m) + (64 - n) (column wise addition)
+        vpadd.i16       d13, d14, d15
+        vmovn.i16       d12, q6
+        vhsub.u8        d12, d2,  d12  // ((129 - sign) - ((64 - m) + (64 - n)) >> 1
+        vst1.8          {d12}, [r6, :64]!
+.elseif \type == 420
+        vadd.i16        q6,  q6,  q7   // (64 - my1) + (64 - my2) (row wise addition)
+        vpadd.i16       d12, d12, d13  // (128 - m) + (128 - n) (column wise addition)
+        vsub.i16        d12, d2,  d12  // (256 - sign) - ((128 - m) + (128 - n))
+        vrshrn.i16      d12, q6,  #2   // ((256 - sign) - ((128 - m) + (128 - n)) + 2) >> 2
+        vst1.32         {d12[0]}, [r6, :32]!
+.endif
+        vst1.16         {q2}, [r0,  :128], r1
+        vst1.16         {q3}, [r12, :128], r1
+        bgt             8b
+        vpop            {q4-q7}
+        pop             {r4-r10,pc}
+1280:
+640:
+320:
+160:
+        sub             r1,  r1,  r4,  lsl #1
+.if \type == 444
+        add             lr,  r6,  r4
+.elseif \type == 422
+        add             lr,  r6,  r4,  lsr #1
+.endif
+        add             r7,  r2,  r4,  lsl #1
+        add             r9,  r3,  r4,  lsl #1
+161:
+        mov             r8,  r4
+16:
+        vld1.16         {q2}, [r2, :128]! // tmp1
+        vld1.16         {q4}, [r3, :128]! // tmp2
+        vld1.16         {q3}, [r7, :128]!
+        vld1.16         {q5}, [r9, :128]!
+        subs            r8,  r8,  #8
+        vdup.32         q13, r10       // PREP_BIAS*64
+        vabd.s16        q6,  q2,  q4   // abs(tmp1 - tmp2)
+        vabd.s16        q7,  q3,  q5
+        vsubl.s16       q8,  d8,  d4   // tmp2 - tmp1 (requires 17 bit)
+        vsubl.s16       q9,  d9,  d5
+        vsubl.s16       q10, d10, d6
+        vsubl.s16       q11, d11, d7
+        vqsub.u16       q6,  q0,  q6   // 27615 - abs()
+        vqsub.u16       q7,  q0,  q7
+        vshll.s16       q5,  d7,  #6   // tmp1 << 6
+        vshll.s16       q4,  d6,  #6
+        vshll.s16       q3,  d5,  #6
+        vshll.s16       q2,  d4,  #6
+        vshr.u16        q6,  q6,  #10  // 64-m = (27615 - abs()) >> mask_sh
+        vshr.u16        q7,  q7,  #10
+        vadd.i32        q2,  q2,  q13  // += PREP_BIAS*64
+        vadd.i32        q3,  q3,  q13
+        vadd.i32        q4,  q4,  q13
+        vadd.i32        q5,  q5,  q13
+        vmovl.u16       q12, d12
+        vmovl.u16       q13, d13
+        vmla.i32        q2,  q8,  q12  // (tmp2-tmp1)*(64-m)
+        vmovl.u16       q12, d14
+        vmla.i32        q3,  q9,  q13
+        vmovl.u16       q13, d15
+        vmla.i32        q4,  q10, q12
+        vmla.i32        q5,  q11, q13
+        vrshl.s32       q2,  q2,  q14  // (tmp1<<6 + (tmp2-tmp1)*(64-m) + (1 << (sh-1)) + PREP_BIAS*64) >> sh
+        vrshl.s32       q3,  q3,  q14
+        vrshl.s32       q4,  q4,  q14
+        vrshl.s32       q5,  q5,  q14
+        vqmovun.s32     d4,  q2        // iclip_pixel
+        vqmovun.s32     d5,  q3
+        vqmovun.s32     d6,  q4
+        vqmovun.s32     d7,  q5
+        vmin.u16        q2,  q2,  q15  // iclip_pixel
+        vmin.u16        q3,  q3,  q15  // iclip_pixel
+.if \type == 444
+        vmovn.i16       d12, q6        // 64 - m
+        vmovn.i16       d13, q7
+        vsub.i16        q6,  q1,  q6   // m
+        vst1.8          {d12}, [r6, :64]!
+        vst1.8          {d13}, [lr, :64]!
+.elseif \type == 422
+        vpadd.i16       d12, d12, d13  // (64 - m) + (64 - n) (column wise addition)
+        vpadd.i16       d13, d14, d15
+        vmovn.i16       d12, q6
+        vhsub.u8        d12, d2,  d12  // ((129 - sign) - ((64 - m) + (64 - n)) >> 1
+        vst1.32         {d12[0]}, [r6, :32]!
+        vst1.32         {d12[1]}, [lr, :32]!
+.elseif \type == 420
+        vadd.i16        q6,  q6,  q7   // (64 - my1) + (64 - my2) (row wise addition)
+        vpadd.i16       d12, d12, d13  // (128 - m) + (128 - n) (column wise addition)
+        vsub.i16        d12, d2,  d12  // (256 - sign) - ((128 - m) + (128 - n))
+        vrshrn.i16      d12, q6,  #2   // ((256 - sign) - ((128 - m) + (128 - n)) + 2) >> 2
+        vst1.32         {d12[0]}, [r6, :32]!
+.endif
+        vst1.16         {q2}, [r0,  :128]!
+        vst1.16         {q3}, [r12, :128]!
+        bgt             16b
+        subs            r5,  r5,  #2
+        add             r2,  r2,  r4,  lsl #1
+        add             r3,  r3,  r4,  lsl #1
+        add             r7,  r7,  r4,  lsl #1
+        add             r9,  r9,  r4,  lsl #1
+.if \type == 444
+        add             r6,  r6,  r4
+        add             lr,  lr,  r4
+.elseif \type == 422
+        add             r6,  r6,  r4,  lsr #1
+        add             lr,  lr,  r4,  lsr #1
+.endif
+        add             r0,  r0,  r1
+        add             r12, r12, r1
+        bgt             161b
+        vpop            {q4-q7}
+        pop             {r4-r10,pc}
+endfunc
+.endm
+
+w_mask_fn 444
+w_mask_fn 422
+w_mask_fn 420
+
 function blend_16bpc_neon, export=1
         push            {r4-r5,lr}
         ldrd            r4,  r5,  [sp, #12]
