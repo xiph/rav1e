@@ -1239,3 +1239,5 @@ L(box5_variable_shift_tbl):
         pop             {r4-r11,pc}
 .purgem add5
 endfunc
+
+sgr_funcs 8

@@ -336,14 +336,17 @@ function sgr_box5_v_neon, export=1
 endfunc
 
 // void dav1d_sgr_calc_ab1_neon(int32_t *a, int16_t *b,
-//                              const int w, const int h, const int strength);
+//                              const int w, const int h, const int strength,
+//                              const int bitdepth_max);
 // void dav1d_sgr_calc_ab2_neon(int32_t *a, int16_t *b,
-//                              const int w, const int h, const int strength);
+//                              const int w, const int h, const int strength,
+//                              const int bitdepth_max);
 function sgr_calc_ab1_neon, export=1
-        push            {r4-r5,lr}
+        push            {r4-r7,lr}
         vpush           {q4-q7}
-        ldr             r4,  [sp, #76]
+        ldrd            r4,  r5,  [sp, #84]
         add             r3,  r3,  #2   // h += 2
+        clz             r6,  r5
         vmov.i32        q15, #9        // n
         movw            r5,  #455
         mov             lr,  #SUM_STRIDE
@@ -351,10 +354,11 @@ function sgr_calc_ab1_neon, export=1
 endfunc
 
 function sgr_calc_ab2_neon, export=1
-        push            {r4-r5,lr}
+        push            {r4-r7,lr}
         vpush           {q4-q7}
-        ldr             r4,  [sp, #76]
+        ldrd            r4,  r5,  [sp, #84]
         add             r3,  r3,  #3   // h += 3
+        clz             r6,  r5
         asr             r3,  r3,  #1   // h /= 2
         vmov.i32        q15, #25       // n
         mov             r5,  #164
@@ -363,7 +367,9 @@ endfunc
 
 function sgr_calc_ab_neon
         movrel          r12, X(sgr_x_by_x)
+        sub             r6,  r6,  #24  // -bitdepth_min_8
         vld1.8          {q8, q9}, [r12, :128]!
+        add             r7,  r6,  r6   // -2*bitdepth_min_8
         vmov.i8         q11, #5
         vmov.i8         d10, #55       // idx of last 5
         vld1.8          {q10},    [r12, :128]
@@ -376,9 +382,7 @@ function sgr_calc_ab_neon
         add             r12, r2,  #7
         bic             r12, r12, #7   // aligned w
         sub             r12, lr,  r12  // increment between rows
-        vmov.i16        q13, #256
         vdup.32         q12, r4
-        vdup.32         q14, r5        // one_by_x
         sub             r0,  r0,  #(4*(SUM_STRIDE))
         sub             r1,  r1,  #(2*(SUM_STRIDE))
         mov             r4,  r2        // backup of w
@@ -386,13 +390,18 @@ function sgr_calc_ab_neon
         vsub.i8         q9,  q9,  q11
         vsub.i8         q10, q10, q11
 1:
-        subs            r2,  r2,  #8
         vld1.32         {q0, q1}, [r0, :128] // a
         vld1.16         {q2},     [r1, :128] // b
+        vdup.32         q13, r7        // -2*bitdepth_min_8
+        vdup.16         q14, r6        // -bitdepth_min_8
+        subs            r2,  r2,  #8
+        vrshl.s32       q0,  q0,  q13
+        vrshl.s32       q1,  q1,  q13
+        vrshl.s16       q4,  q2,  q14
         vmul.i32        q0,  q0,  q15  // a * n
         vmul.i32        q1,  q1,  q15  // a * n
-        vmull.u16       q3,  d4,  d4   // b * b
-        vmull.u16       q4,  d5,  d5   // b * b
+        vmull.u16       q3,  d8,  d8   // b * b
+        vmull.u16       q4,  d9,  d9   // b * b
         vqsub.u32       q0,  q0,  q3   // imax(a * n - b * b, 0)
         vqsub.u32       q1,  q1,  q4   // imax(a * n - b * b, 0)
         vmul.i32        q0,  q0,  q12  // p * s
@@ -417,6 +426,9 @@ function sgr_calc_ab_neon
         vadd.i8         d1,  d1,  d2
         vmovl.u8        q0,  d1        // x
 
+        vmov.i16        q13, #256
+        vdup.32         q14, r5        // one_by_x
+
         vmull.u16       q1,  d0,  d4   // x * BB[i]
         vmull.u16       q2,  d1,  d5   // x * BB[i]
         vmul.i32        q1,  q1,  q14  // x * BB[i] * sgr_one_by_x
@@ -437,5 +449,5 @@ function sgr_calc_ab_neon
         b               1b
 0:
         vpop            {q4-q7}
-        pop             {r4-r5,pc}
+        pop             {r4-r7,pc}
 endfunc
