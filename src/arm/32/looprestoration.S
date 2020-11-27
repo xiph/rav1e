@@ -1675,12 +1675,12 @@ function sgr_finish_filter1_8bpc_neon, export=1
         vmov.i16        q14, #3
         vmov.i32        q15, #3
 1:
-        vld1.16         {q0},       [r9]!
-        vld1.16         {q1},       [r4]!
-        vld1.16         {q2},       [r10]!
-        vld1.32         {q8,  q9},  [r7]!
-        vld1.32         {q10, q11}, [r3]!
-        vld1.32         {q12, q13}, [r8]!
+        vld1.16         {q0},       [r9,  :128]!
+        vld1.16         {q1},       [r4,  :128]!
+        vld1.16         {q2},       [r10, :128]!
+        vld1.32         {q8,  q9},  [r7,  :128]!
+        vld1.32         {q10, q11}, [r3,  :128]!
+        vld1.32         {q12, q13}, [r8,  :128]!
 
 2:
         subs            r5,  r5,  #4
@@ -1711,7 +1711,7 @@ function sgr_finish_filter1_8bpc_neon, export=1
         vadd.i32        q3,  q3,  q5
         vext.8          q7,  q12, q13, #4  // +stride
         vext.8          q10, q12, q13, #8  // +1+stride
-        vld1.32         {d24[0]}, [r1]!    // src
+        vld1.32         {d24[0]}, [r1, :32]! // src
         vadd.i32        q3,  q3,  q7       // +stride
         vadd.i32        q8,  q8,  q10      // +1+stride
         vshl.i32        q3,  q3,  #2
@@ -1728,12 +1728,12 @@ function sgr_finish_filter1_8bpc_neon, export=1
         vmov            q8,  q9
         vmov            q10, q11
         vmov            q12, q13
-        vld1.16         {d1},  [r9]!
-        vld1.16         {d3},  [r4]!
-        vld1.16         {d5},  [r10]!
-        vld1.32         {q9},  [r7]!
-        vld1.32         {q11}, [r3]!
-        vld1.32         {q13}, [r8]!
+        vld1.16         {d1},  [r9,  :64]!
+        vld1.16         {d3},  [r4,  :64]!
+        vld1.16         {d5},  [r10, :64]!
+        vld1.32         {q9},  [r7,  :128]!
+        vld1.32         {q11}, [r3,  :128]!
+        vld1.32         {q13}, [r8,  :128]!
         b               2b
 
 3:
@@ -1779,12 +1779,12 @@ function sgr_finish_filter2_8bpc_neon, export=1
         mov             lr,  r5
 
 1:
-        vld1.16         {q0,  q1},  [r4]!
-        vld1.16         {q2,  q3},  [r8]!
-        vld1.32         {q8,  q9},  [r3]!
-        vld1.32         {q11, q12}, [r7]!
-        vld1.32         {q10},      [r3]!
-        vld1.32         {q13},      [r7]!
+        vld1.16         {q0,  q1},  [r4, :128]!
+        vld1.16         {q2,  q3},  [r8, :128]!
+        vld1.32         {q8,  q9},  [r3, :128]!
+        vld1.32         {q11, q12}, [r7, :128]!
+        vld1.32         {q10},      [r3, :128]!
+        vld1.32         {q13},      [r7, :128]!
 
 2:
         vmov.i16        q14, #5
@@ -1816,7 +1816,7 @@ function sgr_finish_filter2_8bpc_neon, export=1
         vext.8          q8,  q11, q12, #4  // +stride
         vext.8          q11, q12, q13, #4
 
-        vld1.8          {d4}, [r1]!
+        vld1.8          {d4}, [r1, :64]!
 
         vmov.i32        q14, #5
         vmov.i32        q15, #6
@@ -1835,15 +1835,15 @@ function sgr_finish_filter2_8bpc_neon, export=1
         vrshrn.i32      d8,  q4,  #9
         vrshrn.i32      d9,  q5,  #9
         vmov            q2,  q3
-        vst1.16         {q4}, [r0]!
+        vst1.16         {q4}, [r0, :128]!
 
         ble             3f
         vmov            q8,  q10
         vmov            q11, q13
-        vld1.16         {q1},       [r4]!
-        vld1.16         {q3},       [r8]!
-        vld1.32         {q9,  q10}, [r3]!
-        vld1.32         {q12, q13}, [r7]!
+        vld1.16         {q1},       [r4, :128]!
+        vld1.16         {q3},       [r8, :128]!
+        vld1.32         {q9,  q10}, [r3, :128]!
+        vld1.32         {q12, q13}, [r7, :128]!
         b               2b
 
 3:
@@ -1857,9 +1857,9 @@ function sgr_finish_filter2_8bpc_neon, export=1
         add             r4,  r4,  r12, lsl #1
         add             r8,  r8,  r12, lsl #1
 
-        vld1.32         {q8, q9}, [r3]!
-        vld1.16         {q0, q1}, [r4]!
-        vld1.32         {q10},    [r3]!
+        vld1.32         {q8, q9}, [r3, :128]!
+        vld1.16         {q0, q1}, [r4, :128]!
+        vld1.32         {q10},    [r3, :128]!
 
         vmov.i16        q12, #5
         vmov.i16        q13, #6
@@ -1876,7 +1876,7 @@ function sgr_finish_filter2_8bpc_neon, export=1
         vext.8          q7,  q9,  q10, #8
         vmul.i16        q2,  q2,  q13      // * 6
         vmla.i16        q2,  q0,  q12      // * 5 -> a
-        vld1.8          {d22}, [r1]!
+        vld1.8          {d22}, [r1, :64]!
         vadd.i32        q8,  q8,  q6       // -1, +1
         vadd.i32        q9,  q9,  q7
         vmovl.u8        q11, d22
@@ -1891,11 +1891,11 @@ function sgr_finish_filter2_8bpc_neon, export=1
         vrshrn.i32      d8,  q4,  #8
         vrshrn.i32      d9,  q5,  #8
         vmov            q8,  q10
-        vst1.16         {q4}, [r0]!
+        vst1.16         {q4}, [r0, :128]!
 
         ble             5f
-        vld1.16         {q1},      [r4]!
-        vld1.32         {q9, q10}, [r3]!
+        vld1.16         {q1},      [r4, :128]!
+        vld1.32         {q9, q10}, [r3, :128]!
         b               4b
 
 5:
@@ -1939,10 +1939,10 @@ function sgr_weighted1_8bpc_neon, export=1
         mov             r8,  r5
         blt             2f
 1:
-        vld1.8          {d0},  [r2]!
-        vld1.8          {d16}, [r12]!
-        vld1.16         {q1},  [r4]!
-        vld1.16         {q9},  [lr]!
+        vld1.8          {d0},  [r2,  :64]!
+        vld1.8          {d16}, [r12, :64]!
+        vld1.16         {q1},  [r4,  :128]!
+        vld1.16         {q9},  [lr,  :128]!
         subs            r5,  r5,  #8
         vshll.u8        q0,  d0,  #4     // u
         vshll.u8        q8,  d16, #4     // u
@@ -1980,8 +1980,8 @@ function sgr_weighted1_8bpc_neon, export=1
         b               1b
 
 2:
-        vld1.8          {d0}, [r2]!
-        vld1.16         {q1}, [r4]!
+        vld1.8          {d0}, [r2, :64]!
+        vld1.16         {q1}, [r4, :128]!
         subs            r5,  r5,  #8
         vshll.u8        q0,  d0,  #4     // u
         vsub.i16        q1,  q1,  q0     // t1 - u
@@ -2025,12 +2025,12 @@ function sgr_weighted2_8bpc_neon, export=1
         mov             r9,  r6
         blt             2f
 1:
-        vld1.8          {d0},  [r2]!
-        vld1.8          {d16}, [r11]!
-        vld1.16         {q1},  [r4]!
-        vld1.16         {q9},  [r12]!
-        vld1.16         {q2},  [r5]!
-        vld1.16         {q10}, [lr]!
+        vld1.8          {d0},  [r2,  :64]!
+        vld1.8          {d16}, [r11, :64]!
+        vld1.16         {q1},  [r4,  :128]!
+        vld1.16         {q9},  [r12, :128]!
+        vld1.16         {q2},  [r5,  :128]!
+        vld1.16         {q10}, [lr,  :128]!
         subs            r6,  r6,  #8
         vshll.u8        q0,  d0,  #4     // u
         vshll.u8        q8,  d16, #4     // u
@@ -2076,9 +2076,9 @@ function sgr_weighted2_8bpc_neon, export=1
         b               1b
 
 2:
-        vld1.8          {d0}, [r2]!
-        vld1.16         {q1}, [r4]!
-        vld1.16         {q2}, [r5]!
+        vld1.8          {d0}, [r2, :64]!
+        vld1.16         {q1}, [r4, :128]!
+        vld1.16         {q2}, [r5, :128]!
         subs            r6,  r6,  #8
         vshll.u8        q0,  d0,  #4     // u
         vsub.i16        q1,  q1,  q0     // t1 - u
