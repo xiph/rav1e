@@ -1922,7 +1922,6 @@ function sgr_weighted1_8bpc_neon, export=1
         push            {r4-r9,lr}
         ldrd            r4,  r5,  [sp, #28]
         ldrd            r6,  r7,  [sp, #36]
-        ldr             r8,  [sp, #44]
         vdup.16         d31, r7
         cmp             r6,  #2
         add             r9,  r0,  r1
