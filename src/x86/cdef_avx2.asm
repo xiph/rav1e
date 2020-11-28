@@ -1622,10 +1622,10 @@ cglobal cdef_dir, 3, 4, 15, src, stride, var, stride3
     psubw           m3, m8
 
     ; shuffle registers to generate partial_sum_diag[0-1] together
-    vpermq          m7, m0, q1032
-    vpermq          m6, m1, q1032
-    vpermq          m5, m2, q1032
-    vpermq          m4, m3, q1032
+    vperm2i128      m7, m0, m0, 0x01
+    vperm2i128      m6, m1, m1, 0x01
+    vperm2i128      m5, m2, m2, 0x01
+    vperm2i128      m4, m3, m3, 0x01
 
     ; start with partial_sum_hv[0-1]
     paddw           m8, m0, m1
