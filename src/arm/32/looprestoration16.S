@@ -133,7 +133,7 @@ function wiener_filter_h_16bpc_neon, export=1
 
         tst             r7,  #2 // LR_HAVE_RIGHT
         bne             4f
-        // If we'll need to pad the right edge, load that byte to pad with
+        // If we'll need to pad the right edge, load that pixel to pad with
         // here since we can find it pretty easily from here.
         sub             r9,  r5,  #14
         lsl             r9,  r9,  #1

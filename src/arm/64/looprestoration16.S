@@ -126,7 +126,7 @@ function wiener_filter_h_16bpc_neon, export=1
 
         tst             w7,  #2 // LR_HAVE_RIGHT
         b.ne            4f
-        // If we'll need to pad the right edge, load that byte to pad with
+        // If we'll need to pad the right edge, load that pixel to pad with
         // here since we can find it pretty easily from here.
         sub             w9,  w5,  #14
         ldr             h27, [x2,  w9, sxtw #1]
@@ -772,7 +772,7 @@ function sgr_box3_h_16bpc_neon, export=1
 2:
         tst             w7,  #2 // LR_HAVE_RIGHT
         b.ne            4f
-        // If we'll need to pad the right edge, load that byte to pad with
+        // If we'll need to pad the right edge, load that pixel to pad with
         // here since we can find it pretty easily from here.
         sub             w13, w5, #(2 + 16 - 2 + 1)
         ldr             h30, [x3,  w13, sxtw #1]
@@ -996,7 +996,7 @@ function sgr_box5_h_16bpc_neon, export=1
         // and shift v0/v1 to have 3x the first pixel at the front.
         dup             v2.8h,  v0.h[0]
         dup             v18.8h, v16.h[0]
-        // Move x3 back to account for the last 6 bytes we loaded before,
+        // Move x3 back to account for the last 3 pixels we loaded before,
         // which we shifted out.
         sub             x3,  x3,  #6
         sub             x12, x12, #6
@@ -1008,7 +1008,7 @@ function sgr_box5_h_16bpc_neon, export=1
 2:
         tst             w7,  #2 // LR_HAVE_RIGHT
         b.ne            4f
-        // If we'll need to pad the right edge, load that byte to pad with
+        // If we'll need to pad the right edge, load that pixel to pad with
         // here since we can find it pretty easily from here.
         sub             w13, w5, #(2 + 16 - 3 + 1)
         ldr             h30, [x3,  w13, sxtw #1]
