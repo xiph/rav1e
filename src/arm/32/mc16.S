@@ -2604,8 +2604,8 @@ function warp_affine_8x8\t\()_16bpc_neon, export=1
 
         ldrd            r8,  r9,  [r4]
         sxth            r7,  r8
-        asr             r8,  r8, #16
-        asr             r4,  r9, #16
+        asr             r8,  r8,  #16
+        asr             r4,  r9,  #16
         sxth            r9,  r9
         mov             r10, #8
         sub             r2,  r2,  r3, lsl #1
@@ -2665,26 +2665,26 @@ function warp_affine_8x8\t\()_16bpc_neon, export=1
 
         // This ordering of vmull/vmlal is highly beneficial for
         // Cortex A8/A9/A53 here, but harmful for Cortex A7.
-        vmull.s16       q0,  d16,  d2
-        vmlal.s16       q0,  d18,  d4
-        vmlal.s16       q0,  d20,  d6
-        vmlal.s16       q0,  d22,  d8
-        vmlal.s16       q0,  d24,  d10
-        vmlal.s16       q0,  d26,  d12
-        vmull.s16       q1,  d17,  d3
-        vmlal.s16       q1,  d19,  d5
-        vmlal.s16       q1,  d21,  d7
-        vmlal.s16       q1,  d23,  d9
-        vmlal.s16       q1,  d25,  d11
-        vmlal.s16       q1,  d27,  d13
+        vmull.s16       q0,  d16, d2
+        vmlal.s16       q0,  d18, d4
+        vmlal.s16       q0,  d20, d6
+        vmlal.s16       q0,  d22, d8
+        vmlal.s16       q0,  d24, d10
+        vmlal.s16       q0,  d26, d12
+        vmull.s16       q1,  d17, d3
+        vmlal.s16       q1,  d19, d5
+        vmlal.s16       q1,  d21, d7
+        vmlal.s16       q1,  d23, d9
+        vmlal.s16       q1,  d25, d11
+        vmlal.s16       q1,  d27, d13
 
         vmovl.s8        q2,  d14
         vmovl.s8        q3,  d15
 
-        vmlal.s16       q0,  d28,  d4
-        vmlal.s16       q0,  d30,  d6
-        vmlal.s16       q1,  d29,  d5
-        vmlal.s16       q1,  d31,  d7
+        vmlal.s16       q0,  d28, d4
+        vmlal.s16       q0,  d30, d6
+        vmlal.s16       q1,  d29, d5
+        vmlal.s16       q1,  d31, d7
 
 .ifb \t
         ldr             lr,  [sp, #4]   // -(7 + intermediate_bits)
