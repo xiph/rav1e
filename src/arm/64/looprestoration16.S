@@ -143,12 +143,6 @@ function wiener_filter_h_16bpc_neon, export=1
         b               6f
 
 4:      // Loop horizontally
-.macro ushll_sz d0, d1, src, shift, wd
-        ushll           \d0\().4s,  \src\().4h,  \shift
-.ifc \wd, .8h
-        ushll2          \d1\().4s,  \src\().8h,  \shift
-.endif
-.endm
 .macro add_sz d0, d1, s0, s1, c, wd
         add             \d0\().4s,  \s0\().4s,   \c\().4s
 .ifc \wd, .8h
@@ -172,14 +166,13 @@ function wiener_filter_h_16bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v17.16b, v2.16b,  v3.16b, #4
+        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v19.16b, v2.16b,  v3.16b, #8
         ext             v20.16b, v2.16b,  v3.16b, #10
-        ushll_sz        v6,  v7,  v18, #7, \wd
         ext             v21.16b, v2.16b,  v3.16b, #12
-        smlal           v6.4s,   v2.4h,   v0.h[0]
+        smull           v6.4s,   v2.4h,   v0.h[0]
         smlal           v6.4s,   v16.4h,  v0.h[1]
         smlal           v6.4s,   v17.4h,  v0.h[2]
         smlal           v6.4s,   v18.4h,  v0.h[3]
@@ -187,7 +180,7 @@ function wiener_filter_h_16bpc_neon, export=1
         smlal           v6.4s,   v20.4h,  v0.h[5]
         smlal           v6.4s,   v21.4h,  v0.h[6]
 .ifc \wd, .8h
-        smlal2          v7.4s,   v2.8h,   v0.h[0]
+        smull2          v7.4s,   v2.8h,   v0.h[0]
         smlal2          v7.4s,   v16.8h,  v0.h[1]
         smlal2          v7.4s,   v17.8h,  v0.h[2]
         smlal2          v7.4s,   v18.8h,  v0.h[3]
@@ -195,14 +188,13 @@ function wiener_filter_h_16bpc_neon, export=1
         smlal2          v7.4s,   v20.8h,  v0.h[5]
         smlal2          v7.4s,   v21.8h,  v0.h[6]
 .endif
-        ext             v21.16b, v4.16b,  v5.16b, #6
         ext             v19.16b, v4.16b,  v5.16b, #2
         ext             v20.16b, v4.16b,  v5.16b, #4
+        ext             v21.16b, v4.16b,  v5.16b, #6
         ext             v22.16b, v4.16b,  v5.16b, #8
         ext             v23.16b, v4.16b,  v5.16b, #10
-        ushll_sz        v16, v17, v21, #7, \wd
         ext             v24.16b, v4.16b,  v5.16b, #12
-        smlal           v16.4s,  v4.4h,   v0.h[0]
+        smull           v16.4s,  v4.4h,   v0.h[0]
         smlal           v16.4s,  v19.4h,  v0.h[1]
         smlal           v16.4s,  v20.4h,  v0.h[2]
         smlal           v16.4s,  v21.4h,  v0.h[3]
@@ -210,7 +202,7 @@ function wiener_filter_h_16bpc_neon, export=1
         smlal           v16.4s,  v23.4h,  v0.h[5]
         smlal           v16.4s,  v24.4h,  v0.h[6]
 .ifc \wd, .8h
-        smlal2          v17.4s,  v4.8h,   v0.h[0]
+        smull2          v17.4s,  v4.8h,   v0.h[0]
         smlal2          v17.4s,  v19.8h,  v0.h[1]
         smlal2          v17.4s,  v20.8h,  v0.h[2]
         smlal2          v17.4s,  v21.8h,  v0.h[3]
@@ -329,13 +321,9 @@ L(variable_shift_tbl):
         add             v16.4s,  v16.4s,  v17.4s
         addv            s6,      v6.4s
         addv            s7,      v16.4s
-        dup             v16.4h,  v2.h[3]
-        ins             v16.h[1], v4.h[3]
         ins             v6.s[1], v7.s[0]
         mvni            v24.4h,  #0x80, lsl #8 // 0x7fff = (1 << 15) - 1
-        ushll           v16.4s,  v16.4h,  #7
         add             v6.2s,   v6.2s,   v30.2s
-        add             v6.2s,   v6.2s,   v16.2s
         srshl           v6.2s,   v6.2s,   v29.2s
         sqxtun          v6.4h,   v6.4s
         umin            v6.4h,   v6.4h,   v24.4h
@@ -371,9 +359,7 @@ function wiener_filter_v_16bpc_neon, export=1
         ld1             {v0.8h},  [x5]
         dup             v31.8h,  w8
         clz             w8,  w8
-        movi            v1.8h,   #128
         sub             w8,  w8,  #11   // round_bits_v
-        add             v1.8h,   v1.8h,   v0.8h
         dup             v30.4s,  w8
         mov             w8,  w4
         neg             v30.4s,  v30.4s // -round_bits_v
@@ -421,14 +407,14 @@ function wiener_filter_v_16bpc_neon, export=1
         smull           v2.4s,  v16.4h,  v0.h[0]
         smlal           v2.4s,  v17.4h,  v0.h[1]
         smlal           v2.4s,  v18.4h,  v0.h[2]
-        smlal           v2.4s,  v19.4h,  v1.h[3]
+        smlal           v2.4s,  v19.4h,  v0.h[3]
         smlal           v2.4s,  v20.4h,  v0.h[4]
         smlal           v2.4s,  v21.4h,  v0.h[5]
         smlal           v2.4s,  v22.4h,  v0.h[6]
         smull2          v3.4s,  v16.8h,  v0.h[0]
         smlal2          v3.4s,  v17.8h,  v0.h[1]
         smlal2          v3.4s,  v18.8h,  v0.h[2]
-        smlal2          v3.4s,  v19.8h,  v1.h[3]
+        smlal2          v3.4s,  v19.8h,  v0.h[3]
         smlal2          v3.4s,  v20.8h,  v0.h[4]
         smlal2          v3.4s,  v21.8h,  v0.h[5]
         smlal2          v3.4s,  v22.8h,  v0.h[6]

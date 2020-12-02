@@ -40,7 +40,6 @@ pw_16: times 2 dw 16
 pw_256: times 2 dw 256
 pw_2048: times 2 dw 2048
 pw_16380: times 2 dw 16380
-pw_0_128: dw 0, 128
 pw_5_6: dw 5, 6
 pd_6: dd 6
 pd_1024: dd 1024
@@ -52,14 +51,14 @@ cextern sgr_x_by_x
 SECTION .text
 
 INIT_YMM avx2
-cglobal wiener_filter_h, 5, 12, 16, dst, left, src, stride, fh, w, h, edge
+cglobal wiener_filter_h, 5, 12, 16, dst, left, src, stride, flt, w, h, edge
     mov        edged, edgem
-    vpbroadcastb m15, [fhq+0]
+    vpbroadcastb m15, [fltq+0]
     movifnidn     wd, wm
-    vpbroadcastb m14, [fhq+2]
+    vpbroadcastb m14, [fltq+2]
     mov           hd, hm
-    vpbroadcastb m13, [fhq+4]
-    vpbroadcastw m12, [fhq+6]
+    vpbroadcastb m13, [fltq+4]
+    vpbroadcastw m12, [fltq+6]
     vpbroadcastd m11, [pw_2048]
     vpbroadcastd m10, [pw_16380]
     lea          r11, [pb_right_ext_mask]
@@ -207,18 +206,16 @@ cglobal wiener_filter_h, 5, 12, 16, dst, left, src, stride, fh, w, h, edge
     jg .loop
     RET
 
-cglobal wiener_filter_v, 4, 10, 13, dst, stride, mid, w, h, fv, edge
-    movifnidn    fvq, fvmp
+cglobal wiener_filter_v, 4, 10, 13, dst, stride, mid, w, h, flt, edge
+    movifnidn   fltq, fltmp
     mov        edged, edgem
     movifnidn     hd, hm
-    vpbroadcastd m10, [fvq]
-    vpbroadcastd m11, [fvq+4]
-    vpbroadcastd  m0, [pw_0_128]
+    vpbroadcastd m10, [fltq+16]
+    vpbroadcastd m11, [fltq+20]
     vpbroadcastd m12, [pd_1024]
 
     DEFINE_ARGS dst, stride, mid, w, h, ylim, edge, y, mptr, dstptr
     rorx       ylimd, edged, 2
-    paddw        m11, m0
     and        ylimd, 2 ; have_bottom
     sub        ylimd, 3
 
