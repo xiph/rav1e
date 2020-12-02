@@ -39,7 +39,7 @@ function wiener_filter_h_16bpc_neon, export=1
         ldrd            r4,  r5,  [sp, #100]
         ldrd            r6,  r7,  [sp, #108]
         ldr             r8,       [sp, #116] // bitdepth_max
-        vld1.16         {q0}, [r4]
+        vld1.16         {q0}, [r4, :128]
         clz             r8,  r8
         vmov.i32        q14, #1
         sub             r9,  r8,  #38  // -(bitdepth + 6)
@@ -151,16 +151,14 @@ function wiener_filter_h_16bpc_neon, export=1
         b               6f
 
 4:      // Loop horizontally
-        vext.8          q10, q2,  q3,  #6
         vext.8          q8,  q2,  q3,  #2
         vext.8          q9,  q2,  q3,  #4
-        vshll.u16       q6,  d20, #7
-        vshll.u16       q7,  d21, #7
-        vmlal.s16       q6,  d4,  d0[0]
+        vext.8          q10, q2,  q3,  #6
+        vmull.s16       q6,  d4,  d0[0]
         vmlal.s16       q6,  d16, d0[1]
         vmlal.s16       q6,  d18, d0[2]
         vmlal.s16       q6,  d20, d0[3]
-        vmlal.s16       q7,  d5,  d0[0]
+        vmull.s16       q7,  d5,  d0[0]
         vmlal.s16       q7,  d17, d0[1]
         vmlal.s16       q7,  d19, d0[2]
         vmlal.s16       q7,  d21, d0[3]
@@ -173,14 +171,12 @@ function wiener_filter_h_16bpc_neon, export=1
         vmlal.s16       q7,  d17, d1[0]
         vmlal.s16       q7,  d19, d1[1]
         vmlal.s16       q7,  d21, d1[2]
-        vext.8          q10, q4,  q5,  #6
         vext.8          q2,  q4,  q5,  #2
-        vshll.u16       q8,  d20, #7
-        vshll.u16       q9,  d21, #7
-        vmlal.s16       q8,  d8,  d0[0]
+        vext.8          q10, q4,  q5,  #6
+        vmull.s16       q8,  d8,  d0[0]
         vmlal.s16       q8,  d4,  d0[1]
         vmlal.s16       q8,  d20, d0[3]
-        vmlal.s16       q9,  d9,  d0[0]
+        vmull.s16       q9,  d9,  d0[0]
         vmlal.s16       q9,  d5,  d0[1]
         vmlal.s16       q9,  d21, d0[3]
         vext.8          q2,  q4,  q5,  #4
@@ -233,8 +229,7 @@ function wiener_filter_h_16bpc_neon, export=1
         vext.8          d17, d4,  d5,  #4
         vext.8          d19, d5,  d6,  #2
         vext.8          d20, d5,  d6,  #4
-        vshll.u16       q6,  d18, #7
-        vmlal.s16       q6,  d4,  d0[0]
+        vmull.s16       q6,  d4,  d0[0]
         vmlal.s16       q6,  d16, d0[1]
         vmlal.s16       q6,  d17, d0[2]
         vmlal.s16       q6,  d18, d0[3]
@@ -247,8 +242,7 @@ function wiener_filter_h_16bpc_neon, export=1
         vext.8          d17, d8,  d9,  #4
         vext.8          d19, d9,  d10, #2
         vext.8          d20, d9,  d10, #4
-        vshll.u16       q7,  d18, #7
-        vmlal.s16       q7,  d8,  d0[0]
+        vmull.s16       q7,  d8,  d0[0]
         vmlal.s16       q7,  d16, d0[1]
         vmlal.s16       q7,  d17, d0[2]
         vmlal.s16       q7,  d18, d0[3]
@@ -356,14 +350,9 @@ L(variable_shift_tbl):
         vadd.i32        q8,  q9
         vpadd.i32       d12, d12, d13
         vpadd.i32       d13, d16, d17
-        vdup.16         d14, d4[3]
-        vdup.16         d15, d8[3]
         vpadd.i32       d12, d12, d13
-        vtrn.16         d14, d15
         vadd.i32        d12, d12, d28
-        vshll.u16       q7,  d14, #7
         vmvn.i16        d20, #0x8000 // 0x7fff = (1 << 15) - 1
-        vadd.i32        d12, d12, d14
         vrshl.s32       d12, d12, d26
         vqmovun.s32     d12, q6
         vmin.u16        d12, d12, d20
@@ -401,14 +390,10 @@ function wiener_filter_v_16bpc_neon, export=1
         ldrd            r4,  r5,  [sp, #52]
         ldrd            r6,  r7,  [sp, #60]
         ldr             lr,       [sp, #68] // bitdepth_max
-        vmov.i16        q1,  #0
-        mov             r12, #128
-        vld1.16         {q0},  [r5]
+        vld1.16         {q0},  [r5, :128]
         vdup.16         q5,  lr
         clz             lr,  lr
-        vmov.i16        d2[3], r12
         sub             lr,  lr,  #11   // round_bits_v
-        vadd.i16        q0,  q0,  q1
         vdup.32         q4,  lr
         mov             lr,  r4
         vneg.s32        q4,  q4         // -round_bits_v

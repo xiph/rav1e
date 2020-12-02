@@ -30,7 +30,7 @@
 
 // void dav1d_wiener_filter_h_8bpc_neon(int16_t *dst, const pixel (*left)[4],
 //                                      const pixel *src, ptrdiff_t stride,
-//                                      const int16_t fh[7], const intptr_t w,
+//                                      const int16_t fh[8], intptr_t w,
 //                                      int h, enum LrEdgeFlags edges);
 function wiener_filter_h_8bpc_neon, export=1
         push            {r4-r11,lr}
@@ -38,7 +38,7 @@ function wiener_filter_h_8bpc_neon, export=1
         ldrd            r4,  r5,  [sp, #52]
         ldrd            r6,  r7,  [sp, #60]
         mov             r8,  r5
-        vld1.16         {q0},  [r4]
+        vld1.16         {q0},  [r4, :128]
         movw            r9,  #(1 << 14) - (1 << 2)
         vdup.16         q14, r9
         vmov.s16        q15, #2048
@@ -358,18 +358,14 @@ endfunc
 
 // void dav1d_wiener_filter_v_8bpc_neon(pixel *dst, ptrdiff_t stride,
 //                                      const int16_t *mid, int w, int h,
-//                                      const int16_t fv[7], enum LrEdgeFlags edges,
+//                                      const int16_t fv[8], enum LrEdgeFlags edges,
 //                                      ptrdiff_t mid_stride);
 function wiener_filter_v_8bpc_neon, export=1
         push            {r4-r7,lr}
         ldrd            r4,  r5,  [sp, #20]
         ldrd            r6,  r7,  [sp, #28]
         mov             lr,  r4
-        vmov.s16        q1,  #0
-        mov             r12, #128
-        vld1.16         {q0},  [r5]
-        vmov.s16        d2[3], r12
-        vadd.s16        q0,  q0,  q1
+        vld1.16         {q0},  [r5, :128]
 
         // Calculate the number of rows to move back when looping vertically
         mov             r12, r4

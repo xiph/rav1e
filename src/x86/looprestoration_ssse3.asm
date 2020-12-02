@@ -52,7 +52,6 @@ pw_256: times 8 dw 256
 pw_2048: times 8 dw 2048
 pw_16380: times 8 dw 16380
 pw_5_6: times 4 dw 5, 6
-pw_0_128: times 4 dw 0, 128
 pd_1024: times 4 dd 1024
 %if ARCH_X86_32
 pd_256: times 4 dd 256
@@ -129,12 +128,12 @@ SECTION .text
 
 %macro WIENER_H 0
 %if ARCH_X86_64
-cglobal wiener_filter_h, 5, 15, 16, dst, left, src, stride, fh, w, h, edge
+cglobal wiener_filter_h, 5, 15, 16, dst, left, src, stride, flt, w, h, edge
     mov        edged, edgem
     movifnidn     wd, wm
     mov           hd, hm
 %else
-cglobal wiener_filter_h, 5, 7, 8, -84, dst, left, src, stride, fh, w, h, edge
+cglobal wiener_filter_h, 5, 7, 8, -84, dst, left, src, stride, flt, w, h, edge
     mov           r5, edgem
     mov     [esp+12], r5
     mov           wd, wm
@@ -146,7 +145,7 @@ cglobal wiener_filter_h, 5, 7, 8, -84, dst, left, src, stride, fh, w, h, edge
  %define m12 m3
 %endif
 
-    movq         m15, [fhq]
+    movq         m15, [fltq]
 %if cpuflag(ssse3)
     pshufb       m12, m15, [PIC_sym(pb_6_7)]
     pshufb       m13, m15, [PIC_sym(pb_4)]
@@ -438,14 +437,13 @@ cglobal wiener_filter_h, 5, 7, 8, -84, dst, left, src, stride, fh, w, h, edge
 
 %macro WIENER_V 0
 %if ARCH_X86_64
-cglobal wiener_filter_v, 4, 10, 16, dst, stride, mid, w, h, fv, edge
+cglobal wiener_filter_v, 4, 10, 16, dst, stride, mid, w, h, flt, edge
     mov        edged, edgem
-    movifnidn    fvq, fvmp
+    movifnidn   fltq, fltmp
     movifnidn     hd, hm
-    movq         m15, [fvq]
+    movq         m15, [fltq+16]
     pshufd       m14, m15, q1111
     pshufd       m15, m15, q0000
-    paddw        m14, [pw_0_128]
     mova         m12, [pd_1024]
 
     DEFINE_ARGS dst, stride, mid, w, h, y, edge, ylim, mptr, dstptr
@@ -455,7 +453,7 @@ cglobal wiener_filter_v, 4, 10, 16, dst, stride, mid, w, h, fv, edge
     shr        ylimd, 2
     sub        ylimd, 3
 %else
-cglobal wiener_filter_v, 5, 7, 8, -96, dst, stride, mid, w, h, fv, edge
+cglobal wiener_filter_v, 5, 7, 8, -96, dst, stride, mid, w, h, flt, edge
  %define ylimd [esp+12]
 
     mov          r5d, edgem
@@ -463,15 +461,14 @@ cglobal wiener_filter_v, 5, 7, 8, -96, dst, stride, mid, w, h, fv, edge
     shr          r5d, 2
     sub          r5d, 3
     mov        ylimd, r5d
-    mov          fvq, fvmp
+    mov         fltq, fltmp
     mov        edged, edgem
 
     SETUP_PIC edged
 
-    movq          m0, [fvq]
+    movq          m0, [fltq+16]
     pshufd        m1, m0, q1111
     pshufd        m0, m0, q0000
-    paddw         m1, [PIC_sym(pw_0_128)]
     mova  [esp+0x50], m0
     mova  [esp+0x40], m1
 
