@@ -132,6 +132,9 @@ fn build_asm_files() {
 
   let dest_path = Path::new(&out_dir).join("config.h");
   let mut config_file = File::create(&dest_path).unwrap();
+  if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+    config_file.write(b" #define PREFIX 1\n").unwrap();
+  }
   config_file.write(b" #define PRIVATE_PREFIX rav1e_\n").unwrap();
   config_file.write(b" #define ARCH_AARCH64 1\n").unwrap();
   config_file.write(b" #define ARCH_ARM 0\n").unwrap();
