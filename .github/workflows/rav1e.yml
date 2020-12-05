@@ -305,10 +305,27 @@ jobs:
 
     strategy:
       matrix:
-        conf:
-         - cargo-build
-         - cargo-test
-         - cargo-c
+        include:
+          - name: Cargo build (x64)
+            conf: cargo-build
+            target: x86_64-apple-darwin
+            toolchain: stable
+          - name: Cargo test (x64)
+            conf: cargo-test
+            target: x86_64-apple-darwin
+            toolchain: stable
+          - name: Cargo C-build (x64)
+            conf: cargo-c
+            target: x86_64-apple-darwin
+            toolchain: stable
+          - name: Cargo build (Arm64)
+            conf: cargo-build
+            target: aarch64-apple-darwin
+            toolchain: beta # Can be switched to stable on Rust 1.49 release
+          - name: Cargo C-build (Arm64)
+            conf: cargo-c
+            target: aarch64-apple-darwin
+            toolchain: beta # Can be switched to stable on Rust 1.49 release
 
     env:
       RUST_BACKTRACE: full
@@ -334,8 +351,10 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: stable
+        toolchain: ${{ matrix.toolchain }}
         override: true
+        target: ${{ matrix.target }}
+        default: true
     - name: Generate Cargo.lock and Cargo.version
       run: |
         cargo update
@@ -362,15 +381,15 @@ jobs:
     - name: Build
       if: matrix.conf == 'cargo-build'
       run: |
-        cargo build --release
+        cargo build --release --target=${{ matrix.target }}
     - name: Test
       if: matrix.conf == 'cargo-test'
       run: |
-        cargo test --workspace --verbose
+        cargo test --workspace --verbose --target=${{ matrix.target }}
     - name: Run cargo-c
       if: matrix.conf == 'cargo-c'
       run: |
-        cargo cbuild
+        cargo cbuild --target=${{ matrix.target }}
     - name: Stop sccache server
       run: |
         sccache --stop-server
