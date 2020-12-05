@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use std::sync::Arc;
 
-use crate::api::{ChromaSampling, Context, ContextInner, PixelRange};
+use crate::api::{ChromaSampling, ContextInner, PixelRange};
 use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::util::Pixel;
 
@@ -242,30 +242,6 @@ impl Config {
       None
     }
   }
-
-  /// Creates a [`Context`] with this configuration.
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// use rav1e::prelude::*;
-  ///
-  /// # fn main() -> Result<(), InvalidConfig> {
-  /// let cfg = Config::default();
-  /// let ctx: Context<u8> = cfg.new_context()?;
-  /// # Ok(())
-  /// # }
-  /// ```
-  ///
-  /// [`Context`]: struct.Context.html
-  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
-    let inner = self.new_inner()?;
-    let config = *inner.config;
-    let pool = self.new_thread_pool();
-
-    Ok(Context { is_flushing: false, inner, pool, config })
-  }
-
   /// Validates the configuration.
   pub fn validate(&self) -> Result<(), InvalidConfig> {
     use InvalidConfig::*;

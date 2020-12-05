@@ -444,3 +444,28 @@ impl<T: Pixel> fmt::Debug for Context<T> {
     )
   }
 }
+
+impl Config {
+  /// Creates a [`Context`] with this configuration.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// # fn main() -> Result<(), InvalidConfig> {
+  /// let cfg = Config::default();
+  /// let ctx: Context<u8> = cfg.new_context()?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  ///
+  /// [`Context`]: struct.Context.html
+  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
+    let inner = self.new_inner()?;
+    let config = *inner.config;
+    let pool = self.new_thread_pool();
+
+    Ok(Context { is_flushing: false, inner, pool, config })
+  }
+}
