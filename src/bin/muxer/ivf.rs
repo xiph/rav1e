@@ -9,15 +9,15 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::Muxer;
+use crate::error::*;
 use ivf::*;
+use rav1e::hawktracer::*;
 use rav1e::prelude::*;
 use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Write;
 use std::path::Path;
-
-use crate::error::*;
 
 pub struct IvfMuxer {
   output: Box<dyn Write + Send>,
@@ -37,6 +37,7 @@ impl Muxer for IvfMuxer {
     );
   }
 
+  #[hawktracer(write_frame)]
   fn write_frame(&mut self, pts: u64, data: &[u8], _frame_type: FrameType) {
     write_ivf_frame(&mut self.output, pts, data);
   }
