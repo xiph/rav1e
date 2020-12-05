@@ -50,7 +50,7 @@ impl Config {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
-    let (v, _) = self.new_channel_internal()?;
+    let (v, _) = self.new_channel_internal(true)?;
 
     Ok(v)
   }
@@ -70,7 +70,7 @@ impl Config {
     if !rc.emit_pass_data {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
-    let (v, (_, r)) = self.new_channel_internal()?;
+    let (v, (_, r)) = self.new_channel_internal(true)?;
 
     Ok((v, r.unwrap()))
   }
@@ -88,7 +88,7 @@ impl Config {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
-    let (v, (s, _)) = self.new_channel_internal()?;
+    let (v, (s, _)) = self.new_channel_internal(true)?;
 
     Ok((v, s.unwrap()))
   }
@@ -109,7 +109,7 @@ impl Config {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
 
-    let (v, (s, r)) = self.new_channel_internal()?;
+    let (v, (s, r)) = self.new_channel_internal(true)?;
 
     Ok((v, (s.unwrap(), r.unwrap())))
   }
@@ -193,8 +193,8 @@ impl RcSecondPass for Option<Receiver<RcData>> {
 }
 
 impl Config {
-  fn new_channel_internal<T: Pixel>(
-    &self,
+  pub(crate) fn new_channel_internal<T: Pixel>(
+    &self, serial_api_compat: bool,
   ) -> Result<
     (VideoDataChannel<T>, (Option<RcDataSender>, Option<RcDataReceiver>)),
     InvalidConfig,
@@ -205,7 +205,8 @@ impl Config {
     // TODO: make it user-settable
     let input_len = self.enc.rdo_lookahead_frames as usize * 2;
 
-    let (send_frame, receive_frame) = bounded(input_len);
+    let (send_frame, receive_frame) =
+      if serial_api_compat { unbounded() } else { bounded(input_len) };
     let (send_packet, receive_packet) = unbounded();
 
     let rc = &self.rate_control;
@@ -226,7 +227,12 @@ impl Config {
 
       inner.limit = Some(frame_limit);
 
-      let (send_rc_pass2, receive_rc_pass2) = unbounded();
+      let (send_rc_pass2, receive_rc_pass2) = if serial_api_compat {
+        // TODO: derive it from the Encoder configuration
+        bounded(input_len)
+      } else {
+        unbounded()
+      };
 
       (
         Some(RcDataSender::new(pass_limit, send_rc_pass2)),

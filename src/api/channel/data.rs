@@ -37,7 +37,7 @@ impl RcDataSender {
     &mut self, data: RcData,
   ) -> Result<(), TrySendError<RcData>> {
     if self.limit <= self.count {
-      Err(TrySendError::Full(data))
+      Err(TrySendError::Disconnected(data))
     } else {
       let r = self.sender.try_send(data);
       if r.is_ok() {
@@ -62,6 +62,9 @@ impl RcDataSender {
   }
   pub fn is_empty(&self) -> bool {
     self.sender.is_empty()
+  }
+  pub fn capacity(&self) -> Option<usize> {
+    self.sender.capacity()
   }
 
   // TODO: proxy more methods
@@ -117,7 +120,7 @@ impl<T: Pixel> FrameSender<T> {
     &mut self, frame: F,
   ) -> Result<(), TrySendError<FrameInput<T>>> {
     if self.limit <= self.count {
-      Err(TrySendError::Full(frame.into()))
+      Err(TrySendError::Disconnected(frame.into()))
     } else {
       let r = self.sender.try_send(frame.into());
       if r.is_ok() {

@@ -9,8 +9,7 @@
 #![deny(missing_docs)]
 
 /// Channel-based encoder
-#[cfg(all(feature = "channel-api", feature = "unstable"))]
-pub mod channel;
+pub(crate) mod channel;
 /// Color model information
 pub mod color;
 /// Encoder Configuration
