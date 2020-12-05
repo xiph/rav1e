@@ -9,6 +9,7 @@
 
 use av_metrics::video::*;
 use rav1e::data::EncoderStats;
+use rav1e::hawktracer::*;
 use rav1e::prelude::Rational;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
@@ -29,6 +30,7 @@ pub struct FrameSummary {
   pub enc_stats: EncoderStats,
 }
 
+#[hawktracer(build_frame_summary)]
 pub fn build_frame_summary<T: Pixel>(
   packets: Packet<T>, bit_depth: usize, chroma_sampling: ChromaSampling,
   metrics_cli: MetricsEnabled,
@@ -740,6 +742,7 @@ pub enum MetricsEnabled {
   All,
 }
 
+#[hawktracer(calculate_frame_metrics)]
 pub fn calculate_frame_metrics<T: Pixel>(
   frame1: &Frame<T>, frame2: &Frame<T>, bit_depth: usize, cs: ChromaSampling,
   metrics: MetricsEnabled,

@@ -23,6 +23,7 @@ pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
 pub(crate) const IMP_BLOCK_AREA_IN_MV_UNITS: i64 =
   IMP_BLOCK_SIZE_IN_MV_UNITS * IMP_BLOCK_SIZE_IN_MV_UNITS;
 
+#[hawktracer(estimate_intra_costs)]
 pub(crate) fn estimate_intra_costs<T: Pixel>(
   frame: &Frame<T>, bit_depth: usize, cpu_feature_level: CpuFeatureLevel,
 ) -> Box<[u32]> {
@@ -114,6 +115,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
   intra_costs.into_boxed_slice()
 }
 
+#[hawktracer(estimate_inter_costs)]
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Arc<Sequence>,

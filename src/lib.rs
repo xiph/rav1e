@@ -75,7 +75,8 @@ mod serialize {
   }
 }
 
-mod hawktracer {
+#[doc(hidden)]
+pub mod hawktracer {
   cfg_if::cfg_if! {
     if #[cfg(feature="tracing")] {
       pub use rust_hawktracer::*;
