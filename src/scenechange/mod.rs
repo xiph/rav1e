@@ -245,22 +245,29 @@ impl SceneChangeDetector {
         has_scenecut: delta >= threshold,
       }
     } else {
-      let intra_costs =
-        estimate_intra_costs(&*frame2, self.bit_depth, self.cpu_feature_level);
-      let intra_cost = intra_costs.iter().map(|&cost| cost as u64).sum::<u64>()
-        as f64
-        / intra_costs.len() as f64;
-
-      let inter_costs = estimate_inter_costs(
-        frame2,
-        frame1,
-        self.bit_depth,
-        self.encoder_config,
-        self.sequence.clone(),
+      let frame2_ref2 = Arc::clone(&frame2);
+      let (intra_cost, inter_cost) = rayon::join(
+        move || {
+          let intra_costs = estimate_intra_costs(
+            &*frame2,
+            self.bit_depth,
+            self.cpu_feature_level,
+          );
+          intra_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
+            / intra_costs.len() as f64
+        },
+        move || {
+          let inter_costs = estimate_inter_costs(
+            frame2_ref2,
+            frame1,
+            self.bit_depth,
+            self.encoder_config,
+            self.sequence.clone(),
+          );
+          inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
+            / inter_costs.len() as f64
+        },
       );
-      let inter_cost = inter_costs.iter().map(|&cost| cost as u64).sum::<u64>()
-        as f64
-        / inter_costs.len() as f64;
 
       // Sliding scale, more likely to choose a keyframe
       // as we get farther from the last keyframe.
