@@ -246,7 +246,7 @@ impl SceneChangeDetector {
       }
     } else {
       let frame2_ref2 = Arc::clone(&frame2);
-      let (intra_cost, inter_cost) = rayon::join(
+      let (intra_cost, inter_cost) = crate::rayon::join(
         move || {
           let intra_costs = estimate_intra_costs(
             &*frame2,
