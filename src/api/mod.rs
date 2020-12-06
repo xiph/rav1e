@@ -23,8 +23,8 @@ pub(crate) mod lookahead;
 
 mod util;
 
-#[cfg(test)]
-mod test;
+// #[cfg(test)]
+// mod test;
 
 #[cfg(all(feature = "channel-api", feature = "unstable"))]
 pub use channel::*;
