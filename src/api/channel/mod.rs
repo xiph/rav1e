@@ -116,7 +116,8 @@ impl Config {
 }
 
 trait RcFirstPass {
-  fn send_pass_data(&mut self, rc_state: &mut RCState);
+  fn store_pass_data(&mut self, rc_state: &mut RCState);
+  fn send_pass_data(&mut self);
   fn send_pass_summary(&mut self, rc_state: &mut RCState);
 }
 
@@ -126,11 +127,15 @@ trait RcSecondPass {
   ) -> Result<(), ()>;
 }
 
-impl RcFirstPass for Sender<RcData> {
-  fn send_pass_data(&mut self, rc_state: &mut RCState) {
+struct PassDataSender {
+  sender: Sender<RcData>,
+  data: Vec<u8>,
+}
+
+impl RcFirstPass for PassDataSender {
+  fn store_pass_data(&mut self, rc_state: &mut RCState) {
     if let Some(data) = rc_state.emit_frame_data() {
-      let data = data.to_vec().into_boxed_slice();
-      self.send(RcData::Frame(data)).unwrap();
+      self.data.extend(data.iter());
     } else {
       unreachable!(
         "The encoder received more frames than its internal
@@ -138,17 +143,30 @@ impl RcFirstPass for Sender<RcData> {
       );
     }
   }
+
+  fn send_pass_data(&mut self) {
+    let data = self.data.to_vec().into_boxed_slice();
+    self.data.clear();
+    self.sender.send(RcData::Frame(data)).unwrap();
+  }
   fn send_pass_summary(&mut self, rc_state: &mut RCState) {
     let data = rc_state.emit_summary();
     let data = data.to_vec().into_boxed_slice();
-    self.send(RcData::Summary(data)).unwrap();
+    self.sender.send(RcData::Summary(data)).unwrap();
   }
 }
 
-impl RcFirstPass for Option<Sender<RcData>> {
-  fn send_pass_data(&mut self, rc_state: &mut RCState) {
+impl RcFirstPass for Option<PassDataSender> {
+  fn store_pass_data(&mut self, rc_state: &mut RCState) {
     match self.as_mut() {
-      Some(s) => s.send_pass_data(rc_state),
+      Some(s) => s.store_pass_data(rc_state),
+      None => {}
+    }
+  }
+
+  fn send_pass_data(&mut self) {
+    match self.as_mut() {
+      Some(s) => s.send_pass_data(),
       None => {}
     }
   }
@@ -164,16 +182,18 @@ impl RcSecondPass for Receiver<RcData> {
   fn feed_pass_data<T: Pixel>(
     &mut self, inner: &mut ContextInner<T>,
   ) -> Result<(), ()> {
-    while inner.rc_state.twopass_in_frames_needed() > 0
-      && !inner.done_processing()
-    {
+    if inner.done_processing() {
+      return Ok(());
+    }
+
+    while inner.rc_state.twopass_in_frames_needed() > 0 {
       if let Ok(RcData::Frame(data)) = self.recv() {
         inner
           .rc_state
           .parse_frame_data_packet(data.as_ref())
           .unwrap_or_else(|_| todo!("Error reporting"));
       } else {
-        todo!("Error reporting");
+        todo!("No data reporting");
       }
     }
 
@@ -213,7 +233,10 @@ impl Config {
 
     let (mut send_rc_pass1, rc_data_receiver) = if rc.emit_pass_data {
       let (send_rc_pass1, receive_rc_pass1) = unbounded();
-      (Some(send_rc_pass1), Some(RcDataReceiver(receive_rc_pass1)))
+      (
+        Some(PassDataSender { sender: send_rc_pass1, data: Vec::new() }),
+        Some(RcDataReceiver(receive_rc_pass1)),
+      )
     } else {
       (None, None)
     };
@@ -222,7 +245,8 @@ impl Config {
       .summary
       .is_some()
     {
-      let (frame_limit, pass_limit) =
+      // the pass data packets are now lumped together to match the packets emitted.
+      let (frame_limit, _pass_limit) =
         rc.summary.as_ref().map(|s| (s.ntus as u64, s.total as u64)).unwrap();
 
       inner.limit = Some(frame_limit);
@@ -235,7 +259,7 @@ impl Config {
       };
 
       (
-        Some(RcDataSender::new(pass_limit, send_rc_pass2)),
+        Some(RcDataSender::new(frame_limit, send_rc_pass2)),
         Some(receive_rc_pass2),
         frame_limit,
       )
@@ -261,17 +285,21 @@ impl Config {
           // already.
           //
           // this call should return either Ok or Err(Encoded)
-          let has_pass_data = match inner.receive_packet() {
+          let pass_data_ready = match inner.receive_packet() {
             Ok(p) => {
               send_packet.send(p).unwrap();
+              send_rc_pass1.store_pass_data(&mut inner.rc_state);
               true
             }
-            Err(EncoderStatus::Encoded) => true,
+            Err(EncoderStatus::Encoded) => {
+              send_rc_pass1.store_pass_data(&mut inner.rc_state);
+              false
+            }
             Err(EncoderStatus::NotReady) => todo!("Error reporting"),
             _ => unreachable!(),
           };
-          if has_pass_data {
-            send_rc_pass1.send_pass_data(&mut inner.rc_state);
+          if pass_data_ready {
+            send_rc_pass1.send_pass_data();
           }
         }
 
@@ -285,20 +313,23 @@ impl Config {
       loop {
         receive_rc_pass2.feed_pass_data(&mut inner).unwrap();
         let r = inner.receive_packet();
-        let has_pass_data = match r {
+        let pass_data_ready = match r {
           Ok(p) => {
-            // warn!("Sending out {}", p.input_frameno);
             send_packet.send(p).unwrap();
+            send_rc_pass1.store_pass_data(&mut inner.rc_state);
             true
           }
           Err(EncoderStatus::LimitReached) => break,
-          Err(EncoderStatus::Encoded) => true,
+          Err(EncoderStatus::Encoded) => {
+            send_rc_pass1.store_pass_data(&mut inner.rc_state);
+            false
+          }
           Err(EncoderStatus::NotReady) => todo!("Error reporting"),
           _ => unreachable!(),
         };
 
-        if has_pass_data {
-          send_rc_pass1.send_pass_data(&mut inner.rc_state);
+        if pass_data_ready {
+          send_rc_pass1.send_pass_data();
         }
       }
 

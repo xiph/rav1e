@@ -387,7 +387,15 @@ impl<T: Pixel> Context<T> {
   ///
   /// It will return a `RcData::Summary` once the encoder is flushed.
   pub fn rc_receive_pass_data(&mut self) -> Option<RcData> {
-    self.rc_data_receiver.as_mut().and_then(|r| r.recv().ok())
+    self.rc_data_receiver.as_mut().and_then(|r| {
+      let data = r.recv().ok();
+      match data {
+        Some(RcData::Summary(_)) => println!("-> Summary"),
+        Some(RcData::Frame(_)) => println!("-> Data"),
+        _ => println!("-> No data"),
+      }
+      data
+    })
   }
 
   /// Lower bound number of pass data packets required to progress the
@@ -396,11 +404,18 @@ impl<T: Pixel> Context<T> {
   /// It should be called iteratively until it returns 0.
   ///
   pub fn rc_second_pass_data_required(&self) -> usize {
-    if self.packet_receiver.len() > 0 {
-      0
-    } else {
-      1
-    }
+    self.rc_data_sender.as_ref().map_or(0, |s| {
+      let reservoir_delay =
+        self.config.reservoir_frame_delay.unwrap_or(0) as usize;
+      if s.len() <= reservoir_delay
+        && self.packet_receiver.len() == 0
+        && s.limit > s.count
+      {
+        1
+      } else {
+        0
+      }
+    })
   }
 
   /// Feed the first pass Rate Control data to the encoder,

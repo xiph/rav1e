@@ -40,7 +40,7 @@ const TWOPASS_VERSION: i32 = 1;
 //  + FRAME_NSUBTYPES*(4 byte frame count + 1 byte exp + 8 byte scale_sum)
 pub(crate) const TWOPASS_HEADER_SZ: usize = 16 + FRAME_NSUBTYPES * (4 + 1 + 8);
 // 4 byte frame type (show_frame and fti jointly coded) + 4 byte log_scale_q24
-const TWOPASS_PACKET_SZ: usize = 8;
+pub(crate) const TWOPASS_PACKET_SZ: usize = 8;
 
 const SEF_BITS: i64 = 24;
 

@@ -33,24 +33,48 @@ impl RcDataSender {
   pub(crate) fn new(limit: u64, sender: Sender<RcData>) -> RcDataSender {
     Self { sender, limit, count: 0 }
   }
+  fn split_try_send(
+    &mut self, data: RcData,
+  ) -> Result<(), TrySendError<RcData>> {
+    match data {
+      RcData::Summary(_) => self.sender.try_send(data)?,
+      RcData::Frame(data) => {
+        for f in data.chunks(crate::rate::TWOPASS_PACKET_SZ) {
+          self.sender.try_send(RcData::Frame(f.to_vec().into_boxed_slice()))?
+        }
+      }
+    }
+    Ok(())
+  }
   pub fn try_send(
     &mut self, data: RcData,
   ) -> Result<(), TrySendError<RcData>> {
     if self.limit <= self.count {
       Err(TrySendError::Disconnected(data))
     } else {
-      let r = self.sender.try_send(data);
+      let r = self.split_try_send(data);
       if r.is_ok() {
         self.count += 1;
       }
       r
     }
   }
+  fn split_send(&mut self, data: RcData) -> Result<(), SendError<RcData>> {
+    match data {
+      RcData::Summary(_) => self.sender.send(data)?,
+      RcData::Frame(data) => {
+        for f in data.chunks(crate::rate::TWOPASS_PACKET_SZ) {
+          self.sender.send(RcData::Frame(f.to_vec().into_boxed_slice()))?
+        }
+      }
+    }
+    Ok(())
+  }
   pub fn send(&mut self, data: RcData) -> Result<(), SendError<RcData>> {
     if self.limit <= self.count {
       Err(SendError(data))
     } else {
-      let r = self.sender.send(data);
+      let r = self.split_send(data);
       if r.is_ok() {
         self.count += 1;
       }
