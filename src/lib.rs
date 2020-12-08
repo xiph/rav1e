@@ -173,6 +173,15 @@ mod rayon {
   }
 }
 
+#[cfg(feature = "mimalloc")]
+mod alloc {
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+}
+
+
 #[cfg(any(cargo_c, feature = "capi"))]
 pub mod capi;
 
