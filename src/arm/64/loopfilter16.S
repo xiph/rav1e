@@ -785,7 +785,7 @@ function lpf_\dir\()_sb_\type\()_16bpc_neon, export=1
         orr             w6,  w6,  w7             // vmask[0] |= vmask[1]
 
 1:
-        tst             w6,  #0x0f
+        tst             w6,  #0x03
 .ifc \dir, v
         ld1             {v0.8b}, [x4], #8
         ld1             {v1.8b}, [x3], #8
@@ -847,14 +847,14 @@ function lpf_\dir\()_sb_\type\()_16bpc_neon, export=1
         ushl            v10.8h,  v10.8h,  v31.8h
 
 .ifc \type, y
-        tst             w2,  #0x0f
+        tst             w2,  #0x03
         b.eq            2f
         // wd16
         bl              lpf_\dir\()_16_8_neon
         b               8f
 2:
 .endif
-        tst             w7,  #0x0f
+        tst             w7,  #0x03
         b.eq            3f
 .ifc \type, y
         // wd8
