@@ -47,8 +47,8 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::{fmt, io, mem};
 
-use crate::hawktracer::*;
 use crate::rayon::iter::*;
+use rust_hawktracer::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]

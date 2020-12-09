@@ -12,8 +12,8 @@ use crate::api::EncoderConfig;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
-use crate::hawktracer::*;
 use crate::util::{CastFromPrimitive, Pixel};
+use rust_hawktracer::*;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

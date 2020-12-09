@@ -21,9 +21,9 @@ use crate::encoder::FrameInvariants;
 use crate::frame::{
   AsRegion, Frame, Plane, PlaneConfig, PlaneOffset, PlaneSlice,
 };
-use crate::hawktracer::*;
 use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
+use rust_hawktracer::*;
 
 use crate::api::SGRComplexityLevel;
 use std::cmp;

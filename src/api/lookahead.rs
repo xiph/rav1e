@@ -7,7 +7,6 @@ use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
 use crate::frame::{AsRegion, PlaneOffset};
-use crate::hawktracer::*;
 use crate::me::estimate_tile_motion;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
@@ -15,6 +14,7 @@ use crate::rayon::iter::*;
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
+use rust_hawktracer::*;
 use std::sync::Arc;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;

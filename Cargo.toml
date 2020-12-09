@@ -44,7 +44,7 @@ desync_finder = ["backtrace"]
 bench = []
 check_asm = []
 capi = []
-tracing = ["rust_hawktracer"]
+tracing = ["rust_hawktracer/profiling_enabled"]
 scenechange = []
 serialize = ["serde", "toml", "v_frame/serialize", "arrayvec/serde"]
 wasm = ["wasm-bindgen"]
@@ -87,17 +87,13 @@ fern = { version = "0.6", optional = true }
 itertools = "0.9"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.63", optional = true }
+rust_hawktracer = "0.7.0"
 
 [dependencies.image]
 version = "0.23"
 optional = true
 default-features = false
 features = ["png"]
-
-[dependencies.rust_hawktracer]
-version = "0.7.0"
-features = ["profiling_enabled"]
-optional = true
 
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
