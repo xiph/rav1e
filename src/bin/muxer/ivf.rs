@@ -11,8 +11,8 @@
 use super::Muxer;
 use crate::error::*;
 use ivf::*;
-use rav1e::hawktracer::*;
 use rav1e::prelude::*;
+use rust_hawktracer::*;
 use std::fs;
 use std::fs::File;
 use std::io;

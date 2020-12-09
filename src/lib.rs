@@ -75,17 +75,6 @@ mod serialize {
   }
 }
 
-#[doc(hidden)]
-pub mod hawktracer {
-  cfg_if::cfg_if! {
-    if #[cfg(feature="tracing")] {
-      pub use rust_hawktracer::*;
-    } else {
-      pub use noop_proc_macro::hawktracer;
-    }
-  }
-}
-
 mod wasm_bindgen {
   cfg_if::cfg_if! {
     if #[cfg(feature="wasm")] {

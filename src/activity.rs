@@ -8,9 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::frame::*;
-use crate::hawktracer::*;
 use crate::tiling::*;
 use crate::util::*;
+use rust_hawktracer::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {

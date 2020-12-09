@@ -16,7 +16,6 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
-use crate::hawktracer::*;
 use crate::partition::*;
 use crate::rate::{
   RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
@@ -28,6 +27,7 @@ use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
 use log::Level::Info;
+use rust_hawktracer::*;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;

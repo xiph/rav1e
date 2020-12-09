@@ -11,9 +11,9 @@ use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
 use crate::encoder::FrameInvariants;
 use crate::frame::*;
-use crate::hawktracer::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
+use rust_hawktracer::*;
 
 use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;

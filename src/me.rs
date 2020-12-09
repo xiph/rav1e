@@ -29,7 +29,7 @@ use crate::util::ILog;
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
-use crate::hawktracer::*;
+use rust_hawktracer::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MEStats {

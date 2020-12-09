@@ -11,13 +11,13 @@ use crate::api::FrameType;
 use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
 use crate::encoder::FrameInvariants;
-use crate::hawktracer::*;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
 use crate::tiling::*;
 use crate::util::{clamp, ILog, Pixel};
 use crate::DeblockState;
+use rust_hawktracer::*;
 use std::cmp;
 
 use crate::rayon::iter::*;
