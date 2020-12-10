@@ -515,7 +515,7 @@ function lpf_v_8_8_neon
         lpf_8_wd8
 
         sub             r10, r0,  r1, lsl #1
-        sub             r10, r10,  r1
+        sub             r10, r10, r1
         vst1.8          {d21}, [r10, :64], r1 // p2
         vst1.8          {d24}, [r0,  :64], r1 // q0
         vst1.8          {d22}, [r10, :64], r1 // p1
