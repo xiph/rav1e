@@ -200,11 +200,8 @@ cglobal wiener_filter7, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf, \
     jmp .h_main
 .h_top:
     mov            r10, wq
-    movu            m4, [lpfq+r10-4]
     test         edgeb, 1 ; LR_HAVE_LEFT
-    jnz .h_main
-    pshufb          m4, [wiener_l_shuf]
-    jmp .h_main
+    jz .h_extend_left
 .h_loop:
     movu            m4, [lpfq+r10-4]
 .h_main:
@@ -525,11 +522,8 @@ cglobal wiener_filter5, 5, 13, 16, 384*8+16, dst, dst_stride, left, lpf, \
     jmp .h_main
 .h_top:
     mov            r10, wq
-    movu            m4, [lpfq+r10-4]
     test         edgeb, 1 ; LR_HAVE_LEFT
-    jnz .h_main
-    pshufb          m4, m11
-    jmp .h_main
+    jz .h_extend_left
 .h_loop:
     movu            m4, [lpfq+r10-4]
 .h_main:
