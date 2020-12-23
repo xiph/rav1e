@@ -1421,7 +1421,6 @@ function ipred_filter_\bpc\()bpc_neon
         smin            v2.8h,   v2.8h,   v31.8h
         subs            w4,  w4,  #2
         st1             {v2.d}[0], [x0], x1
-        uxtl            v0.8h,   v2.8b
         ext             v0.16b,  v2.16b,  v2.16b, #8 // move top from [4-7] to [0-3]
         st1             {v2.d}[1], [x6], x1
         b.gt            4b
