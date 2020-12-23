@@ -1464,7 +1464,7 @@ L(ipred_filter_tbl):
         vst1.32         {d4[0]}, [r0, :32], r1
         vmovl.u8        q0,  d4
         vst1.32         {d4[1]}, [r6, :32], r1
-        vext.8          q0,  q0,  q0,  #8 // move top from [4-7] to [0-3]
+        vmov            d0,  d1          // move top from [4-7] to [0-3]
         bgt             4b
         pop             {r4-r8, pc}
 80:
