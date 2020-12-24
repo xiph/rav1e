@@ -67,29 +67,20 @@ impl<D: Decoder> Source<D> {
   cfg_if::cfg_if! {
     if #[cfg(all(unix, feature = "signal-hook"))] {
       fn new(limit: usize, input: D) -> Self {
-        let exit_requested = {
-          use std::sync::atomic::*;
-          let e = Arc::new(AtomicBool::from(false));
+        use signal_hook::{flag, consts};
 
-          fn setup_signal(sig: i32, e: Arc<AtomicBool>) {
-            unsafe {
-              signal_hook::register(sig, move || {
-                if e.load(Ordering::SeqCst) {
-                  std::process::exit(128 + sig);
-                }
-                e.store(true, Ordering::SeqCst);
-                info!("Exit requested, flushing.");
-              })
-              .expect("Cannot register the signal hooks");
-            }
-          }
+        // Make sure double CTRL+C and similar kills
+        let exit_requested = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        for sig in consts::TERM_SIGNALS {
+            // When terminated by a second term signal, exit with exit code 1.
+            // This will do nothing the first time (because term_now is false).
+            flag::register_conditional_shutdown(*sig, 1, Arc::clone(&exit_requested)).unwrap();
+            // But this will "arm" the above for the second time, by setting it to true.
+            // The order of registering these is important, if you put this one first, it will
+            // first arm and then terminate ‒ all in the first round.
+            flag::register(*sig, Arc::clone(&exit_requested)).unwrap();
+        }
 
-          setup_signal(signal_hook::SIGTERM, e.clone());
-          setup_signal(signal_hook::SIGQUIT, e.clone());
-          setup_signal(signal_hook::SIGINT, e.clone());
-
-          e
-        };
         Self { limit, input, count: 0, exit_requested, }
       }
     } else {

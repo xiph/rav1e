@@ -584,7 +584,7 @@ mod test {
       let area = tx_size.area();
 
       let input: Vec<i16> =
-        (0..area).map(|_| rng.gen_range(-255, 256)).collect();
+        (0..area).map(|_| rng.gen_range(-255..256)).collect();
 
       for &tx_type in get_valid_txfm_types(tx_size) {
         let mut output_ref = vec![0i16; area];

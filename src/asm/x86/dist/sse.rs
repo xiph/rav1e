@@ -230,13 +230,13 @@ pub mod test {
 
     for rows in input_plane.as_region_mut().rows_iter_mut() {
       for c in rows {
-        *c = T::cast_from(rng.gen_range(0u16, 1 << bd));
+        *c = T::cast_from(rng.gen_range(0u16..(1 << bd)));
       }
     }
 
     for rows in rec_plane.as_region_mut().rows_iter_mut() {
       for c in rows {
-        *c = T::cast_from(rng.gen_range(0u16, 1 << bd));
+        *c = T::cast_from(rng.gen_range(0u16..(1 << bd)));
       }
     }
 
@@ -276,7 +276,7 @@ pub mod test {
     let mut rng = thread_rng();
     for a in scales.iter_mut() {
       *a = rng
-        .gen_range(DistortionScale::new(0.5).0, DistortionScale::new(1.5).0);
+        .gen_range(DistortionScale::new(0.5).0..DistortionScale::new(1.5).0);
     }
   }
 
