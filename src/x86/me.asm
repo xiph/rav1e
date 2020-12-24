@@ -61,6 +61,7 @@ cglobal sad_16x16_hbd, 4, 5, 9, src, src_stride, dst, dst_stride, \
     mov               cntd, 8
     %define            sum  m0
     pxor               sum, sum
+    pxor                m9, m9
 .loop:
     movu                m1, [srcq]
     movu                m2, [srcq+16]
@@ -75,15 +76,17 @@ cglobal sad_16x16_hbd, 4, 5, 9, src, src_stride, dst, dst_stride, \
     W_ABS_DIFF m1, m2, m3, m4, m5, m6, m7, m8
     paddw               m1, m2
     paddw               m3, m4
-    paddw              sum, m1
-    paddw              sum, m3
+; Convert to 32-bits
+    punpcklwd           m2, m1, m9
+    punpcklwd           m4, m3, m9
+    punpckhwd           m1, m9
+    punpckhwd           m3, m9
+    paddd               m1, m2
+    paddd               m3, m4
+    paddd              sum, m1
+    paddd              sum, m3
     dec               cntd
     jg .loop
-; Convert to 32-bits
-    pxor                m1, m1
-    punpcklwd           m2, sum, m1
-    punpckhwd          sum, m1
-    paddd              sum, m2
 ; Horizontal reduction
     movhlps             m1, sum
     paddd              sum, m1
