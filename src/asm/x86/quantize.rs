@@ -170,7 +170,7 @@ mod test {
     let bd: usize = 8;
 
     for &tx_size in &tx_sizes {
-      let qindex: u8 = rng.gen_range(MINQ as u8, MAXQ as u8);
+      let qindex: u8 = rng.gen_range((MINQ as u8)..(MAXQ as u8));
       let dc_quant: i16 = dc_q(qindex, 0, bd);
       let ac_quant: i16 = ac_q(qindex, 0, bd);
 
@@ -181,7 +181,7 @@ mod test {
         out[0] = 0;
         out[1] = area;
         for eob in out.iter_mut().skip(2) {
-          *eob = rng.gen_range(0, area);
+          *eob = rng.gen_range(0..area);
         }
         out
       };

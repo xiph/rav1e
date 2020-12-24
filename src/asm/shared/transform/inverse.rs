@@ -119,7 +119,7 @@ pub mod test {
     }
 
     if eob != 0 {
-      eob += thread_rng().gen_range(0, (exit - eob).min(1));
+      eob += thread_rng().gen_range(0..(exit - eob).min(1));
     }
     for &pos in scan.iter().skip(eob + 1) {
       coeffs[pos as usize] = T::cast_from(0);

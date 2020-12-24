@@ -21,8 +21,11 @@ mod binary {
 
   fn get_tempfile_path(extension: &str) -> PathBuf {
     let mut path = temp_dir();
-    let filename =
-      thread_rng().sample_iter(&Alphanumeric).take(12).collect::<String>();
+    let filename = thread_rng()
+      .sample_iter(Alphanumeric)
+      .take(12)
+      .map(char::from)
+      .collect::<String>();
     path.push(format!("{}.{}", filename, extension));
     path
   }

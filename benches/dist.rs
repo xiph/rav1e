@@ -143,7 +143,7 @@ pub fn get_satd(c: &mut Criterion) {
 fn fill_scaling(ra: &mut ChaChaRng, scales: &mut [u32]) {
   for a in scales.iter_mut() {
     *a =
-      ra.gen_range(DistortionScale::new(0.5).0, DistortionScale::new(1.5).0);
+      ra.gen_range(DistortionScale::new(0.5).0..DistortionScale::new(1.5).0);
   }
 }
 
