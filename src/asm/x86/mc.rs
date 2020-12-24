@@ -319,10 +319,43 @@ cpu_function_lookup_table!(
   [SSSE3, AVX2]
 );
 
+macro_rules! decl_mc_hbd_fns {
+  ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
+    extern {
+      $(
+        fn $func_name(
+          dst: *mut u16, dst_stride: isize, src: *const u16, src_stride: isize,
+          w: i32, h: i32, mx: i32, my: i32, bitdepth_max: i32,
+        );
+      )*
+    }
+
+    static PUT_HBD_FNS_AVX2: [Option<PutHBDFn>; 16] = {
+      let mut out: [Option<PutHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+  }
+}
+
+decl_mc_hbd_fns!(
+  (REGULAR, REGULAR, rav1e_put_8tap_regular_16bpc_avx2),
+  (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth_16bpc_avx2),
+  (REGULAR, SHARP, rav1e_put_8tap_regular_sharp_16bpc_avx2),
+  (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular_16bpc_avx2),
+  (SMOOTH, SMOOTH, rav1e_put_8tap_smooth_16bpc_avx2),
+  (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_16bpc_avx2),
+  (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_16bpc_avx2),
+  (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_16bpc_avx2),
+  (SHARP, SHARP, rav1e_put_8tap_sharp_16bpc_avx2)
+);
+
 cpu_function_lookup_table!(
   PUT_HBD_FNS: [[Option<PutHBDFn>; 16]],
   default: [None; 16],
-  []
+  [AVX2]
 );
 
 macro_rules! decl_mct_fns {
@@ -392,6 +425,40 @@ cpu_function_lookup_table!(
   default: [None; 16],
   [SSSE3, AVX2, AVX512ICL]
 );
+
+/* Disable 16bpc 8tap prep functions until we update Rust and check_asm passes
+macro_rules! decl_mct_hbd_fns {
+  ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
+    extern {
+      $(
+        fn $func_name(
+          tmp: *mut i16, src: *const u16, src_stride: libc::ptrdiff_t, w: i32,
+          h: i32, mx: i32, my: i32, bitdepth_max: i32,
+        );
+      )*
+    }
+
+    static PREP_HBD_FNS_AVX2: [Option<PrepHBDFn>; 16] = {
+      let mut out: [Option<PrepHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+  }
+}
+
+decl_mct_hbd_fns!(
+  (REGULAR, REGULAR, rav1e_prep_8tap_regular_16bpc_avx2),
+  (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth_16bpc_avx2),
+  (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp_16bpc_avx2),
+  (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular_16bpc_avx2),
+  (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth_16bpc_avx2),
+  (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_16bpc_avx2),
+  (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_16bpc_avx2),
+  (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_16bpc_avx2),
+  (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2)
+);*/
 
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
