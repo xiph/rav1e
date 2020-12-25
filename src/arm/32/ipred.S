@@ -1435,6 +1435,8 @@ function ipred_filter_8bpc_neon, export=1
         vmovl.s8        q13, d28
         vmovl.s8        q14, d29
         add             r8,  r2,  #1
+        sub             r2,  r2,  #2
+        mov             r7,  #-2
         bx              r5
 
         .align 2
@@ -1446,8 +1448,6 @@ L(ipred_filter_tbl):
 
 40:
         vld1.32         {d0[]}, [r8]     // top (0-3)
-        sub             r2,  r2,  #2
-        mov             r7,  #-2
         vmovl.u8        q0,  d0          // top (0-3)
 4:
         vld1.32         {d2[]}, [r2], r7 // left (0-1) + topleft (2)
@@ -1469,8 +1469,6 @@ L(ipred_filter_tbl):
         pop             {r4-r8, pc}
 80:
         vld1.8          {d0},  [r8]      // top (0-7)
-        sub             r2,  r2,  #2
-        mov             r7,  #-2
         vmovl.u8        q0,  d0          // top (0-7)
 8:
         vld1.32         {d2[]}, [r2], r7 // left (0-1) + topleft (2)
@@ -1502,8 +1500,6 @@ L(ipred_filter_tbl):
 160:
 320:
         vpush           {q4-q5}
-        sub             r2,  r2,  #2
-        mov             r7,  #-2
         sub             r1,  r1,  r3
         mov             lr,  r3
 
