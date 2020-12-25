@@ -297,6 +297,10 @@ pub(crate) mod rust {
     }
   }
 
+  // HBD output interval is [-20588, 36956] (10-bit), [-20602, 36983] (12-bit)
+  // Subtract PREP_BIAS to ensure result fits in i16 and matches dav1d assembly
+  const PREP_BIAS: i32 = 8192;
+
   #[cold_for_target_arch("x86_64")]
   pub fn prep_8tap<T: Pixel>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
@@ -307,13 +311,15 @@ pub(crate) mod rust {
     let y_filter = get_filter(mode_y, row_frac, height);
     let x_filter = get_filter(mode_x, col_frac, width);
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
+    let prep_bias = if bit_depth == 8 { 0 } else { PREP_BIAS };
     match (col_frac, row_frac) {
       (0, 0) => {
         for r in 0..height {
           let src_slice = &src[r];
           for c in 0..width {
-            tmp[r * width + c] =
-              i16::cast_from(src_slice[c]) << intermediate_bits;
+            tmp[r * width + c] = (i16::cast_from(src_slice[c])
+              << intermediate_bits)
+              - prep_bias as i16;
           }
         }
       }
@@ -322,12 +328,12 @@ pub(crate) mod rust {
         for r in 0..height {
           let src_slice = &offset_slice[r];
           for c in 0..width {
-            tmp[r * width + c] = round_shift(
+            tmp[r * width + c] = (round_shift(
               unsafe {
                 run_filter(src_slice[c..].as_ptr(), ref_stride, y_filter)
               },
               7 - intermediate_bits,
-            ) as i16;
+            ) - prep_bias) as i16;
           }
         }
       }
@@ -336,10 +342,10 @@ pub(crate) mod rust {
         for r in 0..height {
           let src_slice = &offset_slice[r];
           for c in 0..width {
-            tmp[r * width + c] = round_shift(
+            tmp[r * width + c] = (round_shift(
               unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
               7 - intermediate_bits,
-            ) as i16;
+            ) - prep_bias) as i16;
           }
         }
       }
@@ -360,7 +366,7 @@ pub(crate) mod rust {
 
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
-              tmp[r * width + c] = round_shift(
+              tmp[r * width + c] = (round_shift(
                 unsafe {
                   run_filter(
                     intermediate[8 * r + c - cg..].as_ptr(),
@@ -369,7 +375,7 @@ pub(crate) mod rust {
                   )
                 },
                 7,
-              ) as i16;
+              ) - prep_bias) as i16;
             }
           }
         }
@@ -384,12 +390,15 @@ pub(crate) mod rust {
   ) {
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
+    let prep_bias = if bit_depth == 8 { 0 } else { PREP_BIAS * 2 };
     for r in 0..height {
       let dst_slice = &mut dst[r];
       for c in 0..width {
         dst_slice[c] = T::cast_from(
           round_shift(
-            tmp1[r * width + c] as i32 + tmp2[r * width + c] as i32,
+            tmp1[r * width + c] as i32
+              + tmp2[r * width + c] as i32
+              + prep_bias,
             intermediate_bits + 1,
           )
           .max(0)
