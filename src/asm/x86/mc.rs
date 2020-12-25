@@ -426,7 +426,6 @@ cpu_function_lookup_table!(
   [SSSE3, AVX2, AVX512ICL]
 );
 
-/* Disable 16bpc 8tap prep functions until we update Rust and check_asm passes
 macro_rules! decl_mct_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     extern {
@@ -458,12 +457,12 @@ decl_mct_hbd_fns!(
   (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_16bpc_avx2),
   (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_16bpc_avx2),
   (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2)
-);*/
+);
 
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
   default: [None; 16],
-  []
+  [AVX2]
 );
 
 extern {

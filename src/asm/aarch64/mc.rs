@@ -384,7 +384,6 @@ cpu_function_lookup_table!(
   [NEON]
 );
 
-/* Disable 16bpc 8tap prep functions until we update Rust and check_asm passes
 macro_rules! decl_mct_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
     extern {
@@ -417,12 +416,12 @@ decl_mct_hbd_fns!(
   (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_16bpc_neon),
   (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_neon),
   (BILINEAR, BILINEAR, rav1e_prep_bilin_16bpc_neon)
-);*/
+);
 
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
   default: [None; 16],
-  []
+  [NEON]
 );
 
 extern {
@@ -438,12 +437,15 @@ cpu_function_lookup_table!(
   [(NEON, Some(rav1e_avg_8bpc_neon))]
 );
 
-/* Disable 16bpc avg function until we update Rust and check_asm passes
 extern {
   fn rav1e_avg_16bpc_neon(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
-}*/
+}
 
-cpu_function_lookup_table!(AVG_HBD_FNS: [Option<AvgHBDFn>], default: None, []);
+cpu_function_lookup_table!(
+  AVG_HBD_FNS: [Option<AvgHBDFn>],
+  default: None,
+  [(NEON, Some(rav1e_avg_16bpc_neon))]
+);
