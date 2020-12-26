@@ -19,7 +19,10 @@ SECTION_RODATA 32
 spf_h_shuf: db  0,  1,  2,  3,  4,  5,  6,  7,  2,  3,  4,  5,  6,  7,  8,  9
             db  4,  5,  6,  7,  8,  9, 10, 11,  6,  7,  8,  9, 10, 11, 12, 13
 pq_2:       dq (6 - 4)
+pq_3:       dq (6 - 4) + 1
+pq_6:       dq (6 - 4) + 4
 pq_4:       dq (6 - 2)
+pq_5:       dq (6 - 2) + 1
 pq_8:       dq (6 + 2)
 pq_10:      dq (6 + 4)
 pd_32:      dd (1 << 6 >> 1)
@@ -32,7 +35,16 @@ pd_128:     dd (1 << (6 + 2) >> 1)
 nd_524256:  dd (1 << 6 >> 1) - (8192 << 6)
 nd_32766:   dd (1 << (6 - 4) >> 1) - (8192 << (6 - 4))
 nd_131064:  dd (1 << (6 - 2) >> 1) - (8192 << (6 - 2))
+pd_16388:   dd (1 << (6 - 4)) + 8192*2
+pd_16400:   dd (1 << (6 - 2)) + 8192*2
+pd_131104:  dd ((1 << (6 - 4)) + 8192*2) << 3
+pd_131200:  dd ((1 << (6 - 2)) + 8192*2) << 3
+pd_524416:  dd ((1 << (6 - 4)) + 8192*2) << 5
+pd_524800:  dd ((1 << (6 - 2)) + 8192*2) << 5
 pw_8192:    dw 8192
+pw_1:       dw 1
+pw_16:      dw 16
+pw_64:      dw 64
 
 SECTION .text
 
@@ -1549,5 +1561,172 @@ INIT_YMM avx2
 
 filter_fn put
 filter_fn prep
+
+%macro AVG 1
+  mova m0, [p1q]
+  mova m2, [p2q]
+  punpckhwd m1, m0, m2
+  punpcklwd m0, m2
+%ifidn %1, mask
+  mova xm2, [mq]
+  vpmovsxbw m2, xm2
+  vpbroadcastw m7, [pw_64]
+  psubw m7, m2
+  punpckhwd m3, m2, m7
+  punpcklwd m2, m7
+  pmaddwd m0, m2
+%else
+  pmaddwd m0, m3
+%endif
+  pmaddwd m1, m3
+  paddd m0, m4
+  paddd m1, m4
+  psrad m0, xm5
+  psrad m1, xm5
+  packusdw m0, m1
+  pminuw m0, m6
+%endm
+
+%macro bilin_fn 1
+%ifidn %1, avg
+cglobal avg_16bpc, 4, 8, 8, dst, ds, p1, p2, w, h, bdmax, ds3, ow
+%elifidn %1, w_avg
+cglobal w_avg_16bpc, 4, 9, 8, dst, ds, p1, p2, w, h, wg, bdmax, ow
+%else
+cglobal mask_16bpc, 4, 9, 8, dst, ds, p1, p2, w, h, m, bdmax, ow
+%endif
+
+  movifnidn hd, hm
+  movifnidn wd, wm
+
+%ifidn %1, avg
+  vpbroadcastw m3, [pw_1]
+  vpbroadcastd m4, [pd_16400]  ; (1 << (6 - 2)) + 8192*2
+  movq xm5, [pq_5]             ; (6 - 2) + 1
+%elifidn %1, w_avg
+  vpbroadcastw m3, wgm
+  vpbroadcastw m4, [pw_16]
+  psubw m4, m3
+  punpcklwd m3, m4
+  vpbroadcastd m4, [pd_131200] ; ((1 << (6 - 2)) + 8192*2) << 3
+  movq xm5, [pq_8]             ; (6 - 2) + 1 + 3
+%else
+  movifnidn mq, mmp
+  vpbroadcastd m4, [pd_524800] ; ((1 << (6 - 2)) + 8192*2) << 5
+  movq xm5, [pq_10]            ; (6 - 2) + 1 + 5
+%endif
+
+  popcnt bdmaxd, bdmaxm
+  cmp bdmaxd, 10
+  je .bits10
+
+%ifidn %1, avg
+  vpbroadcastd m4, [pd_16388]  ; (1 << (6 - 4)) + 8192*2
+  movq xm5, [pq_3]             ; (6 - 4) + 1
+%elifidn %1, w_avg
+  vpbroadcastd m4, [pd_131104] ; ((1 << (6 - 4)) + 8192*2) << 3
+  movq xm5, [pq_6]             ; (6 - 4) + 1 + 3
+%else
+  vpbroadcastd m4, [pd_524416] ; ((1 << (6 - 4)) + 8192*2) << 5
+  movq xm5, [pq_8]             ; (6 - 4) + 1 + 5
+%endif
+.bits10:
+
+  vpbroadcastw m6, bdmaxm
+
+  lea owq, [2*wq]
+
+DEFINE_ARGS dst, ds, p1, p2, w, h, m, jr, ow
+
+  lea jrq, [.jmp_tbl]
+  tzcnt wd, wm
+  sub wd, 2
+  movsxd wq, [jrq + wq*4]
+  add wq, jrq
+  jmp wq
+
+.w4:
+DEFINE_ARGS dst, ds, p1, p2, w, h, m, ds3, ow
+
+  lea ds3q, [dsq*3]
+
+.w4l:
+  AVG %1
+
+  vextracti128 xm1, m0, 1
+  movq [dstq], xm0
+  pextrq [dstq + dsq], xm0, 1
+  movq [dstq + 2*dsq], xm1
+  pextrq [dstq + ds3q], xm1, 1
+
+  lea dstq, [dstq + 4*dsq]
+  add p1q, 32
+  add p2q, 32
+%ifidn %1, mask
+  add mq, 16
+%endif
+
+  sub hd, 4
+  jg .w4l
+  RET
+
+.w8:
+  AVG %1
+
+  vextracti128 xm1, m0, 1
+  mova [dstq], xm0
+  mova [dstq + dsq], xm1
+
+  lea dstq, [dstq + dsq*2]
+  add p1q, 32
+  add p2q, 32
+%ifidn %1, mask
+  add mq, 16
+%endif
+
+  sub hd, 2
+  jg .w8
+
+  RET
+
+.w16:
+
+  mov wq, owq
+  sub dsq, wq
+
+.w16l:
+  AVG %1
+
+  mova [dstq], m0
+
+  add dstq, 32
+  add p1q, 32
+  add p2q, 32
+%ifidn %1, mask
+  add mq, 16
+%endif
+
+  sub wd, 32
+  jg .w16l
+
+  add dstq, dsq
+  mov wq, owq
+  dec hd
+  jg .w16l
+
+  RET
+
+.jmp_tbl:
+  dd .w4 - .jmp_tbl
+  dd .w8 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+%endm
+
+bilin_fn avg
+bilin_fn w_avg
+bilin_fn mask
 
 %endif ; ARCH_X86_64
