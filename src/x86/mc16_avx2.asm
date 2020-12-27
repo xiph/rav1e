@@ -1729,4 +1729,385 @@ bilin_fn avg
 bilin_fn w_avg
 bilin_fn mask
 
+INIT_XMM avx2
+cglobal blend_16bpc, 6, 7, 7, dst, ds, tmp, w, h, mask, jr
+  pxor m3, m3
+  lea jrq, [.jmp_tbl]
+  tzcnt wd, wm
+  sub wd, 2
+  movsxd wq, [jrq + wq*4]
+  add wq, jrq
+  jmp wq
+.w4:
+  movq m0, [dstq]
+  pinsrq m0, [dstq + dsq], 1
+  mova m1, [tmpq]
+  movq m2, [maskq]
+  psubb m2, m3, m2
+  pmovsxbw m2, m2
+  psllw m2, 9
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  movq [dstq], m0
+  pextrq [dstq + dsq], m0, 1
+  add maskq, 8
+  add tmpq, 16
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w4
+  RET
+INIT_YMM avx2
+.w8:
+  mova xm0, [dstq]
+  vinserti128 m0, [dstq + dsq], 1
+  mova m1, [tmpq]
+  mova xm2, [maskq]
+  psubb xm2, xm3, xm2
+  pmovsxbw m2, xm2
+  psllw m2, 9
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  mova [dstq], xm0
+  vextracti128 [dstq + dsq], m0, 1
+  add maskq, 16
+  add tmpq, 32
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w8
+  RET
+.w16:
+  mova m0, [dstq]
+  mova m4, [dstq + dsq]
+  mova m1, [tmpq]
+  mova m5, [tmpq + 32]
+  mova xm2, [maskq]
+  mova xm6, [maskq + 16]
+  psubb xm2, xm3, xm2
+  psubb xm6, xm3, xm6
+  pmovsxbw m2, xm2
+  pmovsxbw m6, xm6
+  psllw m2, 9
+  psllw m6, 9
+  psubw m1, m0, m1
+  psubw m5, m4, m5
+  pmulhrsw m1, m2
+  pmulhrsw m5, m6
+  paddw m0, m1
+  paddw m4, m5
+  mova [dstq], m0
+  mova [dstq + dsq], m4
+  add maskq, 32
+  add tmpq, 64
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w16
+  RET
+.w32:
+  mova m0, [dstq]
+  mova m4, [dstq + 32]
+  mova m1, [tmpq]
+  mova m5, [tmpq + 32]
+  mova xm2, [maskq]
+  mova xm6, [maskq + 16]
+  psubb xm2, xm3, xm2
+  psubb xm6, xm3, xm6
+  pmovsxbw m2, xm2
+  pmovsxbw m6, xm6
+  psllw m2, 9
+  psllw m6, 9
+  psubw m1, m0, m1
+  psubw m5, m4, m5
+  pmulhrsw m1, m2
+  pmulhrsw m5, m6
+  paddw m0, m1
+  paddw m4, m5
+  mova [dstq], m0
+  mova [dstq + 32], m4
+  add maskq, 32
+  add tmpq, 64
+  add dstq, dsq
+  dec hd
+  jg .w32
+  RET
+.jmp_tbl:
+  dd .w4 - .jmp_tbl
+  dd .w8 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w32 - .jmp_tbl
+
+cextern obmc_masks
+
+INIT_XMM avx2
+cglobal blend_v_16bpc, 5, 7, 7, dst, ds, tmp, w, h, o, jr
+  lea oq, [obmc_masks]
+  pxor m3, m3
+  movsx wq, wd
+  add oq, wq
+  lea jrq, [.jmp_tbl]
+  tzcnt wd, wm
+  sub wd, 1
+  movsxd wq, [jrq + wq*4]
+  add wq, jrq
+  jmp wq
+.w2:
+  vpbroadcastw m2, [oq]
+  psubb m2, m3, m2
+  pmovsxbw m2, m2
+  psllw m2, 9
+.w2l:
+  movd m0, [dstq]
+  movd m1, [tmpq]
+  pinsrd m0, [dstq + dsq], 1
+  pinsrd m1, [tmpq + 4], 1
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  movd [dstq], m0
+  pextrd [dstq + dsq], m0, 1
+  add tmpq, 8
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w2l
+  RET
+.w4:
+  vpbroadcastd m2, [oq]
+  psubb m2, m3, m2
+  pmovsxbw m2, m2
+  psllw m2, 9
+.w4l:
+  movq m0, [dstq]
+  movq m1, [tmpq]
+  pinsrq m0, [dstq + dsq], 1
+  pinsrq m1, [tmpq + 8], 1
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  movq [dstq], m0
+  pextrq [dstq + dsq], m0, 1
+  add tmpq, 16
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w4l
+  RET
+INIT_YMM avx2
+.w8:
+  vpbroadcastq xm2, [oq]
+  psubb xm2, xm3, xm2
+  pmovsxbw m2, xm2
+  psllw m2, 9
+.w8l:
+  mova xm0, [dstq]
+  vinserti128 m0, [dstq + dsq], 1
+  mova m1, [tmpq]
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  mova [dstq], xm0
+  vextracti128 [dstq + dsq], m0, 1
+  add tmpq, 32
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w8l
+  RET
+.w16:
+  mova xm2, [oq]
+  psubb xm2, xm3, xm2
+  pmovsxbw m2, xm2
+  psllw m2, 9
+.w16l:
+  mova m0, [dstq]
+  mova m4, [dstq + dsq]
+  mova m1, [tmpq]
+  mova m5, [tmpq + 32]
+  psubw m1, m0, m1
+  psubw m5, m4, m5
+  pmulhrsw m1, m2
+  pmulhrsw m5, m2
+  paddw m0, m1
+  paddw m4, m5
+  mova [dstq], m0
+  mova [dstq + dsq], m4
+  add tmpq, 64
+  lea dstq, [dstq + 2*dsq]
+  sub hd, 2
+  jg .w16l
+  RET
+.w32:
+  mova xm2, [oq]
+  mova xm6, [oq + 16]
+  psubb xm2, xm3, xm2
+  psubb xm6, xm3, xm6
+  pmovsxbw m2, xm2
+  pmovsxbw m6, xm6
+  psllw m2, 9
+  psllw m6, 9
+.w32l:
+  mova m0, [dstq]
+  mova m4, [dstq + 32]
+  mova m1, [tmpq]
+  mova m5, [tmpq + 32]
+  psubw m1, m0, m1
+  psubw m5, m4, m5
+  pmulhrsw m1, m2
+  pmulhrsw m5, m6
+  paddw m0, m1
+  paddw m4, m5
+  mova [dstq], m0
+  mova [dstq + 32], m4
+  add tmpq, 64
+  add dstq, dsq
+  dec hd
+  jg .w32l
+  RET
+.jmp_tbl:
+  dd .w2 - .jmp_tbl
+  dd .w4 - .jmp_tbl
+  dd .w8 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w32 - .jmp_tbl
+
+INIT_XMM avx2
+cglobal blend_h_16bpc, 5, 8, 7, dst, ds, tmp, w, h, o, jr, w2
+  pxor m3, m3
+  lea w2d, [wd*2]
+  lea oq, [obmc_masks]
+  movsx hq, hd
+  add oq, hq
+  imul hq, 3
+  shr hq, 2
+  lea jrq, [.jmp_tbl]
+  tzcnt wd, wm
+  sub wd, 1
+  movsxd wq, [jrq + wq*4]
+  add wq, jrq
+  jmp wq
+.w2:
+  movd m2, [oq]
+  psubb m2, m3, m2
+  punpcklbw m2, m2
+  pmovsxbw m2, m2
+  psllw m2, 9
+  movd m0, [dstq]
+  movd m1, [tmpq]
+  pinsrd m0, [dstq + dsq], 1
+  pinsrd m1, [tmpq + 4], 1
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  movd [dstq], m0
+  pextrd [dstq + dsq], m0, 1
+  add tmpq, 8
+  lea dstq, [dstq + 2*dsq]
+  add oq, 2
+  sub hd, 2
+  jg .w2
+  RET
+.w4:
+  movd m2, [oq]
+  punpcklbw m2, m2
+  punpcklwd m2, m2
+  psubb m2, m3, m2
+  pmovsxbw m2, m2
+  psllw m2, 9
+  movq m0, [dstq]
+  movq m1, [tmpq]
+  pinsrq m0, [dstq + dsq], 1
+  pinsrq m1, [tmpq + 8], 1
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  movq [dstq], m0
+  pextrq [dstq + dsq], m0, 1
+  add tmpq, 16
+  lea dstq, [dstq + 2*dsq]
+  add oq, 2
+  sub hd, 2
+  jg .w4
+  RET
+INIT_YMM avx2
+.w8:
+  movd xm2, [oq]
+  psubb xm2, xm3, xm2
+  punpcklbw xm2, xm2
+  punpcklwd xm2, xm2
+  punpckldq xm2, xm2
+  pmovsxbw m2, xm2
+  psllw m2, 9
+  mova xm0, [dstq]
+  vinserti128 m0, [dstq + dsq], 1
+  mova m1, [tmpq]
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  mova [dstq], xm0
+  vextracti128 [dstq + dsq], m0, 1
+  add tmpq, 32
+  lea dstq, [dstq + 2*dsq]
+  add oq, 2
+  sub hd, 2
+  jg .w8
+  RET
+.w16:
+  vpbroadcastb xm2, [oq]
+  vpbroadcastb xm6, [oq + 1]
+  psubb xm2, xm3, xm2
+  psubb xm6, xm3, xm6
+  pmovsxbw m2, xm2
+  pmovsxbw m6, xm6
+  psllw m2, 9
+  psllw m6, 9
+  mova m0, [dstq]
+  mova m1, [tmpq]
+  mova m4, [dstq + dsq]
+  mova m5, [tmpq + 32]
+  psubw m1, m0, m1
+  psubw m5, m4, m5
+  pmulhrsw m1, m2
+  pmulhrsw m5, m6
+  paddw m0, m1
+  paddw m4, m5
+  mova [dstq], m0
+  mova [dstq + dsq], m4
+  add tmpq, 64
+  lea dstq, [dstq + 2*dsq]
+  add oq, 2
+  sub hd, 2
+  jg .w16
+  RET
+.w32:
+  mov wd, w2d
+  sub dsq, wq
+.w32l:
+  vpbroadcastb xm2, [oq]
+  psubb xm2, xm3, xm2
+  pmovsxbw m2, xm2
+  psllw m2, 9
+  mov wd, w2d
+.w32c:
+  mova m0, [dstq]
+  mova m1, [tmpq]
+  psubw m1, m0, m1
+  pmulhrsw m1, m2
+  paddw m0, m1
+  mova [dstq], m0
+  add dstq, 32
+  add tmpq, 32
+  sub wd, 32
+  jg .w32c
+  add dstq, dsq
+  inc oq
+  dec hd
+  jg .w32l
+  RET
+.jmp_tbl:
+  dd .w2 - .jmp_tbl
+  dd .w4 - .jmp_tbl
+  dd .w8 - .jmp_tbl
+  dd .w16 - .jmp_tbl
+  dd .w32 - .jmp_tbl
+  dd .w32 - .jmp_tbl
+  dd .w32 - .jmp_tbl
+
 %endif ; ARCH_X86_64
