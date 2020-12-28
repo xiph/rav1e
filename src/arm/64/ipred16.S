@@ -1382,7 +1382,9 @@ function ipred_filter_\bpc\()bpc_neon
         sxtl            v21.8h,  v21.8b
         sxtl            v22.8h,  v22.8b
         dup             v31.8h,  w8
+.if \bpc == 10
         movi            v30.8h,  #0
+.endif
         br              x5
 40:
         ldur            d0,  [x2, #2]             // top (0-3)
