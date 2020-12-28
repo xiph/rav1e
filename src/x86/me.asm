@@ -56,8 +56,8 @@ cglobal sad_4x4_hbd, 4, 6, 8, src, src_stride, dst, dst_stride, \
 %if ARCH_X86_64
 
 INIT_XMM ssse3
-cglobal sad_16x16_hbd, 4, 5, 9, src, src_stride, dst, dst_stride, \
-                                cnt
+cglobal sad_16x16_hbd, 4, 5, 10, src, src_stride, dst, dst_stride, \
+                                 cnt
     mov               cntd, 8
     %define            sum  m0
     pxor               sum, sum
