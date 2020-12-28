@@ -1589,7 +1589,7 @@ filter_fn prep
 
 %macro bilin_fn 1
 %ifidn %1, avg
-cglobal avg_16bpc, 4, 8, 8, dst, ds, p1, p2, w, h, bdmax, ds3, ow
+cglobal avg_16bpc, 4, 9, 8, dst, ds, p1, p2, w, h, bdmax, ds3, ow
 %elifidn %1, w_avg
 cglobal w_avg_16bpc, 4, 9, 8, dst, ds, p1, p2, w, h, wg, bdmax, ow
 %else
@@ -1634,7 +1634,7 @@ cglobal mask_16bpc, 4, 9, 8, dst, ds, p1, p2, w, h, m, bdmax, ow
 
   vpbroadcastw m6, bdmaxm
 
-  lea owq, [2*wq]
+  lea owd, [2*wd]
 
 DEFINE_ARGS dst, ds, p1, p2, w, h, m, jr, ow
 
@@ -1691,7 +1691,7 @@ DEFINE_ARGS dst, ds, p1, p2, w, h, m, ds3, ow
 
 .w16:
 
-  mov wq, owq
+  mov wd, owd ; upper 32-bits of wq zerod by jmp
   sub dsq, wq
 
 .w16l:
@@ -1710,7 +1710,7 @@ DEFINE_ARGS dst, ds, p1, p2, w, h, m, ds3, ow
   jg .w16l
 
   add dstq, dsq
-  mov wq, owq
+  mov wd, owd
   dec hd
   jg .w16l
 
