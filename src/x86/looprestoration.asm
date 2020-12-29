@@ -88,8 +88,8 @@ SECTION .text
 DECLARE_REG_TMP 4, 9, 7, 11, 12, 13, 14 ; ring buffer pointers
 
 INIT_YMM avx2
-cglobal wiener_filter7, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf, \
-                                               lpf_stride, w, edge, flt, h
+cglobal wiener_filter7_8bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf, \
+                                                    lpf_stride, w, edge, flt, h
     mov           fltq, fltmp
     mov          edged, r8m
     mov             wd, wm
@@ -436,8 +436,8 @@ ALIGN function_align
     add           dstq, dst_strideq
     ret
 
-cglobal wiener_filter5, 5, 13, 16, 384*8+16, dst, dst_stride, left, lpf, \
-                                             lpf_stride, w, edge, flt, h
+cglobal wiener_filter5_8bpc, 5, 13, 16, 384*8+16, dst, dst_stride, left, lpf, \
+                                                  lpf_stride, w, edge, flt, h
     mov           fltq, fltmp
     mov          edged, r8m
     mov             wd, wm
@@ -554,7 +554,7 @@ cglobal wiener_filter5, 5, 13, 16, 384*8+16, dst, dst_stride, left, lpf, \
     jnz .h_have_right
     cmp           r10d, -33
     jl .h_have_right
-    call mangle(private_prefix %+ _wiener_filter7_avx2).extend_right
+    call mangle(private_prefix %+ _wiener_filter7_8bpc_avx2).extend_right
 .h_have_right:
     pshufb          m0, m4, m6
     pmaddubsw       m0, m12
@@ -613,7 +613,7 @@ ALIGN function_align
     jnz .hv_have_right
     cmp           r10d, -33
     jl .hv_have_right
-    call mangle(private_prefix %+ _wiener_filter7_avx2).extend_right
+    call mangle(private_prefix %+ _wiener_filter7_8bpc_avx2).extend_right
 .hv_have_right:
     pshufb          m0, m4, m6
     pmaddubsw       m0, m12
@@ -727,8 +727,8 @@ ALIGN function_align
     jl .v_loop
     ret
 
-cglobal sgr_filter_5x5, 5, 13, 16, 400*24+16, dst, dst_stride, left, lpf, \
-                                              lpf_stride, w, edge, params, h
+cglobal sgr_filter_5x5_8bpc, 5, 13, 16, 400*24+16, dst, dst_stride, left, lpf, \
+                                                   lpf_stride, w, edge, params, h
 %define base r12-sgr_x_by_x-256*4
     lea            r12, [sgr_x_by_x+256*4]
     mov        paramsq, paramsmp
@@ -1187,8 +1187,8 @@ ALIGN function_align
     add           dstq, dst_strideq
     ret
 
-cglobal sgr_filter_3x3, 5, 15, 15, -400*28-16, dst, dst_stride, left, lpf, \
-                                               lpf_stride, w, edge, params, h
+cglobal sgr_filter_3x3_8bpc, 5, 15, 15, -400*28-16, dst, dst_stride, left, lpf, \
+                                                    lpf_stride, w, edge, params, h
 %define base r14-sgr_x_by_x-256*4
     mov        paramsq, paramsmp
     mov          edged, r8m
@@ -1298,7 +1298,7 @@ cglobal sgr_filter_3x3, 5, 15, 15, -400*28-16, dst, dst_stride, left, lpf, \
     jnz .h_have_right
     cmp           r10d, -17
     jl .h_have_right
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).extend_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).extend_right
 .h_have_right:
     pshufb          m0, m5, m8
     pmullw          m2, m0, m0
@@ -1346,7 +1346,7 @@ ALIGN function_align
     jnz .hv_have_right
     cmp           r10d, -17
     jl .hv_have_right
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).extend_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).extend_right
 .hv_have_right:
     pshufb          m0, m5, m8
     pmullw          m3, m0, m0
@@ -1546,8 +1546,8 @@ ALIGN function_align
     add           dstq, dst_strideq
     ret
 
-cglobal sgr_filter_mix, 5, 13, 16, 400*56+8, dst, dst_stride, left, lpf, \
-                                             lpf_stride, w, edge, params, h
+cglobal sgr_filter_mix_8bpc, 5, 13, 16, 400*56+8, dst, dst_stride, left, lpf, \
+                                                  lpf_stride, w, edge, params, h
 %define base r12-sgr_x_by_x-256*4
     lea            r12, [sgr_x_by_x+256*4]
     mov        paramsq, paramsmp
@@ -1573,7 +1573,7 @@ cglobal sgr_filter_mix, 5, 13, 16, 400*56+8, dst, dst_stride, left, lpf, \
     call .h_top
     add           lpfq, lpf_strideq
     mov             t2, t1
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).top_fixup
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).top_fixup
     add             t1, 400*12
     call .h_top
     lea            r10, [lpfq+lpf_strideq*4]
@@ -1681,7 +1681,7 @@ cglobal sgr_filter_mix, 5, 13, 16, 400*56+8, dst, dst_stride, left, lpf, \
     jnz .h_have_right
     cmp           r10d, -18
     jl .h_have_right
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).extend_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).extend_right
 .h_have_right:
     pshufb          m6, m5, m9
     pshufb          m4, m5, m10
@@ -1742,7 +1742,7 @@ ALIGN function_align
     jnz .hv0_have_right
     cmp           r10d, -18
     jl .hv0_have_right
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).extend_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).extend_right
 .hv0_have_right:
     pshufb          m6, m5, m9
     pshufb          m4, m5, m10
@@ -1853,7 +1853,7 @@ ALIGN function_align
     jnz .hv1_have_right
     cmp           r10d, -18
     jl .hv1_have_right
-    call mangle(private_prefix %+ _sgr_filter_5x5_avx2).extend_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_8bpc_avx2).extend_right
 .hv1_have_right:
     pshufb          m6, m5, m9
     pshufb          m3, m5, m10
