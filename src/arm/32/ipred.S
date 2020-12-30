@@ -600,10 +600,10 @@ L(ipred_dc_tbl):
 L(ipred_dc_h4):
         vld1.32         {d0[]},  [r2, :32]!
         vpaddl.u8       d0,  d0
+        add             r2,  r2,  #1
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w4):
-        add             r2,  r2,  #1
         vld1.32         {d1[]},  [r2]
         vadd.s16        d0,  d0,  d30
         vpaddl.u8       d1,  d1
@@ -635,10 +635,10 @@ L(ipred_dc_h8):
         vld1.8          {d0},  [r2, :64]!
         vpaddl.u8       d0,  d0
         vpadd.u16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w8):
-        add             r2,  r2,  #1
         vld1.8          {d2},  [r2]
         vadd.s16        d0,  d0,  d30
         vpaddl.u8       d2,  d2
@@ -672,10 +672,10 @@ L(ipred_dc_h16):
         vaddl.u8        q0,  d0,  d1
         vadd.u16        d0,  d0,  d1
         vpadd.u16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w16):
-        add             r2,  r2,  #1
         vld1.8          {d2,  d3},  [r2]
         vadd.s16        d0,  d0,  d30
         vaddl.u8        q1,  d2,  d3
@@ -712,10 +712,10 @@ L(ipred_dc_h32):
         vadd.u16        q0,  q0,  q1
         vadd.u16        d0,  d0,  d1
         vpadd.u16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w32):
-        add             r2,  r2,  #1
         vld1.8          {d2,  d3,  d4,  d5},  [r2]
         vadd.s16        d0,  d0,  d30
         vaddl.u8        q1,  d2,  d3
@@ -760,10 +760,10 @@ L(ipred_dc_h64):
         vadd.u16        q0,  q0,  q1
         vadd.u16        d0,  d0,  d1
         vpadd.u16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.u16       d0,  d0
         bx              r3
 L(ipred_dc_w64):
-        add             r2,  r2,  #1
         vld1.8          {d2,  d3,  d4,  d5},  [r2]!
         vadd.s16        d0,  d0,  d30
         vaddl.u8        q2,  d4,  d5
@@ -2003,10 +2003,10 @@ L(ipred_cfl_tbl):
 L(ipred_cfl_h4):
         vld1.32         {d0[]}, [r2, :32]!
         vpaddl.u8       d0,  d0
+        add             r2,  r2,  #1
         vpadd.i16       d0,  d0
         bx              r12
 L(ipred_cfl_w4):
-        add             r2,  r2,  #1
         vld1.32         {d1[]},  [r2]
         vadd.i16        d0,  d0,  d16
         vpaddl.u8       d1,  d1
@@ -2031,10 +2031,10 @@ L(ipred_cfl_h8):
         vld1.8          {d0}, [r2, :64]!
         vpaddl.u8       d0,  d0
         vpadd.i16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.i16       d0,  d0
         bx              r12
 L(ipred_cfl_w8):
-        add             r2,  r2,  #1
         vld1.8          {d1}, [r2]
         vadd.i16        d0,  d0,  d16
         vpaddl.u8       d1,  d1
@@ -2061,10 +2061,10 @@ L(ipred_cfl_h16):
         vaddl.u8        q0,  d0,  d1
         vadd.i16        d0,  d0,  d1
         vpadd.i16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.i16       d0,  d0
         bx              r12
 L(ipred_cfl_w16):
-        add             r2,  r2,  #1
         vld1.8          {q2}, [r2]
         vadd.i16        d0,  d0,  d16
         vaddl.u8        q2,  d4,  d5
@@ -2094,10 +2094,10 @@ L(ipred_cfl_h32):
         vadd.i16        q0,  q2,  q3
         vadd.i16        d0,  d0,  d1
         vpadd.i16       d0,  d0
+        add             r2,  r2,  #1
         vpadd.i16       d0,  d0
         bx              r12
 L(ipred_cfl_w32):
-        add             r2,  r2,  #1
         vld1.8          {q2, q3},  [r2]
         vadd.i16        d0,  d0,  d16
         vaddl.u8        q2,  d4,  d5
