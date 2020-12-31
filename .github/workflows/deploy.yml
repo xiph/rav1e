@@ -21,22 +21,17 @@ jobs:
          - conf: gnu
            toolchain: stable-x86_64-pc-windows-gnu
 
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
+
     runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Install nasm
-      run: |
-        $NASM_VERSION="2.15.04"
-        $LINK="https://www.nasm.us/pub/nasm/releasebuilds/$NASM_VERSION/win64"
-        curl --ssl-no-revoke -LO "$LINK/nasm-$NASM_VERSION-win64.zip"
-        7z e -y "nasm-$NASM_VERSION-win64.zip" -o"C:\nasm"
-        echo "::add-path::C:\nasm"
+    - uses: ilammy/setup-nasm@v1
 
     - name: Install cargo-c
       run: |
-        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.6.5"
+        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.6.7"
         $CARGO_C_FILE = "cargo-c-windows-msvc"
         curl -LO "$LINK/$CARGO_C_FILE.zip"
         7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
@@ -45,7 +40,7 @@ jobs:
       if: matrix.conf == 'msvc'
       run: |
         $VsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        echo "::add-path::$VsPath;C:\nasm"
+        echo "$VsPath;C:\nasm" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Set MSVC x86_64 linker path
       if: matrix.conf == 'msvc'
@@ -53,7 +48,7 @@ jobs:
         $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
         $LinkPath = vswhere -latest -products * -find "$LinkGlob" |
                     Select-Object -Last 1
-        echo "::add-path::$LinkPath"
+        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Install stable
       uses: actions-rs/toolchain@v1
@@ -88,7 +83,8 @@ jobs:
         echo "::set-output name=version::$VERSION"
 
     - name: Package pre-release binaries
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       run: |
         7z a rav1e-windows-${{ matrix.conf }}.zip `
              "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
@@ -107,7 +103,8 @@ jobs:
         path: target/release/rav1e.exe
 
     - name: Upload pre-release binaries
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v2
       with:
         path: rav1e-windows-${{ matrix.conf }}.zip
@@ -126,7 +123,6 @@ jobs:
         target:
          - x86_64-unknown-linux-musl
          - aarch64-unknown-linux-musl
-         - wasm32-unknown-unknown
         include:
          - target: x86_64-unknown-linux-musl
            name: linux
@@ -136,9 +132,8 @@ jobs:
            name: aarch64-linux
            binaries: rav1e
            strip: aarch64-linux-gnu-strip
-         - target: wasm32-unknown-unknown
-           name: wasm32-linux
-           binaries: librav1e.a rav1e.wasm
+
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
 
     runs-on: ubuntu-latest
 
@@ -149,9 +144,9 @@ jobs:
       if: matrix.target == 'x86_64-unknown-linux-musl'
       env:
         LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.15.04-1
+        NASM_VERSION: 2.15.05-1
         NASM_SHA256: >-
-          7801f43bc3bce0fba50ecaaa9f5bd337708b5d2335b20feecf52ed6f15e188d2
+          c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
       run: |
         curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
         echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
@@ -208,7 +203,8 @@ jobs:
         echo "::set-output name=version::$VERSION"
 
     - name: Create a pre-release tar
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       run: |
         cd target/${{ matrix.target }}/release
         tar -czvf $GITHUB_WORKSPACE/rav1e-${{ matrix.name }}.tar.gz \
@@ -222,7 +218,8 @@ jobs:
         tar -czvf $GITHUB_WORKSPACE/$TAR_FILE.tar.gz ${{ matrix.binaries }}
 
     - name: Upload pre-release binaries
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v2
       with:
         path: rav1e-${{ matrix.name }}.tar.gz
@@ -234,6 +231,8 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
 
   macos-binaries:
+
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
 
     runs-on: macos-latest
 
@@ -267,7 +266,8 @@ jobs:
         echo "::set-output name=version::$VERSION"
 
     - name: Create a pre-release zip
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       run: |
         cd target/release
         zip -9 $GITHUB_WORKSPACE/rav1e-macos.zip rav1e
@@ -280,7 +280,8 @@ jobs:
         zip -9 $GITHUB_WORKSPACE/$ZIP_FILE rav1e
 
     - name: Upload pre-release binaries
-      if: startsWith(github.ref, 'refs/tags/p')
+      if: >
+        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v2
       with:
         path: rav1e-macos.zip
@@ -294,6 +295,8 @@ jobs:
   deploy:
 
     needs: [windows-binaries, linux-binaries, macos-binaries]
+
+    if: github.event_name == 'schedule' && github.repository_owner == 'xiph'
 
     runs-on: ubuntu-latest
 
@@ -323,6 +326,31 @@ jobs:
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
         echo "::set-output name=version::$VERSION"
 
+    - name: Get date for a scheduled pre-release
+      if: github.event_name == 'schedule'
+      id: tagDate
+      run: |
+        DATE=$(date "+%Y%m%d")
+        echo "::set-output name=date::$DATE"
+
+    - name: Create a scheduled pre-release
+      if: github.event_name == 'schedule'
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Weekly pre-release
+        prerelease: true
+        tag_name: p${{ steps.tagDate.outputs.date }}
+        files: |
+          Cargo.lock
+          rav1e.exe
+          rav1e-linux.tar.gz
+          rav1e-aarch64-linux.tar.gz
+          rav1e-macos.zip
+          rav1e-windows-msvc.zip
+          rav1e-windows-gnu.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Create a pre-release
       if: startsWith(github.ref, 'refs/tags/p')
       uses: softprops/action-gh-release@v1
@@ -334,7 +362,6 @@ jobs:
           rav1e.exe
           rav1e-linux.tar.gz
           rav1e-aarch64-linux.tar.gz
-          rav1e-wasm32-linux.tar.gz
           rav1e-macos.zip
           rav1e-windows-msvc.zip
           rav1e-windows-gnu.zip
@@ -351,7 +378,6 @@ jobs:
           rav1e.exe
           rav1e-${{ steps.tagName.outputs.version }}-linux.tar.gz
           rav1e-${{ steps.tagName.outputs.version }}-aarch64-linux.tar.gz
-          rav1e-${{ steps.tagName.outputs.version }}-wasm32-linux.tar.gz
           rav1e-${{ steps.tagName.outputs.version }}-macos.zip
           rav1e-${{ steps.tagName.outputs.version }}-windows-msvc.zip
           rav1e-${{ steps.tagName.outputs.version }}-windows-gnu.zip
