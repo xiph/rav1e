@@ -320,11 +320,11 @@ jobs:
           - name: Cargo build (Arm64)
             conf: cargo-build
             target: aarch64-apple-darwin
-            toolchain: beta # Can be switched to stable on Rust 1.49 release
+            toolchain: stable
           - name: Cargo C-build (Arm64)
             conf: cargo-c
             target: aarch64-apple-darwin
-            toolchain: beta # Can be switched to stable on Rust 1.49 release
+            toolchain: stable
 
     env:
       RUST_BACKTRACE: full
