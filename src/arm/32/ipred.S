@@ -1492,9 +1492,9 @@ L(ipred_filter_tbl):
         vqrshrun.s16    d5,  q3,  #4
         vzip.32         d4,  d5
         subs            r4,  r4,  #2
-        vst1.64         {d4}, [r0, :64], r1
+        vst1.8          {d4}, [r0, :64], r1
         vmovl.u8        q0,  d5
-        vst1.64         {d5}, [r6, :64], r1
+        vst1.8          {d5}, [r6, :64], r1
         bgt             8b
         pop             {r4-r8, pc}
 160:
