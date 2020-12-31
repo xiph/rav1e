@@ -255,7 +255,7 @@ pub(crate) mod rust {
         for j in 0..xsize {
           let ptr_in = input.offset(i * istride + j);
           let x = i32::cast_from(*ptr_in);
-          let mut sum = 0 as i32;
+          let mut sum: i32 = 0;
           let mut max = x;
           let mut min = x;
           for k in 0..2usize {

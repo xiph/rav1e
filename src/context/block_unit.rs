@@ -963,7 +963,7 @@ impl<'a> ContextWriter<'a> {
         len = cmp::max(len, n4_w_8);
       }
 
-      let mut weight = 2 as u32;
+      let mut weight: u32 = 2;
       if target_n4_w >= n4_w_8 && target_n4_w <= n4_w {
         let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n4_h as isize);
         assert!(inc >= 0);
@@ -1029,7 +1029,7 @@ impl<'a> ContextWriter<'a> {
         len = cmp::max(len, n4_h_8);
       }
 
-      let mut weight = 2 as u32;
+      let mut weight: u32 = 2;
       if target_n4_h >= n4_h_8 && target_n4_h <= n4_h {
         let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n4_w as isize);
         assert!(inc >= 0);
@@ -1091,16 +1091,16 @@ impl<'a> ContextWriter<'a> {
     let target_n4_h = bsize.height_mi();
     let target_n4_w = bsize.width_mi();
 
-    let mut max_row_offs = 0 as isize;
+    let mut max_row_offs: isize = 0;
     let row_adj =
       (target_n4_h < BLOCK_8X8.height_mi()) && (bo.0.y & 0x01) != 0x0;
 
-    let mut max_col_offs = 0 as isize;
+    let mut max_col_offs: isize = 0;
     let col_adj =
       (target_n4_w < BLOCK_8X8.width_mi()) && (bo.0.x & 0x01) != 0x0;
 
-    let mut processed_rows = 0 as isize;
-    let mut processed_cols = 0 as isize;
+    let mut processed_rows: isize = 0;
+    let mut processed_cols: isize = 0;
 
     let up_avail = bo.0.y > 0;
     let left_avail = bo.0.x > 0;
@@ -1258,8 +1258,8 @@ impl<'a> ContextWriter<'a> {
       let passes =
         if up_avail { 0 } else { 1 }..if left_avail { 2 } else { 1 };
 
-      let mut ref_id_count = [0 as usize; 2];
-      let mut ref_diff_count = [0 as usize; 2];
+      let mut ref_id_count: [usize; 2] = [0; 2];
+      let mut ref_diff_count: [usize; 2] = [0; 2];
       let mut ref_id_mvs = [[MotionVector::default(); 2]; 2];
       let mut ref_diff_mvs = [[MotionVector::default(); 2]; 2];
 
@@ -1830,7 +1830,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     // Encode EOB
-    let mut eob_extra = 0 as u32;
+    let mut eob_extra: u32 = 0;
     let eob_pt = Self::get_eob_pos_token(eob, &mut eob_extra);
     let eob_multi_size: usize = tx_size.area_log2() - 4;
     let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };

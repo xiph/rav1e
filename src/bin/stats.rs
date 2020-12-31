@@ -761,20 +761,23 @@ pub fn calculate_frame_metrics<T: Pixel>(
 
   match metrics {
     MetricsEnabled::None => QualityMetrics::default(),
-    MetricsEnabled::Psnr => {
-      let mut metrics = QualityMetrics::default();
-      metrics.psnr =
-        Some(psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap());
-      metrics
-    }
+    MetricsEnabled::Psnr => QualityMetrics {
+      psnr: Some(
+        psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap(),
+      ),
+      ..Default::default()
+    },
     MetricsEnabled::All => {
-      let mut metrics = QualityMetrics::default();
-      metrics.psnr =
-        Some(psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap());
-      metrics.psnr_hvs = Some(
-        psnr_hvs::calculate_frame_psnr_hvs(&frame1_info, &frame2_info)
-          .unwrap(),
-      );
+      let mut metrics = QualityMetrics {
+        psnr: Some(
+          psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap(),
+        ),
+        psnr_hvs: Some(
+          psnr_hvs::calculate_frame_psnr_hvs(&frame1_info, &frame2_info)
+            .unwrap(),
+        ),
+        ..Default::default()
+      };
       let ssim = ssim::calculate_frame_ssim(&frame1_info, &frame2_info);
       metrics.ssim = Some(ssim.unwrap());
       let ms_ssim = ssim::calculate_frame_msssim(&frame1_info, &frame2_info);
