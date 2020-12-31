@@ -333,7 +333,7 @@ impl Config {
     }
 
     if let Some(delay) = config.reservoir_frame_delay {
-      if delay < 12 || delay > 131_072 {
+      if !(12..=131_072).contains(&delay) {
         return Err(InvalidReservoirFrameDelay(delay));
       }
     }

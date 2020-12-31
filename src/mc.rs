@@ -259,7 +259,7 @@ pub(crate) mod rust {
         }
       }
       (_, _) => {
-        let mut intermediate = [0 as i16; 8 * (128 + 7)];
+        let mut intermediate: [i16; 8 * (128 + 7)] = [0; 8 * (128 + 7)];
 
         let offset_slice = src.go_left(3).go_up(3);
         for cg in (0..width).step_by(8) {
@@ -350,7 +350,7 @@ pub(crate) mod rust {
         }
       }
       (_, _) => {
-        let mut intermediate = [0 as i16; 8 * (128 + 7)];
+        let mut intermediate: [i16; 8 * (128 + 7)] = [0; 8 * (128 + 7)];
 
         let offset_slice = src.go_left(3).go_up(3);
         for cg in (0..width).step_by(8) {

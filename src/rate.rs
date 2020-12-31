@@ -528,9 +528,9 @@ impl RCDeserialize {
     if self.unbuffer_val(4) != TWOPASS_VERSION as i64 {
       return Err("Version number mismatch".to_string());
     }
-    let mut s = RCSummary::default();
+    let mut s =
+      RCSummary { ntus: self.unbuffer_val(4) as i32, ..Default::default() };
 
-    s.ntus = self.unbuffer_val(4) as i32;
     // Make sure the file claims to have at least one TU.
     // Otherwise we probably got the placeholder data from an aborted
     //  pass 1.

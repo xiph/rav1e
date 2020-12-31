@@ -123,7 +123,7 @@ impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
       leb_size
     }
 
-    let mut coded_payload_length = [0 as u8; 8];
+    let mut coded_payload_length: [u8; 8] = [0; 8];
     let leb_size = uleb_encode(payload, &mut coded_payload_length);
     for i in 0..leb_size {
       self.write(8, coded_payload_length[i])?;

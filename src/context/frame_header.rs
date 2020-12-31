@@ -87,7 +87,7 @@ impl<'a> ContextWriter<'a> {
     }
 
     if comp_mode {
-      let comp_ref_type = 1 as u32; // bidir
+      let comp_ref_type: u32 = 1; // bidir
       let ctx = self.get_comp_ref_type_ctx(bo);
       symbol_with_update!(
         self,

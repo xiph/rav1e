@@ -202,9 +202,12 @@ impl Sequence {
       0
     };
 
-    let mut operating_point_idc = [0 as u16; MAX_NUM_OPERATING_POINTS];
-    let mut level = [[1, 2 as usize]; MAX_NUM_OPERATING_POINTS];
-    let mut tier = [0 as usize; MAX_NUM_OPERATING_POINTS];
+    let mut operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS] =
+      [0; MAX_NUM_OPERATING_POINTS];
+    let mut level: [[usize; 2]; MAX_NUM_OPERATING_POINTS] =
+      [[1, 2]; MAX_NUM_OPERATING_POINTS];
+    let mut tier: [usize; MAX_NUM_OPERATING_POINTS] =
+      [0; MAX_NUM_OPERATING_POINTS];
 
     for i in 0..MAX_NUM_OPERATING_POINTS {
       operating_point_idc[i] = 0;
@@ -2872,7 +2875,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         assert!(subsize != BlockSize::BLOCK_INVALID);
 
         for mode in rdo_output.part_modes {
-          use std::iter::{once, FromIterator};
+          use std::iter::once;
           // Each block is subjected to a new splitting decision
           encode_partition_topdown(
             fi,
@@ -2885,7 +2888,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             &Some(PartitionGroupParameters {
               rd_cost: mode.rd_cost,
               part_type: PartitionType::PARTITION_NONE,
-              part_modes: ArrayVec::from_iter(once(mode)),
+              part_modes: once(mode).collect(),
             }),
             inter_cfg,
           );

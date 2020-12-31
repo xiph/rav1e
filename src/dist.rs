@@ -37,7 +37,7 @@ pub(crate) mod rust {
     let blk_w = bsize.width();
     let blk_h = bsize.height();
 
-    let mut sum = 0 as u32;
+    let mut sum: u32 = 0;
 
     for (slice_org, slice_ref) in
       plane_org.rows_iter().take(blk_h).zip(plane_ref.rows_iter())
@@ -140,7 +140,7 @@ pub(crate) mod rust {
     let size: usize = blk_w.min(blk_h).min(8);
     let tx2d = if size == 4 { hadamard4x4 } else { hadamard8x8 };
 
-    let mut sum = 0 as u64;
+    let mut sum: u64 = 0;
 
     // Loop over chunks the size of the chosen transform
     for chunk_y in (0..blk_h).step_by(size) {

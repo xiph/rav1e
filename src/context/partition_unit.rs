@@ -465,10 +465,10 @@ impl<'a> BlockContext<'a> {
     let bw = bsize.width_mi();
     let bh = bsize.height_mi();
 
-    let above_ctx = &mut self.above_partition_context
-      [bo.0.x >> 1..(bo.0.x + bw) >> 1 as usize];
+    let above_ctx =
+      &mut self.above_partition_context[bo.0.x >> 1..(bo.0.x + bw) >> 1];
     let left_ctx = &mut self.left_partition_context
-      [bo.y_in_sb() >> 1..(bo.y_in_sb() + bh) >> 1 as usize];
+      [bo.y_in_sb() >> 1..(bo.y_in_sb() + bh) >> 1];
 
     // update the partition context at the end notes. set partition bits
     // of block sizes larger than the current one to be one, and partition
