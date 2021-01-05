@@ -10,7 +10,7 @@
 
 /// Simple ivf muxer
 ///
-use bitstream_io::{BitReader, BitWriter, LittleEndian};
+use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};
 use std::io;
 
 pub fn write_ivf_header(
