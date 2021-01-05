@@ -22,7 +22,7 @@ use crate::FrameState;
 use crate::SegmentationState;
 use crate::Sequence;
 
-use bitstream_io::{BigEndian, BitWriter, LittleEndian};
+use bitstream_io::{BigEndian, BitWrite, BitWriter, LittleEndian};
 
 use std::io;
 
