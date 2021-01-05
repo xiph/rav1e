@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::util::{msb, ILog};
-use bitstream_io::{BigEndian, BitWriter};
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
 
 pub const OD_BITRES: u8 = 3;
