@@ -124,10 +124,8 @@ function wiener_filter_h_8bpc_neon, export=1
         ldr             b28, [x2,  w9, sxtw]
         ldr             b29, [x13, w9, sxtw]
         // Fill v28/v29 with the right padding pixel
-        dup             v28.8b,  v28.b[0]
-        dup             v29.8b,  v29.b[0]
-        uxtl            v28.8h,  v28.8b
-        uxtl            v29.8h,  v29.8b
+        dup             v28.8h,  v28.h[0]
+        dup             v29.8h,  v29.h[0]
 3:      // !LR_HAVE_RIGHT
         // If we'll have to pad the right edge we need to quit early here.
         cmp             w5,  #11

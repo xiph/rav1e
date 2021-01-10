@@ -131,10 +131,8 @@ function wiener_filter_h_8bpc_neon, export=1
         ldrb            r11, [r2, r9]
         ldrb            r9,  [lr, r9]
         // Fill q12/q13 with the right padding pixel
-        vdup.8          d24, r11
-        vdup.8          d26, r9
-        vmovl.u8        q12, d24
-        vmovl.u8        q13, d26
+        vdup.16         d24, r11
+        vdup.16         d26, r9
 3:      // !LR_HAVE_RIGHT
         // If we'll have to pad the right edge we need to quit early here.
         cmp             r5,  #11
