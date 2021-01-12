@@ -30,13 +30,12 @@ rav1e is an AV1 video encoder. It is designed to eventually cover all use cases,
 ## Features
 * Intra, inter, and switch frames
 * 64x64 superblocks
-* 4x4 to 64x64 RDO-selected square and 2:1/1:2 rectangular blocks
+* 4x4 to 64x64 RDO-selected square and rectangular blocks
 * DC, H, V, Paeth, smooth, and all directional prediction modes
 * DCT, (FLIP-)ADST and identity transforms (up to 64x64, 16x16 and 32x32 respectively)
 * 8-, 10- and 12-bit depth color
-* 4:2:0 (full support), 4:2:2 and 4:4:4 (limited) chroma sampling
-* 11 speed settings (0-10)
-* Near real-time encoding at high speed levels
+* 4:2:0, 4:2:2 and 4:4:4 chroma sampling
+* 11 speed settings (0-10, exhaustive to near real-time)
 * Constant quantizer and target bitrate (single- and multi-pass) encoding modes
 * Still picture mode
 
