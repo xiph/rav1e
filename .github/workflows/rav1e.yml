@@ -317,14 +317,6 @@ jobs:
             conf: cargo-c
             target: x86_64-apple-darwin
             toolchain: stable
-          - name: Cargo build (Arm64)
-            conf: cargo-build
-            target: aarch64-apple-darwin
-            toolchain: stable
-          - name: Cargo C-build (Arm64)
-            conf: cargo-c
-            target: aarch64-apple-darwin
-            toolchain: stable
 
     env:
       RUST_BACKTRACE: full
@@ -336,7 +328,7 @@ jobs:
      (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
-    runs-on: macos-11.0
+    runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v2
