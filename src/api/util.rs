@@ -13,10 +13,14 @@ use crate::serialize::{Deserialize, Serialize};
 use crate::stats::EncoderStats;
 use crate::util::Pixel;
 
+use std::any::Any;
 use std::fmt;
 use std::sync::Arc;
 
 use thiserror::*;
+
+/// Opaque type to be passed from Frame to Packet
+pub type Opaque = Box<dyn Any + Send>;
 
 // TODO: use the num crate?
 /// A rational number.
@@ -181,7 +185,7 @@ pub struct Packet<T: Pixel> {
   pub enc_stats: EncoderStats,
   /// Optional user-provided opaque data
   #[cfg_attr(feature = "serialize", serde(skip))]
-  pub opaque: Option<Box<dyn std::any::Any + Send>>,
+  pub opaque: Option<Opaque>,
 }
 
 impl<T: Pixel> PartialEq for Packet<T> {

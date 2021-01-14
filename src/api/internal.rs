@@ -10,7 +10,7 @@
 
 use crate::activity::ActivityMask;
 use crate::api::lookahead::*;
-use crate::api::{EncoderConfig, EncoderStatus, FrameType, Packet};
+use crate::api::{EncoderConfig, EncoderStatus, FrameType, Opaque, Packet};
 use crate::color::ChromaSampling::Cs400;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
@@ -256,7 +256,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   /// The next `output_frameno` to be computed by lookahead.
   next_lookahead_output_frameno: u64,
   /// Optional opaque to be sent back to the user
-  opaque_q: BTreeMap<u64, Box<dyn std::any::Any + Send>>,
+  opaque_q: BTreeMap<u64, Opaque>,
 }
 
 impl<T: Pixel> ContextInner<T> {
