@@ -9,6 +9,7 @@
 
 use num_derive::FromPrimitive;
 
+use crate::api::Opaque;
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 use crate::util::*;
@@ -39,7 +40,7 @@ pub struct FrameParameters {
   /// Force emitted frame to be of the type selected
   pub frame_type_override: FrameTypeOverride,
   /// Output the provided data in the matching encoded Packet
-  pub opaque: Option<Box<dyn std::any::Any + Send>>,
+  pub opaque: Option<Opaque>,
 }
 
 pub use v_frame::frame::Frame;
