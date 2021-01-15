@@ -235,8 +235,9 @@ endfunc
 //                                      ptrdiff_t mid_stride);
 function wiener_filter_v_8bpc_neon, export=1
         push            {r4-r7,lr}
-        ldrd            r4,  r5,  [sp, #20]
-        ldrd            r6,  r7,  [sp, #28]
+        vpush           {q4-q6}
+        ldrd            r4,  r5,  [sp, #68]
+        ldrd            r6,  r7,  [sp, #76]
         mov             lr,  r4
         vld1.16         {q0},  [r5, :128]
 
@@ -280,20 +281,17 @@ function wiener_filter_v_8bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        vmull.s16       q2,  d16, d0[0]
-        vmlal.s16       q2,  d18, d0[1]
-        vmlal.s16       q2,  d20, d0[2]
-        vmlal.s16       q2,  d22, d0[3]
-        vmlal.s16       q2,  d24, d1[0]
-        vmlal.s16       q2,  d26, d1[1]
-        vmlal.s16       q2,  d28, d1[2]
-        vmull.s16       q3,  d17, d0[0]
-        vmlal.s16       q3,  d19, d0[1]
-        vmlal.s16       q3,  d21, d0[2]
-        vmlal.s16       q3,  d23, d0[3]
-        vmlal.s16       q3,  d25, d1[0]
-        vmlal.s16       q3,  d27, d1[1]
-        vmlal.s16       q3,  d29, d1[2]
+        vadd.i16        q4,  q10, q12
+        vadd.i16        q5,  q9,  q13
+        vadd.i16        q6,  q8,  q14
+        vmull.s16       q2,  d22, d0[3]
+        vmlal.s16       q2,  d8,  d1[0]
+        vmlal.s16       q2,  d10, d1[1]
+        vmlal.s16       q2,  d12, d1[2]
+        vmull.s16       q3,  d23, d0[3]
+        vmlal.s16       q3,  d9,  d1[0]
+        vmlal.s16       q3,  d11, d1[1]
+        vmlal.s16       q3,  d13, d1[2]
         vqrshrun.s32    d4,  q2,  #11
         vqrshrun.s32    d5,  q3,  #11
         vqmovun.s16     d4,  q2
@@ -402,6 +400,7 @@ function wiener_filter_v_8bpc_neon, export=1
         b               1b
 
 0:
+        vpop            {q4-q6}
         pop             {r4-r7,pc}
 .purgem filter
 endfunc
