@@ -67,6 +67,7 @@ struct FrameOpaque {
 }
 
 unsafe impl Send for FrameOpaque {}
+unsafe impl Sync for FrameOpaque {}
 
 impl Default for FrameOpaque {
   fn default() -> Self {
@@ -1062,7 +1063,7 @@ pub unsafe extern fn rav1e_send_frame(
   let maybe_opaque = if frame.is_null() {
     None
   } else {
-    (*frame).opaque.take().map(|o| Box::new(o) as rav1e::Opaque)
+    (*frame).opaque.take().map(|o| rav1e::Opaque::new(o))
   };
 
   let ret = (*ctx)
