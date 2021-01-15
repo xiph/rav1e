@@ -46,9 +46,9 @@ endconst
 //                                      int h, enum LrEdgeFlags edges);
 function wiener_filter_h_8bpc_neon, export=1
         push            {r4-r11,lr}
-        vpush           {q4}
-        ldrd            r4,  r5,  [sp, #52]
-        ldrd            r6,  r7,  [sp, #60]
+        vpush           {q4-q7}
+        ldrd            r4,  r5,  [sp, #100]
+        ldrd            r6,  r7,  [sp, #108]
         mov             r8,  r5
         vld1.16         {q0},  [r4, :128]
         movw            r9,  #(1 << 14) - (1 << 2)
@@ -159,34 +159,32 @@ function wiener_filter_h_8bpc_neon, export=1
         vbit            q9,  q13, q11
 
 4:      // Loop horizontally
-        // This is tuned as some sort of compromise between Cortex A7, A8,
-        // A9 and A53.
-        vmul.s16        q3,  q1,  d0[0]
-        vext.8          q10, q1,  q2,  #2
         vext.8          q11, q1,  q2,  #4
-        vmla.s16        q3,  q10, d0[1]
-        vmla.s16        q3,  q11, d0[2]
-        vext.8          q10, q1,  q2,  #6
-        vext.8          q11, q1,  q2,  #8
-        vmla.s16        q3,  q10, d0[3]
-        vmla.s16        q3,  q11, d1[0]
-        vext.8          q10, q1,  q2,  #10
-        vext.8          q11, q1,  q2,  #12
-        vmla.s16        q3,  q10, d1[1]
-        vmla.s16        q3,  q11, d1[2]
+        vext.8          q5,  q1,  q2,  #8
+        vext.8          q10, q1,  q2,  #2
+        vext.8          q6,  q1,  q2,  #10
+        vext.8          q7,  q1,  q2,  #12
+        vext.8          q4,  q1,  q2,  #6
+        vadd.i16        q5,  q5,  q11
+        vadd.i16        q6,  q6,  q10
+        vadd.i16        q7,  q7,  q1
+        vmul.s16        q3,  q4,  d0[3]
+        vmla.s16        q3,  q5,  d1[0]
+        vmla.s16        q3,  q6,  d1[1]
+        vmla.s16        q3,  q7,  d1[2]
 
-        vmul.s16        q10, q8,  d0[0]
-        vext.8          q11, q8,  q9,  #2
         vext.8          q4,  q8,  q9,  #4
-        vmla.s16        q10, q11, d0[1]
-        vmla.s16        q10, q4,  d0[2]
-        vext.8          q11, q8,  q9,  #6
-        vext.8          q4,  q8,  q9,  #8
-        vmla.s16        q10, q11, d0[3]
-        vmla.s16        q10, q4,  d1[0]
-        vext.8          q11, q8,  q9,  #10
+        vext.8          q6,  q8,  q9,  #8
+        vext.8          q11, q8,  q9,  #2
+        vext.8          q7,  q8,  q9,  #10
+        vadd.i16        q6,  q6,  q4
         vext.8          q4,  q8,  q9,  #12
-        vmla.s16        q10, q11, d1[1]
+        vext.8          q5,  q8,  q9,  #6
+        vadd.i16        q7,  q7,  q11
+        vadd.i16        q4,  q4,  q8
+        vmul.s16        q10, q5,  d0[3]
+        vmla.s16        q10, q6,  d1[0]
+        vmla.s16        q10, q7,  d1[1]
         vmla.s16        q10, q4,  d1[2]
 
         vext.8          q1,  q1,  q2,  #6
@@ -227,7 +225,7 @@ function wiener_filter_h_8bpc_neon, export=1
         mov             r5,  r8
         b               1b
 0:
-        vpop            {q4}
+        vpop            {q4-q7}
         pop             {r4-r11,pc}
 endfunc
 

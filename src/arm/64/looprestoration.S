@@ -156,29 +156,29 @@ function wiener_filter_h_8bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v17.16b, v2.16b,  v3.16b, #4
-        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v19.16b, v2.16b,  v3.16b, #8
+        ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v20.16b, v2.16b,  v3.16b, #10
         ext             v21.16b, v2.16b,  v3.16b, #12
-        mul             v6.8h,   v2.8h,   v0.h[0]
-        mla             v6.8h,   v16.8h,  v0.h[1]
-        mla             v6.8h,   v17.8h,  v0.h[2]
-        mla             v6.8h,   v18.8h,  v0.h[3]
+        ext             v18.16b, v2.16b,  v3.16b, #6
+        add             v19.8h,  v19.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v16.8h
+        add             v21.8h,  v21.8h,  v2.8h
+        mul             v6.8h,   v18.8h,  v0.h[3]
         mla             v6.8h,   v19.8h,  v0.h[4]
         mla             v6.8h,   v20.8h,  v0.h[5]
         mla             v6.8h,   v21.8h,  v0.h[6]
-        ext             v22.16b, v4.16b,  v5.16b, #2
         ext             v23.16b, v4.16b,  v5.16b, #4
-        ext             v24.16b, v4.16b,  v5.16b, #6
         ext             v25.16b, v4.16b,  v5.16b, #8
+        ext             v22.16b, v4.16b,  v5.16b, #2
         ext             v26.16b, v4.16b,  v5.16b, #10
         ext             v27.16b, v4.16b,  v5.16b, #12
-        mul             v7.8h,   v4.8h,   v0.h[0]
-        mla             v7.8h,   v22.8h,  v0.h[1]
-        mla             v7.8h,   v23.8h,  v0.h[2]
-        mla             v7.8h,   v24.8h,  v0.h[3]
+        ext             v24.16b, v4.16b,  v5.16b, #6
+        add             v25.8h,  v25.8h,  v23.8h
+        add             v26.8h,  v26.8h,  v22.8h
+        add             v27.8h,  v27.8h,  v4.8h
+        mul             v7.8h,   v24.8h,  v0.h[3]
         mla             v7.8h,   v25.8h,  v0.h[4]
         mla             v7.8h,   v26.8h,  v0.h[5]
         mla             v7.8h,   v27.8h,  v0.h[6]

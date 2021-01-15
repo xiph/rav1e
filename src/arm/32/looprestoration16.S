@@ -168,46 +168,41 @@ function wiener_filter_h_16bpc_neon, export=1
         vbit            q5,  q12, q10
 
 4:      // Loop horizontally
-        vext.8          q8,  q2,  q3,  #2
-        vext.8          q9,  q2,  q3,  #4
-        vext.8          q10, q2,  q3,  #6
-        vmull.s16       q6,  d4,  d0[0]
-        vmlal.s16       q6,  d16, d0[1]
-        vmlal.s16       q6,  d18, d0[2]
-        vmlal.s16       q6,  d20, d0[3]
-        vmull.s16       q7,  d5,  d0[0]
-        vmlal.s16       q7,  d17, d0[1]
-        vmlal.s16       q7,  d19, d0[2]
-        vmlal.s16       q7,  d21, d0[3]
+        vext.8          q7,  q2,  q3,  #4
         vext.8          q8,  q2,  q3,  #8
+        vext.8          q6,  q2,  q3,  #2
         vext.8          q9,  q2,  q3,  #10
-        vext.8          q10, q2,  q3,  #12
+        vadd.i16        q8,  q8,  q7
+        vadd.i16        q9,  q9,  q6
+        vext.8          q6,  q2,  q3,  #12
+        vext.8          q7,  q2,  q3,  #6
+        vadd.i16        q2,  q2,  q6
+        vmull.s16       q6,  d14, d0[3]
         vmlal.s16       q6,  d16, d1[0]
         vmlal.s16       q6,  d18, d1[1]
-        vmlal.s16       q6,  d20, d1[2]
+        vmlal.s16       q6,  d4,  d1[2]
+        vmull.s16       q7,  d15, d0[3]
         vmlal.s16       q7,  d17, d1[0]
         vmlal.s16       q7,  d19, d1[1]
-        vmlal.s16       q7,  d21, d1[2]
-        vext.8          q2,  q4,  q5,  #2
-        vext.8          q10, q4,  q5,  #6
-        vmull.s16       q8,  d8,  d0[0]
-        vmlal.s16       q8,  d4,  d0[1]
-        vmlal.s16       q8,  d20, d0[3]
-        vmull.s16       q9,  d9,  d0[0]
-        vmlal.s16       q9,  d5,  d0[1]
-        vmlal.s16       q9,  d21, d0[3]
-        vext.8          q2,  q4,  q5,  #4
+        vmlal.s16       q7,  d5,  d1[2]
+
+        vext.8          q8,  q4,  q5,  #4
         vext.8          q10, q4,  q5,  #8
-        vmlal.s16       q8,  d4,  d0[2]
-        vmlal.s16       q8,  d20, d1[0]
-        vmlal.s16       q9,  d5,  d0[2]
-        vmlal.s16       q9,  d21, d1[0]
+        vext.8          q9,  q4,  q5,  #2
         vext.8          q2,  q4,  q5,  #10
-        vext.8          q10, q4,  q5,  #12
+        vadd.i16        q10, q10, q8
+        vadd.i16        q2,  q2,  q9
+        vext.8          q8,  q4,  q5,  #12
+        vext.8          q9,  q4,  q5,  #6
+        vadd.i16        q4,  q4,  q8
+        vmull.s16       q8,  d18, d0[3]
+        vmlal.s16       q8,  d20, d1[0]
         vmlal.s16       q8,  d4,  d1[1]
-        vmlal.s16       q8,  d20, d1[2]
+        vmlal.s16       q8,  d8,  d1[2]
+        vmull.s16       q9,  d19, d0[3]
+        vmlal.s16       q9,  d21, d1[0]
         vmlal.s16       q9,  d5,  d1[1]
-        vmlal.s16       q9,  d21, d1[2]
+        vmlal.s16       q9,  d9,  d1[2]
 
         vmvn.i16        q10, #0x8000 // 0x7fff = (1 << 15) - 1
         vadd.i32        q6,  q6,  q14
