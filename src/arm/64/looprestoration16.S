@@ -164,44 +164,38 @@ function wiener_filter_h_16bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v17.16b, v2.16b,  v3.16b, #4
-        ext             v18.16b, v2.16b,  v3.16b, #6
         ext             v19.16b, v2.16b,  v3.16b, #8
+        ext             v16.16b, v2.16b,  v3.16b, #2
         ext             v20.16b, v2.16b,  v3.16b, #10
         ext             v21.16b, v2.16b,  v3.16b, #12
-        smull           v6.4s,   v2.4h,   v0.h[0]
-        smlal           v6.4s,   v16.4h,  v0.h[1]
-        smlal           v6.4s,   v17.4h,  v0.h[2]
-        smlal           v6.4s,   v18.4h,  v0.h[3]
+        ext             v18.16b, v2.16b,  v3.16b, #6
+        add             v19.8h,  v19.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v16.8h
+        add             v21.8h,  v21.8h,  v2.8h
+        smull           v6.4s,   v18.4h,  v0.h[3]
         smlal           v6.4s,   v19.4h,  v0.h[4]
         smlal           v6.4s,   v20.4h,  v0.h[5]
         smlal           v6.4s,   v21.4h,  v0.h[6]
-        smull2          v7.4s,   v2.8h,   v0.h[0]
-        smlal2          v7.4s,   v16.8h,  v0.h[1]
-        smlal2          v7.4s,   v17.8h,  v0.h[2]
-        smlal2          v7.4s,   v18.8h,  v0.h[3]
+        smull2          v7.4s,   v18.8h,  v0.h[3]
         smlal2          v7.4s,   v19.8h,  v0.h[4]
         smlal2          v7.4s,   v20.8h,  v0.h[5]
         smlal2          v7.4s,   v21.8h,  v0.h[6]
 
-        ext             v19.16b, v4.16b,  v5.16b, #2
         ext             v20.16b, v4.16b,  v5.16b, #4
-        ext             v21.16b, v4.16b,  v5.16b, #6
         ext             v22.16b, v4.16b,  v5.16b, #8
+        ext             v19.16b, v4.16b,  v5.16b, #2
         ext             v23.16b, v4.16b,  v5.16b, #10
         ext             v24.16b, v4.16b,  v5.16b, #12
-        smull           v16.4s,  v4.4h,   v0.h[0]
-        smlal           v16.4s,  v19.4h,  v0.h[1]
-        smlal           v16.4s,  v20.4h,  v0.h[2]
-        smlal           v16.4s,  v21.4h,  v0.h[3]
+        ext             v21.16b, v4.16b,  v5.16b, #6
+        add             v22.8h,  v22.8h,  v20.8h
+        add             v23.8h,  v23.8h,  v19.8h
+        add             v24.8h,  v24.8h,  v4.8h
+        smull           v16.4s,  v21.4h,  v0.h[3]
         smlal           v16.4s,  v22.4h,  v0.h[4]
         smlal           v16.4s,  v23.4h,  v0.h[5]
         smlal           v16.4s,  v24.4h,  v0.h[6]
-        smull2          v17.4s,  v4.8h,   v0.h[0]
-        smlal2          v17.4s,  v19.8h,  v0.h[1]
-        smlal2          v17.4s,  v20.8h,  v0.h[2]
-        smlal2          v17.4s,  v21.8h,  v0.h[3]
+        smull2          v17.4s,  v21.8h,  v0.h[3]
         smlal2          v17.4s,  v22.8h,  v0.h[4]
         smlal2          v17.4s,  v23.8h,  v0.h[5]
         smlal2          v17.4s,  v24.8h,  v0.h[6]
