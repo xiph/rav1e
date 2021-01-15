@@ -1176,7 +1176,7 @@ fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
   let frame_type_override =
     if keyframe { FrameTypeOverride::Key } else { FrameTypeOverride::No };
 
-  let opaque = Some(Box::new(keyframe) as Box<dyn std::any::Any + Send>);
+  let opaque = Some(Opaque::new(keyframe));
 
   let fp = FrameParameters { frame_type_override, opaque };
 

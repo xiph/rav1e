@@ -20,7 +20,27 @@ use std::sync::Arc;
 use thiserror::*;
 
 /// Opaque type to be passed from Frame to Packet
-pub type Opaque = Box<dyn Any + Send>;
+#[derive(Debug)]
+pub struct Opaque(Box<dyn Any + Send + Sync>);
+
+impl Opaque {
+  /// Wrap a type in the opaque struct
+  pub fn new<T: Any + Send + Sync>(t: T) -> Self {
+    Opaque(Box::new(t) as Box<dyn Any + Send + Sync>)
+  }
+
+  /// Attempt to downcast the opaque to a concrete type.
+  pub fn downcast<T: Any + Send + Sync>(self) -> Result<Box<T>, Opaque> {
+    if self.0.is::<T>() {
+      unsafe {
+        let raw: *mut (dyn Any + Send + Sync) = Box::into_raw(self.0);
+        Ok(Box::from_raw(raw as *mut T))
+      }
+    } else {
+      Err(self)
+    }
+  }
+}
 
 // TODO: use the num crate?
 /// A rational number.
