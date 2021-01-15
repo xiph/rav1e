@@ -272,20 +272,17 @@ function wiener_filter_v_8bpc_neon, export=1
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        smull           v2.4s,  v16.4h,  v0.h[0]
-        smlal           v2.4s,  v17.4h,  v0.h[1]
-        smlal           v2.4s,  v18.4h,  v0.h[2]
-        smlal           v2.4s,  v19.4h,  v0.h[3]
-        smlal           v2.4s,  v20.4h,  v0.h[4]
-        smlal           v2.4s,  v21.4h,  v0.h[5]
-        smlal           v2.4s,  v22.4h,  v0.h[6]
-        smull2          v3.4s,  v16.8h,  v0.h[0]
-        smlal2          v3.4s,  v17.8h,  v0.h[1]
-        smlal2          v3.4s,  v18.8h,  v0.h[2]
-        smlal2          v3.4s,  v19.8h,  v0.h[3]
-        smlal2          v3.4s,  v20.8h,  v0.h[4]
-        smlal2          v3.4s,  v21.8h,  v0.h[5]
-        smlal2          v3.4s,  v22.8h,  v0.h[6]
+        add             v25.8h, v18.8h,  v20.8h
+        add             v26.8h, v17.8h,  v21.8h
+        add             v27.8h, v16.8h,  v22.8h
+        smull           v2.4s,  v19.4h,  v0.h[3]
+        smlal           v2.4s,  v25.4h,  v0.h[4]
+        smlal           v2.4s,  v26.4h,  v0.h[5]
+        smlal           v2.4s,  v27.4h,  v0.h[6]
+        smull2          v3.4s,  v19.8h,  v0.h[3]
+        smlal2          v3.4s,  v25.8h,  v0.h[4]
+        smlal2          v3.4s,  v26.8h,  v0.h[5]
+        smlal2          v3.4s,  v27.8h,  v0.h[6]
         sqrshrun        v2.4h,  v2.4s,   #11
         sqrshrun2       v2.8h,  v3.4s,   #11
         sqxtun          v2.8b,  v2.8h
