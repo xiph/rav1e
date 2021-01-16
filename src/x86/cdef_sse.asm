@@ -249,13 +249,13 @@ SECTION .text
 
 %macro CDEF_FILTER 2 ; w, h
  %if ARCH_X86_64
-cglobal cdef_filter_%1x%2, 4, 9, 16, 3 * 16 + (%2+4)*32, \
-                           dst, stride, left, top, pri, sec, edge, stride3, dst4
+cglobal cdef_filter_%1x%2_8bpc, 4, 9, 16, 3 * 16 + (%2+4)*32, \
+                                dst, stride, left, top, pri, sec, edge, stride3, dst4
   %define px rsp+3*16+2*32
   %define base 0
  %else
-cglobal cdef_filter_%1x%2, 2, 7, 8, - 7 * 16 - (%2+4)*32, \
-                           dst, stride, left, edge, stride3
+cglobal cdef_filter_%1x%2_8bpc, 2, 7, 8, - 7 * 16 - (%2+4)*32, \
+                                dst, stride, left, edge, stride3
     %define       topq  r2
     %define      dst4q  r2
     LEA             r5, tap_table
