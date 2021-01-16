@@ -99,6 +99,9 @@ fn build_nasm_files() {
     "src/x86/satd.asm",
     "src/x86/sse.asm",
     "src/x86/cdef.asm",
+    "src/x86/cdef_sse.asm",
+    "src/x86/cdef16_avx2.asm",
+    "src/x86/cdef16_sse.asm",
     "src/x86/tables.asm",
   ];
 
