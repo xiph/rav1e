@@ -856,8 +856,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     // when we add support for it.
     let width = fi.width - 1;
     let height = fi.height - 1;
-    let width_bits = 32 - (width as u32).leading_zeros();
-    let height_bits = 32 - (height as u32).leading_zeros();
+    let width_bits = log_in_base_2(width as u32) as u32 + 1;
+    let height_bits = log_in_base_2(height as u32) as u32 + 1;
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
     self.write(4, width_bits - 1)?;
@@ -875,8 +875,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.frame_size_override_flag {
       let width = fi.width - 1;
       let height = fi.height - 1;
-      let width_bits = 32 - (width as u32).leading_zeros();
-      let height_bits = 32 - (height as u32).leading_zeros();
+      let width_bits = log_in_base_2(width as u32) as u32 + 1;
+      let height_bits = log_in_base_2(height as u32) as u32 + 1;
       assert!(width_bits <= 16);
       assert!(height_bits <= 16);
       self.write(width_bits, width as u16)?;

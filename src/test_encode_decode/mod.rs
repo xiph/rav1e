@@ -286,6 +286,10 @@ mod small_dimension {
 
 mod tiny_dimension {
   test_dimensions! {
+    (1, 1),
+    (2, 2),
+    (4, 4),
+    (8, 8),
     (16, 16),
     (32, 32),
     (64, 64),
@@ -297,6 +301,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
   let quantizer = 100;
   let limit = 1;
   let speed = 10;
+  let still_picture = w < 16 || h < 16;
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
@@ -315,7 +320,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     0,
     0,
     0,
-    false,
+    still_picture,
   );
 }
 
