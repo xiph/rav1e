@@ -264,7 +264,7 @@ CDEF_FILTER 4, 8
 CDEF_FILTER 4, 4
 
 INIT_YMM avx2
-cglobal cdef_dir_8, 3, 4, 15, src, stride, var, stride3
+cglobal cdef_dir_8bpc, 3, 4, 15, src, stride, var, stride3
     lea       stride3q, [strideq*3]
     movq           xm0, [srcq+strideq*0]
     movq           xm1, [srcq+strideq*1]
