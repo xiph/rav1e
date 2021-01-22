@@ -183,6 +183,14 @@ pub struct ColorDescription {
   pub matrix_coefficients: MatrixCoefficients,
 }
 
+impl ColorDescription {
+  pub(crate) fn is_srgb_triple(self) -> bool {
+    self.color_primaries == ColorPrimaries::BT709
+      && self.transfer_characteristics == TransferCharacteristics::SRGB
+      && self.matrix_coefficients == MatrixCoefficients::Identity
+  }
+}
+
 /// Allowed pixel value range
 ///
 /// C.f. VideoFullRangeFlag variable specified in ISO/IEC 23091-4/ITU-T H.273

@@ -382,72 +382,58 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
+  // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
   fn write_color_config(&mut self, seq: &Sequence) -> io::Result<()> {
-    let high_bd = seq.bit_depth > 8;
-
-    self.write_bit(high_bd)?;
-
-    if seq.profile == 2 && high_bd {
-      self.write_bit(seq.bit_depth == 12)?;
+    let high_bitdepth = seq.bit_depth > 8;
+    self.write_bit(high_bitdepth)?;
+    if seq.profile == 2 && high_bitdepth {
+      self.write_bit(seq.bit_depth == 12)?; // twelve_bit
     }
 
     let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
     if seq.profile == 1 {
       assert!(!monochrome);
     } else {
-      self.write_bit(monochrome)?;
+      self.write_bit(monochrome)?; // mono_chrome
     }
 
-    // color description present
+    // color_description_present_flag
     self.write_bit(seq.color_description.is_some())?;
-
-    let mut write_color_range = true;
-
+    let mut srgb_triple = false;
     if let Some(color_description) = seq.color_description {
       self.write(8, color_description.color_primaries as u8)?;
       self.write(8, color_description.transfer_characteristics as u8)?;
       self.write(8, color_description.matrix_coefficients as u8)?;
-
-      if color_description.color_primaries == ColorPrimaries::BT709
-        && color_description.transfer_characteristics
-          == TransferCharacteristics::SRGB
-        && color_description.matrix_coefficients
-          == MatrixCoefficients::Identity
-      {
-        write_color_range = false;
-        assert!(seq.chroma_sampling == ChromaSampling::Cs444);
-      }
+      srgb_triple = color_description.is_srgb_triple();
     }
 
-    if write_color_range {
-      self.write_bit(seq.pixel_range == PixelRange::Full)?; // full color range
-
-      if monochrome {
-        return Ok(());
-      }
-
-      let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
-      let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
-
+    if monochrome || !srgb_triple {
+      self.write_bit(seq.pixel_range == PixelRange::Full)?; // color_range
+    }
+    if monochrome {
+      return Ok(());
+    } else if srgb_triple {
+      assert!(seq.pixel_range == PixelRange::Full);
+      assert!(seq.chroma_sampling == ChromaSampling::Cs444);
+    } else {
       if seq.profile == 0 {
         assert!(seq.chroma_sampling == ChromaSampling::Cs420);
       } else if seq.profile == 1 {
         assert!(seq.chroma_sampling == ChromaSampling::Cs444);
       } else if seq.bit_depth == 12 {
+        let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
+        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
         self.write_bit(subsampling_x)?;
-
         if subsampling_x {
           self.write_bit(subsampling_y)?;
         }
       } else {
         assert!(seq.chroma_sampling == ChromaSampling::Cs422);
       }
-
       if seq.chroma_sampling == ChromaSampling::Cs420 {
         self.write(2, seq.chroma_sample_position as u32)?;
       }
     }
-
     self.write_bit(true)?; // separate_uv_delta_q
 
     Ok(())
