@@ -157,7 +157,7 @@ lto = "thin"
 incremental = true
 
 [workspace]
-members = [".", "ivf", "rav1e_js", "v_frame"]
+members = [".", "ivf", "v_frame"]
 
 [package.metadata.docs.rs]
 no-default-features = true
