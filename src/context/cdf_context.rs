@@ -518,9 +518,14 @@ impl FieldMap {
     panic!("  CDF address not found {:x}", addr);
   }
 
-  pub(crate) fn update(
-    &mut self, name: &'static str, start: usize, end: usize,
-  ) {
+  pub(crate) fn update(&mut self, addr: usize) {
+    let (name, start, end) = self.lookup(addr);
+    #[cfg(feature = "desync_finder")]
+    {
+      println!(" CDF {}", name);
+      println!();
+    }
+
     self.log.entry(start).and_modify(|v| v.1 += 1).or_insert((
       name,
       1,
@@ -546,13 +551,7 @@ macro_rules! symbol_with_update {
     {
       let cdf: &[_] = $cdf;
       let map = &mut $self.fc_map;
-      let (name, start, end) = map.lookup(cdf.as_ptr() as usize);
-      #[cfg(feature = "desync_finder")]
-      {
-        println!(" CDF {}", name);
-        println!();
-      }
-      map.update(name, start, end);
+      map.update(cdf.as_ptr() as usize);
     }
   };
 }
