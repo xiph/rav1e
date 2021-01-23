@@ -496,6 +496,45 @@ impl fmt::Debug for CDFContext {
   }
 }
 
+#[derive(Debug, Default)]
+pub struct FieldMap {
+  map: Vec<(&'static str, usize, usize)>,
+  log: HashMap<usize, (&'static str, usize, usize)>,
+}
+
+impl FieldMap {
+  /// Print the field the address belong to
+  pub(crate) fn lookup(&self, addr: usize) -> (&'static str, usize, usize) {
+    for (name, start, end) in &self.map {
+      if addr >= *start && addr < *end {
+        return (name, *start, *end);
+      }
+    }
+
+    panic!("  CDF address not found {:x}", addr);
+  }
+
+  pub(crate) fn update(
+    &mut self, name: &'static str, start: usize, end: usize,
+  ) {
+    self.log.entry(start).and_modify(|v| v.1 += 1).or_insert((
+      name,
+      1,
+      end - start,
+    ));
+  }
+
+  fn summary(&self, ctx: usize) {
+    println!("Summary for {:x}", ctx);
+    let mut sum = 0;
+    for (k, v) in self.log.iter() {
+      println!(" {:x} {:x} {}: {} {}b", ctx, k, v.0, v.1, v.2);
+      sum += v.2;
+    }
+    println!("total: {}", sum);
+  }
+}
+
 #[macro_use]
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
