@@ -258,7 +258,7 @@ impl CDFContext {
     reset_4d!(self.coeff_br_cdf);
   }
 
-  pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
+  pub fn build_map(&self) -> HashMap<&'static str, (usize, usize)> {
     use std::mem::size_of_val;
 
     let partition_cdf_start =
@@ -423,70 +423,78 @@ impl CDFContext {
     let coeff_br_cdf_end =
       coeff_br_cdf_start + size_of_val(&self.coeff_br_cdf);
 
-    vec![
-      ("partition_cdf", partition_cdf_start, partition_cdf_end),
-      ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
-      ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
-      ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
-      ("cfl_sign_cdf", cfl_sign_cdf_start, cfl_sign_cdf_end),
-      ("cfl_alpha_cdf", cfl_alpha_cdf_start, cfl_alpha_cdf_end),
-      ("newmv_cdf", newmv_cdf_start, newmv_cdf_end),
-      ("zeromv_cdf", zeromv_cdf_start, zeromv_cdf_end),
-      ("refmv_cdf", refmv_cdf_start, refmv_cdf_end),
-      ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
-      ("inter_tx_cdf", inter_tx_cdf_start, inter_tx_cdf_end),
-      ("tx_size_cdf", tx_size_cdf_start, tx_size_cdf_end),
-      ("txfm_partition_cdf", txfm_partition_cdf_start, txfm_partition_cdf_end),
-      ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
-      ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
-      ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
-      ("filter_intra_cdfs", filter_intra_cdfs_start, filter_intra_cdfs_end),
+    [
+      ("partition_cdf", (partition_cdf_start, partition_cdf_end)),
+      ("kf_y_cdf", (kf_y_cdf_start, kf_y_cdf_end)),
+      ("y_mode_cdf", (y_mode_cdf_start, y_mode_cdf_end)),
+      ("uv_mode_cdf", (uv_mode_cdf_start, uv_mode_cdf_end)),
+      ("cfl_sign_cdf", (cfl_sign_cdf_start, cfl_sign_cdf_end)),
+      ("cfl_alpha_cdf", (cfl_alpha_cdf_start, cfl_alpha_cdf_end)),
+      ("newmv_cdf", (newmv_cdf_start, newmv_cdf_end)),
+      ("zeromv_cdf", (zeromv_cdf_start, zeromv_cdf_end)),
+      ("refmv_cdf", (refmv_cdf_start, refmv_cdf_end)),
+      ("intra_tx_cdf", (intra_tx_cdf_start, intra_tx_cdf_end)),
+      ("inter_tx_cdf", (inter_tx_cdf_start, inter_tx_cdf_end)),
+      ("tx_size_cdf", (tx_size_cdf_start, tx_size_cdf_end)),
+      (
+        "txfm_partition_cdf",
+        (txfm_partition_cdf_start, txfm_partition_cdf_end),
+      ),
+      ("skip_cdfs", (skip_cdfs_start, skip_cdfs_end)),
+      ("intra_inter_cdfs", (intra_inter_cdfs_start, intra_inter_cdfs_end)),
+      ("angle_delta_cdf", (angle_delta_cdf_start, angle_delta_cdf_end)),
+      ("filter_intra_cdfs", (filter_intra_cdfs_start, filter_intra_cdfs_end)),
       (
         "palette_y_mode_cdfs",
-        palette_y_mode_cdfs_start,
-        palette_y_mode_cdfs_end,
+        (palette_y_mode_cdfs_start, palette_y_mode_cdfs_end),
       ),
       (
         "palette_uv_mode_cdfs",
-        palette_uv_mode_cdfs_start,
-        palette_uv_mode_cdfs_end,
+        (palette_uv_mode_cdfs_start, palette_uv_mode_cdfs_end),
       ),
-      ("comp_mode_cdf", comp_mode_cdf_start, comp_mode_cdf_end),
-      ("comp_ref_type_cdf", comp_ref_type_cdf_start, comp_ref_type_cdf_end),
-      ("comp_ref_cdf", comp_ref_cdf_start, comp_ref_cdf_end),
-      ("comp_bwd_ref_cdf", comp_bwd_ref_cdf_start, comp_bwd_ref_cdf_end),
-      ("single_ref_cdfs", single_ref_cdfs_start, single_ref_cdfs_end),
-      ("drl_cdfs", drl_cdfs_start, drl_cdfs_end),
-      ("compound_mode_cdf", compound_mode_cdf_start, compound_mode_cdf_end),
-      ("nmv_context", nmv_context_start, nmv_context_end),
+      ("comp_mode_cdf", (comp_mode_cdf_start, comp_mode_cdf_end)),
+      ("comp_ref_type_cdf", (comp_ref_type_cdf_start, comp_ref_type_cdf_end)),
+      ("comp_ref_cdf", (comp_ref_cdf_start, comp_ref_cdf_end)),
+      ("comp_bwd_ref_cdf", (comp_bwd_ref_cdf_start, comp_bwd_ref_cdf_end)),
+      ("single_ref_cdfs", (single_ref_cdfs_start, single_ref_cdfs_end)),
+      ("drl_cdfs", (drl_cdfs_start, drl_cdfs_end)),
+      ("compound_mode_cdf", (compound_mode_cdf_start, compound_mode_cdf_end)),
+      ("nmv_context", (nmv_context_start, nmv_context_end)),
       (
         "deblock_delta_multi_cdf",
-        deblock_delta_multi_cdf_start,
-        deblock_delta_multi_cdf_end,
+        (deblock_delta_multi_cdf_start, deblock_delta_multi_cdf_end),
       ),
-      ("deblock_delta_cdf", deblock_delta_cdf_start, deblock_delta_cdf_end),
+      ("deblock_delta_cdf", (deblock_delta_cdf_start, deblock_delta_cdf_end)),
       (
         "spatial_segmentation_cdfs",
-        spatial_segmentation_cdfs_start,
-        spatial_segmentation_cdfs_end,
+        (spatial_segmentation_cdfs_start, spatial_segmentation_cdfs_end),
       ),
-      ("lrf_switchable_cdf", lrf_switchable_cdf_start, lrf_switchable_cdf_end),
-      ("lrf_sgrproj_cdf", lrf_sgrproj_cdf_start, lrf_sgrproj_cdf_end),
-      ("lrf_wiener_cdf", lrf_wiener_cdf_start, lrf_wiener_cdf_end),
-      ("txb_skip_cdf", txb_skip_cdf_start, txb_skip_cdf_end),
-      ("dc_sign_cdf", dc_sign_cdf_start, dc_sign_cdf_end),
-      ("eob_extra_cdf", eob_extra_cdf_start, eob_extra_cdf_end),
-      ("eob_flag_cdf16", eob_flag_cdf16_start, eob_flag_cdf16_end),
-      ("eob_flag_cdf32", eob_flag_cdf32_start, eob_flag_cdf32_end),
-      ("eob_flag_cdf64", eob_flag_cdf64_start, eob_flag_cdf64_end),
-      ("eob_flag_cdf128", eob_flag_cdf128_start, eob_flag_cdf128_end),
-      ("eob_flag_cdf256", eob_flag_cdf256_start, eob_flag_cdf256_end),
-      ("eob_flag_cdf512", eob_flag_cdf512_start, eob_flag_cdf512_end),
-      ("eob_flag_cdf1024", eob_flag_cdf1024_start, eob_flag_cdf1024_end),
-      ("coeff_base_eob_cdf", coeff_base_eob_cdf_start, coeff_base_eob_cdf_end),
-      ("coeff_base_cdf", coeff_base_cdf_start, coeff_base_cdf_end),
-      ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
+      (
+        "lrf_switchable_cdf",
+        (lrf_switchable_cdf_start, lrf_switchable_cdf_end),
+      ),
+      ("lrf_sgrproj_cdf", (lrf_sgrproj_cdf_start, lrf_sgrproj_cdf_end)),
+      ("lrf_wiener_cdf", (lrf_wiener_cdf_start, lrf_wiener_cdf_end)),
+      ("txb_skip_cdf", (txb_skip_cdf_start, txb_skip_cdf_end)),
+      ("dc_sign_cdf", (dc_sign_cdf_start, dc_sign_cdf_end)),
+      ("eob_extra_cdf", (eob_extra_cdf_start, eob_extra_cdf_end)),
+      ("eob_flag_cdf16", (eob_flag_cdf16_start, eob_flag_cdf16_end)),
+      ("eob_flag_cdf32", (eob_flag_cdf32_start, eob_flag_cdf32_end)),
+      ("eob_flag_cdf64", (eob_flag_cdf64_start, eob_flag_cdf64_end)),
+      ("eob_flag_cdf128", (eob_flag_cdf128_start, eob_flag_cdf128_end)),
+      ("eob_flag_cdf256", (eob_flag_cdf256_start, eob_flag_cdf256_end)),
+      ("eob_flag_cdf512", (eob_flag_cdf512_start, eob_flag_cdf512_end)),
+      ("eob_flag_cdf1024", (eob_flag_cdf1024_start, eob_flag_cdf1024_end)),
+      (
+        "coeff_base_eob_cdf",
+        (coeff_base_eob_cdf_start, coeff_base_eob_cdf_end),
+      ),
+      ("coeff_base_cdf", (coeff_base_cdf_start, coeff_base_cdf_end)),
+      ("coeff_br_cdf", (coeff_br_cdf_start, coeff_br_cdf_end)),
     ]
+    .iter()
+    .cloned()
+    .collect()
   }
 }
 
@@ -498,7 +506,7 @@ impl fmt::Debug for CDFContext {
 
 #[derive(Debug, Default)]
 pub struct FieldMap {
-  map: Vec<(&'static str, usize, usize)>,
+  map: HashMap<&'static str, (usize, usize)>,
   log: HashMap<usize, (&'static str, usize, usize)>,
 }
 
@@ -509,7 +517,7 @@ impl FieldMap {
 
   /// Print the field the address belong to
   pub(crate) fn lookup(&self, addr: usize) -> (&'static str, usize, usize) {
-    for (name, start, end) in &self.map {
+    for (name, (start, end)) in &self.map {
       if addr >= *start && addr < *end {
         return (name, *start, *end);
       }
