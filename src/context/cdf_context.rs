@@ -278,6 +278,12 @@ impl CDFContext {
       self.cfl_alpha_cdf.first().unwrap().as_ptr() as usize;
     let cfl_alpha_cdf_end =
       cfl_alpha_cdf_start + size_of_val(&self.cfl_alpha_cdf);
+    let newmv_cdf_start = self.newmv_cdf.first().unwrap().as_ptr() as usize;
+    let newmv_cdf_end = newmv_cdf_start + size_of_val(&self.newmv_cdf);
+    let zeromv_cdf_start = self.zeromv_cdf.first().unwrap().as_ptr() as usize;
+    let zeromv_cdf_end = zeromv_cdf_start + size_of_val(&self.zeromv_cdf);
+    let refmv_cdf_start = self.refmv_cdf.first().unwrap().as_ptr() as usize;
+    let refmv_cdf_end = refmv_cdf_start + size_of_val(&self.refmv_cdf);
     let intra_tx_cdf_start =
       self.intra_tx_cdf.first().unwrap().as_ptr() as usize;
     let intra_tx_cdf_end =
@@ -286,6 +292,13 @@ impl CDFContext {
       self.inter_tx_cdf.first().unwrap().as_ptr() as usize;
     let inter_tx_cdf_end =
       inter_tx_cdf_start + size_of_val(&self.inter_tx_cdf);
+    let tx_size_cdf_start =
+      self.tx_size_cdf.first().unwrap().as_ptr() as usize;
+    let tx_size_cdf_end = tx_size_cdf_start + size_of_val(&self.tx_size_cdf);
+    let txfm_partition_cdf_start =
+      self.txfm_partition_cdf.first().unwrap().as_ptr() as usize;
+    let txfm_partition_cdf_end =
+      txfm_partition_cdf_start + size_of_val(&self.txfm_partition_cdf);
     let skip_cdfs_start = self.skip_cdfs.first().unwrap().as_ptr() as usize;
     let skip_cdfs_end = skip_cdfs_start + size_of_val(&self.skip_cdfs);
     let intra_inter_cdfs_start =
@@ -324,6 +337,16 @@ impl CDFContext {
       self.comp_bwd_ref_cdf.first().unwrap().as_ptr() as usize;
     let comp_bwd_ref_cdf_end =
       comp_bwd_ref_cdf_start + size_of_val(&self.comp_bwd_ref_cdf);
+    let single_ref_cdfs_start =
+      self.single_ref_cdfs.first().unwrap().as_ptr() as usize;
+    let single_ref_cdfs_end =
+      single_ref_cdfs_start + size_of_val(&self.single_ref_cdfs);
+    let drl_cdfs_start = self.drl_cdfs.first().unwrap().as_ptr() as usize;
+    let drl_cdfs_end = drl_cdfs_start + size_of_val(&self.drl_cdfs);
+    let compound_mode_cdf_start =
+      self.compound_mode_cdf.first().unwrap().as_ptr() as usize;
+    let compound_mode_cdf_end =
+      compound_mode_cdf_start + size_of_val(&self.compound_mode_cdf);
     let deblock_delta_multi_cdf_start =
       self.deblock_delta_multi_cdf.first().unwrap().as_ptr() as usize;
     let deblock_delta_multi_cdf_end = deblock_delta_multi_cdf_start
@@ -404,8 +427,13 @@ impl CDFContext {
       ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
       ("cfl_sign_cdf", cfl_sign_cdf_start, cfl_sign_cdf_end),
       ("cfl_alpha_cdf", cfl_alpha_cdf_start, cfl_alpha_cdf_end),
+      ("newmv_cdf", newmv_cdf_start, newmv_cdf_end),
+      ("zeromv_cdf", zeromv_cdf_start, zeromv_cdf_end),
+      ("refmv_cdf", refmv_cdf_start, refmv_cdf_end),
       ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
       ("inter_tx_cdf", inter_tx_cdf_start, inter_tx_cdf_end),
+      ("tx_size_cdf", tx_size_cdf_start, tx_size_cdf_end),
+      ("txfm_partition_cdf", txfm_partition_cdf_start, txfm_partition_cdf_end),
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
       ("intra_inter_cdfs", intra_inter_cdfs_start, intra_inter_cdfs_end),
       ("angle_delta_cdf", angle_delta_cdf_start, angle_delta_cdf_end),
@@ -424,6 +452,9 @@ impl CDFContext {
       ("comp_ref_type_cdf", comp_ref_type_cdf_start, comp_ref_type_cdf_end),
       ("comp_ref_cdf", comp_ref_cdf_start, comp_ref_cdf_end),
       ("comp_bwd_ref_cdf", comp_bwd_ref_cdf_start, comp_bwd_ref_cdf_end),
+      ("single_ref_cdfs", single_ref_cdfs_start, single_ref_cdfs_end),
+      ("drl_cdfs", drl_cdfs_start, drl_cdfs_end),
+      ("compound_mode_cdf", compound_mode_cdf_start, compound_mode_cdf_end),
       (
         "deblock_delta_multi_cdf",
         deblock_delta_multi_cdf_start,
