@@ -602,7 +602,17 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
-    *self.fc = checkpoint.fc;
+    for (d_start, (name, _, len)) in self.fc_map.log.iter() {
+      let (s_start, _s_end) = checkpoint.fc_map.map[name];
+      unsafe {
+        std::ptr::copy_nonoverlapping(
+          s_start as *const u8,
+          (*d_start) as *mut u8,
+          *len,
+        );
+      }
+    }
+    // *self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
     if self.debug {
       self.fc_map.summary(self as *const Self as usize);
