@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use std::fmt;
 
 #[derive(Clone, Copy)]
 pub struct CDFContext {
@@ -499,11 +500,16 @@ impl fmt::Debug for CDFContext {
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     $w.symbol_with_update($s, $cdf);
-    #[cfg(feature = "desync_finder")]
     {
       let cdf: &[_] = $cdf;
-      if let Some(map) = $self.fc_map.as_ref() {
-        map.lookup(cdf.as_ptr() as usize);
+      if let Some(map) = $self.fc_map.as_mut() {
+        let (name, start, end) = map.lookup(cdf.as_ptr() as usize);
+        #[cfg(feature = "desync_finder")]
+        {
+          println!(" CDF {}", name);
+          println!();
+        }
+        map.update(name, start, end);
       }
     }
   };
@@ -518,7 +524,6 @@ pub struct ContextWriterCheckpoint {
 pub struct ContextWriter<'a> {
   pub bc: BlockContext<'a>,
   pub fc: &'a mut CDFContext,
-  #[cfg(feature = "desync_finder")]
   pub fc_map: Option<FieldMap>, // For debugging purposes
 }
 
@@ -526,16 +531,11 @@ impl<'a> ContextWriter<'a> {
   #[allow(clippy::let_and_return)]
   pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
     #[allow(unused_mut)]
-    let mut cw = ContextWriter {
-      fc,
-      bc,
-      #[cfg(feature = "desync_finder")]
-      fc_map: Default::default(),
-    };
-    #[cfg(feature = "desync_finder")]
+    let mut cw = ContextWriter { fc, bc, fc_map: Default::default() };
     {
       if std::env::var_os("RAV1E_DEBUG").is_some() {
-        cw.fc_map = Some(FieldMap { map: cw.fc.build_map() });
+        cw.fc_map =
+          Some(FieldMap { map: cw.fc.build_map(), log: Default::default() });
       }
     }
 
@@ -553,10 +553,11 @@ impl<'a> ContextWriter<'a> {
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
     *self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
-    #[cfg(feature = "desync_finder")]
     {
       if self.fc_map.is_some() {
-        self.fc_map = Some(FieldMap { map: self.fc.build_map() });
+        self.fc_map.as_ref().unwrap().summary(self as *const Self as usize);
+        self.fc_map =
+          Some(FieldMap { map: self.fc.build_map(), log: Default::default() });
       }
     }
   }
