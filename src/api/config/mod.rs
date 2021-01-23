@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use std::sync::Arc;
 
-use crate::api::{ChromaSampling, Context, ContextInner};
+use crate::api::{ChromaSampling, Context, ContextInner, PixelRange};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::tiling::TilingInfo;
@@ -111,6 +111,10 @@ pub enum InvalidConfig {
   /// The configuration
   #[error("Mismatch in the rate control configuration")]
   RateControlConfigurationMismatch,
+
+  /// The color configuration mismatches AV1 constraints.
+  #[error("Mismatch in the color configuration")]
+  ColorConfigurationMismatch,
 }
 
 /// Contains the encoder configuration.
@@ -344,6 +348,20 @@ impl Config {
 
     if config.enable_timing_info && config.still_picture {
       return Err(InvalidOptionWithStillPicture("enable_timing_info"));
+    }
+
+    // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
+    if let Some(color_description) = config.color_description {
+      if config.chroma_sampling != ChromaSampling::Cs400
+        && color_description.is_srgb_triple()
+      {
+        if config.pixel_range != PixelRange::Full {
+          return Err(ColorConfigurationMismatch);
+        }
+        if config.chroma_sampling != ChromaSampling::Cs444 {
+          return Err(ColorConfigurationMismatch);
+        }
+      }
     }
 
     // TODO: add more validation
