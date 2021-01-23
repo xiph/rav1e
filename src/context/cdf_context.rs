@@ -503,6 +503,10 @@ pub struct FieldMap {
 }
 
 impl FieldMap {
+  fn new(fc: &CDFContext) -> FieldMap {
+    Self { map: fc.build_map(), log: Default::default() }
+  }
+
   /// Print the field the address belong to
   pub(crate) fn lookup(&self, addr: usize) -> (&'static str, usize, usize) {
     for (name, start, end) in &self.map {
@@ -541,63 +545,61 @@ macro_rules! symbol_with_update {
     $w.symbol_with_update($s, $cdf);
     {
       let cdf: &[_] = $cdf;
-      if let Some(map) = $self.fc_map.as_mut() {
-        let (name, start, end) = map.lookup(cdf.as_ptr() as usize);
-        #[cfg(feature = "desync_finder")]
-        {
-          println!(" CDF {}", name);
-          println!();
-        }
-        map.update(name, start, end);
+      let map = &mut $self.fc_map;
+      let (name, start, end) = map.lookup(cdf.as_ptr() as usize);
+      #[cfg(feature = "desync_finder")]
+      {
+        println!(" CDF {}", name);
+        println!();
       }
+      map.update(name, start, end);
     }
   };
 }
 
-#[derive(Clone)]
 pub struct ContextWriterCheckpoint {
   pub fc: CDFContext,
   pub bc: BlockContextCheckpoint,
+  pub fc_map: FieldMap,
 }
 
 pub struct ContextWriter<'a> {
   pub bc: BlockContext<'a>,
   pub fc: &'a mut CDFContext,
-  pub fc_map: Option<FieldMap>, // For debugging purposes
+  pub fc_map: FieldMap,
+  pub debug: bool,
 }
 
 impl<'a> ContextWriter<'a> {
-  #[allow(clippy::let_and_return)]
   pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
-    #[allow(unused_mut)]
-    let mut cw = ContextWriter { fc, bc, fc_map: Default::default() };
-    {
-      if std::env::var_os("RAV1E_DEBUG").is_some() {
-        cw.fc_map =
-          Some(FieldMap { map: cw.fc.build_map(), log: Default::default() });
-      }
-    }
+    let fc_map = FieldMap::new(fc);
+    let debug = std::env::var_os("RAV1E_DEBUG").is_some();
 
-    cw
+    ContextWriter { fc, bc, fc_map, debug }
   }
 
   pub fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
     (if element > 0 { cdf[element - 1] } else { 32768 }) - cdf[element]
   }
 
-  pub const fn checkpoint(&self) -> ContextWriterCheckpoint {
-    ContextWriterCheckpoint { fc: *self.fc, bc: self.bc.checkpoint() }
+  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
+    let mut cc = ContextWriterCheckpoint {
+      fc: *self.fc,
+      bc: self.bc.checkpoint(),
+      fc_map: Default::default(),
+    };
+
+    cc.fc_map = FieldMap::new(&cc.fc);
+
+    cc
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
     *self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
-    {
-      if self.fc_map.is_some() {
-        self.fc_map.as_ref().unwrap().summary(self as *const Self as usize);
-        self.fc_map =
-          Some(FieldMap { map: self.fc.build_map(), log: Default::default() });
-      }
+    if self.debug {
+      self.fc_map.summary(self as *const Self as usize);
+      self.fc_map.log.clear();
     }
   }
 }
