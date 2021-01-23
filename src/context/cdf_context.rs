@@ -347,6 +347,8 @@ impl CDFContext {
       self.compound_mode_cdf.first().unwrap().as_ptr() as usize;
     let compound_mode_cdf_end =
       compound_mode_cdf_start + size_of_val(&self.compound_mode_cdf);
+    let nmv_context_start = &self.nmv_context as *const NMVContext as usize;
+    let nmv_context_end = nmv_context_start + size_of_val(&self.nmv_context);
     let deblock_delta_multi_cdf_start =
       self.deblock_delta_multi_cdf.first().unwrap().as_ptr() as usize;
     let deblock_delta_multi_cdf_end = deblock_delta_multi_cdf_start
@@ -455,6 +457,7 @@ impl CDFContext {
       ("single_ref_cdfs", single_ref_cdfs_start, single_ref_cdfs_end),
       ("drl_cdfs", drl_cdfs_start, drl_cdfs_end),
       ("compound_mode_cdf", compound_mode_cdf_start, compound_mode_cdf_end),
+      ("nmv_context", nmv_context_start, nmv_context_end),
       (
         "deblock_delta_multi_cdf",
         deblock_delta_multi_cdf_start,

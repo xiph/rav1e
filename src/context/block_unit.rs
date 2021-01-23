@@ -1694,7 +1694,12 @@ impl<'a> ContextWriter<'a> {
       MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
     let j: MvJointType = av1_get_mv_joint(diff);
 
-    w.symbol_with_update(j as u32, &mut self.fc.nmv_context.joints_cdf);
+    symbol_with_update!(
+      self,
+      w,
+      j as u32,
+      &mut self.fc.nmv_context.joints_cdf
+    );
 
     if mv_joint_vertical(j) {
       encode_mv_component(
