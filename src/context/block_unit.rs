@@ -483,7 +483,7 @@ impl<'a> BlockContext<'a> {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct NMVComponent {
   pub classes_cdf: [u16; MV_CLASSES + 1],
   pub class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
@@ -495,7 +495,7 @@ pub struct NMVComponent {
   pub bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct NMVContext {
   pub joints_cdf: [u16; MV_JOINTS + 1],
   pub comps: [NMVComponent; 2],
@@ -697,6 +697,7 @@ impl<'a> ContextWriter<'a> {
   pub fn write_angle_delta(
     &mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode,
   ) {
+    println!("writing angle delta");
     symbol_with_update!(
       self,
       w,

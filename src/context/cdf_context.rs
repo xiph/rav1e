@@ -10,7 +10,7 @@
 use super::*;
 use std::fmt;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CDFContext {
   pub partition_cdf: [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
   pub kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
@@ -498,11 +498,13 @@ impl CDFContext {
   }
 }
 
+/*
 impl fmt::Debug for CDFContext {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "CDFContext contains too many numbers to print :-(")
   }
 }
+*/
 
 #[derive(Debug, Default)]
 pub struct FieldMap {
@@ -618,5 +620,6 @@ impl<'a> ContextWriter<'a> {
       self.fc_map.summary(self as *const Self as usize);
       self.fc_map.log.clear();
     }
+    pretty_assertions::assert_eq!(self.fc, &checkpoint.fc);
   }
 }
