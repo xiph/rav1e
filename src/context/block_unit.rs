@@ -1723,10 +1723,13 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, multi: bool,
     planes: usize,
   ) {
-    fn write_block_delta(w: &mut dyn Writer, cdf: &mut [u16], delta: i8) {
+    fn write_block_delta(
+      fc_map: &mut FieldMap, w: &mut dyn Writer, cdf: &mut [u16], delta: i8,
+    ) {
       let abs = delta.abs() as u32;
 
       w.symbol_with_update(cmp::min(abs, DELTA_LF_SMALL), cdf);
+      fc_map.update(cdf.as_ptr() as usize);
 
       if abs >= DELTA_LF_SMALL {
         let bits = msb(abs as i32 - 1) as u32;
@@ -1739,18 +1742,19 @@ impl<'a> ContextWriter<'a> {
     }
 
     let block = &self.bc.blocks[bo];
+    let fc_map = &mut self.fc_map;
     if multi {
       let deltas_count = FRAME_LF_COUNT + planes - 3;
       let deltas = &block.deblock_deltas[..deltas_count];
       let cdfs = &mut self.fc.deblock_delta_multi_cdf[..deltas_count];
 
       for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
-        write_block_delta(w, cdf, delta);
+        write_block_delta(fc_map, w, cdf, delta);
       }
     } else {
       let delta = block.deblock_deltas[0];
       let cdf = &mut self.fc.deblock_delta_cdf;
-      write_block_delta(w, cdf, delta);
+      write_block_delta(fc_map, w, cdf, delta);
     }
   }
 
