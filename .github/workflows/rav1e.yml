@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - 0.*
   pull_request:
     branches:
       - master
+      - 0.*
 
 jobs:
   rustfmt-clippy:
