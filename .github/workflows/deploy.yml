@@ -1,5 +1,4 @@
 name: deploy
-
 on:
   schedule:
     # Run every Tuesday at 21:00 (UTC)
@@ -10,9 +9,7 @@ on:
       - 'p*'
 
 jobs:
-
   windows-binaries:
-
     strategy:
       matrix:
         conf:
@@ -25,7 +22,6 @@ jobs:
            toolchain: stable-x86_64-pc-windows-gnu
 
     if: github.repository_owner == 'xiph'
-
     runs-on: windows-latest
 
     steps:
@@ -61,21 +57,17 @@ jobs:
         override: true
 
     - name: Build rav1e
-      run: |
-        cargo build --release
+      run: cargo build --release
 
     - name: Strip rav1e gnu-binary
       if: matrix.conf == 'gnu'
-      run: |
-        strip target/release/rav1e.exe
+      run: strip target/release/rav1e.exe
 
     - name: Run cargo-c
-      run: |
-        cargo cinstall --release --destdir="C:\"
+      run:  cargo cinstall --release --destdir="C:\"
 
     - name: Rename cargo-c folder
-      run: |
-        Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
+      run: Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -118,9 +110,7 @@ jobs:
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
 
-
   linux-binaries:
-
     strategy:
       matrix:
         target:
@@ -137,7 +127,6 @@ jobs:
            strip: aarch64-linux-gnu-strip
 
     if: github.repository_owner == 'xiph'
-
     runs-on: ubuntu-latest
 
     steps:
@@ -185,18 +174,15 @@ jobs:
 
     - name: Build rav1e for aarch64-musl
       if: matrix.target == 'aarch64-unknown-linux-musl'
-      run: |
-        cross build --target ${{ matrix.target }} --release
+      run: cross build --target ${{ matrix.target }} --release
 
     - name: Build rav1e
       if: matrix.target != 'aarch64-unknown-linux-musl'
-      run: |
-        cargo build --target ${{ matrix.target }} --release
+      run: cargo build --target ${{ matrix.target }} --release
 
     - name: Strip musl rav1e
       if: matrix.target != 'wasm32-unknown-unknown'
-      run: |
-        ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
+      run: ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -234,17 +220,14 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
 
   macos-binaries:
-
     if: github.repository_owner == 'xiph'
-
     runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Install nasm
-      run: |
-        brew install nasm
+      run: brew install nasm
 
     - name: Install stable
       uses: actions-rs/toolchain@v1
@@ -254,12 +237,10 @@ jobs:
         override: true
 
     - name: Build rav1e
-      run: |
-        cargo build --release
+      run: cargo build --release
 
     - name: Strip rav1e
-      run: |
-        strip target/release/rav1e
+      run: strip target/release/rav1e
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -296,11 +277,8 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
 
   deploy:
-
     needs: [windows-binaries, linux-binaries, macos-binaries]
-
     if: github.repository_owner == 'xiph'
-
     runs-on: ubuntu-latest
 
     steps:
@@ -319,8 +297,7 @@ jobs:
         override: true
 
     - name: Create Cargo.lock
-      run: |
-        cargo update
+      run: cargo update
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
