@@ -230,7 +230,7 @@ impl QuantizationContext {
     // to be quite close (+/- 1/256), for both inter and intra,
     // post-deadzoning.
     //
-    // [1] https://people.xiph.org/~jm/notes/theoretical_results.pdf
+    // [1] https://jmvalin.ca/notes/theoretical_results.pdf
     self.dc_offset = self.dc_quant * (if is_intra { 109 } else { 108 }) / 256;
     self.ac_offset0 = self.ac_quant * (if is_intra { 98 } else { 97 }) / 256;
     self.ac_offset1 = self.ac_quant * (if is_intra { 109 } else { 108 }) / 256;
