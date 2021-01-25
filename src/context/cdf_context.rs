@@ -512,7 +512,7 @@ pub struct FieldMap {
 }
 
 impl FieldMap {
-  fn new(fc: &CDFContext) -> FieldMap {
+  pub(crate) fn new(fc: &CDFContext) -> FieldMap {
     Self { map: fc.build_map(), log: Default::default() }
   }
 
@@ -569,6 +569,7 @@ pub struct ContextWriterCheckpoint {
   pub fc: CDFContext,
   pub bc: BlockContextCheckpoint,
   pub fc_map: FieldMap,
+  pub gen: usize,
 }
 
 pub struct ContextWriter<'a> {
@@ -576,6 +577,7 @@ pub struct ContextWriter<'a> {
   pub fc: &'a mut CDFContext,
   pub fc_map: FieldMap,
   pub debug: bool,
+  pub checkpoints: usize,
 }
 
 impl<'a> ContextWriter<'a> {
@@ -583,19 +585,23 @@ impl<'a> ContextWriter<'a> {
     let fc_map = FieldMap::new(fc);
     let debug = std::env::var_os("RAV1E_DEBUG").is_some();
 
-    ContextWriter { fc, bc, fc_map, debug }
+    ContextWriter { fc, bc, fc_map, debug, checkpoints: 0 }
   }
 
   pub fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
     (if element > 0 { cdf[element - 1] } else { 32768 }) - cdf[element]
   }
 
-  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
+  pub fn checkpoint(&mut self) -> ContextWriterCheckpoint {
     let mut cc = ContextWriterCheckpoint {
       fc: *self.fc,
       bc: self.bc.checkpoint(),
       fc_map: Default::default(),
+      gen: self.checkpoints,
     };
+
+    println!("Making a new checkpoint {} {:p}", self.checkpoints, &cc);
+    self.checkpoints += 1;
 
     cc.fc_map = FieldMap::new(&cc.fc);
 
@@ -619,6 +625,7 @@ impl<'a> ContextWriter<'a> {
       self.fc_map.summary(self as *const Self as usize);
       self.fc_map.log.clear();
     }
+    println!("rolling back checkpoint {:p}", checkpoint);
     pretty_assertions::assert_eq!(self.fc, &checkpoint.fc);
   }
 }
