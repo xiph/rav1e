@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use std::fmt;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CDFContext {
