@@ -600,7 +600,7 @@ impl<'a> ContextWriter<'a> {
       gen: self.checkpoints,
     };
 
-    println!("Making a new checkpoint {} {:p}", self.checkpoints, &cc);
+    //    println!("Making a new checkpoint {} {:p}", self.checkpoints, &cc);
     self.checkpoints += 1;
 
     cc.fc_map = FieldMap::new(&cc.fc);
@@ -623,9 +623,9 @@ impl<'a> ContextWriter<'a> {
     self.bc.rollback(&checkpoint.bc);
     if self.debug {
       self.fc_map.summary(self as *const Self as usize);
-      self.fc_map.log.clear();
+      pretty_assertions::assert_eq!(self.fc, &checkpoint.fc);
+      // self.fc_map.log.clear();
     }
-    println!("rolling back checkpoint {:p}", checkpoint);
-    pretty_assertions::assert_eq!(self.fc, &checkpoint.fc);
+    //    println!("rolling back checkpoint {:p}", checkpoint);
   }
 }
