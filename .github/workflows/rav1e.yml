@@ -183,7 +183,7 @@ jobs:
       if: matrix.conf == 'grcov-coveralls'
       env:
         LINK: https://github.com/mozilla/grcov/releases/download
-        GRCOV_VERSION: 0.5.15
+        GRCOV_VERSION: 0.7.1
       run: |
         curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
         tar xj -C $HOME/.cargo/bin
