@@ -1,18 +1,14 @@
 name: deploy
-
 on:
   schedule:
-    # Run every Tuesday at 21:00 (UTC)
-    - cron: '0 21 * * TUE'
+    - cron: '0 21 * * TUE' # Run every Tuesday at 21:00 (UTC)
   push:
     tags:
       - 'v*.*.*'
       - 'p*'
 
 jobs:
-
   windows-binaries:
-
     strategy:
       matrix:
         conf:
@@ -25,7 +21,6 @@ jobs:
            toolchain: stable-x86_64-pc-windows-gnu
 
     if: github.repository_owner == 'xiph'
-
     runs-on: windows-latest
 
     steps:
@@ -34,7 +29,7 @@ jobs:
 
     - name: Install cargo-c
       run: |
-        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.6.7"
+        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.7.1"
         $CARGO_C_FILE = "cargo-c-windows-msvc"
         curl -LO "$LINK/$CARGO_C_FILE.zip"
         7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
@@ -43,7 +38,6 @@ jobs:
       if: matrix.conf == 'msvc'
       run: |
         $VsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        echo "$VsPath;C:\nasm" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Set MSVC x86_64 linker path
       if: matrix.conf == 'msvc'
@@ -61,21 +55,17 @@ jobs:
         override: true
 
     - name: Build rav1e
-      run: |
-        cargo build --release
+      run: cargo build --release
 
     - name: Strip rav1e gnu-binary
       if: matrix.conf == 'gnu'
-      run: |
-        strip target/release/rav1e.exe
+      run: strip target/release/rav1e.exe
 
     - name: Run cargo-c
-      run: |
-        cargo cinstall --release --destdir="C:\"
+      run:  cargo cinstall --release --destdir="C:\"
 
     - name: Rename cargo-c folder
-      run: |
-        Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
+      run: Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -118,9 +108,7 @@ jobs:
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
 
-
   linux-binaries:
-
     strategy:
       matrix:
         target:
@@ -137,23 +125,11 @@ jobs:
            strip: aarch64-linux-gnu-strip
 
     if: github.repository_owner == 'xiph'
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Install nasm
-      if: matrix.target == 'x86_64-unknown-linux-musl'
-      env:
-        LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.15.05-1
-        NASM_SHA256: >-
-          c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
-      run: |
-        curl -O "$LINK/nasm_${NASM_VERSION}_amd64.deb"
-        echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" | sha256sum --check
-        sudo dpkg -i "nasm_${NASM_VERSION}_amd64.deb"
+    - uses: ilammy/setup-nasm@v1
 
     - name: Install musl tools
       if: matrix.target != 'wasm32-unknown-unknown'
@@ -185,18 +161,15 @@ jobs:
 
     - name: Build rav1e for aarch64-musl
       if: matrix.target == 'aarch64-unknown-linux-musl'
-      run: |
-        cross build --target ${{ matrix.target }} --release
+      run: cross build --target ${{ matrix.target }} --release
 
     - name: Build rav1e
       if: matrix.target != 'aarch64-unknown-linux-musl'
-      run: |
-        cargo build --target ${{ matrix.target }} --release
+      run: cargo build --target ${{ matrix.target }} --release
 
     - name: Strip musl rav1e
       if: matrix.target != 'wasm32-unknown-unknown'
-      run: |
-        ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
+      run: ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -234,17 +207,14 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
 
   macos-binaries:
-
     if: github.repository_owner == 'xiph'
-
     runs-on: macos-latest
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Install nasm
-      run: |
-        brew install nasm
+      run: brew install nasm
 
     - name: Install stable
       uses: actions-rs/toolchain@v1
@@ -254,12 +224,10 @@ jobs:
         override: true
 
     - name: Build rav1e
-      run: |
-        cargo build --release
+      run: cargo build --release
 
     - name: Strip rav1e
-      run: |
-        strip target/release/rav1e
+      run: strip target/release/rav1e
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
@@ -296,11 +264,8 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
 
   deploy:
-
     needs: [windows-binaries, linux-binaries, macos-binaries]
-
     if: github.repository_owner == 'xiph'
-
     runs-on: ubuntu-latest
 
     steps:
@@ -319,8 +284,7 @@ jobs:
         override: true
 
     - name: Create Cargo.lock
-      run: |
-        cargo update
+      run: cargo update
 
     - name: Get the version
       if: startsWith(github.ref, 'refs/tags/v')
