@@ -503,7 +503,7 @@ pub struct FieldMap {
 }
 
 impl FieldMap {
-  fn new(fc: &CDFContext) -> FieldMap {
+  pub(crate) fn new(fc: &CDFContext) -> FieldMap {
     Self { map: fc.build_map(), log: Default::default() }
   }
 

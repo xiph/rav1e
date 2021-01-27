@@ -127,7 +127,7 @@ mod test {
     use super::*;
 
     let cdf = CDFContext::new(8);
-    let cdf_map = FieldMap { map: cdf.build_map() };
+    let cdf_map = FieldMap::new(&cdf);
     let f = &cdf.partition_cdf[2];
     cdf_map.lookup(f.as_ptr() as usize);
   }
