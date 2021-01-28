@@ -33,124 +33,208 @@ const right_ext_mask_buf
         .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 right_ext_mask:
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
         .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
         .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
         .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
         .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 endconst
 
-// void dav1d_wiener_filter_h_8bpc_neon(int16_t *dst, const pixel (*left)[4],
-//                                      const pixel *src, ptrdiff_t stride,
-//                                      const int16_t fh[8], intptr_t w,
-//                                      int h, enum LrEdgeFlags edges);
-function wiener_filter_h_8bpc_neon, export=1
-        mov             w8,  w5
-        ld1             {v0.8h},  [x4]
-        mov             w9,  #(1 << 14) - (1 << 2)
-        dup             v30.8h,  w9
+// void dav1d_wiener_filter7_8bpc_neon(pixel *p, const ptrdiff_t p_stride,
+//                                     const pixel (*left)[4],
+//                                     const pixel *lpf, const ptrdiff_t lpf_stride,
+//                                     const int w, int h,
+//                                     const int16_t filter[2][8],
+//                                     const enum LrEdgeFlags edges);
+function wiener_filter7_8bpc_neon, export=1
+        ldr             w8,  [sp]
+        stp             x29, x30, [sp, #-16]!
+        mov             x29, sp
+        ld1             {v0.8h, v1.8h},  [x7]
+        tst             w8,  #4               // LR_HAVE_TOP
+        sub_sp          384*2*6
+
+        mov             w17, #(1 << 14) - (1 << 2)
+        dup             v30.8h,  w17
         movi            v31.8h,  #8, lsl #8
-        // Calculate mid_stride
-        add             w10, w5,  #7
-        bic             w10, w10, #7
-        lsl             w10, w10, #1
 
-        // Set up pointers for reading/writing alternate rows
-        add             x12, x0,  x10
-        lsl             w10, w10, #1
-        add             x13, x2,  x3
-        lsl             x3,  x3,  #1
+        // x9  - t6
+        // x10 - t5
+        // x11 - t4
+        // x12 - t3
+        // x13 - t2
+        // x14 - t1
+        // x15 - t0
+        mov             x14, sp               // t1
+        b.eq            L(no_top_7)
 
-        // Subtract the aligned width from mid_stride
-        add             w11, w5,  #7
-        bic             w11, w11, #7
-        sub             x10, x10, w11, uxtw #1
+        mov             x16, x2               // backup left
+        mov             x2,  #0
+        bl              wiener_filter7_h_8bpc_neon
+        add             x3,  x3,  x4          // lpf += lpf_stride
+        mov             x9,  x14              // t6
+        mov             x10, x14              // t5
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter7_h_8bpc_neon
+        add             x3,  x3,  x4,  lsl #2
+        add             x3,  x3,  x4          // lpf += lpf_stride*5
+        mov             x11, x14              // t4
+        add             x14, x14, #384*2      // t1 += 384*2
+        mov             x2,  x16              // left
+        mov             x16, x3               // backup lpf
+        mov             x3,  x0               // lpf = p
+        bl              wiener_filter7_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        mov             x12, x14              // t3
+        mov             x13, x14              // t2
+        b.eq            L(v1_7)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter7_h_8bpc_neon
+        mov             x13, x14              // t2
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v2_7)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter7_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v3_7)
+        add             x3,  x3,  x1          // src += p_stride
 
-        // Subtract the number of pixels read from the source stride
-        add             w11, w11, #8
-        sub             x3,  x3,  w11, uxtw
+L(main_7):
+        add             x15, x14, #384*2      // t0 = t1 + 384*2
+L(main_loop_7):
+        bl              wiener_filter7_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.ne            L(main_loop_7)
+        tst             w8,  #8 // LR_HAVE_BOTTOM
+        b.eq            L(v3_7)
+
+        mov             x3,  x16              // restore lpf
+        mov             x2,  #0               // left = NULL
+        sub             x4,  x4,  x1          // lpf_stride - p_stride
+        bl              wiener_filter7_hv_8bpc_neon
+        add             x3,  x3,  x4          // src += lpf_stride - p_stride
+        bl              wiener_filter7_hv_8bpc_neon
+L(v1_7):
+        bl              wiener_filter7_v_8bpc_neon
+
+        mov             sp,  x29
+        ldp             x29, x30, [sp], #16
+        ret
+
+L(no_top_7):
+        add             x3,  x3,  x4,  lsl #2
+        add             x16, x3,  x4,  lsl #1 // lpf += lpf_stride*6, backup
+        mov             x3,  x0               // lpf = p
+
+        bl              wiener_filter7_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        mov             x9,  x14              // t6
+        mov             x10, x14              // t5
+        mov             x11, x14              // t4
+        mov             x12, x14              // t3
+        mov             x13, x14              // t2
+        b.eq            L(v1_7)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter7_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        mov             x13, x14              // t2
+        b.eq            L(v2_7)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter7_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v3_7)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x15, x14, #384*2      // t0 = t1 + 384*2
+        bl              wiener_filter7_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v3_7)
+        add             x15, x15, #384*2*4    // t0 += 384*2*4
+        bl              wiener_filter7_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.ne            L(main_7)
+L(v3_7):
+        bl              wiener_filter7_v_8bpc_neon
+L(v2_7):
+        bl              wiener_filter7_v_8bpc_neon
+        b               L(v1_7)
+endfunc
+
+
+function wiener_filter7_h_8bpc_neon
+        stp             x3,  x5,  [sp, #-32]!
+        str             x14,      [sp, #16]
 
         // Set up the src pointers to include the left edge, for LR_HAVE_LEFT, left == NULL
-        tst             w7,  #1 // LR_HAVE_LEFT
-        b.eq            2f
+        tst             w8,  #1 // LR_HAVE_LEFT
+        b.eq            1f
         // LR_HAVE_LEFT
-        cbnz            x1,  0f
+        cbnz            x2,  0f
         // left == NULL
-        sub             x2,  x2,  #3
-        sub             x13, x13, #3
-        b               1f
-0:      // LR_HAVE_LEFT, left != NULL
-2:      // !LR_HAVE_LEFT, increase the stride.
-        // For this case we don't read the left 3 pixels from the src pointer,
-        // but shift it as if we had done that.
-        add             x3,  x3,  #3
-
-
-1:      // Loop vertically
-        ld1             {v3.16b},  [x2],  #16
-        ld1             {v5.16b},  [x13], #16
-
-        tst             w7,  #1 // LR_HAVE_LEFT
-        b.eq            0f
-        cbz             x1,  2f
-        // LR_HAVE_LEFT, left != NULL
-        ld1             {v2.s}[3],  [x1], #4
-        // Move x2/x13 back to account for the last 3 bytes we loaded earlier,
-        // which we'll shift out.
-        sub             x2,  x2,  #3
-        sub             x13, x13, #3
-        ld1             {v4.s}[3],  [x1], #4
-        ext             v3.16b, v2.16b, v3.16b, #13
-        ext             v5.16b, v4.16b, v5.16b, #13
+        sub             x3,  x3,  #3
+        ld1             {v3.16b}, [x3], #16
         b               2f
+
 0:
+        // LR_HAVE_LEFT, left != NULL
+        ld1             {v3.16b},  [x3], #16
+        ld1             {v2.s}[3], [x2], #4
+        // Move x3 back to account for the last 3 bytes we loaded earlier,
+        // which we'll shift out.
+        sub             x3,  x3,  #3
+        ext             v3.16b,  v2.16b,  v3.16b, #13
+        b               2f
+
+1:
+        ld1             {v3.16b}, [x3], #16
         // !LR_HAVE_LEFT, fill v2 with the leftmost byte
         // and shift v3 to have 3x the first byte at the front.
-        dup             v2.16b, v3.b[0]
-        dup             v4.16b, v5.b[0]
-        // Move x2 back to account for the last 3 bytes we loaded before,
+        dup             v2.16b,  v3.b[0]
+        // Move x3 back to account for the last 3 bytes we loaded before,
         // which we shifted out.
-        sub             x2,  x2,  #3
-        sub             x13, x13, #3
-        ext             v3.16b, v2.16b, v3.16b, #13
-        ext             v5.16b, v4.16b, v5.16b, #13
+        sub             x3,  x3,  #3
+        ext             v3.16b,  v2.16b,  v3.16b, #13
 
 2:
-        uxtl            v2.8h,  v3.8b
-        uxtl2           v3.8h,  v3.16b
-        uxtl            v4.8h,  v5.8b
-        uxtl2           v5.8h,  v5.16b
+        ld1             {v4.8b}, [x3], #8
+        uxtl            v2.8h,   v3.8b
+        uxtl2           v3.8h,   v3.16b
+        uxtl            v4.8h,   v4.8b
 
-        tst             w7,  #2 // LR_HAVE_RIGHT
+        tst             w8,  #2 // LR_HAVE_RIGHT
         b.ne            4f
-        // If we'll need to pad the right edge, load that byte to pad with
-        // here since we can find it pretty easily from here.
-        sub             w9,  w5, #14
-        ldr             b28, [x2,  w9, sxtw]
-        ldr             b29, [x13, w9, sxtw]
-        // Fill v28/v29 with the right padding pixel
-        dup             v28.8h,  v28.h[0]
-        dup             v29.8h,  v29.h[0]
+
 3:      // !LR_HAVE_RIGHT
 
         // Check whether we need to pad the right edge
-        cmp             w5,  #11
-        b.ge            4f   // If w >= 11, all used input pixels are valid
+        cmp             w5,  #19
+        b.ge            4f   // If w >= 19, all used input pixels are valid
 
-        // 1 <= w < 11, w+3 pixels valid in v2-v3. For w=9 or w=10,
+        // 1 <= w < 19, w+3 pixels valid in v2-v4. For w>=9,
         // this ends up called again; it's not strictly needed in those
         // cases (we pad enough here), but keeping the code as simple as possible.
 
-        // Insert padding in v2/3.h[w+3] onwards; fuse the +3 (*2) into the
+        // The padding pixel is v2/3/4.h[w+2]. x3 points at the next input, ie
+        // v2/3/4.h[24]. Thus read from x3[w-22] to find the padding pixel.
+        sub             w17, w5,  #22
+        // Insert padding in v2/3/4.h[w+3] onwards; fuse the +3 (*2) into the
         // buffer pointer.
-        movrel          x4,  right_ext_mask, -6
-        sub             x4,  x4,  w5,  uxtw #1
-        ld1             {v26.16b, v27.16b}, [x4]
+        movrel          x7,  right_ext_mask, -6
+        ldr             b28, [x3,  w17, sxtw]
+        sub             x7,  x7,  w5,  uxtw #1
+        dup             v28.8h,  v28.h[0]
+        ld1             {v25.16b, v26.16b, v27.16b}, [x7]
 
-        bit             v2.16b,  v28.16b, v26.16b
-        bit             v3.16b,  v28.16b, v27.16b
-        bit             v4.16b,  v29.16b, v26.16b
-        bit             v5.16b,  v29.16b, v27.16b
+        bit             v2.16b,  v28.16b, v25.16b
+        bit             v3.16b,  v28.16b, v26.16b
+        bit             v4.16b,  v28.16b, v27.16b
 
 4:      // Loop horizontally
         // Interleaving the mul/mla chains actually hurts performance
@@ -165,234 +249,724 @@ function wiener_filter_h_8bpc_neon, export=1
         add             v19.8h,  v19.8h,  v17.8h
         add             v20.8h,  v20.8h,  v16.8h
         add             v21.8h,  v21.8h,  v2.8h
+        shl             v22.8h,  v18.8h,  #7
         mul             v6.8h,   v18.8h,  v0.h[3]
         mla             v6.8h,   v19.8h,  v0.h[4]
         mla             v6.8h,   v20.8h,  v0.h[5]
         mla             v6.8h,   v21.8h,  v0.h[6]
-        ext             v23.16b, v4.16b,  v5.16b, #4
-        ext             v25.16b, v4.16b,  v5.16b, #8
-        ext             v22.16b, v4.16b,  v5.16b, #2
-        ext             v26.16b, v4.16b,  v5.16b, #10
-        ext             v27.16b, v4.16b,  v5.16b, #12
-        ext             v24.16b, v4.16b,  v5.16b, #6
-        add             v25.8h,  v25.8h,  v23.8h
-        add             v26.8h,  v26.8h,  v22.8h
-        add             v27.8h,  v27.8h,  v4.8h
-        mul             v7.8h,   v24.8h,  v0.h[3]
-        mla             v7.8h,   v25.8h,  v0.h[4]
-        mla             v7.8h,   v26.8h,  v0.h[5]
-        mla             v7.8h,   v27.8h,  v0.h[6]
 
-        shl             v18.8h,  v18.8h,  #7
-        shl             v24.8h,  v24.8h,  #7
-        sub             v18.8h,  v18.8h,  v30.8h
-        sub             v24.8h,  v24.8h,  v30.8h
-        sqadd           v6.8h,   v6.8h,   v18.8h
-        sqadd           v7.8h,   v7.8h,   v24.8h
+        ext             v17.16b, v3.16b,  v4.16b, #4
+        ext             v19.16b, v3.16b,  v4.16b, #8
+        ext             v16.16b, v3.16b,  v4.16b, #2
+        ext             v20.16b, v3.16b,  v4.16b, #10
+        ext             v21.16b, v3.16b,  v4.16b, #12
+        ext             v18.16b, v3.16b,  v4.16b, #6
+
+        add             v19.8h,  v19.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v16.8h
+        add             v21.8h,  v21.8h,  v3.8h
+        shl             v23.8h,  v18.8h,  #7
+        mul             v7.8h,   v18.8h,  v0.h[3]
+        mla             v7.8h,   v19.8h,  v0.h[4]
+        mla             v7.8h,   v20.8h,  v0.h[5]
+        mla             v7.8h,   v21.8h,  v0.h[6]
+
+        sub             v22.8h,  v22.8h,  v30.8h
+        sub             v23.8h,  v23.8h,  v30.8h
+        sqadd           v6.8h,   v6.8h,   v22.8h
+        sqadd           v7.8h,   v7.8h,   v23.8h
         sshr            v6.8h,   v6.8h,   #3
         sshr            v7.8h,   v7.8h,   #3
         add             v6.8h,   v6.8h,   v31.8h
         add             v7.8h,   v7.8h,   v31.8h
 
-        subs            w5,  w5,  #8
+        subs            w5,  w5,  #16
 
-        st1             {v6.8h},  [x0],  #16
-        st1             {v7.8h},  [x12], #16
+        st1             {v6.8h, v7.8h}, [x14], #32
 
-        b.le            9f
-        tst             w7,  #2 // LR_HAVE_RIGHT
-        mov             v2.16b,  v3.16b
-        mov             v4.16b,  v5.16b
-        ld1             {v3.8b},  [x2],  #8
-        ld1             {v5.8b},  [x13], #8
-        uxtl            v3.8h,   v3.8b
-        uxtl            v5.8h,   v5.8b
+        b.le            0f
+        mov             v2.16b,  v4.16b
+        ld1             {v4.16b}, [x3], #16
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        uxtl            v3.8h,   v4.8b
+        uxtl2           v4.8h,   v4.16b
         b.ne            4b // If we don't need to pad, just keep filtering.
         b               3b // If we need to pad, check how many pixels we have left.
 
-9:
-        subs            w6,  w6,  #2
-        b.le            0f
-        // Jump to the next row and loop horizontally
-        add             x0,  x0,  x10
-        add             x12, x12, x10
-        add             x2,  x2,  x3
-        add             x13, x13, x3
-        mov             w5,  w8
-        b               1b
 0:
+        ldr             x14,      [sp, #16]
+        ldp             x3,  x5,  [sp], #32
         ret
 endfunc
 
-// void dav1d_wiener_filter_v_8bpc_neon(pixel *dst, ptrdiff_t stride,
-//                                      const int16_t *mid, int w, int h,
-//                                      const int16_t fv[8], enum LrEdgeFlags edges,
-//                                      ptrdiff_t mid_stride);
-function wiener_filter_v_8bpc_neon, export=1
-        mov             w8,  w4
-        ld1             {v0.8h},  [x5]
+function wiener_filter7_v_8bpc_neon
+        // Backing up/restoring registers shifted, so that x9 gets the value
+        // of x10, etc, afterwards.
+        stp             x10, x11, [sp, #-64]!
+        stp             x12, x13, [sp, #16]
+        stp             x14, x14, [sp, #32]
+        stp             x0,  x5,  [sp, #48]
+1:
+        ld1             {v20.8h, v21.8h}, [x11], #32
+        ld1             {v24.8h, v25.8h}, [x13], #32
 
-        // Calculate the number of rows to move back when looping vertically
-        mov             w11, w4
-        tst             w6,  #4 // LR_HAVE_TOP
-        b.eq            0f
-        sub             x2,  x2,  x7,  lsl #1
-        add             w11, w11, #2
-0:
-        tst             w6,  #8 // LR_HAVE_BOTTOM
+        ld1             {v18.8h, v19.8h}, [x10], #32
+        add             v24.8h,  v24.8h,  v20.8h
+        ld1             {v26.8h, v27.8h}, [x14], #32
+
+        ld1             {v16.8h, v17.8h}, [x9],  #32
+        add             v28.8h,  v26.8h,  v18.8h
+        ld1             {v22.8h, v23.8h}, [x12], #32
+
+        add             v16.8h,  v26.8h,  v16.8h
+        add             v25.8h,  v25.8h,  v21.8h
+
+        smull           v2.4s,   v22.4h,  v1.h[3]
+        smlal           v2.4s,   v24.4h,  v1.h[4]
+        smlal           v2.4s,   v28.4h,  v1.h[5]
+        smlal           v2.4s,   v16.4h,  v1.h[6]
+        add             v29.8h,  v27.8h,  v19.8h
+        smull2          v3.4s,   v22.8h,  v1.h[3]
+        smlal2          v3.4s,   v24.8h,  v1.h[4]
+        smlal2          v3.4s,   v28.8h,  v1.h[5]
+        smlal2          v3.4s,   v16.8h,  v1.h[6]
+        add             v17.8h,  v27.8h,  v17.8h
+        smull           v4.4s,   v23.4h,  v1.h[3]
+        smlal           v4.4s,   v25.4h,  v1.h[4]
+        smlal           v4.4s,   v29.4h,  v1.h[5]
+        smlal           v4.4s,   v17.4h,  v1.h[6]
+        smull2          v5.4s,   v23.8h,  v1.h[3]
+        smlal2          v5.4s,   v25.8h,  v1.h[4]
+        smlal2          v5.4s,   v29.8h,  v1.h[5]
+        smlal2          v5.4s,   v17.8h,  v1.h[6]
+        sqrshrun        v2.4h,   v2.4s,   #11
+        sqrshrun2       v2.8h,   v3.4s,   #11
+        sqrshrun        v3.4h,   v4.4s,   #11
+        sqrshrun2       v3.8h,   v5.4s,   #11
+        sqxtun          v2.8b,   v2.8h
+        sqxtun2         v2.16b,  v3.8h
+        subs            w5,  w5,  #16
+        st1             {v2.16b}, [x0], #16
+        b.gt            1b
+
+        ldp             x0,  x5,  [sp, #48]
+        ldp             x13, x14, [sp, #32]
+        ldp             x11, x12, [sp, #16]
+        ldp             x9,  x10, [sp], #64
+
+        add             x0,  x0,  x1
+        ret
+endfunc
+
+function wiener_filter7_hv_8bpc_neon
+        // Backing up/restoring registers shifted, so that x9 gets the value
+        // of x10, etc, and x15==x9, afterwards.
+        stp             x10, x11, [sp, #-80]!
+        stp             x12, x13, [sp, #16]
+        stp             x14, x15, [sp, #32]
+        stp             x10, x0,  [sp, #48]
+        stp             x3,  x5,  [sp, #64]
+
+        // Set up the src pointers to include the left edge, for LR_HAVE_LEFT, left == NULL
+        tst             w8,  #1 // LR_HAVE_LEFT
         b.eq            1f
-        add             w11, w11, #2
+        // LR_HAVE_LEFT
+        cbnz            x2,  0f
+        // left == NULL
+        sub             x3,  x3,  #3
+        ld1             {v3.16b}, [x3], #16
+        b               2f
 
-1:      // Start of horizontal loop; start one vertical filter slice.
-        // Load rows into v16-v19 and pad properly.
-        tst             w6,  #4 // LR_HAVE_TOP
-        ld1             {v16.8h}, [x2], x7
-        b.eq            2f
-        // LR_HAVE_TOP
-        ld1             {v18.8h}, [x2], x7
-        mov             v17.16b, v16.16b
-        ld1             {v19.8h}, [x2], x7
-        b               3f
-2:      // !LR_HAVE_TOP
-        mov             v17.16b, v16.16b
-        mov             v18.16b, v16.16b
-        mov             v19.16b, v16.16b
+0:
+        // LR_HAVE_LEFT, left != NULL
+        ld1             {v3.16b},  [x3], #16
+        ld1             {v2.s}[3], [x2], #4
+        // Move x3 back to account for the last 3 bytes we loaded earlier,
+        // which we'll shift out.
+        sub             x3,  x3,  #3
+        ext             v3.16b,  v2.16b,  v3.16b, #13
+        b               2f
+1:
+        ld1             {v3.16b}, [x3], #16
+        // !LR_HAVE_LEFT, fill v2 with the leftmost byte
+        // and shift v3 to have 3x the first byte at the front.
+        dup             v2.16b,  v3.b[0]
+        // Move x3 back to account for the last 3 bytes we loaded before,
+        // which we shifted out.
+        sub             x3,  x3,  #3
+        ext             v3.16b,  v2.16b,  v3.16b, #13
 
-3:
-        cmp             w4,  #4
-        b.lt            5f
-        // Start filtering normally; fill in v20-v22 with unique rows.
-        ld1             {v20.8h}, [x2], x7
-        ld1             {v21.8h}, [x2], x7
-        ld1             {v22.8h}, [x2], x7
+2:
+        ld1             {v4.8b}, [x3], #8
+        uxtl            v2.8h,   v3.8b
+        uxtl2           v3.8h,   v3.16b
+        uxtl            v4.8h,   v4.8b
 
-4:
-.macro filter compare
-        subs            w4,  w4,  #1
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        b.ne            4f
+
+3:      // !LR_HAVE_RIGHT
+
+        // Check whether we need to pad the right edge
+        cmp             w5,  #19
+        b.ge            4f   // If w >= 19, all used input pixels are valid
+
+        // 1 <= w < 19, w+3 pixels valid in v2-v4. For w>=9,
+        // this ends up called again; it's not strictly needed in those
+        // cases (we pad enough here), but keeping the code as simple as possible.
+
+        // The padding pixel is v2/3/4.h[w+2]. x3 points at the next input, ie
+        // v2/3/4.h[24]. Thus read from x3[w-22] to find the padding pixel.
+        sub             w17, w5,  #22
+        // Insert padding in v2/3/4.h[w+3] onwards; fuse the +3 (*2) into the
+        // buffer pointer.
+        movrel          x7,  right_ext_mask, -6
+        ldr             b28, [x3,  w17, sxtw]
+        sub             x7,  x7,  w5,  uxtw #1
+        dup             v28.8h,  v28.h[0]
+        ld1             {v25.16b, v26.16b, v27.16b}, [x7]
+
+        bit             v2.16b,  v28.16b, v25.16b
+        bit             v3.16b,  v28.16b, v26.16b
+        bit             v4.16b,  v28.16b, v27.16b
+
+4:      // Loop horizontally
+        ext             v17.16b, v2.16b,  v3.16b, #4
+        ext             v19.16b, v2.16b,  v3.16b, #8
+        ext             v16.16b, v2.16b,  v3.16b, #2
+        ext             v20.16b, v2.16b,  v3.16b, #10
+        ext             v21.16b, v2.16b,  v3.16b, #12
+        ext             v18.16b, v2.16b,  v3.16b, #6
+        add             v19.8h,  v19.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v16.8h
+        add             v21.8h,  v21.8h,  v2.8h
+        shl             v22.8h,  v18.8h,  #7
+        mul             v6.8h,   v18.8h,  v0.h[3]
+        mla             v6.8h,   v19.8h,  v0.h[4]
+        mla             v6.8h,   v20.8h,  v0.h[5]
+        mla             v6.8h,   v21.8h,  v0.h[6]
+
+        ext             v17.16b, v3.16b,  v4.16b, #4
+        ext             v19.16b, v3.16b,  v4.16b, #8
+        ext             v16.16b, v3.16b,  v4.16b, #2
+        ext             v20.16b, v3.16b,  v4.16b, #10
+        ext             v21.16b, v3.16b,  v4.16b, #12
+        ext             v18.16b, v3.16b,  v4.16b, #6
+
+        add             v19.8h,  v19.8h,  v17.8h
+        add             v20.8h,  v20.8h,  v16.8h
+        add             v21.8h,  v21.8h,  v3.8h
+        shl             v23.8h,  v18.8h,  #7
+        mul             v7.8h,   v18.8h,  v0.h[3]
+        mla             v7.8h,   v19.8h,  v0.h[4]
+        mla             v7.8h,   v20.8h,  v0.h[5]
+        mla             v7.8h,   v21.8h,  v0.h[6]
+
+        ld1             {v20.8h, v21.8h}, [x11], #32
+
+        sub             v22.8h,  v22.8h,  v30.8h
+        sub             v23.8h,  v23.8h,  v30.8h
+        ld1             {v26.8h, v27.8h}, [x13], #32
+        sqadd           v6.8h,   v6.8h,   v22.8h
+        sqadd           v7.8h,   v7.8h,   v23.8h
+        ld1             {v18.8h, v19.8h}, [x10], #32
+        sshr            v6.8h,   v6.8h,   #3
+        sshr            v7.8h,   v7.8h,   #3
+        ld1             {v28.8h, v29.8h}, [x14], #32
+        add             v6.8h,   v6.8h,   v31.8h
+        add             v7.8h,   v7.8h,   v31.8h
+
+        ld1             {v16.8h, v17.8h}, [x9],  #32
+        add             v26.8h,  v20.8h,  v26.8h
+
+        ld1             {v24.8h, v25.8h}, [x12], #32
+        add             v28.8h,  v18.8h,  v28.8h
+
+        add             v16.8h,  v16.8h,  v6.8h
+        add             v27.8h,  v21.8h,  v27.8h
+
+        smull           v18.4s,  v24.4h,  v1.h[3]
+        smlal           v18.4s,  v26.4h,  v1.h[4]
+        smlal           v18.4s,  v28.4h,  v1.h[5]
+        smlal           v18.4s,  v16.4h,  v1.h[6]
+        add             v29.8h,  v19.8h,  v29.8h
+        smull2          v19.4s,  v24.8h,  v1.h[3]
+        smlal2          v19.4s,  v26.8h,  v1.h[4]
+        smlal2          v19.4s,  v28.8h,  v1.h[5]
+        smlal2          v19.4s,  v16.8h,  v1.h[6]
+        add             v17.8h,  v17.8h,  v7.8h
+        smull           v20.4s,  v25.4h,  v1.h[3]
+        smlal           v20.4s,  v27.4h,  v1.h[4]
+        smlal           v20.4s,  v29.4h,  v1.h[5]
+        smlal           v20.4s,  v17.4h,  v1.h[6]
+        smull2          v21.4s,  v25.8h,  v1.h[3]
+        smlal2          v21.4s,  v27.8h,  v1.h[4]
+        smlal2          v21.4s,  v29.8h,  v1.h[5]
+        smlal2          v21.4s,  v17.8h,  v1.h[6]
+        sqrshrun        v18.4h,  v18.4s,  #11
+        sqrshrun2       v18.8h,  v19.4s,  #11
+        sqrshrun        v19.4h,  v20.4s,  #11
+        sqrshrun2       v19.8h,  v21.4s,  #11
+        st1             {v6.8h, v7.8h}, [x15], #32
+        sqxtun          v18.8b,  v18.8h
+        sqxtun2         v18.16b, v19.8h
+        subs            w5,  w5,  #16
+
+        st1             {v18.16b}, [x0], #16
+
+        b.le            0f
+        mov             v2.16b,  v4.16b
+        ld1             {v4.16b}, [x3], #16
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        uxtl            v3.8h,   v4.8b
+        uxtl2           v4.8h,   v4.16b
+        b.ne            4b // If we don't need to pad, just keep filtering.
+        b               3b // If we need to pad, check how many pixels we have left.
+
+0:
+        ldp             x3,  x5,  [sp, #64]
+        ldp             x15, x0,  [sp, #48]
+        ldp             x13, x14, [sp, #32]
+        ldp             x11, x12, [sp, #16]
+        ldp             x9,  x10, [sp], #80
+
+        add             x3,  x3,  x1
+        add             x0,  x0,  x1
+
+        ret
+endfunc
+
+// void dav1d_wiener_filter5_8bpc_neon(pixel *p, const ptrdiff_t p_stride,
+//                                     const pixel (*left)[4],
+//                                     const pixel *lpf, const ptrdiff_t lpf_stride,
+//                                     const int w, int h,
+//                                     const int16_t filter[2][8],
+//                                     const enum LrEdgeFlags edges);
+function wiener_filter5_8bpc_neon, export=1
+        ldr             w8,  [sp]
+        stp             x29, x30, [sp, #-16]!
+        mov             x29, sp
+        ld1             {v0.8h, v1.8h},  [x7]
+        tst             w8,  #4               // LR_HAVE_TOP
+        sub_sp          384*2*4
+
+        mov             w17, #(1 << 14) - (1 << 2)
+        dup             v30.8h,  w17
+        movi            v31.8h,  #8, lsl #8
+
+        // x11 - t4
+        // x12 - t3
+        // x13 - t2
+        // x14 - t1
+        // x15 - t0
+        mov             x14, sp               // t1
+        b.eq            L(no_top_5)
+
+        mov             x16, x2               // backup left
+        mov             x2,  #0
+        bl              wiener_filter5_h_8bpc_neon
+        add             x3,  x3,  x4          // lpf += lpf_stride
+        mov             x11, x14              // t4
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter5_h_8bpc_neon
+        add             x3,  x3,  x4,  lsl #2
+        add             x3,  x3,  x4          // lpf += lpf_stride*5
+        mov             x12, x14              // t3
+        add             x14, x14, #384*2      // t1 += 384*2
+        mov             x2,  x16              // left
+        mov             x16, x3               // backup lpf
+        mov             x3,  x0               // lpf = p
+        bl              wiener_filter5_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        mov             x13, x14              // t2
+        b.eq            L(v1_5)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter5_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v2_5)
+        add             x3,  x3,  x1          // src += p_stride
+
+L(main_5):
+        mov             x15, x11              // t0 = t4
+L(main_loop_5):
+        bl              wiener_filter5_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.ne            L(main_loop_5)
+        tst             w8,  #8 // LR_HAVE_BOTTOM
+        b.eq            L(v2_5)
+
+        mov             x3,  x16              // restore lpf
+        mov             x2,  #0               // left = NULL
+        sub             x4,  x4,  x1          // lpf_stride - p_stride
+        bl              wiener_filter5_hv_8bpc_neon
+        add             x3,  x3,  x4          // src += lpf_stride - p_stride
+        bl              wiener_filter5_hv_8bpc_neon
+L(end_5):
+
+        mov             sp,  x29
+        ldp             x29, x30, [sp], #16
+        ret
+
+L(no_top_5):
+        add             x3,  x3,  x4,  lsl #2
+        add             x16, x3,  x4,  lsl #1 // lpf += lpf_stride*6, backup
+        mov             x3,  x0               // lpf = p
+
+        bl              wiener_filter5_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        mov             x11, x14              // t4
+        mov             x12, x14              // t3
+        mov             x13, x14              // t2
+        b.eq            L(v1_5)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x14, x14, #384*2      // t1 += 384*2
+        bl              wiener_filter5_h_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v2_5)
+        add             x3,  x3,  x1          // src += p_stride
+        add             x15, x14, #384*2      // t0 = t1 + 384*2
+        bl              wiener_filter5_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.eq            L(v2_5)
+        add             x15, x15, #384*2*3    // t0 += 384*2*3
+        bl              wiener_filter5_hv_8bpc_neon
+        subs            w6,  w6,  #1          // h--
+        b.ne            L(main_5)
+L(v2_5):
+        bl              wiener_filter5_v_8bpc_neon
+        add             x0,  x0,  x1
+        mov             x11, x12
+        mov             x12, x13
+        mov             x13, x14
+L(v1_5):
+        bl              wiener_filter5_v_8bpc_neon
+        b               L(end_5)
+endfunc
+
+
+function wiener_filter5_h_8bpc_neon
+        stp             x3,  x5,  [sp, #-32]!
+        str             x14,      [sp, #16]
+
+        // Set up the src pointers to include the left edge, for LR_HAVE_LEFT, left == NULL
+        tst             w8,  #1 // LR_HAVE_LEFT
+        b.eq            1f
+        // LR_HAVE_LEFT
+        cbnz            x2,  0f
+        // left == NULL
+        sub             x3,  x3,  #2
+        ld1             {v3.16b}, [x3], #16
+        b               2f
+
+0:
+        // LR_HAVE_LEFT, left != NULL
+        ld1             {v3.16b},  [x3], #16
+        ld1             {v2.s}[3], [x2], #4
+        // Move x3 back to account for the last 2 bytes we loaded earlier,
+        // which we'll shift out.
+        sub             x3,  x3,  #2
+        ext             v3.16b,  v2.16b,  v3.16b, #14
+        b               2f
+
+1:
+        ld1             {v3.16b}, [x3], #16
+        // !LR_HAVE_LEFT, fill v2 with the leftmost byte
+        // and shift v3 to have 3x the first byte at the front.
+        dup             v2.16b,  v3.b[0]
+        // Move x3 back to account for the last 2 bytes we loaded before,
+        // which we shifted out.
+        sub             x3,  x3,  #2
+        ext             v3.16b,  v2.16b,  v3.16b, #14
+
+2:
+        ld1             {v4.8b}, [x3], #8
+        uxtl            v2.8h,   v3.8b
+        uxtl2           v3.8h,   v3.16b
+        uxtl            v4.8h,   v4.8b
+
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        b.ne            4f
+
+3:      // !LR_HAVE_RIGHT
+
+        // Check whether we need to pad the right edge
+        cmp             w5,  #18
+        b.ge            4f   // If w >= 18, all used input pixels are valid
+
+        // 1 <= w < 18, w+2 pixels valid in v2-v4. For w>=9,
+        // this ends up called again; it's not strictly needed in those
+        // cases (we pad enough here), but keeping the code as simple as possible.
+
+        // The padding pixel is v2/3/4.h[w+2]. x3 points at the next input, ie
+        // v2/3/4.h[24]. Thus read from x3[w-23] to find the padding pixel.
+        sub             w17, w5,  #23
+        // Insert padding in v2/3/4.h[w+2] onwards; fuse the +2 (*2) into the
+        // buffer pointer.
+        movrel          x7,  right_ext_mask, -4
+        ldr             b28, [x3,  w17, sxtw]
+        sub             x7,  x7,  w5,  uxtw #1
+        dup             v28.8h,  v28.h[0]
+        ld1             {v25.16b, v26.16b, v27.16b}, [x7]
+
+        bit             v2.16b,  v28.16b, v25.16b
+        bit             v3.16b,  v28.16b, v26.16b
+        bit             v4.16b,  v28.16b, v27.16b
+
+4:      // Loop horizontally
         // Interleaving the mul/mla chains actually hurts performance
         // significantly on Cortex A53, thus keeping mul/mla tightly
         // chained like this.
-        add             v25.8h, v18.8h,  v20.8h
-        add             v26.8h, v17.8h,  v21.8h
-        add             v27.8h, v16.8h,  v22.8h
-        smull           v2.4s,  v19.4h,  v0.h[3]
-        smlal           v2.4s,  v25.4h,  v0.h[4]
-        smlal           v2.4s,  v26.4h,  v0.h[5]
-        smlal           v2.4s,  v27.4h,  v0.h[6]
-        smull2          v3.4s,  v19.8h,  v0.h[3]
-        smlal2          v3.4s,  v25.8h,  v0.h[4]
-        smlal2          v3.4s,  v26.8h,  v0.h[5]
-        smlal2          v3.4s,  v27.8h,  v0.h[6]
-        sqrshrun        v2.4h,  v2.4s,   #11
-        sqrshrun2       v2.8h,  v3.4s,   #11
-        sqxtun          v2.8b,  v2.8h
-        st1             {v2.8b}, [x0], x1
-.if \compare
-        cmp             w4,  #4
-.else
-        b.le            9f
-.endif
-        mov             v16.16b,  v17.16b
-        mov             v17.16b,  v18.16b
-        mov             v18.16b,  v19.16b
-        mov             v19.16b,  v20.16b
-        mov             v20.16b,  v21.16b
-        mov             v21.16b,  v22.16b
-.endm
-        filter          1
-        b.lt            7f
-        ld1             {v22.8h}, [x2], x7
-        b               4b
+        ext             v16.16b, v2.16b,  v3.16b, #2
+        ext             v18.16b, v2.16b,  v3.16b, #6
+        ext             v19.16b, v2.16b,  v3.16b, #8
+        ext             v17.16b, v2.16b,  v3.16b, #4
+        add             v18.8h,  v18.8h,  v16.8h
+        add             v19.8h,  v19.8h,  v2.8h
+        shl             v22.8h,  v17.8h,  #7
+        mul             v6.8h,   v17.8h,  v0.h[3]
+        mla             v6.8h,   v18.8h,  v0.h[4]
+        mla             v6.8h,   v19.8h,  v0.h[5]
 
-5:      // Less than 4 rows in total; not all of v20-v21 are filled yet.
-        tst             w6,  #8 // LR_HAVE_BOTTOM
-        b.eq            6f
-        // LR_HAVE_BOTTOM
-        cmp             w4,  #2
-        // We load at least 2 rows in all cases.
-        ld1             {v20.8h}, [x2], x7
-        ld1             {v21.8h}, [x2], x7
-        b.gt            53f // 3 rows in total
-        b.eq            52f // 2 rows in total
-51:     // 1 row in total, v19 already loaded, load edge into v20-v22.
-        mov             v22.16b,  v21.16b
-        b               8f
-52:     // 2 rows in total, v19 already loaded, load v20 with content data
-        // and 2 rows of edge.
-        ld1             {v22.8h}, [x2], x7
-        mov             v23.16b,  v22.16b
-        b               8f
-53:
-        // 3 rows in total, v19 already loaded, load v20 and v21 with content
-        // and 2 rows of edge.
-        ld1             {v22.8h}, [x2], x7
-        ld1             {v23.8h}, [x2], x7
-        mov             v24.16b,  v23.16b
-        b               8f
+        ext             v16.16b, v3.16b,  v4.16b, #2
+        ext             v18.16b, v3.16b,  v4.16b, #6
+        ext             v19.16b, v3.16b,  v4.16b, #8
+        ext             v17.16b, v3.16b,  v4.16b, #4
+        add             v18.8h,  v18.8h,  v16.8h
+        add             v19.8h,  v19.8h,  v3.8h
+        shl             v23.8h,  v17.8h,  #7
+        mul             v7.8h,   v17.8h,  v0.h[3]
+        mla             v7.8h,   v18.8h,  v0.h[4]
+        mla             v7.8h,   v19.8h,  v0.h[5]
 
-6:
-        // !LR_HAVE_BOTTOM
-        cmp             w4,  #2
-        b.gt            63f // 3 rows in total
-        b.eq            62f // 2 rows in total
-61:     // 1 row in total, v19 already loaded, pad that into v20-v22.
-        mov             v20.16b,  v19.16b
-        mov             v21.16b,  v19.16b
-        mov             v22.16b,  v19.16b
-        b               8f
-62:     // 2 rows in total, v19 already loaded, load v20 and pad that into v21-v23.
-        ld1             {v20.8h}, [x2], x7
-        mov             v21.16b,  v20.16b
-        mov             v22.16b,  v20.16b
-        mov             v23.16b,  v20.16b
-        b               8f
-63:
-        // 3 rows in total, v19 already loaded, load v20 and v21 and pad v21 into v22-v24.
-        ld1             {v20.8h}, [x2], x7
-        ld1             {v21.8h}, [x2], x7
-        mov             v22.16b,  v21.16b
-        mov             v23.16b,  v21.16b
-        mov             v24.16b,  v21.16b
-        b               8f
+        sub             v22.8h,  v22.8h,  v30.8h
+        sub             v23.8h,  v23.8h,  v30.8h
+        sqadd           v6.8h,   v6.8h,   v22.8h
+        sqadd           v7.8h,   v7.8h,   v23.8h
+        sshr            v6.8h,   v6.8h,   #3
+        sshr            v7.8h,   v7.8h,   #3
+        add             v6.8h,   v6.8h,   v31.8h
+        add             v7.8h,   v7.8h,   v31.8h
 
-7:
-        // All registers up to v21 are filled already, 3 valid rows left.
-        // < 4 valid rows left; fill in padding and filter the last
-        // few rows.
-        tst             w6,  #8 // LR_HAVE_BOTTOM
-        b.eq            71f
-        // LR_HAVE_BOTTOM; load 2 rows of edge.
-        ld1             {v22.8h}, [x2], x7
-        ld1             {v23.8h}, [x2], x7
-        mov             v24.16b,  v23.16b
-        b               8f
-71:
-        // !LR_HAVE_BOTTOM, pad 3 rows
-        mov             v22.16b,  v21.16b
-        mov             v23.16b,  v21.16b
-        mov             v24.16b,  v21.16b
+        subs            w5,  w5,  #16
 
-8:      // At this point, all registers up to v22-v24 are loaded with
-        // edge/padding (depending on how many rows are left).
-        filter          0 // This branches to 9f when done
-        mov             v22.16b,  v23.16b
-        mov             v23.16b,  v24.16b
-        b               8b
+        st1             {v6.8h, v7.8h}, [x14], #32
 
-9:      // End of one vertical slice.
-        subs            w3,  w3,  #8
         b.le            0f
-        // Move pointers back up to the top and loop horizontally.
-        msub            x0,  x1,  x8,  x0
-        msub            x2,  x7,  x11, x2
-        add             x0,  x0,  #8
-        add             x2,  x2,  #16
-        mov             w4,  w8
-        b               1b
+        mov             v2.16b,  v4.16b
+        ld1             {v4.16b}, [x3], #16
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        uxtl            v3.8h,   v4.8b
+        uxtl2           v4.8h,   v4.16b
+        b.ne            4b // If we don't need to pad, just keep filtering.
+        b               3b // If we need to pad, check how many pixels we have left.
 
 0:
+        ldr             x14,      [sp, #16]
+        ldp             x3,  x5,  [sp], #32
         ret
-.purgem filter
+endfunc
+
+function wiener_filter5_v_8bpc_neon
+        stp             x11, x12, [sp, #-48]!
+        stp             x13, x14, [sp, #16]
+        stp             x0,  x5,  [sp, #32]
+1:
+        ld1             {v18.8h, v19.8h}, [x12], #32
+        ld1             {v22.8h, v23.8h}, [x14], #32
+        ld1             {v16.8h, v17.8h}, [x11], #32
+
+        add             v24.8h,  v22.8h,  v18.8h
+        ld1             {v20.8h, v21.8h}, [x13], #32
+        add             v16.8h,  v22.8h,  v16.8h
+        add             v25.8h,  v23.8h,  v19.8h
+
+        smull           v2.4s,   v20.4h,  v1.h[3]
+        smlal           v2.4s,   v24.4h,  v1.h[4]
+        smlal           v2.4s,   v16.4h,  v1.h[5]
+        add             v17.8h,  v23.8h,  v17.8h
+        smull2          v3.4s,   v20.8h,  v1.h[3]
+        smlal2          v3.4s,   v24.8h,  v1.h[4]
+        smlal2          v3.4s,   v16.8h,  v1.h[5]
+        smull           v4.4s,   v21.4h,  v1.h[3]
+        smlal           v4.4s,   v25.4h,  v1.h[4]
+        smlal           v4.4s,   v17.4h,  v1.h[5]
+        smull2          v5.4s,   v21.8h,  v1.h[3]
+        smlal2          v5.4s,   v25.8h,  v1.h[4]
+        smlal2          v5.4s,   v17.8h,  v1.h[5]
+        sqrshrun        v2.4h,   v2.4s,   #11
+        sqrshrun2       v2.8h,   v3.4s,   #11
+        sqrshrun        v3.4h,   v4.4s,   #11
+        sqrshrun2       v3.8h,   v5.4s,   #11
+        sqxtun          v2.8b,   v2.8h
+        sqxtun2         v2.16b,  v3.8h
+        subs            w5,  w5,  #16
+        st1             {v2.16b}, [x0], #16
+        b.gt            1b
+
+        ldp             x0,  x5,  [sp, #32]
+        ldp             x13, x14, [sp, #16]
+        ldp             x11, x12, [sp], #48
+
+        ret
+endfunc
+
+function wiener_filter5_hv_8bpc_neon
+        // Backing up/restoring registers shifted, so that x11 gets the value
+        // of x12, etc, and x15==x11, afterwards.
+        stp             x12, x13, [sp, #-64]!
+        stp             x14, x15, [sp, #16]
+        stp             x12, x0,  [sp, #32]
+        stp             x3,  x5,  [sp, #48]
+
+        // Set up the src pointers to include the left edge, for LR_HAVE_LEFT, left == NULL
+        tst             w8,  #1 // LR_HAVE_LEFT
+        b.eq            1f
+        // LR_HAVE_LEFT
+        cbnz            x2,  0f
+        // left == NULL
+        sub             x3,  x3,  #2
+        ld1             {v3.16b}, [x3], #16
+        b               2f
+
+0:
+        // LR_HAVE_LEFT, left != NULL
+        ld1             {v3.16b},  [x3], #16
+        ld1             {v2.s}[3], [x2], #4
+        // Move x3 back to account for the last 2 bytes we loaded earlier,
+        // which we'll shift out.
+        sub             x3,  x3,  #2
+        ext             v3.16b,  v2.16b,  v3.16b, #14
+        b               2f
+1:
+        ld1             {v3.16b}, [x3], #16
+        // !LR_HAVE_LEFT, fill v2 with the leftmost byte
+        // and shift v3 to have 2x the first byte at the front.
+        dup             v2.16b,  v3.b[0]
+        // Move x3 back to account for the last 2 bytes we loaded before,
+        // which we shifted out.
+        sub             x3,  x3,  #2
+        ext             v3.16b, v2.16b, v3.16b, #14
+
+2:
+        ld1             {v4.8b}, [x3], #8
+        uxtl            v2.8h,  v3.8b
+        uxtl2           v3.8h,  v3.16b
+        uxtl            v4.8h,  v4.8b
+
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        b.ne            4f
+
+3:      // !LR_HAVE_RIGHT
+
+        // Check whether we need to pad the right edge
+        cmp             w5,  #18
+        b.ge            4f   // If w >= 18, all used input pixels are valid
+
+        // 1 <= w < 18, w+2 pixels valid in v2-v4. For w>=9,
+        // this ends up called again; it's not strictly needed in those
+        // cases (we pad enough here), but keeping the code as simple as possible.
+
+        // The padding pixel is v2/3/4.h[w+1]. x3 points at the next input, ie
+        // v2/3/4.h[24]. Thus read from x3[w-23] to find the padding pixel.
+        sub             w17, w5,  #23
+        // Insert padding in v2/3/4.h[w+2] onwards; fuse the +2 (*2) into the
+        // buffer pointer.
+        movrel          x7,  right_ext_mask, -4
+        ldr             b28, [x3,  w17, sxtw]
+        sub             x7,  x7,  w5,  uxtw #1
+        dup             v28.8h,  v28.h[0]
+        ld1             {v25.16b, v26.16b, v27.16b}, [x7]
+
+        bit             v2.16b,  v28.16b, v25.16b
+        bit             v3.16b,  v28.16b, v26.16b
+        bit             v4.16b,  v28.16b, v27.16b
+
+4:      // Loop horizontally
+
+        ext             v16.16b, v2.16b,  v3.16b, #2
+        ext             v18.16b, v2.16b,  v3.16b, #6
+        ext             v19.16b, v2.16b,  v3.16b, #8
+        ext             v17.16b, v2.16b,  v3.16b, #4
+        add             v18.8h,  v18.8h,  v16.8h
+        add             v19.8h,  v19.8h,  v2.8h
+        shl             v22.8h,  v17.8h,  #7
+        mul             v6.8h,   v17.8h,  v0.h[3]
+        mla             v6.8h,   v18.8h,  v0.h[4]
+        mla             v6.8h,   v19.8h,  v0.h[5]
+
+        ext             v16.16b, v3.16b,  v4.16b, #2
+        ext             v18.16b, v3.16b,  v4.16b, #6
+        ext             v19.16b, v3.16b,  v4.16b, #8
+        ext             v17.16b, v3.16b,  v4.16b, #4
+        add             v18.8h,  v18.8h,  v16.8h
+        add             v19.8h,  v19.8h,  v3.8h
+        shl             v23.8h,  v17.8h,  #7
+        mul             v7.8h,   v17.8h,  v0.h[3]
+        mla             v7.8h,   v18.8h,  v0.h[4]
+        mla             v7.8h,   v19.8h,  v0.h[5]
+
+        ld1             {v18.8h, v19.8h}, [x12], #32
+
+        sub             v22.8h,  v22.8h,  v30.8h
+        sub             v23.8h,  v23.8h,  v30.8h
+        ld1             {v24.8h, v25.8h}, [x14], #32
+        sqadd           v6.8h,   v6.8h,   v22.8h
+        sqadd           v7.8h,   v7.8h,   v23.8h
+        ld1             {v16.8h, v17.8h}, [x11], #32
+        sshr            v6.8h,   v6.8h,   #3
+        sshr            v7.8h,   v7.8h,   #3
+        ld1             {v20.8h, v21.8h}, [x13], #32
+        add             v6.8h,   v6.8h,   v31.8h
+        add             v7.8h,   v7.8h,   v31.8h
+
+        add             v24.8h,  v24.8h,  v18.8h
+        add             v16.8h,  v16.8h,  v6.8h
+
+        smull           v18.4s,  v20.4h,  v1.h[3]
+        smlal           v18.4s,  v24.4h,  v1.h[4]
+        smlal           v18.4s,  v16.4h,  v1.h[5]
+        add             v25.8h,  v25.8h,  v19.8h
+        smull2          v19.4s,  v20.8h,  v1.h[3]
+        smlal2          v19.4s,  v24.8h,  v1.h[4]
+        smlal2          v19.4s,  v16.8h,  v1.h[5]
+        add             v17.8h,  v17.8h,  v7.8h
+        smull           v20.4s,  v21.4h,  v1.h[3]
+        smlal           v20.4s,  v25.4h,  v1.h[4]
+        smlal           v20.4s,  v17.4h,  v1.h[5]
+        smull2          v21.4s,  v21.8h,  v1.h[3]
+        smlal2          v21.4s,  v25.8h,  v1.h[4]
+        smlal2          v21.4s,  v17.8h,  v1.h[5]
+        sqrshrun        v18.4h,  v18.4s,  #11
+        sqrshrun2       v18.8h,  v19.4s,  #11
+        sqrshrun        v19.4h,  v20.4s,  #11
+        sqrshrun2       v19.8h,  v21.4s,  #11
+        st1             {v6.8h, v7.8h}, [x15], #32
+        sqxtun          v18.8b,  v18.8h
+        sqxtun2         v18.16b, v19.8h
+        subs            w5,  w5,  #16
+
+        st1             {v18.16b}, [x0], #16
+
+        b.le            0f
+        mov             v2.16b,  v4.16b
+        ld1             {v4.16b}, [x3], #16
+        tst             w8,  #2 // LR_HAVE_RIGHT
+        uxtl            v3.8h,   v4.8b
+        uxtl2           v4.8h,   v4.16b
+        b.ne            4b // If we don't need to pad, just keep filtering.
+        b               3b // If we need to pad, check how many pixels we have left.
+
+0:
+        ldp             x3,  x5,  [sp, #48]
+        ldp             x15, x0,  [sp, #32]
+        ldp             x13, x14, [sp, #16]
+        ldp             x11, x12, [sp], #64
+
+        add             x3,  x3,  x1
+        add             x0,  x0,  x1
+
+        ret
 endfunc
 
 #define SUM_STRIDE (384+16)
