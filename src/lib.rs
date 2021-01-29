@@ -57,6 +57,7 @@
 #![warn(clippy::needless_continue)]
 #![warn(clippy::path_buf_push_overwrite)]
 #![warn(clippy::range_plus_one)]
+#![feature(type_ascription)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
