@@ -499,7 +499,7 @@ impl fmt::Debug for CDFContext {
 #[derive(Debug, Default)]
 pub struct FieldMap {
   map: Vec<(&'static str, usize, usize)>,
-  log: HashMap<usize, (&'static str, usize, usize)>,
+  log: Vec<(&'static str, usize, usize)>,
 }
 
 impl FieldMap {
@@ -519,28 +519,34 @@ impl FieldMap {
   }
 
   pub(crate) fn update(&mut self, addr: usize) {
-    let (name, start, end) = self.lookup(addr);
+    let (name, start, _end) = self.lookup(addr);
     #[cfg(feature = "desync_finder")]
     {
       println!(" CDF {}", name);
       println!();
     }
 
-    self.log.entry(start).and_modify(|v| v.1 += 1).or_insert((
-      name,
-      1,
-      end - start,
-    ));
+    self.log.push((name, start, addr));
   }
 
-  fn summary(&self, ctx: usize) {
-    println!("Summary for {:x}", ctx);
-    let mut sum = 0;
-    for (k, v) in self.log.iter() {
-      println!(" {:x} {:x} {}: {} {}b", ctx, k, v.0, v.1, v.2);
-      sum += v.2;
+  fn summary(&self, log_start: usize) {
+    println!("Checkpoint from {}", log_start);
+    let mut sum: HashMap<&'static str, HashMap<usize, usize>> = HashMap::new();
+    for (name, _start, addr) in self.log[log_start..].iter() {
+      sum
+        .entry(name)
+        .and_modify(|v| {
+          v.entry(*addr).and_modify(|c| *c += 1).or_insert(1);
+        })
+        .or_insert([(*addr, 1usize)].iter().cloned().collect());
     }
-    println!("total: {}", sum);
+    for (name, values) in sum.iter() {
+      println!("  {}: {}", name, values.len());
+      for (&addr, &count) in values.iter() {
+        println!("    {:x} {}", addr, count)
+      }
+    }
+    println!("total: {}", self.log.len() - log_start);
   }
 }
 
@@ -560,6 +566,7 @@ pub struct ContextWriterCheckpoint {
   pub fc: CDFContext,
   pub bc: BlockContextCheckpoint,
   pub fc_map: FieldMap,
+  pub log_start: usize,
 }
 
 pub struct ContextWriter<'a> {
@@ -586,6 +593,7 @@ impl<'a> ContextWriter<'a> {
       fc: *self.fc,
       bc: self.bc.checkpoint(),
       fc_map: Default::default(),
+      log_start: self.fc_map.log.len(),
     };
 
     cc.fc_map = FieldMap::new(&cc.fc);
@@ -597,8 +605,7 @@ impl<'a> ContextWriter<'a> {
     *self.fc = checkpoint.fc;
     self.bc.rollback(&checkpoint.bc);
     if self.debug {
-      self.fc_map.summary(self as *const Self as usize);
-      self.fc_map.log.clear();
+      self.fc_map.summary(checkpoint.log_start);
     }
   }
 }
