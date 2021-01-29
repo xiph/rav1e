@@ -18,7 +18,10 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::util::{msb, ILog};
+use crate::{
+  context::FieldMap,
+  util::{msb, ILog},
+};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
 
@@ -43,6 +46,10 @@ pub trait Writer {
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
   /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
   fn symbol_with_update(&mut self, s: u32, cdf: &mut [u16]);
+  /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
+  fn symbol_with_update_map(
+    &mut self, s: u32, cdf: &mut [u16], map: &mut FieldMap,
+  );
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
   /// Write a single bit with flat proability
@@ -546,6 +553,12 @@ where
     self.symbol(s, &cdf[..nsymbs]);
 
     update_cdf(cdf, s);
+  }
+  fn symbol_with_update_map(
+    &mut self, s: u32, cdf: &mut [u16], map: &mut FieldMap,
+  ) {
+    self.symbol_with_update(s, cdf);
+    map.update(cdf.as_ptr() as usize);
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.

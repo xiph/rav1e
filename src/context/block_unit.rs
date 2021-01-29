@@ -1687,6 +1687,62 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, mv: MotionVector, ref_mv: MotionVector,
     mv_precision: MvSubpelPrecision,
   ) {
+    fn encode_mv_component(
+      w: &mut dyn Writer, comp: i32, mvcomp: &mut NMVComponent,
+      precision: MvSubpelPrecision, map: &mut FieldMap,
+    ) {
+      assert!(comp != 0);
+      assert!(MV_LOW <= comp && comp <= MV_UPP);
+      let mut offset: u32 = 0;
+      let sign: u32 = if comp < 0 { 1 } else { 0 };
+      let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
+      let mv_class = get_mv_class(mag - 1, &mut offset);
+      let d = offset >> 3; // int mv data
+      let fr = (offset >> 1) & 3; // fractional mv data
+      let hp = offset & 1; // high precision mv data
+
+      // Sign
+      w.symbol_with_update_map(sign, &mut mvcomp.sign_cdf, map);
+
+      // Class
+      w.symbol_with_update_map(mv_class as u32, &mut mvcomp.classes_cdf, map);
+
+      // Integer bits
+      if mv_class == MV_CLASS_0 {
+        w.symbol_with_update_map(d, &mut mvcomp.class0_cdf, map);
+      } else {
+        let n = mv_class + CLASS0_BITS - 1; // number of bits
+        for i in 0..n {
+          w.symbol_with_update_map((d >> i) & 1, &mut mvcomp.bits_cdf[i], map);
+        }
+      }
+      // Fractional bits
+      if precision > MvSubpelPrecision::MV_SUBPEL_NONE {
+        w.symbol_with_update_map(
+          fr,
+          if mv_class == MV_CLASS_0 {
+            &mut mvcomp.class0_fp_cdf[d as usize]
+          } else {
+            &mut mvcomp.fp_cdf
+          },
+          map,
+        );
+      }
+
+      // High precision bit
+      if precision > MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION {
+        w.symbol_with_update_map(
+          hp,
+          if mv_class == MV_CLASS_0 {
+            &mut mvcomp.class0_hp_cdf
+          } else {
+            &mut mvcomp.hp_cdf
+          },
+          map,
+        );
+      }
+    }
+
     // <https://aomediacodec.github.io/av1-spec/#assign-mv-semantics>
     assert!(mv.is_valid());
 
@@ -1707,6 +1763,7 @@ impl<'a> ContextWriter<'a> {
         diff.row as i32,
         &mut self.fc.nmv_context.comps[0],
         mv_precision,
+        &mut self.fc_map,
       );
     }
     if mv_joint_horizontal(j) {
@@ -1715,6 +1772,7 @@ impl<'a> ContextWriter<'a> {
         diff.col as i32,
         &mut self.fc.nmv_context.comps[1],
         mv_precision,
+        &mut self.fc_map,
       );
     }
   }
