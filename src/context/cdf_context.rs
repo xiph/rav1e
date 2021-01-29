@@ -499,7 +499,7 @@ impl fmt::Debug for CDFContext {
 #[derive(Debug, Default)]
 pub struct FieldMap {
   map: Vec<(&'static str, usize, usize)>,
-  log: Vec<(&'static str, usize, usize)>,
+  log: Vec<(&'static str, usize)>,
 }
 
 impl FieldMap {
@@ -508,10 +508,10 @@ impl FieldMap {
   }
 
   /// Print the field the address belong to
-  pub(crate) fn lookup(&self, addr: usize) -> (&'static str, usize, usize) {
+  pub(crate) fn lookup(&self, addr: usize) -> (&'static str, usize) {
     for (name, start, end) in &self.map {
       if addr >= *start && addr < *end {
-        return (name, *start, *end);
+        return (name, addr);
       }
     }
 
@@ -519,20 +519,20 @@ impl FieldMap {
   }
 
   pub(crate) fn update(&mut self, addr: usize) {
-    let (name, start, _end) = self.lookup(addr);
+    let (name, off) = self.lookup(addr);
     #[cfg(feature = "desync_finder")]
     {
       println!(" CDF {}", name);
       println!();
     }
 
-    self.log.push((name, start, addr));
+    self.log.push((name, off));
   }
 
   fn summary(&self, log_start: usize) {
     println!("Checkpoint from {}", log_start);
     let mut sum: HashMap<&'static str, HashMap<usize, usize>> = HashMap::new();
-    for (name, _start, addr) in self.log[log_start..].iter() {
+    for (name, addr) in self.log[log_start..].iter() {
       sum
         .entry(name)
         .and_modify(|v| {
