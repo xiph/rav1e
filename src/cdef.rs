@@ -601,21 +601,22 @@ pub fn cdef_filter_tile<T: Pixel>(
   let fb_height = (output.planes[0].rect().height + 63) / 64;
 
   // should parallelize this
-  let mut queue: Vec<(usize, usize)> = Vec::new();
+  let mut queue: Vec<(usize, usize, TileMut<'_, T>)> = Vec::new();
 
   for fby in 0..fb_height {
     for fbx in 0..fb_width {
-      queue.push((fbx, fby));
-    }}
+      queue.push((fbx, fby, output));
+    }
+  }
 
-  queue.par_iter()
-    .for_each(|tpl| filter_tile( tpl: &(usize, usize), fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,  output: &mut TileMut<'_, T>));
+  queue.par_iter().for_each(|tpl| filter_tile(tpl, fi, input, tb, output));
 }
 
 #[hawktracer(filter_tile)]
 pub fn filter_tile<T: Pixel>(
-  tpl: &(usize, usize), fi: &FrameInvariants<T>, input: &Frame<T>,
-  tb: &TileBlocks,  output: &mut TileMut<'_, T>) {
+  tpl: &(usize, usize, &mut TileMut<'_, T>), fi: &FrameInvariants<T>,
+  input: &Frame<T>, tb: &TileBlocks, output: &mut TileMut<'_, T>,
+) {
   // tile_sbo is treated as an offset into the Tiles' plane
   // regions, not as an absolute offset in the visible frame.  The
   // Tile's own offset is added to this in order to address into
@@ -624,6 +625,6 @@ pub fn filter_tile<T: Pixel>(
   let cdef_index = tb.get_cdef(tile_sbo);
   let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
   cdef_filter_superblock(
-  fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
+    fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
   );
 }
