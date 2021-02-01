@@ -1786,8 +1786,7 @@ impl<'a> ContextWriter<'a> {
     ) {
       let abs = delta.abs() as u32;
 
-      w.symbol_with_update(cmp::min(abs, DELTA_LF_SMALL), cdf);
-      fc_map.update(cdf.as_ptr() as usize);
+      w.symbol_with_update_map(cmp::min(abs, DELTA_LF_SMALL), cdf, fc_map);
 
       if abs >= DELTA_LF_SMALL {
         let bits = msb(abs as i32 - 1) as u32;

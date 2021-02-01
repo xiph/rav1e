@@ -558,7 +558,7 @@ where
     &mut self, s: u32, cdf: &mut [u16], map: &mut FieldMap,
   ) {
     self.symbol_with_update(s, cdf);
-    map.update(cdf.as_ptr() as usize);
+    map.update(cdf.as_ptr() as usize, cdf.len());
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.

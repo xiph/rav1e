@@ -80,38 +80,6 @@ union CDFContextU {
   b: [u16; size_of::<CDFContext>() / size_of::<u16>()],
 }
 
-#[cfg(test)]
-mod test {
-  use super::*;
-  #[test]
-  fn copy() {
-    let d_0 = CDFContext::new(42);
-    let s_0 = d_0;
-
-    let start_d = &d_0 as *const _ as usize;
-    // let start_s = &s_0 as *const _ as usize;
-    let map = FieldMap::new(&d_0);
-
-    let d: *const CDFContextU = unsafe { mem::transmute(&d_0 as *const _) };
-    let s: *const CDFContextU = unsafe { mem::transmute(&s_0 as *const _) };
-
-    println!("Copied {:p}", &d_0);
-
-    for (i, (a, b)) in
-      unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
-    {
-      if *a != *b {
-        let addr = start_d + i;
-        let dest = map.lookup(addr);
-        println!("{} [{}] from {} differs", dest.0, dest.2, i);
-      }
-    }
-    println!("Checkpoint complete");
-
-    pretty_assertions::assert_eq!(&d_0, &s_0);
-  }
-}
-
 impl CDFContext {
   pub fn new(quantizer: u8) -> CDFContext {
     let qctx = match quantizer {
@@ -532,7 +500,8 @@ impl CDFContext {
 #[derive(Debug, Default)]
 pub struct FieldMap {
   map: Vec<(&'static str, usize, usize)>,
-  log: Vec<(&'static str, usize, usize)>,
+  // log: Vec<(&'static str, usize, usize, usize)>,
+  log: Vec<(usize, usize)>,
 }
 
 impl FieldMap {
@@ -551,37 +520,47 @@ impl FieldMap {
     panic!("  CDF address not found {:x}", addr);
   }
 
-  pub(crate) fn update(&mut self, addr: usize) {
-    let (name, addr, off) = self.lookup(addr);
-    println!("changing {:x} -> {} [{}]", addr, name, off);
+  pub(crate) fn update(&mut self, addr: usize, len: usize) {
+    //    let (name, addr, off) = self.lookup(addr);
+    //    println!("changing {:x} -> {} [{}] len {}", addr, name, off, len);
     #[cfg(feature = "desync_finder")]
     {
       println!(" CDF {}", name);
       println!();
     }
 
-    self.log.push((name, addr, off));
+    //    self.log.push((name, addr, off, len));
+    self.log.push((addr, len))
   }
-
-  fn summary(&self, log_start: usize) {
-    println!("Checkpoint from {}", log_start);
-    let mut sum: HashMap<&'static str, HashMap<usize, usize>> = HashMap::new();
-    for (name, _addr, off) in self.log[log_start..].iter() {
-      sum
-        .entry(name)
-        .and_modify(|v| {
-          v.entry(*off).and_modify(|c| *c += 1).or_insert(1);
-        })
-        .or_insert([(*off, 1usize)].iter().cloned().collect());
-    }
-    for (name, values) in sum.iter() {
-      println!("  {}: {}", name, values.len());
-      for (&off, &count) in values.iter() {
-        println!("    off {} count {}", off, count)
+  /*
+    fn summary(&self, log_start: usize) {
+      println!("Checkpoint from {}", log_start);
+      let mut sum: HashMap<&'static str, HashMap<usize, (usize, usize)>> =
+        HashMap::new();
+      for (name, _addr, off, len) in self.log[log_start..].iter() {
+        sum
+          .entry(name)
+          .and_modify(|v| {
+            v.entry(*off)
+              .and_modify(|c| {
+                c.0 += 1;
+                c.1 += *len;
+              })
+              .or_insert((1, *len));
+          })
+          .or_insert([(*off, (1usize, *len))].iter().cloned().collect());
       }
+      let mut total = 0;
+      for (name, values) in sum.iter() {
+        println!("  {}: {}", name, values.len());
+        for (&off, &count) in values.iter() {
+          println!("    off {} count {} len {}", off, count.0, count.1);
+          total += count.1;
+        }
+      }
+      println!("total: {}", total);
     }
-    println!("total: {}", self.log.len() - log_start);
-  }
+  */
 }
 
 #[macro_use]
@@ -591,7 +570,7 @@ macro_rules! symbol_with_update {
     {
       let cdf: &[_] = $cdf;
       let map = &mut $self.fc_map;
-      map.update(cdf.as_ptr() as usize);
+      map.update(cdf.as_ptr() as usize, cdf.len());
     }
   };
 }
@@ -631,9 +610,9 @@ impl<'a> ContextWriter<'a> {
     };
 
     cc.fc_map = FieldMap::new(&cc.fc);
-
+    /*
     let start_d = self.fc as *const _ as usize;
-    let start_s = &cc.fc as *const _ as usize;
+    // let start_s = &cc.fc as *const _ as usize;
     let map = &self.fc_map;
 
     let d: *const CDFContextU = unsafe { mem::transmute(self.fc as *const _) };
@@ -645,12 +624,12 @@ impl<'a> ContextWriter<'a> {
       unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
     {
       if *a != *b {
-        let addr = start_d + i;
+        let addr = start_d + i * 2;
         let dest = map.lookup(addr);
         println!("{} [{}] from {:x} differs", dest.0, dest.2, addr);
       }
     }
-    println!("Checkpoint complete");
+    println!("Checkpoint complete"); */
 
     assert_eq!(self.fc, &cc.fc, "Different on copy!?");
 
@@ -659,52 +638,72 @@ impl<'a> ContextWriter<'a> {
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
     let map = &self.fc_map;
-    if self.debug {
-      map.summary(checkpoint.log_start);
-    }
+    //    if self.debug {
+    //      map.summary(checkpoint.log_start);
+    //    }
 
-    println!("start destination {:p}", self.fc);
-    println!("start source {:p}", &checkpoint.fc);
+    //    println!("start destination {:p}", self.fc);
+    //    println!("start source {:p}", &checkpoint.fc);
     let start_d = self.fc as *mut _ as usize;
     let start_s = &checkpoint.fc as *const _ as usize;
+    /*    {
+      let d: *const CDFContextU =
+        unsafe { mem::transmute(self.fc as *const _) };
+      let s: *const CDFContextU =
+        unsafe { mem::transmute(&checkpoint.fc as *const _) };
 
-    for (_, addr, _off_field) in map.log[checkpoint.log_start..].iter() {
+      for (i, (a, b)) in
+        unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
+      {
+        if *a != *b {
+          let addr = start_d + i * 2;
+          let dest = map.lookup(addr);
+          println!("{} [{}] from {} differs", dest.0, dest.2, i * 2);
+        }
+      }
+    }
+    for (_, addr, _off_field, len) in map.log[checkpoint.log_start..].iter() {
+    */
+    for (addr, len) in map.log[checkpoint.log_start..].iter() {
       unsafe {
         let addr: usize = *addr;
         let off = addr - start_d;
         let src = (start_s + off) as *const u16;
         let dst = addr as *mut u16;
-        let dest = map.lookup(addr);
-        let source = checkpoint.fc_map.lookup(src as usize);
-        println!("rolling back {:x} -> {} [{}]", addr, dest.0, dest.2);
+        // let dest = map.lookup(addr);
+        // let source = checkpoint.fc_map.lookup(src as usize);
+        /*        println!(
+          "rolling back {:x} -> {} [{}] len {}",
+          addr, dest.0, dest.2, *len
+        );
         // println!("destination {:?}", dest);
         // println!("source {:?}", source);
-        assert_eq!(dest.2, source.2);
+        assert_eq!(dest.2, source.2); */
 
-        *dst = *src;
+        std::ptr::copy_nonoverlapping(src, dst, *len);
       }
     }
+    /*    {
+      let d: *const CDFContextU =
+        unsafe { mem::transmute(self.fc as *const _) };
+      let s: *const CDFContextU =
+        unsafe { mem::transmute(&checkpoint.fc as *const _) };
 
-    let d = unsafe {
-      slice::from_raw_parts(
-        start_d as *const u16,
-        mem::size_of_val(self.fc) / 2,
-      )
-    };
-    let s = unsafe {
-      slice::from_raw_parts(
-        start_s as *const u16,
-        mem::size_of_val(self.fc) / 2,
-      )
-    };
-
-    for (i, (a, b)) in d.iter().zip(s.iter()).enumerate() {
-      if *a != *b {
-        let addr = start_d + i * 2;
-        let dest = map.lookup(addr);
-        println!("{} [{}] from {} differs", dest.0, dest.2, i * 2);
+      for (i, (a, b)) in
+        unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
+      {
+        if *a != *b {
+          let addr = start_d + i * 2;
+          let dest = map.lookup(addr);
+          println!(
+            "{} [{}] from {} differs - not rolled back?",
+            dest.0,
+            dest.2,
+            i * 2
+          );
+        }
       }
-    }
+    } */
 
     pretty_assertions::assert_eq!(self.fc, &checkpoint.fc);
     self.bc.rollback(&checkpoint.bc);
