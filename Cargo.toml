@@ -88,6 +88,7 @@ itertools = "0.10"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.63", optional = true }
 rust_hawktracer = "0.7.0"
+pretty_assertions = "0.6"
 
 [dependencies.image]
 version = "0.23"
@@ -114,7 +115,6 @@ signal-hook = { version = "0.3", optional = true }
 [dev-dependencies]
 assert_cmd = "1.0"
 criterion = "0.3"
-pretty_assertions = "0.6"
 interpolate_name = "0.2.2"
 rand = "0.8"
 rand_chacha = "0.3"
