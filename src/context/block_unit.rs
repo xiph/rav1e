@@ -483,7 +483,7 @@ impl<'a> BlockContext<'a> {
   }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NMVComponent {
   pub classes_cdf: [u16; MV_CLASSES + 1],
   pub class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
@@ -495,7 +495,7 @@ pub struct NMVComponent {
   pub bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NMVContext {
   pub joints_cdf: [u16; MV_JOINTS + 1],
   pub comps: [NMVComponent; 2],

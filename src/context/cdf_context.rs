@@ -8,9 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
-use std::fmt;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct CDFContext {
   pub partition_cdf: [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
   pub kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
@@ -487,12 +486,6 @@ impl CDFContext {
       ("coeff_base_cdf", coeff_base_cdf_start, coeff_base_cdf_end),
       ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
     ]
-  }
-}
-
-impl fmt::Debug for CDFContext {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "CDFContext contains too many numbers to print :-(")
   }
 }
 
