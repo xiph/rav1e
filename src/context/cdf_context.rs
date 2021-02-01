@@ -7,7 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use mem::size_of;
+
 use super::*;
+use std::assert_eq;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct CDFContext {
@@ -70,6 +73,43 @@ pub struct CDFContext {
     [[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub coeff_br_cdf: [[[[u16; BR_CDF_SIZE + 1]; LEVEL_CONTEXTS]; PLANE_TYPES];
     TxSize::TX_SIZES],
+}
+
+union CDFContextU {
+  s: CDFContext,
+  b: [u16; size_of::<CDFContext>() / size_of::<u16>()],
+}
+
+#[cfg(test)]
+mod test {
+  use super::*;
+  #[test]
+  fn copy() {
+    let d_0 = CDFContext::new(42);
+    let s_0 = d_0;
+
+    let start_d = &d_0 as *const _ as usize;
+    // let start_s = &s_0 as *const _ as usize;
+    let map = FieldMap::new(&d_0);
+
+    let d: *const CDFContextU = unsafe { mem::transmute(&d_0 as *const _) };
+    let s: *const CDFContextU = unsafe { mem::transmute(&s_0 as *const _) };
+
+    println!("Copied {:p}", &d_0);
+
+    for (i, (a, b)) in
+      unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
+    {
+      if *a != *b {
+        let addr = start_d + i;
+        let dest = map.lookup(addr);
+        println!("{} [{}] from {} differs", dest.0, dest.2, i);
+      }
+    }
+    println!("Checkpoint complete");
+
+    pretty_assertions::assert_eq!(&d_0, &s_0);
+  }
 }
 
 impl CDFContext {
@@ -592,13 +632,35 @@ impl<'a> ContextWriter<'a> {
 
     cc.fc_map = FieldMap::new(&cc.fc);
 
+    let start_d = self.fc as *const _ as usize;
+    let start_s = &cc.fc as *const _ as usize;
+    let map = &self.fc_map;
+
+    let d: *const CDFContextU = unsafe { mem::transmute(self.fc as *const _) };
+    let s: *const CDFContextU = unsafe { mem::transmute(&cc.fc as *const _) };
+
+    println!("Copied");
+
+    for (i, (a, b)) in
+      unsafe { (*d).b }.iter().zip(unsafe { (*s).b }.iter()).enumerate()
+    {
+      if *a != *b {
+        let addr = start_d + i;
+        let dest = map.lookup(addr);
+        println!("{} [{}] from {:x} differs", dest.0, dest.2, addr);
+      }
+    }
+    println!("Checkpoint complete");
+
+    assert_eq!(self.fc, &cc.fc, "Different on copy!?");
+
     cc
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
     let map = &self.fc_map;
     if self.debug {
-      map.summary(0);
+      map.summary(checkpoint.log_start);
     }
 
     println!("start destination {:p}", self.fc);
@@ -606,7 +668,7 @@ impl<'a> ContextWriter<'a> {
     let start_d = self.fc as *mut _ as usize;
     let start_s = &checkpoint.fc as *const _ as usize;
 
-    for (_, addr, _off_field) in map.log[0..].iter() {
+    for (_, addr, _off_field) in map.log[checkpoint.log_start..].iter() {
       unsafe {
         let addr: usize = *addr;
         let off = addr - start_d;
@@ -624,17 +686,23 @@ impl<'a> ContextWriter<'a> {
     }
 
     let d = unsafe {
-      slice::from_raw_parts(start_d as *const u16, mem::size_of_val(self.fc))
+      slice::from_raw_parts(
+        start_d as *const u16,
+        mem::size_of_val(self.fc) / 2,
+      )
     };
     let s = unsafe {
-      slice::from_raw_parts(start_s as *const u16, mem::size_of_val(self.fc))
+      slice::from_raw_parts(
+        start_s as *const u16,
+        mem::size_of_val(self.fc) / 2,
+      )
     };
 
     for (i, (a, b)) in d.iter().zip(s.iter()).enumerate() {
       if *a != *b {
-        let addr = start_d + i;
+        let addr = start_d + i * 2;
         let dest = map.lookup(addr);
-        println!("{} [{}] from {:x} differs", dest.0, dest.2, addr);
+        println!("{} [{}] from {} differs", dest.0, dest.2, i * 2);
       }
     }
 
