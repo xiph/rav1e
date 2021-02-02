@@ -1702,20 +1702,10 @@ impl<'a> ContextWriter<'a> {
     );
 
     if mv_joint_vertical(j) {
-      encode_mv_component(
-        w,
-        diff.row as i32,
-        &mut self.fc.nmv_context.comps[0],
-        mv_precision,
-      );
+      self.encode_mv_component(w, diff.row as i32, 0, mv_precision);
     }
     if mv_joint_horizontal(j) {
-      encode_mv_component(
-        w,
-        diff.col as i32,
-        &mut self.fc.nmv_context.comps[1],
-        mv_precision,
-      );
+      self.encode_mv_component(w, diff.col as i32, 1, mv_precision);
     }
   }
 
@@ -1723,10 +1713,20 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, multi: bool,
     planes: usize,
   ) {
-    fn write_block_delta(w: &mut dyn Writer, cdf: &mut [u16], delta: i8) {
+    let block = &self.bc.blocks[bo];
+    let deltas_count = if multi { FRAME_LF_COUNT + planes - 3 } else { 1 };
+    let deltas = &block.deblock_deltas[..deltas_count];
+    let cdf1 = &mut [self.fc.deblock_delta_cdf];
+    let cdfs = if multi {
+      &mut self.fc.deblock_delta_multi_cdf[..deltas_count]
+    } else {
+      cdf1
+    };
+
+    for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
       let abs = delta.abs() as u32;
 
-      w.symbol_with_update(cmp::min(abs, DELTA_LF_SMALL), cdf);
+      symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL), cdf);
 
       if abs >= DELTA_LF_SMALL {
         let bits = msb(abs as i32 - 1) as u32;
@@ -1736,21 +1736,6 @@ impl<'a> ContextWriter<'a> {
       if abs > 0 {
         w.bool(delta < 0, 16384);
       }
-    }
-
-    let block = &self.bc.blocks[bo];
-    if multi {
-      let deltas_count = FRAME_LF_COUNT + planes - 3;
-      let deltas = &block.deblock_deltas[..deltas_count];
-      let cdfs = &mut self.fc.deblock_delta_multi_cdf[..deltas_count];
-
-      for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
-        write_block_delta(w, cdf, delta);
-      }
-    } else {
-      let delta = block.deblock_deltas[0];
-      let cdf = &mut self.fc.deblock_delta_cdf;
-      write_block_delta(w, cdf, delta);
     }
   }
 
