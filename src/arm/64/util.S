@@ -59,6 +59,29 @@
 #endif
 .endm
 
+.macro sub_sp space
+#ifdef _WIN32
+.if \space > 8192
+        // Here, we'd need to touch two (or more) pages while decrementing
+        // the stack pointer.
+        .error          "sub_sp_align doesn't support values over 8K at the moment"
+.elseif \space > 4096
+        sub             x16, sp,  #4096
+        ldr             xzr, [x16]
+        sub             sp,  x16, #(\space - 4096)
+.else
+        sub             sp,  sp,  #\space
+.endif
+#else
+.if \space >= 4096
+        sub             sp,  sp,  #(\space)/4096*4096
+.endif
+.if (\space % 4096) != 0
+        sub             sp,  sp,  #(\space)%4096
+.endif
+#endif
+.endm
+
 .macro transpose_8x8b_xtl r0, r1, r2, r3, r4, r5, r6, r7, xtl
         // a0 b0 a1 b1 a2 b2 a3 b3 a4 b4 a5 b5 a6 b6 a7 b7
         zip1            \r0\().16b, \r0\().16b, \r1\().16b
