@@ -3207,6 +3207,8 @@ fn encode_tile<'a, T: Pixel>(
     cw.bc.reset_left_contexts(planes);
 
     for sbx in 0..ts.sb_width {
+      cw.fc_log.clear();
+
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       let mut sbs_qe = SBSQueueEntry {
         sbo: tile_sbo,

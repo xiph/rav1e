@@ -42,7 +42,10 @@ pub trait Writer {
   /// leaves cdf unchanged
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
   /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
-  fn symbol_with_update(&mut self, s: u32, cdf: &mut [u16]);
+  fn symbol_with_update(
+    &mut self, s: u32, cdf: &mut [u16],
+    log: &mut crate::context::CDFContextLog,
+  );
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
   /// Write a single bit with flat proability
@@ -535,7 +538,10 @@ where
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be exactly 32768. There should be at most 16 values.
-  fn symbol_with_update(&mut self, s: u32, cdf: &mut [u16]) {
+  fn symbol_with_update(
+    &mut self, s: u32, cdf: &mut [u16],
+    log: &mut crate::context::CDFContextLog,
+  ) {
     let nsymbs = cdf.len() - 1;
     #[cfg(feature = "desync_finder")]
     {
@@ -543,6 +549,7 @@ where
         self.print_backtrace(s);
       }
     }
+    log.push(cdf);
     self.symbol(s, &cdf[..nsymbs]);
 
     update_cdf(cdf, s);

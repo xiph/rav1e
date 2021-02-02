@@ -498,7 +498,7 @@ impl fmt::Debug for CDFContext {
 #[macro_use]
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
-    $w.symbol_with_update($s, $cdf);
+    $w.symbol_with_update($s, $cdf, &mut $self.fc_log);
     #[cfg(feature = "desync_finder")]
     {
       let cdf: &[_] = $cdf;
@@ -511,13 +511,53 @@ macro_rules! symbol_with_update {
 
 #[derive(Clone)]
 pub struct ContextWriterCheckpoint {
-  pub fc: CDFContext,
+  pub fc: usize,
   pub bc: BlockContextCheckpoint,
+}
+
+pub struct CDFContextLog {
+  base: usize,
+  data: Vec<u16>,
+}
+
+impl CDFContextLog {
+  fn new(fc: &CDFContext) -> Self {
+    Self { base: fc as *const _ as usize, data: Vec::with_capacity(256 * 1024) }
+  }
+  fn checkpoint(&self) -> usize {
+    self.data.len()
+  }
+  pub fn push(&mut self, cdf: &[u16]) {
+    let offset = cdf.as_ptr() as usize - self.base;
+    debug_assert!(offset <= u16::MAX.into());
+    self.data.extend_from_slice(cdf);
+    self.data.extend_from_slice(&[offset as u16, cdf.len() as u16]);
+  }
+  pub fn rollback(&mut self, fc: &mut CDFContext, checkpoint: usize) {
+    let base = fc as *mut _ as *mut u8;
+    while self.data.len() > checkpoint {
+      if let Some(len) = self.data.pop() {
+        if let Some(offset) = self.data.pop() {
+          let len = len as usize;
+          let src = &self.data[self.data.len() - len];
+          unsafe {
+            let dst = base.add(offset as usize) as *mut u16;
+            dst.copy_from_nonoverlapping(src, len);
+          }
+          self.data.truncate(self.data.len() - len);
+        }
+      }
+    }
+  }
+  pub fn clear(&mut self) {
+    self.data.clear();
+  }
 }
 
 pub struct ContextWriter<'a> {
   pub bc: BlockContext<'a>,
   pub fc: &'a mut CDFContext,
+  pub fc_log: CDFContextLog,
   #[cfg(feature = "desync_finder")]
   pub fc_map: Option<FieldMap>, // For debugging purposes
 }
@@ -525,10 +565,12 @@ pub struct ContextWriter<'a> {
 impl<'a> ContextWriter<'a> {
   #[allow(clippy::let_and_return)]
   pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
+    let fc_log = CDFContextLog::new(fc);
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       fc,
       bc,
+      fc_log,
       #[cfg(feature = "desync_finder")]
       fc_map: Default::default(),
     };
@@ -546,12 +588,15 @@ impl<'a> ContextWriter<'a> {
     (if element > 0 { cdf[element - 1] } else { 32768 }) - cdf[element]
   }
 
-  pub const fn checkpoint(&self) -> ContextWriterCheckpoint {
-    ContextWriterCheckpoint { fc: *self.fc, bc: self.bc.checkpoint() }
+  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
+    ContextWriterCheckpoint {
+      fc: self.fc_log.checkpoint(),
+      bc: self.bc.checkpoint(),
+    }
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
-    *self.fc = checkpoint.fc;
+    self.fc_log.rollback(&mut self.fc, checkpoint.fc);
     self.bc.rollback(&checkpoint.bc);
     #[cfg(feature = "desync_finder")]
     {
