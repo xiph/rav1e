@@ -1480,53 +1480,6 @@ function inv_txfm_add_vert_4x16_neon
         pop             {pc}
 endfunc
 
-.macro sub_sp_align space
-#if CONFIG_THUMB
-        mov             r7,  sp
-        and             r7,  r7,  #15
-#else
-        and             r7,  sp,  #15
-#endif
-        sub             sp,  sp,  r7
-        // Now the stack is aligned, store the amount of adjustment back
-        // on the stack, as we don't want to waste a register as frame
-        // pointer.
-        str             r7,  [sp, #-16]!
-#ifdef _WIN32
-.if \space > 8192
-        // Here, we'd need to touch two (or more) pages while decrementing
-        // the stack pointer.
-        .error          "sub_sp_align doesn't support values over 8K at the moment"
-.elseif \space > 4096
-        sub             r7,  sp,  #4096
-        ldr             r12, [r7]
-        sub             r7,  r7,  #(\space - 4096)
-        mov             sp,  r7
-.else
-        sub             sp,  sp,  #\space
-.endif
-#else
-.if \space >= 4096
-        sub             sp,  sp,  #(\space)/4096*4096
-.endif
-.if (\space % 4096) != 0
-        sub             sp,  sp,  #(\space)%4096
-.endif
-#endif
-.endm
-
-.macro add_sp_align space
-.if \space >= 4096
-        add             sp,  sp,  #(\space)/4096*4096
-.endif
-.if (\space % 4096) != 0
-        add             sp,  sp,  #(\space)%4096
-.endif
-        ldr             r7,  [sp], #16
-        // Add back the original stack adjustment
-        add             sp,  sp,  r7
-.endm
-
 function inv_txfm_add_16x16_neon
         sub_sp_align    512
         ldrh            r11, [r10], #2
