@@ -9,7 +9,10 @@
 
 use super::*;
 
+const CDF_LEN_MAX: usize = 16 + 1;
+
 #[derive(Clone, Copy)]
+#[repr(C)]
 pub struct CDFContext {
   pub partition_cdf: [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
   pub kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
@@ -70,6 +73,8 @@ pub struct CDFContext {
     [[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub coeff_br_cdf: [[[[u16; BR_CDF_SIZE + 1]; LEVEL_CONTEXTS]; PLANE_TYPES];
     TxSize::TX_SIZES],
+
+  padding: [u16; CDF_LEN_MAX],
 }
 
 impl CDFContext {
@@ -131,6 +136,8 @@ impl CDFContext {
       coeff_base_eob_cdf: av1_default_coeff_base_eob_multi_cdfs[qctx],
       coeff_base_cdf: av1_default_coeff_base_multi_cdfs[qctx],
       coeff_br_cdf: av1_default_coeff_lps_multi_cdfs[qctx],
+
+      padding: [0; CDF_LEN_MAX],
     }
   }
 
@@ -517,36 +524,47 @@ pub struct ContextWriterCheckpoint {
 
 pub struct CDFContextLog {
   base: usize,
-  data: Vec<u16>,
+  data: Vec<[u16; CDF_LEN_MAX + 1]>,
 }
 
 impl CDFContextLog {
   fn new(fc: &CDFContext) -> Self {
-    Self { base: fc as *const _ as usize, data: Vec::with_capacity(256 * 1024) }
+    Self { base: fc as *const _ as usize, data: Vec::with_capacity(1 << 15) }
   }
   fn checkpoint(&self) -> usize {
     self.data.len()
   }
+  #[inline(always)]
   pub fn push(&mut self, cdf: &[u16]) {
     let offset = cdf.as_ptr() as usize - self.base;
     debug_assert!(offset <= u16::MAX.into());
-    self.data.extend_from_slice(cdf);
-    self.data.extend_from_slice(&[offset as u16, cdf.len() as u16]);
+    unsafe {
+      // Maintain an invariant of non-zero spare capacity, so that branching
+      // may be deferred until writes are issued. Benchmarks indicate this is
+      // faster than first testing capacity and possibly reallocating.
+      let len = self.data.len();
+      debug_assert!(len < self.data.capacity());
+      let entry = self.data.get_unchecked_mut(len);
+      let dst = entry.as_mut_ptr();
+      dst.copy_from_nonoverlapping(cdf.as_ptr(), CDF_LEN_MAX);
+      entry[CDF_LEN_MAX] = offset as u16;
+      self.data.set_len(len + 1);
+      self.data.reserve(1);
+    }
   }
+  #[inline(always)]
   pub fn rollback(&mut self, fc: &mut CDFContext, checkpoint: usize) {
     let base = fc as *mut _ as *mut u8;
-    while self.data.len() > checkpoint {
-      if let Some(len) = self.data.pop() {
-        if let Some(offset) = self.data.pop() {
-          let len = len as usize;
-          let src = &self.data[self.data.len() - len];
-          unsafe {
-            let dst = base.add(offset as usize) as *mut u16;
-            dst.copy_from_nonoverlapping(src, len);
-          }
-          self.data.truncate(self.data.len() - len);
-        }
+    let mut len = self.data.len();
+    unsafe {
+      while len > checkpoint {
+        len -= 1;
+        let src = self.data.get_unchecked_mut(len);
+        let offset = src[CDF_LEN_MAX] as usize;
+        let dst = base.add(offset) as *mut u16;
+        dst.copy_from_nonoverlapping(src.as_ptr(), CDF_LEN_MAX);
       }
+      self.data.set_len(len);
     }
   }
   pub fn clear(&mut self) {
