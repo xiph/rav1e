@@ -2916,8 +2916,8 @@ filter_fn prep, x0, x7, x1, x2, w3, w4, w5, x5, w6, x6, x8, x9, 6
 
 .macro load_filter_row dst, src, inc
         asr             w13, \src, #10
-        ldr             \dst, [x11, w13, sxtw #3]
         add             \src, \src, \inc
+        ldr             \dst, [x11, w13, sxtw #3]
 .endm
 
 function warp_filter_horz_neon
@@ -2926,57 +2926,44 @@ function warp_filter_horz_neon
         ld1             {v16.8b, v17.8b}, [x2], x3
 
         load_filter_row d0, w12, w7
-        uxtl            v16.8h,  v16.8b
         load_filter_row d1, w12, w7
-        uxtl            v17.8h,  v17.8b
         load_filter_row d2, w12, w7
-        sxtl            v0.8h,   v0.8b
         load_filter_row d3, w12, w7
-        sxtl            v1.8h,   v1.8b
         load_filter_row d4, w12, w7
-        sxtl            v2.8h,   v2.8b
         load_filter_row d5, w12, w7
-        sxtl            v3.8h,   v3.8b
         load_filter_row d6, w12, w7
-        sxtl            v4.8h,   v4.8b
+        // subtract by 128 to allow using smull
+        eor             v16.8b,  v16.8b,  v22.8b
+        eor             v17.8b,  v17.8b,  v22.8b
         load_filter_row d7, w12, w7
-        sxtl            v5.8h,   v5.8b
-        ext             v18.16b, v16.16b, v17.16b, #2*1
-        mul             v23.8h,  v16.8h,  v0.8h
-        sxtl            v6.8h,   v6.8b
-        ext             v19.16b, v16.16b, v17.16b, #2*2
-        mul             v18.8h,  v18.8h,  v1.8h
-        sxtl            v7.8h,   v7.8b
-        ext             v20.16b, v16.16b, v17.16b, #2*3
-        mul             v19.8h,  v19.8h,  v2.8h
-        ext             v21.16b, v16.16b, v17.16b, #2*4
-        saddlp          v23.4s,  v23.8h
-        mul             v20.8h,  v20.8h,  v3.8h
-        ext             v22.16b, v16.16b, v17.16b, #2*5
-        saddlp          v18.4s,  v18.8h
-        mul             v21.8h,  v21.8h,  v4.8h
-        saddlp          v19.4s,  v19.8h
-        mul             v22.8h,  v22.8h,  v5.8h
-        saddlp          v20.4s,  v20.8h
-        saddlp          v21.4s,  v21.8h
-        saddlp          v22.4s,  v22.8h
-        addp            v18.4s,  v23.4s,  v18.4s
-        ext             v23.16b, v16.16b, v17.16b, #2*6
-        addp            v19.4s,  v19.4s,  v20.4s
-        mul             v23.8h,  v23.8h,  v6.8h
-        ext             v20.16b, v16.16b, v17.16b, #2*7
-        mul             v20.8h,  v20.8h,  v7.8h
-        saddlp          v23.4s,  v23.8h
-        addp            v21.4s,  v21.4s,  v22.4s
-        saddlp          v20.4s,  v20.8h
-        addp            v20.4s,  v23.4s,  v20.4s
-        addp            v18.4s,  v18.4s,  v19.4s
-        addp            v20.4s,  v21.4s,  v20.4s
+
+        ext             v18.8b,  v16.8b,  v17.8b,  #1
+        ext             v19.8b,  v16.8b,  v17.8b,  #2
+        smull           v0.8h,   v0.8b,   v16.8b
+        smull           v1.8h,   v1.8b,   v18.8b
+        ext             v18.8b,  v16.8b,  v17.8b,  #3
+        ext             v20.8b,  v16.8b,  v17.8b,  #4
+        smull           v2.8h,   v2.8b,   v19.8b
+        smull           v3.8h,   v3.8b,   v18.8b
+        ext             v18.8b,  v16.8b,  v17.8b,  #5
+        ext             v19.8b,  v16.8b,  v17.8b,  #6
+        smull           v4.8h,   v4.8b,   v20.8b
+        smull           v5.8h,   v5.8b,   v18.8b
+        ext             v18.8b,  v16.8b,  v17.8b,  #7
+        smull           v6.8h,   v6.8b,   v19.8b
+        smull           v7.8h,   v7.8b,   v18.8b
+
+        addp            v0.8h,   v0.8h,   v1.8h
+        addp            v2.8h,   v2.8h,   v3.8h
+        addp            v4.8h,   v4.8h,   v5.8h
+        addp            v6.8h,   v6.8h,   v7.8h
+
+        addp            v0.8h,   v0.8h,   v2.8h
+        addp            v4.8h,   v4.8h,   v6.8h
+
+        addp            v0.8h,   v0.8h,   v4.8h
 
         add             w5,  w5,  w8
-
-        rshrn           v16.4h,  v18.4s,  #3
-        rshrn2          v16.8h,  v20.4s,  #3
 
         ret
 endfunc
@@ -3002,25 +2989,32 @@ function warp_affine_8x8\t\()_8bpc_neon, export=1
         lsl             x1,  x1,  #1
 .endif
 
+        movi            v22.8b,  #128
+.ifb \t
+        movi            v23.8h,  #128
+.else
+        movi            v23.8h,  #8, lsl #8
+.endif
+
         bl              warp_filter_horz_neon
-        mov             v24.16b, v16.16b
+        srshr           v24.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v25.16b, v16.16b
+        srshr           v25.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v26.16b, v16.16b
+        srshr           v26.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v27.16b, v16.16b
+        srshr           v27.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v28.16b, v16.16b
+        srshr           v28.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v29.16b, v16.16b
+        srshr           v29.8h,  v0.8h,  #3
         bl              warp_filter_horz_neon
-        mov             v30.16b, v16.16b
+        srshr           v30.8h,  v0.8h,  #3
 
 1:
         add             w14, w6,  #512
         bl              warp_filter_horz_neon
-        mov             v31.16b, v16.16b
+        srshr           v31.8h,  v0.8h,  #3
 
         load_filter_row d0, w14, w9
         load_filter_row d1, w14, w9
@@ -3030,15 +3024,7 @@ function warp_affine_8x8\t\()_8bpc_neon, export=1
         load_filter_row d5, w14, w9
         load_filter_row d6, w14, w9
         load_filter_row d7, w14, w9
-        transpose_8x8b  v0, v1, v2, v3, v4, v5, v6, v7, v16, v17
-        sxtl            v0.8h,   v0.8b
-        sxtl            v1.8h,   v1.8b
-        sxtl            v2.8h,   v2.8b
-        sxtl            v3.8h,   v3.8b
-        sxtl            v4.8h,   v4.8b
-        sxtl            v5.8h,   v5.8b
-        sxtl            v6.8h,   v6.8b
-        sxtl            v7.8h,   v7.8b
+        transpose_8x8b_xtl v0, v1, v2, v3, v4, v5, v6, v7, sxtl
 
         // This ordering of smull/smlal/smull2/smlal2 is highly
         // beneficial for Cortex A53 here.
@@ -3066,6 +3052,7 @@ function warp_affine_8x8\t\()_8bpc_neon, export=1
         sqrshrn2        v16.8h,  v17.4s,  #\shift
         mov             v27.16b, v28.16b
         mov             v28.16b, v29.16b
+        add             v16.8h,  v16.8h,  v23.8h
 .ifb \t
         sqxtun          v16.8b,  v16.8h
 .endif
