@@ -554,12 +554,13 @@ impl CDFContextLog {
     let base = fc as *mut _ as *mut u8;
     let mut len = self.data.len();
     unsafe {
+      let mut src = self.data.get_unchecked_mut(len).as_ptr();
       while len > checkpoint {
         len -= 1;
-        let src = self.data.get_unchecked_mut(len);
-        let offset = src[CDF_LEN_MAX] as usize;
+        src = src.sub(CDF_LEN_MAX + 1);
+        let offset = *src.add(CDF_LEN_MAX) as usize;
         let dst = base.add(offset) as *mut u16;
-        dst.copy_from_nonoverlapping(src.as_ptr(), CDF_LEN_MAX);
+        dst.copy_from_nonoverlapping(src, CDF_LEN_MAX);
       }
       self.data.set_len(len);
     }
