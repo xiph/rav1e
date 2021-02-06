@@ -13,7 +13,7 @@ use std::arch::x86_64::*;
 
 #[inline(always)]
 pub fn update_cdf(cdf: &mut [u16], val: u32) {
-  if cdf.len() == 5 {
+  if cdf.len() == 4 {
     return unsafe {
       update_cdf_4_sse2(cdf, val);
     };
@@ -95,8 +95,8 @@ mod test {
 
   #[test]
   fn update_cdf_4_sse2() {
-    let mut cdf = [7296, 3819, 1616, 0, 0];
-    let mut cdf2 = [7296, 3819, 1616, 0, 0];
+    let mut cdf = [7296, 3819, 1616, 0];
+    let mut cdf2 = [7296, 3819, 1616, 0];
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
       unsafe {
@@ -105,7 +105,7 @@ mod test {
       assert_eq!(cdf, cdf2);
     }
 
-    let mut cdf = [7297, 3820, 1617, 0, 0];
+    let mut cdf = [7297, 3820, 1617, 0];
     let mut cdf2 = cdf.clone();
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);

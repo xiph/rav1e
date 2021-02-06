@@ -15,18 +15,15 @@ impl CDFContext {
     &self, w: &dyn Writer, rs: &TileRestorationState,
     filter: RestorationFilter, pli: usize,
   ) -> u32 {
-    let nsym = &self.lrf_switchable_cdf.len() - 1;
     match filter {
-      RestorationFilter::None => {
-        w.symbol_bits(0, &self.lrf_switchable_cdf[..nsym])
-      }
+      RestorationFilter::None => w.symbol_bits(0, &self.lrf_switchable_cdf),
       RestorationFilter::Wiener { .. } => {
         unreachable!() // for now, not permanently
       }
       RestorationFilter::Sgrproj { set, xqd } => {
         // Does *not* use 'RESTORE_SGRPROJ' but rather just '2'
         let rp = &rs.planes[pli];
-        let mut bits = w.symbol_bits(2, &self.lrf_switchable_cdf[..nsym])
+        let mut bits = w.symbol_bits(2, &self.lrf_switchable_cdf)
           + ((SGRPROJ_PARAMS_BITS as u32) << OD_BITRES);
         for i in 0..2 {
           let s = SGRPROJ_PARAMS_S[set as usize][i];

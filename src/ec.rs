@@ -544,7 +544,6 @@ where
     &mut self, s: u32, cdf: &mut [u16],
     log: &mut crate::context::CDFContextLog,
   ) {
-    let nsymbs = cdf.len() - 1;
     #[cfg(feature = "desync_finder")]
     {
       if self.debug {
@@ -552,7 +551,7 @@ where
       }
     }
     log.push(cdf);
-    self.symbol(s, &cdf[..nsymbs]);
+    self.symbol(s, cdf);
 
     update_cdf(cdf, s);
   }
@@ -890,7 +889,7 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
 pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
   pub fn update_cdf(cdf: &mut [u16], val: u32) {
-    let nsymbs = cdf.len() - 1;
+    let nsymbs = cdf.len();
     let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs - 1] >> 4) as usize;
     cdf[nsymbs - 1] += 1 - (cdf[nsymbs - 1] >> 5);
 

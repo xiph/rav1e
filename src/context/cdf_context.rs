@@ -9,70 +9,67 @@
 
 use super::*;
 
-const CDF_LEN_MAX: usize = 16 + 1;
+const CDF_LEN_MAX: usize = 16;
 
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct CDFContext {
-  pub partition_cdf: [[u16; EXT_PARTITION_TYPES + 1]; PARTITION_CONTEXTS],
-  pub kf_y_cdf: [[[u16; INTRA_MODES + 1]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
-  pub y_mode_cdf: [[u16; INTRA_MODES + 1]; BLOCK_SIZE_GROUPS],
-  pub uv_mode_cdf: [[[u16; UV_INTRA_MODES + 1]; INTRA_MODES]; 2],
-  pub cfl_sign_cdf: [u16; CFL_JOINT_SIGNS + 1],
-  pub cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE + 1]; CFL_ALPHA_CONTEXTS],
-  pub newmv_cdf: [[u16; 2 + 1]; NEWMV_MODE_CONTEXTS],
-  pub zeromv_cdf: [[u16; 2 + 1]; GLOBALMV_MODE_CONTEXTS],
-  pub refmv_cdf: [[u16; 2 + 1]; REFMV_MODE_CONTEXTS],
-  pub intra_tx_cdf: [[[[u16; TX_TYPES + 1]; INTRA_MODES];
-    TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
-  pub inter_tx_cdf:
-    [[[u16; TX_TYPES + 1]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
-  pub tx_size_cdf:
-    [[[u16; MAX_TX_DEPTH + 1 + 1]; TX_SIZE_CONTEXTS]; MAX_TX_CATS],
-  pub txfm_partition_cdf: [[u16; 2 + 1]; TXFM_PARTITION_CONTEXTS],
-  pub skip_cdfs: [[u16; 3]; SKIP_CONTEXTS],
-  pub intra_inter_cdfs: [[u16; 3]; INTRA_INTER_CONTEXTS],
-  pub angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1 + 1]; DIRECTIONAL_MODES],
-  pub filter_intra_cdfs: [[u16; 3]; BlockSize::BLOCK_SIZES_ALL],
+  pub partition_cdf: [[u16; EXT_PARTITION_TYPES]; PARTITION_CONTEXTS],
+  pub kf_y_cdf: [[[u16; INTRA_MODES]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
+  pub y_mode_cdf: [[u16; INTRA_MODES]; BLOCK_SIZE_GROUPS],
+  pub uv_mode_cdf: [[[u16; UV_INTRA_MODES]; INTRA_MODES]; 2],
+  pub cfl_sign_cdf: [u16; CFL_JOINT_SIGNS],
+  pub cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE]; CFL_ALPHA_CONTEXTS],
+  pub newmv_cdf: [[u16; 2]; NEWMV_MODE_CONTEXTS],
+  pub zeromv_cdf: [[u16; 2]; GLOBALMV_MODE_CONTEXTS],
+  pub refmv_cdf: [[u16; 2]; REFMV_MODE_CONTEXTS],
+  pub intra_tx_cdf:
+    [[[[u16; TX_TYPES]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
+  pub inter_tx_cdf: [[[u16; TX_TYPES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
+  pub tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1]; TX_SIZE_CONTEXTS]; MAX_TX_CATS],
+  pub txfm_partition_cdf: [[u16; 2]; TXFM_PARTITION_CONTEXTS],
+  pub skip_cdfs: [[u16; 2]; SKIP_CONTEXTS],
+  pub intra_inter_cdfs: [[u16; 2]; INTRA_INTER_CONTEXTS],
+  pub angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1]; DIRECTIONAL_MODES],
+  pub filter_intra_cdfs: [[u16; 2]; BlockSize::BLOCK_SIZES_ALL],
   pub palette_y_mode_cdfs:
-    [[[u16; 3]; PALETTE_Y_MODE_CONTEXTS]; PALETTE_BSIZE_CTXS],
-  pub palette_uv_mode_cdfs: [[u16; 3]; PALETTE_UV_MODE_CONTEXTS],
-  pub comp_mode_cdf: [[u16; 3]; COMP_INTER_CONTEXTS],
-  pub comp_ref_type_cdf: [[u16; 3]; COMP_REF_TYPE_CONTEXTS],
-  pub comp_ref_cdf: [[[u16; 3]; FWD_REFS - 1]; REF_CONTEXTS],
-  pub comp_bwd_ref_cdf: [[[u16; 3]; BWD_REFS - 1]; REF_CONTEXTS],
-  pub single_ref_cdfs: [[[u16; 2 + 1]; SINGLE_REFS - 1]; REF_CONTEXTS],
-  pub drl_cdfs: [[u16; 2 + 1]; DRL_MODE_CONTEXTS],
-  pub compound_mode_cdf:
-    [[u16; INTER_COMPOUND_MODES + 1]; INTER_MODE_CONTEXTS],
+    [[[u16; 2]; PALETTE_Y_MODE_CONTEXTS]; PALETTE_BSIZE_CTXS],
+  pub palette_uv_mode_cdfs: [[u16; 2]; PALETTE_UV_MODE_CONTEXTS],
+  pub comp_mode_cdf: [[u16; 2]; COMP_INTER_CONTEXTS],
+  pub comp_ref_type_cdf: [[u16; 2]; COMP_REF_TYPE_CONTEXTS],
+  pub comp_ref_cdf: [[[u16; 2]; FWD_REFS - 1]; REF_CONTEXTS],
+  pub comp_bwd_ref_cdf: [[[u16; 2]; BWD_REFS - 1]; REF_CONTEXTS],
+  pub single_ref_cdfs: [[[u16; 2]; SINGLE_REFS - 1]; REF_CONTEXTS],
+  pub drl_cdfs: [[u16; 2]; DRL_MODE_CONTEXTS],
+  pub compound_mode_cdf: [[u16; INTER_COMPOUND_MODES]; INTER_MODE_CONTEXTS],
   pub nmv_context: NMVContext,
-  pub deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1 + 1]; FRAME_LF_COUNT],
-  pub deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1 + 1],
-  pub spatial_segmentation_cdfs: [[u16; 8 + 1]; 3],
-  pub lrf_switchable_cdf: [u16; 3 + 1],
-  pub lrf_sgrproj_cdf: [u16; 2 + 1],
-  pub lrf_wiener_cdf: [u16; 2 + 1],
+  pub deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1]; FRAME_LF_COUNT],
+  pub deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1],
+  pub spatial_segmentation_cdfs: [[u16; 8]; 3],
+  pub lrf_switchable_cdf: [u16; 3],
+  pub lrf_sgrproj_cdf: [u16; 2],
+  pub lrf_wiener_cdf: [u16; 2],
 
   // lv_map
-  pub txb_skip_cdf: [[[u16; 3]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
-  pub dc_sign_cdf: [[[u16; 3]; DC_SIGN_CONTEXTS]; PLANE_TYPES],
+  pub txb_skip_cdf: [[[u16; 2]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
+  pub dc_sign_cdf: [[[u16; 2]; DC_SIGN_CONTEXTS]; PLANE_TYPES],
   pub eob_extra_cdf:
-    [[[[u16; 3]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
+    [[[[u16; 2]; EOB_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
 
-  pub eob_flag_cdf16: [[[u16; 5 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf32: [[[u16; 6 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf64: [[[u16; 7 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf128: [[[u16; 8 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf256: [[[u16; 9 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf512: [[[u16; 10 + 1]; 2]; PLANE_TYPES],
-  pub eob_flag_cdf1024: [[[u16; 11 + 1]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf16: [[[u16; 5]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf32: [[[u16; 6]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf64: [[[u16; 7]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf128: [[[u16; 8]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf256: [[[u16; 9]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf512: [[[u16; 10]; 2]; PLANE_TYPES],
+  pub eob_flag_cdf1024: [[[u16; 11]; 2]; PLANE_TYPES],
 
   pub coeff_base_eob_cdf:
-    [[[[u16; 3 + 1]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES],
+    [[[[u16; 3]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub coeff_base_cdf:
-    [[[[u16; 4 + 1]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
-  pub coeff_br_cdf: [[[[u16; BR_CDF_SIZE + 1]; LEVEL_CONTEXTS]; PLANE_TYPES];
-    TxSize::TX_SIZES],
+    [[[[u16; 4]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
+  pub coeff_br_cdf:
+    [[[[u16; BR_CDF_SIZE]; LEVEL_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
 
   padding: [u16; CDF_LEN_MAX],
 }
@@ -143,9 +140,10 @@ impl CDFContext {
 
   pub fn reset_counts(&mut self) {
     macro_rules! reset_1d {
-      ($field:expr) => {{
-        $field[$field.len() - 2] = 0;
-      }};
+      ($field:expr) => {
+        let r = $field.last_mut().unwrap();
+        *r = 0;
+      };
     }
     macro_rules! reset_2d {
       ($field:expr) => {
@@ -603,7 +601,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
     (if element > 0 { cdf[element - 1] } else { 32768 })
-      - (if element + 2 < cdf.len() { cdf[element] } else { 0 })
+      - (if element + 1 < cdf.len() { cdf[element] } else { 0 })
   }
 
   pub fn checkpoint(&self) -> ContextWriterCheckpoint {

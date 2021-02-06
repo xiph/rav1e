@@ -485,19 +485,19 @@ impl<'a> BlockContext<'a> {
 
 #[derive(Clone, Copy)]
 pub struct NMVComponent {
-  pub classes_cdf: [u16; MV_CLASSES + 1],
-  pub class0_fp_cdf: [[u16; MV_FP_SIZE + 1]; CLASS0_SIZE],
-  pub fp_cdf: [u16; MV_FP_SIZE + 1],
-  pub sign_cdf: [u16; 2 + 1],
-  pub class0_hp_cdf: [u16; 2 + 1],
-  pub hp_cdf: [u16; 2 + 1],
-  pub class0_cdf: [u16; CLASS0_SIZE + 1],
-  pub bits_cdf: [[u16; 2 + 1]; MV_OFFSET_BITS],
+  pub classes_cdf: [u16; MV_CLASSES],
+  pub class0_fp_cdf: [[u16; MV_FP_SIZE]; CLASS0_SIZE],
+  pub fp_cdf: [u16; MV_FP_SIZE],
+  pub sign_cdf: [u16; 2],
+  pub class0_hp_cdf: [u16; 2],
+  pub hp_cdf: [u16; 2],
+  pub class0_cdf: [u16; CLASS0_SIZE],
+  pub bits_cdf: [[u16; 2]; MV_OFFSET_BITS],
 }
 
 #[derive(Clone, Copy)]
 pub struct NMVContext {
-  pub joints_cdf: [u16; MV_JOINTS + 1],
+  pub joints_cdf: [u16; MV_JOINTS],
   pub comps: [NMVComponent; 2],
 }
 
@@ -625,7 +625,7 @@ impl IndexMut<PlaneBlockOffset> for FrameBlocks {
 impl<'a> ContextWriter<'a> {
   pub fn get_cdf_intra_mode_kf(
     &self, bo: TileBlockOffset,
-  ) -> &[u16; INTRA_MODES + 1] {
+  ) -> &[u16; INTRA_MODES] {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
     let above_mode = if bo.0.y > 0 {
@@ -664,9 +664,7 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, mode as u32, cdf);
   }
 
-  pub fn get_cdf_intra_mode(
-    &self, bsize: BlockSize,
-  ) -> &[u16; INTRA_MODES + 1] {
+  pub fn get_cdf_intra_mode(&self, bsize: BlockSize) -> &[u16; INTRA_MODES] {
     &self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize]
   }
 
@@ -689,7 +687,7 @@ impl<'a> ContextWriter<'a> {
     if bs.cfl_allowed() {
       symbol_with_update!(self, w, uv_mode as u32, cdf);
     } else {
-      symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..UV_INTRA_MODES]);
+      symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..INTRA_MODES]);
     }
   }
 

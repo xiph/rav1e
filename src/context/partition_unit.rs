@@ -307,7 +307,7 @@ impl<'a> ContextWriter<'a> {
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
     let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
-      &mut self.fc.partition_cdf[ctx][..=PARTITION_TYPES]
+      &mut self.fc.partition_cdf[ctx][..PARTITION_TYPES]
     } else {
       &mut self.fc.partition_cdf[ctx]
     };

@@ -10,11 +10,11 @@
 // TODO: Nice to have (although I wasn't able to find a way to do it yet in rust): zero-fill arrays that are
 // shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
 macro_rules! cdf {
-    ($($x:expr),+) =>  {[$(32768 - $x),+, 0, 0]}
+    ($($x:expr),+) =>  {[$(32768 - $x),+, 0]}
 }
 
 macro_rules! cdf_size {
   ($x:expr) => {
-    $x + 1
+    $x
   };
 }

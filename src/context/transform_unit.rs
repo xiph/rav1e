@@ -543,7 +543,7 @@ impl<'a> ContextWriter<'a> {
           w,
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.inter_tx_cdf[tx_set_index as usize]
-            [square_tx_size as usize][..=num_tx_set[tx_set as usize]]
+            [square_tx_size as usize][..num_tx_set[tx_set as usize]]
         );
       } else {
         let intra_dir = y_mode;
@@ -557,7 +557,7 @@ impl<'a> ContextWriter<'a> {
           av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
           &mut self.fc.intra_tx_cdf[tx_set_index as usize]
             [square_tx_size as usize][intra_dir as usize]
-            [..=num_tx_set[tx_set as usize]]
+            [..num_tx_set[tx_set as usize]]
         );
       }
     }
@@ -651,7 +651,7 @@ impl<'a> ContextWriter<'a> {
       self,
       w,
       depth as u32,
-      &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx][..=max_depths + 1]
+      &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx][..=max_depths]
     );
   }
 
