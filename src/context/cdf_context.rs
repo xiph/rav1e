@@ -143,10 +143,9 @@ impl CDFContext {
 
   pub fn reset_counts(&mut self) {
     macro_rules! reset_1d {
-      ($field:expr) => {
-        let r = $field.last_mut().unwrap();
-        *r = 0;
-      };
+      ($field:expr) => {{
+        $field[$field.len() - 2] = 0;
+      }};
     }
     macro_rules! reset_2d {
       ($field:expr) => {
@@ -171,21 +170,21 @@ impl CDFContext {
     }
 
     for i in 0..4 {
-      self.partition_cdf[i][4] = 0;
+      self.partition_cdf[i][3] = 0;
     }
     for i in 4..16 {
-      self.partition_cdf[i][10] = 0;
+      self.partition_cdf[i][9] = 0;
     }
     for i in 16..20 {
-      self.partition_cdf[i][8] = 0;
+      self.partition_cdf[i][7] = 0;
     }
 
     reset_3d!(self.kf_y_cdf);
     reset_2d!(self.y_mode_cdf);
 
     for i in 0..INTRA_MODES {
-      self.uv_mode_cdf[0][i][UV_INTRA_MODES - 1] = 0;
-      self.uv_mode_cdf[1][i][UV_INTRA_MODES] = 0;
+      self.uv_mode_cdf[0][i][UV_INTRA_MODES - 2] = 0;
+      self.uv_mode_cdf[1][i][UV_INTRA_MODES - 1] = 0;
     }
     reset_1d!(self.cfl_sign_cdf);
     reset_2d!(self.cfl_alpha_cdf);
@@ -195,23 +194,23 @@ impl CDFContext {
 
     for i in 0..TX_SIZE_SQR_CONTEXTS {
       for j in 0..INTRA_MODES {
-        self.intra_tx_cdf[1][i][j][7] = 0;
-        self.intra_tx_cdf[2][i][j][5] = 0;
+        self.intra_tx_cdf[1][i][j][6] = 0;
+        self.intra_tx_cdf[2][i][j][4] = 0;
       }
-      self.inter_tx_cdf[1][i][16] = 0;
-      self.inter_tx_cdf[2][i][12] = 0;
-      self.inter_tx_cdf[3][i][2] = 0;
+      self.inter_tx_cdf[1][i][15] = 0;
+      self.inter_tx_cdf[2][i][11] = 0;
+      self.inter_tx_cdf[3][i][1] = 0;
     }
 
     for i in 0..TX_SIZE_CONTEXTS {
-      self.tx_size_cdf[0][i][MAX_TX_DEPTH] = 0;
+      self.tx_size_cdf[0][i][MAX_TX_DEPTH - 1] = 0;
     }
     reset_2d!(self.tx_size_cdf[1]);
     reset_2d!(self.tx_size_cdf[2]);
     reset_2d!(self.tx_size_cdf[3]);
 
     for i in 0..TXFM_PARTITION_CONTEXTS {
-      self.txfm_partition_cdf[i][2] = 0;
+      self.txfm_partition_cdf[i][1] = 0;
     }
 
     reset_2d!(self.skip_cdfs);
@@ -603,7 +602,8 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
-    (if element > 0 { cdf[element - 1] } else { 32768 }) - cdf[element]
+    (if element > 0 { cdf[element - 1] } else { 32768 })
+      - (if element + 2 < cdf.len() { cdf[element] } else { 0 })
   }
 
   pub fn checkpoint(&self) -> ContextWriterCheckpoint {

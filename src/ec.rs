@@ -519,14 +519,15 @@ where
   /// `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be exactly 32768. There should be at most 16 values.
+  ///       must be greater than 32704. There should be at most 16 values.
+  ///       The lower 6 bits of the last value hold the count.
   #[inline(always)]
   fn symbol(&mut self, s: u32, cdf: &[u16]) {
-    debug_assert!(cdf[cdf.len() - 1] == 0);
+    debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));
     let nms = cdf.len() - s as usize;
     let fl = if s > 0 { cdf[s as usize - 1] } else { 32768 };
     let fh = cdf[s as usize];
-    debug_assert!(fh <= fl);
+    debug_assert!((fh >> EC_PROB_SHIFT) <= (fl >> EC_PROB_SHIFT));
     debug_assert!(fl <= 32768);
     self.store(fl, fh, nms as u16);
   }
@@ -537,7 +538,8 @@ where
   /// `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be exactly 32768. There should be at most 16 values.
+  ///       must be greater 32704. There should be at most 16 values.
+  ///       The lower 6 bits of the last value hold the count.
   fn symbol_with_update(
     &mut self, s: u32, cdf: &mut [u16],
     log: &mut crate::context::CDFContextLog,
@@ -560,10 +562,11 @@ where
   /// `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be exactly 32768. There should be at most 16 values.
+  ///       must be greater than 32704. There should be at most 16 values.
+  ///       The lower 6 bits of the last value hold the count.
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32 {
     let mut bits = 0;
-    debug_assert!(cdf[cdf.len() - 1] == 0);
+    debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));
     debug_assert!(32768 <= self.rng);
     let rng = (self.rng >> 8) as u32;
     let fh = cdf[s as usize] as u32 >> EC_PROB_SHIFT;
@@ -888,8 +891,8 @@ pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
   pub fn update_cdf(cdf: &mut [u16], val: u32) {
     let nsymbs = cdf.len() - 1;
-    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs] >> 4) as usize;
-    cdf[nsymbs] += 1 - (cdf[nsymbs] >> 5);
+    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs - 1] >> 4) as usize;
+    cdf[nsymbs - 1] += 1 - (cdf[nsymbs - 1] >> 5);
 
     // Single loop (faster)
     for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
