@@ -14,9 +14,8 @@ use crate::transform::*;
 
 const TOKEN_CDF_Q_CTXS: usize = 4;
 
-pub static av1_default_dc_sign_cdfs: [[[[u16; cdf_size!(2)];
-  DC_SIGN_CONTEXTS]; PLANE_TYPES];
-  TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_dc_sign_cdfs: [[[[u16; 2]; DC_SIGN_CONTEXTS];
+  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
   [
     [cdf!(128 * 125), cdf!(128 * 102), cdf!(128 * 147)],
     [cdf!(128 * 119), cdf!(128 * 101), cdf!(128 * 135)],
@@ -35,8 +34,7 @@ pub static av1_default_dc_sign_cdfs: [[[[u16; cdf_size!(2)];
   ],
 ];
 
-pub static av1_default_txb_skip_cdfs: [[[[u16; cdf_size!(2)];
-  TXB_SKIP_CONTEXTS];
+pub static av1_default_txb_skip_cdfs: [[[[u16; 2]; TXB_SKIP_CONTEXTS];
   TxSize::TX_SIZES]; TOKEN_CDF_Q_CTXS] = [
   [
     [
@@ -348,9 +346,9 @@ pub static av1_default_txb_skip_cdfs: [[[[u16; cdf_size!(2)];
   ],
 ];
 
-pub static av1_default_eob_extra_cdfs: [[[[[u16; cdf_size!(2)];
-  EOB_COEF_CONTEXTS]; PLANE_TYPES];
-  TxSize::TX_SIZES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_extra_cdfs: [[[[[u16; 2]; EOB_COEF_CONTEXTS];
+  PLANE_TYPES]; TxSize::TX_SIZES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       [
@@ -841,8 +839,8 @@ pub static av1_default_eob_extra_cdfs: [[[[[u16; cdf_size!(2)];
   ],
 ];
 
-pub static av1_default_eob_multi16_cdfs: [[[[u16; cdf_size!(5)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi16_cdfs: [[[[u16; 5]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [cdf!(840, 1039, 1980, 4895), cdf!(370, 671, 1883, 4471)],
     [cdf!(3247, 4950, 9688, 14563), cdf!(1904, 3354, 7763, 14647)],
@@ -861,8 +859,8 @@ pub static av1_default_eob_multi16_cdfs: [[[[u16; cdf_size!(5)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi32_cdfs: [[[[u16; cdf_size!(6)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi32_cdfs: [[[[u16; 6]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [cdf!(400, 520, 977, 2102, 6542), cdf!(210, 405, 1315, 3326, 7537)],
     [
@@ -896,8 +894,8 @@ pub static av1_default_eob_multi32_cdfs: [[[[u16; cdf_size!(6)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi64_cdfs: [[[[u16; cdf_size!(7)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi64_cdfs: [[[[u16; 7]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       cdf!(329, 498, 1101, 1784, 3265, 7758),
@@ -940,8 +938,8 @@ pub static av1_default_eob_multi64_cdfs: [[[[u16; cdf_size!(7)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi128_cdfs: [[[[u16; cdf_size!(8)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi128_cdfs: [[[[u16; 8]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       cdf!(219, 482, 1140, 2091, 3680, 6028, 12586),
@@ -984,8 +982,8 @@ pub static av1_default_eob_multi128_cdfs: [[[[u16; cdf_size!(8)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi256_cdfs: [[[[u16; cdf_size!(9)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi256_cdfs: [[[[u16; 9]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       cdf!(310, 584, 1887, 3589, 6168, 8611, 11352, 15652),
@@ -1028,8 +1026,8 @@ pub static av1_default_eob_multi256_cdfs: [[[[u16; cdf_size!(9)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi512_cdfs: [[[[u16; cdf_size!(10)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi512_cdfs: [[[[u16; 10]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       cdf!(641, 983, 3707, 5430, 10234, 14958, 18788, 23412, 26061),
@@ -1072,8 +1070,8 @@ pub static av1_default_eob_multi512_cdfs: [[[[u16; cdf_size!(10)]; 2];
   ],
 ];
 
-pub static av1_default_eob_multi1024_cdfs: [[[[u16; cdf_size!(11)]; 2];
-  PLANE_TYPES]; TOKEN_CDF_Q_CTXS] = [
+pub static av1_default_eob_multi1024_cdfs: [[[[u16; 11]; 2]; PLANE_TYPES];
+  TOKEN_CDF_Q_CTXS] = [
   [
     [
       cdf!(393, 421, 751, 1623, 3160, 6352, 13345, 18047, 22571, 25830),
@@ -1120,7 +1118,7 @@ pub static av1_default_eob_multi1024_cdfs: [[[[u16; cdf_size!(11)]; 2];
   ],
 ];
 
-pub static av1_default_coeff_lps_multi_cdfs: [[[[[u16; cdf_size!(BR_CDF_SIZE)];
+pub static av1_default_coeff_lps_multi_cdfs: [[[[[u16; BR_CDF_SIZE];
   LEVEL_CONTEXTS];
   PLANE_TYPES];
   TxSize::TX_SIZES];
@@ -2095,8 +2093,7 @@ pub static av1_default_coeff_lps_multi_cdfs: [[[[[u16; cdf_size!(BR_CDF_SIZE)];
   ],
 ];
 
-pub static av1_default_coeff_base_multi_cdfs: [[[[[u16;
-  cdf_size!(NUM_BASE_LEVELS + 2)];
+pub static av1_default_coeff_base_multi_cdfs: [[[[[u16; NUM_BASE_LEVELS + 2];
   SIG_COEF_CONTEXTS];
   PLANE_TYPES];
   TxSize::TX_SIZES];
@@ -3912,7 +3909,7 @@ pub static av1_default_coeff_base_multi_cdfs: [[[[[u16;
 ];
 
 pub static av1_default_coeff_base_eob_multi_cdfs: [[[[[u16;
-  cdf_size!(NUM_BASE_LEVELS + 1)];
+  NUM_BASE_LEVELS + 1];
   SIG_COEF_CONTEXTS_EOB];
   PLANE_TYPES];
   TxSize::TX_SIZES];

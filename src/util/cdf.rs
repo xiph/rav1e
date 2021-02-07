@@ -12,9 +12,3 @@
 macro_rules! cdf {
     ($($x:expr),+) =>  {[$(32768 - $x),+, 0]}
 }
-
-macro_rules! cdf_size {
-  ($x:expr) => {
-    $x
-  };
-}

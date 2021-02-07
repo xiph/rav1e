@@ -37,8 +37,8 @@ pub const TXFM_PARTITION_CONTEXTS: usize = 21; // (TxSize::TX_SIZES - TxSize::TX
 
 // LUTS ---------------------
 
-pub static default_kf_y_mode_cdf: [[[u16; cdf_size!(INTRA_MODES)];
-  KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS] = [
+pub static default_kf_y_mode_cdf: [[[u16; INTRA_MODES]; KF_MODE_CONTEXTS];
+  KF_MODE_CONTEXTS] = [
   [
     cdf!(
       15588, 17027, 19338, 20218, 20682, 21110, 21825, 23244, 24189, 28165,
@@ -151,8 +151,7 @@ pub static default_kf_y_mode_cdf: [[[u16; cdf_size!(INTRA_MODES)];
   ],
 ];
 
-pub static default_angle_delta_cdf: [[u16;
-  cdf_size!(2 * MAX_ANGLE_DELTA + 1)];
+pub static default_angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1];
   DIRECTIONAL_MODES] = [
   cdf!(2180, 5032, 7567, 22776, 26989, 30217),
   cdf!(2301, 5608, 8801, 23487, 26974, 30330),
@@ -164,8 +163,7 @@ pub static default_angle_delta_cdf: [[u16;
   cdf!(3605, 10428, 12459, 17676, 21244, 30655),
 ];
 
-pub static default_if_y_mode_cdf: [[u16; cdf_size!(INTRA_MODES)];
-  BLOCK_SIZE_GROUPS] = [
+pub static default_if_y_mode_cdf: [[u16; INTRA_MODES]; BLOCK_SIZE_GROUPS] = [
   cdf!(
     22801, 23489, 24293, 24756, 25601, 26123, 26606, 27418, 27945, 29228,
     29685, 30349
@@ -184,8 +182,7 @@ pub static default_if_y_mode_cdf: [[u16; cdf_size!(INTRA_MODES)];
   ),
 ];
 
-pub static default_uv_mode_cdf: [[[u16; cdf_size!(UV_INTRA_MODES)];
-  INTRA_MODES]; 2] = [
+pub static default_uv_mode_cdf: [[[u16; UV_INTRA_MODES]; INTRA_MODES]; 2] = [
   [
     cdf!(
       22631, 24152, 25378, 25661, 25986, 26520, 27055, 27923, 28244, 30059,
@@ -296,7 +293,7 @@ pub static default_uv_mode_cdf: [[[u16; cdf_size!(UV_INTRA_MODES)];
   ],
 ];
 
-pub const default_partition_cdf: [[u16; cdf_size!(EXT_PARTITION_TYPES)];
+pub const default_partition_cdf: [[u16; EXT_PARTITION_TYPES];
   PARTITION_CONTEXTS] = [
   cdf!(19132, 25510, 30392, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX),
   cdf!(13928, 19855, 28540, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX, CDFMAX),
@@ -320,10 +317,9 @@ pub const default_partition_cdf: [[u16; cdf_size!(EXT_PARTITION_TYPES)];
   cdf!(711, 966, 1172, 32448, 32538, 32617, 32664, CDFMAX, CDFMAX),
 ];
 
-pub static default_intra_ext_tx_cdf: [[[[u16; cdf_size!(TX_TYPES)];
-  INTRA_MODES]; TX_SIZE_SQR_CONTEXTS];
-  TX_SETS_INTRA] = [
-  [[[0; cdf_size!(TX_TYPES)]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
+pub static default_intra_ext_tx_cdf: [[[[u16; TX_TYPES]; INTRA_MODES];
+  TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA] = [
+  [[[0; TX_TYPES]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
   [
     [
       cdf!(
@@ -762,9 +758,9 @@ pub static default_intra_ext_tx_cdf: [[[[u16; cdf_size!(TX_TYPES)];
   ],
 ];
 
-pub static default_inter_ext_tx_cdf: [[[u16; cdf_size!(TX_TYPES)];
+pub static default_inter_ext_tx_cdf: [[[u16; TX_TYPES];
   TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER] = [
-  [[0; cdf_size!(TX_TYPES)]; TX_SIZE_SQR_CONTEXTS],
+  [[0; TX_TYPES]; TX_SIZE_SQR_CONTEXTS],
   [
     cdf!(
       4458, 5560, 7695, 9709, 13330, 14789, 17537, 20266, 21504, 22848, 23934,
@@ -821,10 +817,10 @@ pub static default_inter_ext_tx_cdf: [[[u16; cdf_size!(TX_TYPES)];
   ],
 ];
 
-pub static default_cfl_sign_cdf: [u16; cdf_size!(CFL_JOINT_SIGNS)] =
+pub static default_cfl_sign_cdf: [u16; CFL_JOINT_SIGNS] =
   cdf!(1418, 2123, 13340, 18405, 26972, 28343, 32294);
 
-pub static default_cfl_alpha_cdf: [[u16; cdf_size!(CFL_ALPHABET_SIZE)];
+pub static default_cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE];
   CFL_ALPHA_CONTEXTS] = [
   cdf!(
     7637, 20719, 31401, 32481, 32657, 32688, 32692, 32696, 32700, 32704,
@@ -857,8 +853,7 @@ const SWITCHABLE_FILTERS: usize = 3;
 const SWITCHABLE_FILTER_CONTEXTS: usize = (SWITCHABLE_FILTERS + 1) * 4;
 
 #[allow(unused)]
-pub static default_switchable_interp_cdf: [[u16;
-  cdf_size!(SWITCHABLE_FILTERS)];
+pub static default_switchable_interp_cdf: [[u16; SWITCHABLE_FILTERS];
   SWITCHABLE_FILTER_CONTEXTS] = [
   cdf!(31935, 32720),
   cdf!(5568, 32719),
@@ -878,20 +873,20 @@ pub static default_switchable_interp_cdf: [[u16;
   cdf!(14969, 21398),
 ];
 
-pub static default_newmv_cdf: [[u16; cdf_size!(2)]; NEWMV_MODE_CONTEXTS] = [
+pub static default_newmv_cdf: [[u16; 2]; NEWMV_MODE_CONTEXTS] = [
   cdf!(24035),
   cdf!(16630),
   cdf!(15339),
   cdf!(8386),
   cdf!(12222),
   cdf!(4676),
-  [0; cdf_size!(2)],
+  [0; 2],
 ];
 
-pub static default_zeromv_cdf: [[u16; cdf_size!(2)]; GLOBALMV_MODE_CONTEXTS] =
+pub static default_zeromv_cdf: [[u16; 2]; GLOBALMV_MODE_CONTEXTS] =
   [cdf!(2175), cdf!(1054)];
 
-pub static default_refmv_cdf: [[u16; cdf_size!(2)]; REFMV_MODE_CONTEXTS] = [
+pub static default_refmv_cdf: [[u16; 2]; REFMV_MODE_CONTEXTS] = [
   cdf!(23974),
   cdf!(24188),
   cdf!(17848),
@@ -900,11 +895,10 @@ pub static default_refmv_cdf: [[u16; cdf_size!(2)]; REFMV_MODE_CONTEXTS] = [
   cdf!(19923),
 ];
 
-pub static default_drl_cdf: [[u16; cdf_size!(2)]; DRL_MODE_CONTEXTS] =
+pub static default_drl_cdf: [[u16; 2]; DRL_MODE_CONTEXTS] =
   [cdf!(13104), cdf!(24560), cdf!(18945)];
 
-pub static default_compound_mode_cdf: [[u16;
-  cdf_size!(INTER_COMPOUND_MODES)];
+pub static default_compound_mode_cdf: [[u16; INTER_COMPOUND_MODES];
   INTER_MODE_CONTEXTS] = [
   cdf!(7760, 13823, 15808, 17641, 19156, 20666, 26891),
   cdf!(10730, 19452, 21145, 22749, 24039, 25131, 28724),
@@ -917,12 +911,12 @@ pub static default_compound_mode_cdf: [[u16;
 ];
 
 #[allow(unused)]
-pub static default_interintra_cdf: [[u16; cdf_size!(2)]; BLOCK_SIZE_GROUPS] =
+pub static default_interintra_cdf: [[u16; 2]; BLOCK_SIZE_GROUPS] =
   [cdf!(16384), cdf!(26887), cdf!(27597), cdf!(30237)];
 
 #[allow(unused)]
 pub static default_interintra_mode_cdf: [[u16;
-  cdf_size!(InterIntraMode::INTERINTRA_MODES as usize)];
+  InterIntraMode::INTERINTRA_MODES as usize];
   BLOCK_SIZE_GROUPS as usize] = [
   cdf!(8192, 16384, 24576),
   cdf!(1875, 11082, 27332),
@@ -931,7 +925,7 @@ pub static default_interintra_mode_cdf: [[u16;
 ];
 
 #[allow(unused)]
-pub static default_wedge_interintra_cdf: [[u16; cdf_size!(2)];
+pub static default_wedge_interintra_cdf: [[u16; 2];
   BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384),
   cdf!(16384),
@@ -959,7 +953,7 @@ pub static default_wedge_interintra_cdf: [[u16; cdf_size!(2)];
 
 #[allow(unused)]
 pub static default_compound_type_cdf: [[u16;
-  cdf_size!(CompoundType::COMPOUND_TYPES as usize - 1)];
+  CompoundType::COMPOUND_TYPES as usize - 1];
   BlockSize::BLOCK_SIZES_ALL as usize] = [
   cdf!(16384),
   cdf!(16384),
@@ -986,8 +980,7 @@ pub static default_compound_type_cdf: [[u16;
 ];
 
 #[allow(unused)]
-pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)];
-  BlockSize::BLOCK_SIZES_ALL] = [
+pub static default_wedge_idx_cdf: [[u16; 16]; BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(
     2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384, 18432, 20480, 22528,
     24576, 26624, 28672, 30720
@@ -1080,7 +1073,7 @@ pub static default_wedge_idx_cdf: [[u16; cdf_size!(16)];
 
 #[allow(unused)]
 pub static default_motion_mode_cdf: [[u16;
-  cdf_size!(MotionMode::MOTION_MODES as usize)];
+  MotionMode::MOTION_MODES as usize];
   BlockSize::BLOCK_SIZES_ALL as usize] = [
   cdf!(10923, 21845),
   cdf!(10923, 21845),
@@ -1107,8 +1100,7 @@ pub static default_motion_mode_cdf: [[u16;
 ];
 
 #[allow(unused)]
-pub static default_obmc_cdf: [[u16; cdf_size!(2)];
-  BlockSize::BLOCK_SIZES_ALL] = [
+pub static default_obmc_cdf: [[u16; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384),
   cdf!(16384),
   cdf!(16384),
@@ -1133,26 +1125,24 @@ pub static default_obmc_cdf: [[u16; cdf_size!(2)];
   cdf!(26879),
 ];
 
-pub static default_intra_inter_cdf: [[u16; cdf_size!(2)];
-  INTRA_INTER_CONTEXTS] = [cdf!(806), cdf!(16662), cdf!(20186), cdf!(26538)];
+pub static default_intra_inter_cdf: [[u16; 2]; INTRA_INTER_CONTEXTS] =
+  [cdf!(806), cdf!(16662), cdf!(20186), cdf!(26538)];
 
-pub static default_comp_mode_cdf: [[u16; cdf_size!(2)]; COMP_INTER_CONTEXTS] =
+pub static default_comp_mode_cdf: [[u16; 2]; COMP_INTER_CONTEXTS] =
   [cdf!(26828), cdf!(24035), cdf!(12031), cdf!(10640), cdf!(2901)];
 
-pub static default_comp_ref_type_cdf: [[u16; cdf_size!(2)];
-  COMP_REF_TYPE_CONTEXTS] =
+pub static default_comp_ref_type_cdf: [[u16; 2]; COMP_REF_TYPE_CONTEXTS] =
   [cdf!(1198), cdf!(2070), cdf!(9166), cdf!(7499), cdf!(22475)];
 
 #[allow(unused)]
-pub static default_uni_comp_ref_cdf: [[[u16; cdf_size!(2)];
-  UNIDIR_COMP_REFS - 1];
+pub static default_uni_comp_ref_cdf: [[[u16; 2]; UNIDIR_COMP_REFS - 1];
   UNI_COMP_REF_CONTEXTS] = [
   [cdf!(5284), cdf!(3865), cdf!(3128)],
   [cdf!(23152), cdf!(14173), cdf!(15270)],
   [cdf!(31774), cdf!(25120), cdf!(26710)],
 ];
 
-pub static default_single_ref_cdf: [[[u16; cdf_size!(2)]; SINGLE_REFS - 1];
+pub static default_single_ref_cdf: [[[u16; 2]; SINGLE_REFS - 1];
   REF_CONTEXTS] = [
   [cdf!(4897), cdf!(1555), cdf!(4236), cdf!(8650), cdf!(904), cdf!(1444)],
   [
@@ -1173,15 +1163,13 @@ pub static default_single_ref_cdf: [[[u16; cdf_size!(2)]; SINGLE_REFS - 1];
   ],
 ];
 
-pub static default_comp_ref_cdf: [[[u16; cdf_size!(2)]; FWD_REFS - 1];
-  REF_CONTEXTS] = [
+pub static default_comp_ref_cdf: [[[u16; 2]; FWD_REFS - 1]; REF_CONTEXTS] = [
   [cdf!(4946), cdf!(9468), cdf!(1503)],
   [cdf!(19891), cdf!(22441), cdf!(15160)],
   [cdf!(30731), cdf!(31059), cdf!(27544)],
 ];
 
-pub static default_comp_bwdref_cdf: [[[u16; cdf_size!(2)]; BWD_REFS - 1];
-  REF_CONTEXTS] = [
+pub static default_comp_bwdref_cdf: [[[u16; 2]; BWD_REFS - 1]; REF_CONTEXTS] = [
   [cdf!(2235), cdf!(1423)],
   [cdf!(17182), cdf!(15175)],
   [cdf!(30606), cdf!(30489)],
@@ -1189,7 +1177,7 @@ pub static default_comp_bwdref_cdf: [[[u16; cdf_size!(2)]; BWD_REFS - 1];
 
 #[allow(unused)]
 pub static default_palette_y_size_cdf: [[u16;
-  cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
+  PaletteSize::PALETTE_SIZES as usize];
   PALETTE_BSIZE_CTXS] = [
   cdf!(7952, 13000, 18149, 21478, 25527, 29241),
   cdf!(7139, 11421, 16195, 19544, 23666, 28073),
@@ -1202,7 +1190,7 @@ pub static default_palette_y_size_cdf: [[u16;
 
 #[allow(unused)]
 pub static default_palette_uv_size_cdf: [[u16;
-  cdf_size!(PaletteSize::PALETTE_SIZES as usize)];
+  PaletteSize::PALETTE_SIZES as usize];
   PALETTE_BSIZE_CTXS] = [
   cdf!(8713, 19979, 27128, 29609, 31331, 32272),
   cdf!(5839, 15573, 23581, 26947, 29848, 31700),
@@ -1213,8 +1201,7 @@ pub static default_palette_uv_size_cdf: [[u16;
   cdf!(1269, 5435, 10433, 18963, 21700, 25865),
 ];
 
-pub static default_palette_y_mode_cdfs: [[[u16; cdf_size!(2)];
-  PALETTE_Y_MODE_CONTEXTS];
+pub static default_palette_y_mode_cdfs: [[[u16; 2]; PALETTE_Y_MODE_CONTEXTS];
   PALETTE_BSIZE_CTXS] = [
   [cdf!(31676), cdf!(3419), cdf!(1261)],
   [cdf!(31912), cdf!(2859), cdf!(980)],
@@ -1225,12 +1212,12 @@ pub static default_palette_y_mode_cdfs: [[[u16; cdf_size!(2)];
   [cdf!(32450), cdf!(7946), cdf!(129)],
 ];
 
-pub static default_palette_uv_mode_cdfs: [[u16; cdf_size!(2)];
-  PALETTE_UV_MODE_CONTEXTS] = [cdf!(32461), cdf!(21488)];
+pub static default_palette_uv_mode_cdfs: [[u16; 2]; PALETTE_UV_MODE_CONTEXTS] =
+  [cdf!(32461), cdf!(21488)];
 
 #[allow(unused)]
 pub static default_palette_y_color_index_cdf: [[[u16;
-  cdf_size!(PaletteColor::PALETTE_COLORS as usize)];
+  PaletteColor::PALETTE_COLORS as usize];
   PALETTE_COLOR_INDEX_CONTEXTS];
   PaletteSize::PALETTE_SIZES as usize] = [
   [
@@ -1286,7 +1273,7 @@ pub static default_palette_y_color_index_cdf: [[[u16;
 
 #[allow(unused)]
 pub static default_palette_uv_color_index_cdf: [[[u16;
-  cdf_size!(PaletteColor::PALETTE_COLORS as usize)];
+  PaletteColor::PALETTE_COLORS as usize];
   PALETTE_COLOR_INDEX_CONTEXTS];
   PaletteSize::PALETTE_SIZES as usize] = [
   [
@@ -1340,8 +1327,7 @@ pub static default_palette_uv_color_index_cdf: [[[u16;
   ],
 ];
 
-pub static default_txfm_partition_cdf: [[u16; cdf_size!(2)];
-  TXFM_PARTITION_CONTEXTS] = [
+pub static default_txfm_partition_cdf: [[u16; 2]; TXFM_PARTITION_CONTEXTS] = [
   cdf!(28581),
   cdf!(23846),
   cdf!(20847),
@@ -1365,21 +1351,19 @@ pub static default_txfm_partition_cdf: [[u16; cdf_size!(2)];
   cdf!(16088),
 ];
 
-pub static default_skip_cdfs: [[u16; cdf_size!(2)]; SKIP_CONTEXTS] =
+pub static default_skip_cdfs: [[u16; 2]; SKIP_CONTEXTS] =
   [cdf!(31671), cdf!(16515), cdf!(4576)];
 
 #[allow(unused)]
-pub static default_skip_mode_cdfs: [[u16; cdf_size!(2)]; SKIP_MODE_CONTEXTS] =
+pub static default_skip_mode_cdfs: [[u16; 2]; SKIP_MODE_CONTEXTS] =
   [cdf!(32621), cdf!(20708), cdf!(8127)];
 
 #[allow(unused)]
-pub static default_compound_idx_cdfs: [[u16; cdf_size!(2)];
-  COMP_INDEX_CONTEXTS] =
+pub static default_compound_idx_cdfs: [[u16; 2]; COMP_INDEX_CONTEXTS] =
   [cdf!(18244), cdf!(12865), cdf!(7053), cdf!(13259), cdf!(9334), cdf!(4644)];
 
 #[allow(unused)]
-pub static default_comp_group_idx_cdfs: [[u16; cdf_size!(2)];
-  COMP_GROUP_IDX_CONTEXTS] = [
+pub static default_comp_group_idx_cdfs: [[u16; 2]; COMP_GROUP_IDX_CONTEXTS] = [
   cdf!(26607),
   cdf!(22891),
   cdf!(18840),
@@ -1389,15 +1373,14 @@ pub static default_comp_group_idx_cdfs: [[u16; cdf_size!(2)];
 ];
 
 #[allow(unused)]
-pub static default_intrabc_cdf: [u16; cdf_size!(2)] = cdf!(30531);
+pub static default_intrabc_cdf: [u16; 2] = cdf!(30531);
 
 #[allow(unused)]
 pub static default_filter_intra_mode_cdf: [u16;
-  cdf_size!(FilterIntraMode::FILTER_INTRA_MODES as usize)] =
+  FilterIntraMode::FILTER_INTRA_MODES as usize] =
   cdf!(8949, 12776, 17211, 29558);
 
-pub static default_filter_intra_cdfs: [[u16; cdf_size!(2)];
-  BlockSize::BLOCK_SIZES_ALL] = [
+pub static default_filter_intra_cdfs: [[u16; 2]; BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(4621),
   cdf!(6743),
   cdf!(5893),
@@ -1422,18 +1405,18 @@ pub static default_filter_intra_cdfs: [[u16; cdf_size!(2)];
   cdf!(16384),
 ];
 
-pub static default_switchable_restore_cdf: [u16;
-  cdf_size!(RESTORE_SWITCHABLE_TYPES)] = cdf!(9413, 22581);
+pub static default_switchable_restore_cdf: [u16; RESTORE_SWITCHABLE_TYPES] =
+  cdf!(9413, 22581);
 
-pub static default_wiener_restore_cdf: [u16; cdf_size!(2)] = cdf!(11570);
+pub static default_wiener_restore_cdf: [u16; 2] = cdf!(11570);
 
-pub static default_sgrproj_restore_cdf: [u16; cdf_size!(2)] = cdf!(16855);
+pub static default_sgrproj_restore_cdf: [u16; 2] = cdf!(16855);
 
 #[allow(unused)]
-pub static default_delta_q_cdf: [u16; cdf_size!(DELTA_Q_PROBS + 1)] =
+pub static default_delta_q_cdf: [u16; DELTA_Q_PROBS + 1] =
   cdf!(28160, 32120, 32677);
 
-pub static default_delta_lf_multi_cdf: [[u16; cdf_size!(DELTA_LF_PROBS + 1)];
+pub static default_delta_lf_multi_cdf: [[u16; DELTA_LF_PROBS + 1];
   FRAME_LF_COUNT] = [
   cdf!(28160, 32120, 32677),
   cdf!(28160, 32120, 32677),
@@ -1441,29 +1424,27 @@ pub static default_delta_lf_multi_cdf: [[u16; cdf_size!(DELTA_LF_PROBS + 1)];
   cdf!(28160, 32120, 32677),
 ];
 
-pub static default_delta_lf_cdf: [u16; cdf_size!(DELTA_LF_PROBS + 1)] =
+pub static default_delta_lf_cdf: [u16; DELTA_LF_PROBS + 1] =
   cdf!(28160, 32120, 32677);
 
 // FIXME(someone) need real defaults here
 #[allow(unused)]
-pub static default_seg_tree_cdf: [u16; cdf_size!(MAX_SEGMENTS)] =
+pub static default_seg_tree_cdf: [u16; MAX_SEGMENTS] =
   cdf!(4096, 8192, 12288, 16384, 20480, 24576, 28672);
 
 #[allow(unused)]
-pub static default_segment_pred_cdf: [[u16; cdf_size!(2)];
-  SEG_TEMPORAL_PRED_CTXS] =
+pub static default_segment_pred_cdf: [[u16; 2]; SEG_TEMPORAL_PRED_CTXS] =
   [cdf!(128 * 128), cdf!(128 * 128), cdf!(128 * 128)];
 
-pub static default_spatial_pred_seg_tree_cdf: [[u16;
-  cdf_size!(MAX_SEGMENTS)];
+pub static default_spatial_pred_seg_tree_cdf: [[u16; MAX_SEGMENTS];
   SPATIAL_PREDICTION_PROBS] = [
   cdf!(5622, 7893, 16093, 18233, 27809, 28373, 32533),
   cdf!(14274, 18230, 22557, 24935, 29980, 30851, 32344),
   cdf!(27527, 28487, 28723, 28890, 32397, 32647, 32679),
 ];
 
-pub static default_tx_size_cdf: [[[u16; cdf_size!(MAX_TX_DEPTH + 1)];
-  TX_SIZE_CONTEXTS]; MAX_TX_CATS] = [
+pub static default_tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1]; TX_SIZE_CONTEXTS];
+  MAX_TX_CATS] = [
   [cdf!(19968, CDFMAX), cdf!(19968, CDFMAX), cdf!(24320, CDFMAX)],
   [cdf!(12272, 30172), cdf!(12272, 30172), cdf!(18677, 30848)],
   [cdf!(12986, 15180), cdf!(12986, 15180), cdf!(24302, 25602)],
