@@ -2180,16 +2180,7 @@ L(\type\()_8tap_filter_4):
         lsl             \d_strd, \d_strd, #1
         lsl             \s_strd, \s_strd, #1
 
-        ld1             {v28.8b, v29.8b},  [\src], \s_strd
-        uxtl            v28.8h,  v28.8b
-        uxtl            v29.8h,  v29.8b
-        mul             v24.8h,  v28.8h,  v0.h[0]
-.irpc i, 1234567
-        ext             v26.16b, v28.16b, v29.16b, #(2*\i)
-        mla             v24.8h,  v26.8h,  v0.h[\i]
-.endr
-        srshr           v16.8h,  v24.8h, #2
-
+        bl              L(\type\()_8tap_filter_8_first)
         bl              L(\type\()_8tap_filter_8)
         mov             v17.16b, v24.16b
         mov             v18.16b, v25.16b
@@ -2267,16 +2258,7 @@ L(\type\()_8tap_filter_4):
         lsl             \d_strd, \d_strd, #1
         lsl             \s_strd, \s_strd, #1
 
-        ld1             {v28.8b, v29.8b},  [\src], \s_strd
-        uxtl            v28.8h,  v28.8b
-        uxtl            v29.8h,  v29.8b
-        mul             v24.8h,  v28.8h,  v0.h[0]
-.irpc i, 1234567
-        ext             v26.16b, v28.16b, v29.16b, #(2*\i)
-        mla             v24.8h,  v26.8h,  v0.h[\i]
-.endr
-        srshr           v16.8h,  v24.8h, #2
-
+        bl              L(\type\()_8tap_filter_8_first)
         bl              L(\type\()_8tap_filter_8)
         mov             v17.16b, v24.16b
         mov             v18.16b, v25.16b
@@ -2362,6 +2344,28 @@ L(\type\()_8tap_filter_4):
         b               168b
 0:
         br              x15
+
+L(\type\()_8tap_filter_8_first):
+        ld1             {v28.8b, v29.8b},  [\src], \s_strd
+        uxtl            v28.8h,  v28.8b
+        uxtl            v29.8h,  v29.8b
+        mul             v16.8h,  v28.8h,  v0.h[0]
+        ext             v24.16b, v28.16b, v29.16b, #(2*1)
+        ext             v25.16b, v28.16b, v29.16b, #(2*2)
+        ext             v26.16b, v28.16b, v29.16b, #(2*3)
+        ext             v27.16b, v28.16b, v29.16b, #(2*4)
+        mla             v16.8h,  v24.8h,  v0.h[1]
+        mla             v16.8h,  v25.8h,  v0.h[2]
+        mla             v16.8h,  v26.8h,  v0.h[3]
+        mla             v16.8h,  v27.8h,  v0.h[4]
+        ext             v24.16b, v28.16b, v29.16b, #(2*5)
+        ext             v25.16b, v28.16b, v29.16b, #(2*6)
+        ext             v26.16b, v28.16b, v29.16b, #(2*7)
+        mla             v16.8h,  v24.8h,  v0.h[5]
+        mla             v16.8h,  v25.8h,  v0.h[6]
+        mla             v16.8h,  v26.8h,  v0.h[7]
+        srshr           v16.8h,  v16.8h,  #2
+        ret
 
 L(\type\()_8tap_filter_8):
         ld1             {v28.8b, v29.8b},  [\sr2], \s_strd
