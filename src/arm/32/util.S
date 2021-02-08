@@ -158,6 +158,14 @@
         vtrn.8          \r2,  \r3
 .endm
 
+.macro transpose_4x4s q0, q1, q2, q3, r0, r1, r2, r3, r4, r5, r6, r7
+        vswp            \r1,  \r4 // vtrn.64 \q0, \q2
+        vswp            \r3,  \r6 // vtrn.64 \q1, \q3
+
+        vtrn.32         \q0,  \q1
+        vtrn.32         \q2,  \q3
+.endm
+
 .macro transpose_4x4h q0, q1, r0, r1, r2, r3
         vtrn.32         \q0,  \q1
 
