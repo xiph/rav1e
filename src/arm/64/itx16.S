@@ -402,12 +402,12 @@ endfunc
 
 .macro idct_4 r0, r1, r2, r3
         mul_mla         v6,  \r1, \r3, v0.s[3], v0.s[2]
-        mul_mls         v4,  \r1, \r3, v0.s[2], v0.s[3]
         mul_mla         v2,  \r0, \r2, v0.s[0], v0.s[0]
+        mul_mls         v4,  \r1, \r3, v0.s[2], v0.s[3]
         mul_mls         v3,  \r0, \r2, v0.s[0], v0.s[0]
         srshr           v6.4s,  v6.4s,  #12
-        srshr           v7.4s,  v4.4s,  #12
         srshr           v2.4s,  v2.4s,  #12
+        srshr           v7.4s,  v4.4s,  #12
         srshr           v3.4s,  v3.4s,  #12
         sqadd           \r0\().4s,  v2.4s,   v6.4s
         sqsub           \r3\().4s,  v2.4s,   v6.4s
