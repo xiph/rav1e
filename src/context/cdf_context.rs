@@ -679,10 +679,12 @@ impl<'a> ContextWriter<'a> {
       - (if element + 1 < cdf.len() { cdf[element] } else { 0 })
   }
 
-  pub fn checkpoint(&self) -> ContextWriterCheckpoint {
+  pub fn checkpoint(
+    &self, tile_bo: &TileBlockOffset, chroma_sampling: ChromaSampling,
+  ) -> ContextWriterCheckpoint {
     ContextWriterCheckpoint {
       fc: self.fc_log.checkpoint(),
-      bc: self.bc.checkpoint(),
+      bc: self.bc.checkpoint(tile_bo, chroma_sampling),
     }
   }
 

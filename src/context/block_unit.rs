@@ -211,13 +211,15 @@ impl Default for Block {
 
 #[derive(Clone)]
 pub struct BlockContextCheckpoint {
+  x: usize,
+  chroma_sampling: ChromaSampling,
   cdef_coded: bool,
-  above_partition_context: [u8; PARTITION_CONTEXT_MAX_WIDTH],
+  above_partition_context: [u8; MIB_SIZE >> 1],
   // left context is also at 8x8 granularity
   left_partition_context: [u8; MIB_SIZE >> 1],
-  above_tx_context: [u8; COEFF_CONTEXT_MAX_WIDTH],
+  above_tx_context: [u8; MIB_SIZE],
   left_tx_context: [u8; MIB_SIZE],
-  above_coeff_context: [[u8; COEFF_CONTEXT_MAX_WIDTH]; MAX_PLANES],
+  above_coeff_context: [[u8; MIB_SIZE]; MAX_PLANES],
   left_coeff_context: [[u8; MIB_SIZE]; MAX_PLANES],
 }
 
@@ -256,25 +258,64 @@ impl<'a> BlockContext<'a> {
     }
   }
 
-  pub const fn checkpoint(&self) -> BlockContextCheckpoint {
-    BlockContextCheckpoint {
+  pub fn checkpoint(
+    &self, tile_bo: &TileBlockOffset, chroma_sampling: ChromaSampling,
+  ) -> BlockContextCheckpoint {
+    let x = tile_bo.0.x & (COEFF_CONTEXT_MAX_WIDTH - MIB_SIZE);
+    let mut checkpoint = BlockContextCheckpoint {
+      x,
+      chroma_sampling,
       cdef_coded: self.cdef_coded,
-      above_partition_context: self.above_partition_context,
+      above_partition_context: [0; MIB_SIZE >> 1],
       left_partition_context: self.left_partition_context,
-      above_tx_context: self.above_tx_context,
+      above_tx_context: [0; MIB_SIZE],
       left_tx_context: self.left_tx_context,
-      above_coeff_context: self.above_coeff_context,
+      above_coeff_context: [[0; MIB_SIZE]; MAX_PLANES],
       left_coeff_context: self.left_coeff_context,
+    };
+    checkpoint.above_partition_context.copy_from_slice(
+      &self.above_partition_context[(x >> 1)..][..(MIB_SIZE >> 1)],
+    );
+    checkpoint
+      .above_tx_context
+      .copy_from_slice(&self.above_tx_context[x..][..MIB_SIZE]);
+    let num_planes =
+      if chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+    for (p, (dst, src)) in checkpoint
+      .above_coeff_context
+      .iter_mut()
+      .zip(self.above_coeff_context.iter())
+      .enumerate()
+      .take(num_planes)
+    {
+      let xdec = (p > 0 && chroma_sampling != ChromaSampling::Cs444) as usize;
+      dst.copy_from_slice(&src[(x >> xdec)..][..MIB_SIZE]);
     }
+    checkpoint
   }
 
   pub fn rollback(&mut self, checkpoint: &BlockContextCheckpoint) {
+    let x = checkpoint.x & (COEFF_CONTEXT_MAX_WIDTH - MIB_SIZE);
     self.cdef_coded = checkpoint.cdef_coded;
-    self.above_partition_context = checkpoint.above_partition_context;
+    self.above_partition_context[(x >> 1)..][..(MIB_SIZE >> 1)]
+      .copy_from_slice(&checkpoint.above_partition_context);
     self.left_partition_context = checkpoint.left_partition_context;
-    self.above_tx_context = checkpoint.above_tx_context;
+    self.above_tx_context[x..][..MIB_SIZE]
+      .copy_from_slice(&checkpoint.above_tx_context);
     self.left_tx_context = checkpoint.left_tx_context;
-    self.above_coeff_context = checkpoint.above_coeff_context;
+    let num_planes =
+      if checkpoint.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+    for (p, (dst, src)) in self
+      .above_coeff_context
+      .iter_mut()
+      .zip(checkpoint.above_coeff_context.iter())
+      .enumerate()
+      .take(num_planes)
+    {
+      let xdec = (p > 0 && checkpoint.chroma_sampling != ChromaSampling::Cs444)
+        as usize;
+      dst[(x >> xdec)..][..MIB_SIZE].copy_from_slice(src);
+    }
     self.left_coeff_context = checkpoint.left_coeff_context;
   }
 

@@ -2388,7 +2388,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
-  let cw_checkpoint = cw.checkpoint();
+  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
 

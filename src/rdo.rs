@@ -928,7 +928,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   inter_cfg: &InterConfig,
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let cw_checkpoint = cw.checkpoint();
+  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
 
   let rdo_type = if fi.use_tx_domain_rate {
     RDOType::TxDistEstRate
@@ -976,7 +976,7 @@ pub fn rdo_mode_decision<T: Pixel>(
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
-    let cw_checkpoint = cw.checkpoint();
+    let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
     let wr: &mut dyn Writer = &mut WriterCounter::new();
     let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
 
@@ -1650,7 +1650,8 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   if cw_checkpoint.is_none() {
     // Only run the first call
     // Prevents creating multiple checkpoints for own version of cw
-    *cw_checkpoint = Some(cw.checkpoint());
+    *cw_checkpoint =
+      Some(cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling));
   }
 
   let rdo_type = if fi.use_tx_domain_distortion {
@@ -1879,7 +1880,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
-  let cw_checkpoint = cw.checkpoint();
+  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
