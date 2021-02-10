@@ -706,7 +706,7 @@ def_fn_4x4 identity, flipadst
         vrshrn_8h       \r14, \r15, q4,   q5,   #12         // t7a
         vmull_vmlal_8h  q2,   q3,   \r10, \r11, \r6,  \r7,  d1[3], d1[2] // -> t6a
         vrshrn_8h       \r6,  \r7,  q6,   q7,   #12         // t5a
-        vrshrn_8h       \r10, \r11, q2,   q3,   #12         // taa
+        vrshrn_8h       \r10, \r11, q2,   q3,   #12         // t6a
 
         vqadd.s16       q2,   \q1,  \q3 // t4
         vqsub.s16       \q1,  \q1,  \q3 // t5a
@@ -1173,7 +1173,7 @@ function inv_dct_4h_x16_neon, export=1
 
         vrshrn.i32      d6,  q3,  #12  // t11
         vrshrn.i32      d7,  q4,  #12  // t12
-        vmull_vmlal     q4,  d25, d21, d0[0], d0[0]  // -> t10a
+        vmull_vmlal     q4,  d25, d21, d0[0], d0[0]  // -> t13a
         vrshrn.i32      d4,  q2,  #12  // t10a
         vrshrn.i32      d5,  q4,  #12  // t13a
 

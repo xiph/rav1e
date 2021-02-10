@@ -602,7 +602,7 @@ def_fn_4x4 identity, flipadst
         srshr           \r1\().4s, v2.4s,  #12           // t4a
         srshr           \r7\().4s, v4.4s,  #12           // t7a
         srshr           \r3\().4s, v6.4s,  #12           // t5a
-        srshr           \r5\().4s, v7.4s,  #12           // taa
+        srshr           \r5\().4s, v7.4s,  #12           // t6a
 
         sqadd           v2.4s,     \r1\().4s,  \r3\().4s // t4
         sqsub           \r1\().4s, \r1\().4s,  \r3\().4s // t5a
@@ -1007,7 +1007,7 @@ function inv_dct_4s_x16_neon
 
         srshr           v4.4s,  v4.4s,  #12   // t11
         srshr           v5.4s,  v6.4s,  #12   // t12
-        mul_mla         v6,  v25, v21, v0.s[0], v0.s[0] // -> t10a
+        mul_mla         v6,  v25, v21, v0.s[0], v0.s[0] // -> t13a
         srshr           v2.4s,  v2.4s,  #12   // t10a
         srshr           v3.4s,  v6.4s,  #12   // t13a
 

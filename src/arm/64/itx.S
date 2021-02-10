@@ -718,7 +718,7 @@ def_fn_4x4 identity, flipadst
         rshrn_sz        \r7, v4,  v5,  #12, \sz                   // t7a
         smull_smlal     v2,  v3,  \r5, \r3, v0.h[7], v0.h[6], \sz // -> t6a
         rshrn_sz        \r3, v6,  v7,  #12, \sz                   // t5a
-        rshrn_sz        \r5, v2,  v3,  #12, \sz                   // taa
+        rshrn_sz        \r5, v2,  v3,  #12, \sz                   // t6a
 
         sqadd           v2\sz,   \r1\sz,  \r3\sz // t4
         sqsub           \r1\sz,  \r1\sz,  \r3\sz // t5a
@@ -1085,7 +1085,7 @@ def_fns_48 8, 4
 
         rshrn_sz        v4,  v4,  v5,  #12, \sz   // t11
         rshrn_sz        v5,  v6,  v7,  #12, \sz   // t12
-        smull_smlal     v6,  v7,  v25, v21, v0.h[0], v0.h[0], \sz // -> t10a
+        smull_smlal     v6,  v7,  v25, v21, v0.h[0], v0.h[0], \sz // -> t13a
         rshrn_sz        v2,  v2,  v3,  #12, \sz   // t10a
         rshrn_sz        v3,  v6,  v7,  #12, \sz   // t13a
 
