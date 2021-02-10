@@ -32,7 +32,7 @@ pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
 }
 
 pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
-  let &table = match bit_depth {
+  let table = match bit_depth {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
     12 => &dc_qlookup_12_Q3,
@@ -43,7 +43,7 @@ pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
 }
 
 pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
-  let &table = match bit_depth {
+  let table = match bit_depth {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
     12 => &ac_qlookup_12_Q3,
