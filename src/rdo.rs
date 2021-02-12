@@ -1770,7 +1770,7 @@ fn rdo_partition_none<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   inter_cfg: &InterConfig,
   child_modes: &mut ArrayVec<[PartitionParameters; 4]>,
-) -> Option<f64> {
+) -> f64 {
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
 
   let mode = rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
@@ -1778,7 +1778,7 @@ fn rdo_partition_none<T: Pixel>(
 
   child_modes.push(mode);
 
-  Some(cost)
+  cost
 }
 
 // VERTICAL, HORIZONTAL or simple SPLIT
@@ -1892,15 +1892,17 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
     let mut child_modes = ArrayVec::<[_; 4]>::new();
 
     let cost = match partition {
-      PARTITION_NONE if bsize <= BlockSize::BLOCK_64X64 => rdo_partition_none(
-        fi,
-        ts,
-        cw,
-        bsize,
-        tile_bo,
-        inter_cfg,
-        &mut child_modes,
-      ),
+      PARTITION_NONE if bsize <= BlockSize::BLOCK_64X64 => {
+        Some(rdo_partition_none(
+          fi,
+          ts,
+          cw,
+          bsize,
+          tile_bo,
+          inter_cfg,
+          &mut child_modes,
+        ))
+      }
       PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
         rdo_partition_simple(
           fi,

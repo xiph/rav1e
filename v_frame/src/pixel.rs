@@ -114,6 +114,7 @@ pub trait Pixel:
 
   /// Converts stride in pixels to stride in bytes.
   #[inline]
+  #[allow(clippy::wrong_self_convention)]
   fn to_asm_stride(in_stride: usize) -> isize {
     (in_stride * size_of::<Self>()) as isize
   }
