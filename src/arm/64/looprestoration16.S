@@ -53,7 +53,11 @@ endconst
 //                                      const int bitdepth_max);
 function wiener_filter7_16bpc_neon, export=1
         ldr             w8,  [sp]
+#ifdef __APPLE__
+        ldr             w9,  [sp, #4]
+#else
         ldr             w9,  [sp, #8]
+#endif
         stp             x29, x30, [sp, #-32]!
         stp             d8,  d9,  [sp, #16]
         mov             x29, sp
@@ -596,10 +600,15 @@ endfunc
 //                                      const pixel *lpf, const ptrdiff_t lpf_stride,
 //                                      const int w, int h,
 //                                      const int16_t filter[2][8],
-//                                      const enum LrEdgeFlags edges);
+//                                      const enum LrEdgeFlags edges,
+//                                      const int bitdepth_max);
 function wiener_filter5_16bpc_neon, export=1
         ldr             w8,  [sp]
+#ifdef __APPLE__
+        ldr             w9,  [sp, #4]
+#else
         ldr             w9,  [sp, #8]
+#endif
         stp             x29, x30, [sp, #-32]!
         stp             d8,  d9,  [sp, #16]
         mov             x29, sp
