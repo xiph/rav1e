@@ -808,10 +808,14 @@ impl<T: Pixel> ContextInner<T> {
   ) {
     let plane_org = &frame.planes[0];
     let plane_ref = &reference_frame.planes[0];
+    let lookahead_intra_costs_lines =
+      fi.lookahead_intra_costs.chunks_exact(fi.w_in_imp_b);
+    let block_importances_lines =
+      fi.block_importances.chunks_exact(fi.w_in_imp_b);
 
     (0..fi.h_in_imp_b)
-      .zip(fi.lookahead_intra_costs.chunks_exact(fi.w_in_imp_b))
-      .zip(fi.block_importances.chunks_exact(fi.w_in_imp_b))
+      .zip(lookahead_intra_costs_lines)
+      .zip(block_importances_lines)
       .for_each(|((y, lookahead_intra_costs), block_importances)| {
         (0..fi.w_in_imp_b).for_each(|x| {
           let mv = me_stats[y * 2][x * 2].mv;
