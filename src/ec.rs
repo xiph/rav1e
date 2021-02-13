@@ -524,9 +524,12 @@ where
   #[inline(always)]
   fn symbol(&mut self, s: u32, cdf: &[u16]) {
     debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));
-    let nms = cdf.len() - s as usize;
-    let fl = if s > 0 { cdf[s as usize - 1] } else { 32768 };
-    let fh = cdf[s as usize];
+    let s = s as usize;
+    debug_assert!(s < cdf.len());
+    // The above is stricter than the following overflow check: s <= cdf.len()
+    let nms = cdf.len() - s;
+    let fl = if s > 0 { unsafe { *cdf.get_unchecked(s - 1) } } else { 32768 };
+    let fh = unsafe { *cdf.get_unchecked(s) };
     debug_assert!((fh >> EC_PROB_SHIFT) <= (fl >> EC_PROB_SHIFT));
     debug_assert!(fl <= 32768);
     self.store(fl, fh, nms as u16);
@@ -888,13 +891,21 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
 
 pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
+  #[inline]
   pub fn update_cdf(cdf: &mut [u16], val: u32) {
+    use crate::context::CDF_LEN_MAX;
     let nsymbs = cdf.len();
-    let rate = 3 + (nsymbs >> 1).min(2) + (cdf[nsymbs - 1] >> 4) as usize;
-    cdf[nsymbs - 1] += 1 - (cdf[nsymbs - 1] >> 5);
-
+    let mut rate = 3 + (nsymbs >> 1).min(2);
+    if let Some(count) = cdf.last_mut() {
+      rate += (*count >> 4) as usize;
+      *count += 1 - (*count >> 5);
+    } else {
+      return;
+    }
     // Single loop (faster)
-    for (i, v) in cdf[..nsymbs - 1].iter_mut().enumerate() {
+    for (i, v) in
+      cdf[..nsymbs - 1].iter_mut().enumerate().take(CDF_LEN_MAX - 1)
+    {
       if i as u32 >= val {
         *v -= *v >> rate;
       } else {

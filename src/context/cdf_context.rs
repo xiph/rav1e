@@ -9,7 +9,7 @@
 
 use super::*;
 
-const CDF_LEN_MAX: usize = 16;
+pub const CDF_LEN_MAX: usize = 16;
 
 #[derive(Clone)]
 pub struct CDFContextCheckpoint {
@@ -555,12 +555,16 @@ trait CDFContextLogOps: CDFContextLogSize {
       // may be deferred until writes are issued. Benchmarks indicate this is
       // faster than first testing capacity and possibly reallocating.
       let len = log.data.len();
-      debug_assert!(len + Self::CDF_LEN_MAX < log.data.capacity());
+      let new_len = len + Self::CDF_LEN_MAX + 1;
+      let capacity = log.data.capacity();
+      debug_assert!(new_len <= capacity);
       let dst = log.data.get_unchecked_mut(len) as *mut u16;
       dst.copy_from_nonoverlapping(cdf.as_ptr(), Self::CDF_LEN_MAX);
       *dst.add(Self::CDF_LEN_MAX) = offset as u16;
-      log.data.set_len(len + Self::CDF_LEN_MAX + 1);
-      log.data.reserve(Self::CDF_LEN_MAX + 1);
+      log.data.set_len(new_len);
+      if Self::CDF_LEN_MAX + 1 > capacity.wrapping_sub(new_len) {
+        log.data.reserve(Self::CDF_LEN_MAX + 1);
+      }
     }
   }
   #[inline(always)]
