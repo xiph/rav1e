@@ -217,9 +217,7 @@ impl CDFContext {
     reset_2d!(self.tx_size_8x8_cdf);
     reset_3d!(self.tx_size_cdf);
 
-    for i in 0..TXFM_PARTITION_CONTEXTS {
-      self.txfm_partition_cdf[i][1] = 0;
-    }
+    reset_2d!(self.txfm_partition_cdf);
 
     reset_2d!(self.skip_cdfs);
     reset_2d!(self.intra_inter_cdfs);
