@@ -538,13 +538,17 @@ impl<'a> ContextWriter<'a> {
       assert!(av1_tx_used[tx_set as usize][tx_type as usize] != 0);
 
       if is_inter {
-        symbol_with_update!(
-          self,
-          w,
-          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
-          &mut self.fc.inter_tx_cdf[tx_set_index as usize]
-            [square_tx_size as usize][..num_tx_set[tx_set as usize]]
-        );
+        let s = av1_tx_ind[tx_set as usize][tx_type as usize] as u32;
+        if tx_set_index == 1 {
+          let cdf = &mut self.fc.inter_tx_1_cdf[square_tx_size as usize];
+          symbol_with_update!(self, w, s, cdf);
+        } else if tx_set_index == 2 {
+          let cdf = &mut self.fc.inter_tx_2_cdf[square_tx_size as usize];
+          symbol_with_update!(self, w, s, cdf);
+        } else {
+          let cdf = &mut self.fc.inter_tx_3_cdf[square_tx_size as usize];
+          symbol_with_update!(self, w, s, cdf);
+        }
       } else {
         let intra_dir = y_mode;
         // TODO: Once use_filter_intra is enabled,
