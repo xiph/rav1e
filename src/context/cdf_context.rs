@@ -59,11 +59,13 @@ pub struct CDFContext {
   pub partition_w8_cdf: [[u16; 4]; PARTITION_TYPES],
 
   pub eob_flag_cdf16: [[[u16; 5]; 2]; PLANE_TYPES],
+  pub intra_tx_2_cdf: [[[u16; 5]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
 
   pub eob_flag_cdf32: [[[u16; 6]; 2]; PLANE_TYPES],
 
   pub angle_delta_cdf: [[u16; 2 * MAX_ANGLE_DELTA + 1]; DIRECTIONAL_MODES],
   pub eob_flag_cdf64: [[[u16; 7]; 2]; PLANE_TYPES],
+  pub intra_tx_1_cdf: [[[u16; 7]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS],
 
   pub cfl_sign_cdf: [u16; CFL_JOINT_SIGNS],
   pub compound_mode_cdf: [[u16; INTER_COMPOUND_MODES]; INTER_MODE_CONTEXTS],
@@ -88,8 +90,6 @@ pub struct CDFContext {
 
   pub cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE]; CFL_ALPHA_CONTEXTS],
   pub inter_tx_1_cdf: [[u16; TX_TYPES]; TX_SIZE_SQR_CONTEXTS],
-  pub intra_tx_cdf:
-    [[[[u16; TX_TYPES]; INTRA_MODES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTRA],
 
   pub nmv_context: NMVContext,
 }
@@ -115,7 +115,8 @@ impl CDFContext {
       newmv_cdf: default_newmv_cdf,
       zeromv_cdf: default_zeromv_cdf,
       refmv_cdf: default_refmv_cdf,
-      intra_tx_cdf: default_intra_ext_tx_cdf,
+      intra_tx_2_cdf: default_intra_tx_2_cdf,
+      intra_tx_1_cdf: default_intra_tx_1_cdf,
       inter_tx_3_cdf: default_inter_tx_3_cdf,
       inter_tx_2_cdf: default_inter_tx_2_cdf,
       inter_tx_1_cdf: default_inter_tx_1_cdf,
@@ -206,12 +207,8 @@ impl CDFContext {
     reset_2d!(self.zeromv_cdf);
     reset_2d!(self.refmv_cdf);
 
-    for i in 0..TX_SIZE_SQR_CONTEXTS {
-      for j in 0..INTRA_MODES {
-        self.intra_tx_cdf[1][i][j][6] = 0;
-        self.intra_tx_cdf[2][i][j][4] = 0;
-      }
-    }
+    reset_3d!(self.intra_tx_2_cdf);
+    reset_3d!(self.intra_tx_1_cdf);
 
     reset_2d!(self.inter_tx_3_cdf);
     reset_2d!(self.inter_tx_2_cdf);
@@ -313,10 +310,14 @@ impl CDFContext {
     let zeromv_cdf_end = zeromv_cdf_start + size_of_val(&self.zeromv_cdf);
     let refmv_cdf_start = self.refmv_cdf.first().unwrap().as_ptr() as usize;
     let refmv_cdf_end = refmv_cdf_start + size_of_val(&self.refmv_cdf);
-    let intra_tx_cdf_start =
-      self.intra_tx_cdf.first().unwrap().as_ptr() as usize;
-    let intra_tx_cdf_end =
-      intra_tx_cdf_start + size_of_val(&self.intra_tx_cdf);
+    let intra_tx_2_cdf_start =
+      self.intra_tx_2_cdf.first().unwrap().as_ptr() as usize;
+    let intra_tx_2_cdf_end =
+      intra_tx_2_cdf_start + size_of_val(&self.intra_tx_2_cdf);
+    let intra_tx_1_cdf_start =
+      self.intra_tx_1_cdf.first().unwrap().as_ptr() as usize;
+    let intra_tx_1_cdf_end =
+      intra_tx_1_cdf_start + size_of_val(&self.intra_tx_1_cdf);
     let inter_tx_3_cdf_start =
       self.inter_tx_3_cdf.first().unwrap().as_ptr() as usize;
     let inter_tx_3_cdf_end =
@@ -476,7 +477,8 @@ impl CDFContext {
       ("newmv_cdf", newmv_cdf_start, newmv_cdf_end),
       ("zeromv_cdf", zeromv_cdf_start, zeromv_cdf_end),
       ("refmv_cdf", refmv_cdf_start, refmv_cdf_end),
-      ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
+      ("intra_tx_2_cdf", intra_tx_2_cdf_start, intra_tx_2_cdf_end),
+      ("intra_tx_1_cdf", intra_tx_1_cdf_start, intra_tx_1_cdf_end),
       ("inter_tx_3_cdf", inter_tx_3_cdf_start, inter_tx_3_cdf_end),
       ("inter_tx_2_cdf", inter_tx_2_cdf_start, inter_tx_2_cdf_end),
       ("inter_tx_1_cdf", inter_tx_1_cdf_start, inter_tx_1_cdf_end),

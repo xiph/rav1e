@@ -555,14 +555,16 @@ impl<'a> ContextWriter<'a> {
         // intra_dir =
         // fimode_to_intradir[mbmi->filter_intra_mode_info.filter_intra_mode];
 
-        symbol_with_update!(
-          self,
-          w,
-          av1_tx_ind[tx_set as usize][tx_type as usize] as u32,
-          &mut self.fc.intra_tx_cdf[tx_set_index as usize]
-            [square_tx_size as usize][intra_dir as usize]
-            [..num_tx_set[tx_set as usize]]
-        );
+        let s = av1_tx_ind[tx_set as usize][tx_type as usize] as u32;
+        if tx_set_index == 1 {
+          let cdf = &mut self.fc.intra_tx_1_cdf[square_tx_size as usize]
+            [intra_dir as usize];
+          symbol_with_update!(self, w, s, cdf);
+        } else {
+          let cdf = &mut self.fc.intra_tx_2_cdf[square_tx_size as usize]
+            [intra_dir as usize];
+          symbol_with_update!(self, w, s, cdf);
+        }
       }
     }
   }
