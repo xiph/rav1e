@@ -1443,10 +1443,10 @@ function inv_txfm_add_4x16_neon
         st1             {v2.4s}, [x6], x11
 .endr
         blr             x4
-        rshrn           v28.4h,  v16.4s,  #1
-        rshrn           v29.4h,  v17.4s,  #1
-        rshrn           v30.4h,  v18.4s,  #1
-        rshrn           v31.4h,  v19.4s,  #1
+        sqrshrn         v28.4h,  v16.4s,  #1
+        sqrshrn         v29.4h,  v17.4s,  #1
+        sqrshrn         v30.4h,  v18.4s,  #1
+        sqrshrn         v31.4h,  v19.4s,  #1
         transpose_4x4h  v28, v29, v30, v31, v4,  v5,  v6,  v7
 
         b               2f
@@ -1466,10 +1466,10 @@ function inv_txfm_add_4x16_neon
         st1             {v2.4s}, [x6], x11
 .endr
         blr             x4
-        rshrn           v24.4h,  v16.4s,  #1
-        rshrn           v25.4h,  v17.4s,  #1
-        rshrn           v26.4h,  v18.4s,  #1
-        rshrn           v27.4h,  v19.4s,  #1
+        sqrshrn         v24.4h,  v16.4s,  #1
+        sqrshrn         v25.4h,  v17.4s,  #1
+        sqrshrn         v26.4h,  v18.4s,  #1
+        sqrshrn         v27.4h,  v19.4s,  #1
         transpose_4x4h  v24, v25, v26, v27, v4,  v5,  v6,  v7
 
         b               2f
@@ -1488,10 +1488,10 @@ function inv_txfm_add_4x16_neon
         st1             {v2.4s}, [x6], x11
 .endr
         blr             x4
-        rshrn           v20.4h,  v16.4s,  #1
-        rshrn           v21.4h,  v17.4s,  #1
-        rshrn           v22.4h,  v18.4s,  #1
-        rshrn           v23.4h,  v19.4s,  #1
+        sqrshrn         v20.4h,  v16.4s,  #1
+        sqrshrn         v21.4h,  v17.4s,  #1
+        sqrshrn         v22.4h,  v18.4s,  #1
+        sqrshrn         v23.4h,  v19.4s,  #1
         transpose_4x4h  v20, v21, v22, v23, v4,  v5,  v6,  v7
 
         b               2f
@@ -1507,10 +1507,10 @@ function inv_txfm_add_4x16_neon
         st1             {v2.4s}, [x2], x11
 .endr
         blr             x4
-        rshrn           v16.4h,  v16.4s,  #1
-        rshrn           v17.4h,  v17.4s,  #1
-        rshrn           v18.4h,  v18.4s,  #1
-        rshrn           v19.4h,  v19.4s,  #1
+        sqrshrn         v16.4h,  v16.4s,  #1
+        sqrshrn         v17.4h,  v17.4s,  #1
+        sqrshrn         v18.4h,  v18.4s,  #1
+        sqrshrn         v19.4h,  v19.4s,  #1
         transpose_4x8h  v16, v17, v18, v19, v4,  v5,  v6,  v7
 
         blr             x5
