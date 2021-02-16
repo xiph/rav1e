@@ -647,12 +647,13 @@ impl<'a> ContextWriter<'a> {
     debug_assert!(depth <= max_depths);
     debug_assert!(!tx_size.is_rect() || bsize.is_rect_tx_allowed());
 
-    symbol_with_update!(
-      self,
-      w,
-      depth as u32,
-      &mut self.fc.tx_size_cdf[tx_size_cat][tx_size_ctx][..=max_depths]
-    );
+    if tx_size_cat > 0 {
+      let cdf = &mut self.fc.tx_size_cdf[tx_size_cat - 1][tx_size_ctx];
+      symbol_with_update!(self, w, depth as u32, cdf);
+    } else {
+      let cdf = &mut self.fc.tx_size_8x8_cdf[tx_size_ctx];
+      symbol_with_update!(self, w, depth as u32, cdf);
+    }
   }
 
   // Based on https://aomediacodec.github.io/av1-spec/#cdf-selection-process

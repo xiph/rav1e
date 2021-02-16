@@ -32,6 +32,7 @@ const SEG_TEMPORAL_PRED_CTXS: usize = 3;
 const TX_SIZE_LUMA_MIN: usize = TxSize::TX_4X4 as usize;
 const TX_SIZE_CTX_MIN: usize = TX_SIZE_LUMA_MIN + 1;
 pub const MAX_TX_CATS: usize = TxSize::TX_SIZES - TX_SIZE_CTX_MIN;
+pub const BIG_TX_CATS: usize = MAX_TX_CATS - 1; // All except 8x8, which has lower max depth.
 pub const MAX_TX_DEPTH: usize = 2;
 pub const TXFM_PARTITION_CONTEXTS: usize = 21; // (TxSize::TX_SIZES - TxSize::TX_8X8) * 6 - 3;
 
@@ -1442,9 +1443,11 @@ pub static default_spatial_pred_seg_tree_cdf: [[u16; MAX_SEGMENTS];
   cdf!(27527, 28487, 28723, 28890, 32397, 32647, 32679),
 ];
 
+pub static default_tx_size_8x8_cdf: [[u16; MAX_TX_DEPTH]; TX_SIZE_CONTEXTS] =
+  [cdf!(19968), cdf!(19968), cdf!(24320)];
+
 pub static default_tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1]; TX_SIZE_CONTEXTS];
-  MAX_TX_CATS] = [
-  [cdf!(19968, CDFMAX), cdf!(19968, CDFMAX), cdf!(24320, CDFMAX)],
+  BIG_TX_CATS] = [
   [cdf!(12272, 30172), cdf!(12272, 30172), cdf!(18677, 30848)],
   [cdf!(12986, 15180), cdf!(12986, 15180), cdf!(24302, 25602)],
   [cdf!(5782, 11475), cdf!(5782, 11475), cdf!(16803, 22759)],

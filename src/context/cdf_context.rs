@@ -42,11 +42,12 @@ pub struct CDFContext {
   pub txb_skip_cdf: [[[u16; 2]; TXB_SKIP_CONTEXTS]; TxSize::TX_SIZES],
   pub txfm_partition_cdf: [[u16; 2]; TXFM_PARTITION_CONTEXTS],
   pub zeromv_cdf: [[u16; 2]; GLOBALMV_MODE_CONTEXTS],
+  pub tx_size_8x8_cdf: [[u16; MAX_TX_DEPTH]; TX_SIZE_CONTEXTS],
 
   pub coeff_base_eob_cdf:
     [[[[u16; 3]; SIG_COEF_CONTEXTS_EOB]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub lrf_switchable_cdf: [u16; 3],
-  pub tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1]; TX_SIZE_CONTEXTS]; MAX_TX_CATS],
+  pub tx_size_cdf: [[[u16; MAX_TX_DEPTH + 1]; TX_SIZE_CONTEXTS]; BIG_TX_CATS],
 
   pub coeff_base_cdf:
     [[[[u16; 4]; SIG_COEF_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
@@ -109,6 +110,7 @@ impl CDFContext {
       refmv_cdf: default_refmv_cdf,
       intra_tx_cdf: default_intra_ext_tx_cdf,
       inter_tx_cdf: default_inter_ext_tx_cdf,
+      tx_size_8x8_cdf: default_tx_size_8x8_cdf,
       tx_size_cdf: default_tx_size_cdf,
       txfm_partition_cdf: default_txfm_partition_cdf,
       skip_cdfs: default_skip_cdfs,
@@ -211,12 +213,8 @@ impl CDFContext {
       self.inter_tx_cdf[3][i][1] = 0;
     }
 
-    for i in 0..TX_SIZE_CONTEXTS {
-      self.tx_size_cdf[0][i][MAX_TX_DEPTH - 1] = 0;
-    }
-    reset_2d!(self.tx_size_cdf[1]);
-    reset_2d!(self.tx_size_cdf[2]);
-    reset_2d!(self.tx_size_cdf[3]);
+    reset_2d!(self.tx_size_8x8_cdf);
+    reset_3d!(self.tx_size_cdf);
 
     for i in 0..TXFM_PARTITION_CONTEXTS {
       self.txfm_partition_cdf[i][1] = 0;
@@ -311,6 +309,10 @@ impl CDFContext {
       self.inter_tx_cdf.first().unwrap().as_ptr() as usize;
     let inter_tx_cdf_end =
       inter_tx_cdf_start + size_of_val(&self.inter_tx_cdf);
+    let tx_size_8x8_cdf_start =
+      self.tx_size_8x8_cdf.first().unwrap().as_ptr() as usize;
+    let tx_size_8x8_cdf_end =
+      tx_size_8x8_cdf_start + size_of_val(&self.tx_size_8x8_cdf);
     let tx_size_cdf_start =
       self.tx_size_cdf.first().unwrap().as_ptr() as usize;
     let tx_size_cdf_end = tx_size_cdf_start + size_of_val(&self.tx_size_cdf);
@@ -454,6 +456,7 @@ impl CDFContext {
       ("refmv_cdf", refmv_cdf_start, refmv_cdf_end),
       ("intra_tx_cdf", intra_tx_cdf_start, intra_tx_cdf_end),
       ("inter_tx_cdf", inter_tx_cdf_start, inter_tx_cdf_end),
+      ("tx_size_8x8_cdf", tx_size_8x8_cdf_start, tx_size_8x8_cdf_end),
       ("tx_size_cdf", tx_size_cdf_start, tx_size_cdf_end),
       ("txfm_partition_cdf", txfm_partition_cdf_start, txfm_partition_cdf_end),
       ("skip_cdfs", skip_cdfs_start, skip_cdfs_end),
