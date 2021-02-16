@@ -734,12 +734,12 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, uv_mode: PredictionMode,
     y_mode: PredictionMode, bs: BlockSize,
   ) {
-    let cdf =
-      &mut self.fc.uv_mode_cdf[bs.cfl_allowed() as usize][y_mode as usize];
     if bs.cfl_allowed() {
+      let cdf = &mut self.fc.uv_mode_cfl_cdf[y_mode as usize];
       symbol_with_update!(self, w, uv_mode as u32, cdf);
     } else {
-      symbol_with_update!(self, w, uv_mode as u32, &mut cdf[..INTRA_MODES]);
+      let cdf = &mut self.fc.uv_mode_cdf[y_mode as usize];
+      symbol_with_update!(self, w, uv_mode as u32, cdf);
     }
   }
 

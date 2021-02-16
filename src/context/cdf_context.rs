@@ -76,8 +76,9 @@ pub struct CDFContext {
 
   pub kf_y_cdf: [[[u16; INTRA_MODES]; KF_MODE_CONTEXTS]; KF_MODE_CONTEXTS],
   pub y_mode_cdf: [[u16; INTRA_MODES]; BLOCK_SIZE_GROUPS],
+  pub uv_mode_cdf: [[u16; INTRA_MODES]; INTRA_MODES],
 
-  pub uv_mode_cdf: [[[u16; UV_INTRA_MODES]; INTRA_MODES]; 2],
+  pub uv_mode_cfl_cdf: [[u16; UV_INTRA_MODES]; INTRA_MODES],
 
   pub cfl_alpha_cdf: [[u16; CFL_ALPHABET_SIZE]; CFL_ALPHA_CONTEXTS],
   pub inter_tx_cdf: [[[u16; TX_TYPES]; TX_SIZE_SQR_CONTEXTS]; TX_SETS_INTER],
@@ -100,6 +101,7 @@ impl CDFContext {
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
       uv_mode_cdf: default_uv_mode_cdf,
+      uv_mode_cfl_cdf: default_uv_mode_cfl_cdf,
       cfl_sign_cdf: default_cfl_sign_cdf,
       cfl_alpha_cdf: default_cfl_alpha_cdf,
       newmv_cdf: default_newmv_cdf,
@@ -191,10 +193,8 @@ impl CDFContext {
     reset_3d!(self.kf_y_cdf);
     reset_2d!(self.y_mode_cdf);
 
-    for i in 0..INTRA_MODES {
-      self.uv_mode_cdf[0][i][UV_INTRA_MODES - 2] = 0;
-      self.uv_mode_cdf[1][i][UV_INTRA_MODES - 1] = 0;
-    }
+    reset_2d!(self.uv_mode_cdf);
+    reset_2d!(self.uv_mode_cfl_cdf);
     reset_1d!(self.cfl_sign_cdf);
     reset_2d!(self.cfl_alpha_cdf);
     reset_2d!(self.newmv_cdf);
@@ -286,6 +286,10 @@ impl CDFContext {
     let uv_mode_cdf_start =
       self.uv_mode_cdf.first().unwrap().as_ptr() as usize;
     let uv_mode_cdf_end = uv_mode_cdf_start + size_of_val(&self.uv_mode_cdf);
+    let uv_mode_cfl_cdf_start =
+      self.uv_mode_cfl_cdf.first().unwrap().as_ptr() as usize;
+    let uv_mode_cfl_cdf_end =
+      uv_mode_cfl_cdf_start + size_of_val(&self.uv_mode_cfl_cdf);
     let cfl_sign_cdf_start = self.cfl_sign_cdf.as_ptr() as usize;
     let cfl_sign_cdf_end =
       cfl_sign_cdf_start + size_of_val(&self.cfl_sign_cdf);
@@ -442,6 +446,7 @@ impl CDFContext {
       ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
       ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),
       ("uv_mode_cdf", uv_mode_cdf_start, uv_mode_cdf_end),
+      ("uv_mode_cfl_cdf", uv_mode_cfl_cdf_start, uv_mode_cfl_cdf_end),
       ("cfl_sign_cdf", cfl_sign_cdf_start, cfl_sign_cdf_end),
       ("cfl_alpha_cdf", cfl_alpha_cdf_start, cfl_alpha_cdf_end),
       ("newmv_cdf", newmv_cdf_start, newmv_cdf_end),
