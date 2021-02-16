@@ -55,6 +55,7 @@ pub struct CDFContext {
     [[[[u16; BR_CDF_SIZE]; LEVEL_CONTEXTS]; PLANE_TYPES]; TxSize::TX_SIZES],
   pub deblock_delta_cdf: [u16; DELTA_LF_PROBS + 1],
   pub deblock_delta_multi_cdf: [[u16; DELTA_LF_PROBS + 1]; FRAME_LF_COUNT],
+  pub partition_w8_cdf: [[u16; 4]; PARTITION_TYPES],
 
   pub eob_flag_cdf16: [[[u16; 5]; 2]; PLANE_TYPES],
 
@@ -67,11 +68,12 @@ pub struct CDFContext {
   pub compound_mode_cdf: [[u16; INTER_COMPOUND_MODES]; INTER_MODE_CONTEXTS],
   pub eob_flag_cdf128: [[[u16; 8]; 2]; PLANE_TYPES],
   pub spatial_segmentation_cdfs: [[u16; 8]; 3],
+  pub partition_w128_cdf: [[u16; 8]; PARTITION_TYPES],
 
   pub eob_flag_cdf256: [[[u16; 9]; 2]; PLANE_TYPES],
 
   pub eob_flag_cdf512: [[[u16; 10]; 2]; PLANE_TYPES],
-  pub partition_cdf: [[u16; EXT_PARTITION_TYPES]; PARTITION_CONTEXTS],
+  pub partition_cdf: [[u16; EXT_PARTITION_TYPES]; 3 * PARTITION_TYPES],
 
   pub eob_flag_cdf1024: [[[u16; 11]; 2]; PLANE_TYPES],
 
@@ -98,6 +100,8 @@ impl CDFContext {
       _ => 3,
     };
     CDFContext {
+      partition_w8_cdf: default_partition_w8_cdf,
+      partition_w128_cdf: default_partition_w128_cdf,
       partition_cdf: default_partition_cdf,
       kf_y_cdf: default_kf_y_mode_cdf,
       y_mode_cdf: default_if_y_mode_cdf,
@@ -182,15 +186,9 @@ impl CDFContext {
       };
     }
 
-    for i in 0..4 {
-      self.partition_cdf[i][3] = 0;
-    }
-    for i in 4..16 {
-      self.partition_cdf[i][9] = 0;
-    }
-    for i in 16..20 {
-      self.partition_cdf[i][7] = 0;
-    }
+    reset_2d!(self.partition_w8_cdf);
+    reset_2d!(self.partition_w128_cdf);
+    reset_2d!(self.partition_cdf);
 
     reset_3d!(self.kf_y_cdf);
     reset_2d!(self.y_mode_cdf);
@@ -273,6 +271,14 @@ impl CDFContext {
   pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
     use std::mem::size_of_val;
 
+    let partition_w8_cdf_start =
+      self.partition_w8_cdf.first().unwrap().as_ptr() as usize;
+    let partition_w8_cdf_end =
+      partition_w8_cdf_start + size_of_val(&self.partition_w8_cdf);
+    let partition_w128_cdf_start =
+      self.partition_w128_cdf.first().unwrap().as_ptr() as usize;
+    let partition_w128_cdf_end =
+      partition_w128_cdf_start + size_of_val(&self.partition_w128_cdf);
     let partition_cdf_start =
       self.partition_cdf.first().unwrap().as_ptr() as usize;
     let partition_cdf_end =
@@ -444,6 +450,8 @@ impl CDFContext {
       coeff_br_cdf_start + size_of_val(&self.coeff_br_cdf);
 
     vec![
+      ("partition_w8_cdf", partition_w8_cdf_start, partition_w8_cdf_end),
+      ("partition_w128_cdf", partition_w128_cdf_start, partition_w128_cdf_end),
       ("partition_cdf", partition_cdf_start, partition_cdf_end),
       ("kf_y_cdf", kf_y_cdf_start, kf_y_cdf_end),
       ("y_mode_cdf", y_mode_cdf_start, y_mode_cdf_end),

@@ -306,18 +306,22 @@ impl<'a> ContextWriter<'a> {
     let has_rows = (bo.0.y + hbs) < self.bc.blocks.rows();
     let ctx = self.bc.partition_plane_context(bo, bsize);
     assert!(ctx < PARTITION_CONTEXTS);
-    let partition_cdf = if bsize <= BlockSize::BLOCK_8X8 {
-      &mut self.fc.partition_cdf[ctx][..PARTITION_TYPES]
-    } else {
-      &mut self.fc.partition_cdf[ctx]
-    };
 
     if !has_rows && !has_cols {
       return;
     }
 
     if has_rows && has_cols {
-      symbol_with_update!(self, w, p as u32, partition_cdf);
+      if ctx < PARTITION_TYPES {
+        let cdf = &mut self.fc.partition_w8_cdf[ctx];
+        symbol_with_update!(self, w, p as u32, cdf);
+      } else if ctx < 4 * PARTITION_TYPES {
+        let cdf = &mut self.fc.partition_cdf[ctx - PARTITION_TYPES];
+        symbol_with_update!(self, w, p as u32, cdf);
+      } else {
+        let cdf = &mut self.fc.partition_w128_cdf[ctx - 4 * PARTITION_TYPES];
+        symbol_with_update!(self, w, p as u32, cdf);
+      }
     } else if !has_rows && has_cols {
       assert!(
         p == PartitionType::PARTITION_SPLIT
@@ -325,11 +329,29 @@ impl<'a> ContextWriter<'a> {
       );
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
-      ContextWriter::partition_gather_vert_alike(
-        &mut cdf,
-        partition_cdf,
-        bsize,
-      );
+      if ctx < PARTITION_TYPES {
+        let partition_cdf = &mut self.fc.partition_w8_cdf[ctx];
+        ContextWriter::partition_gather_vert_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      } else if ctx < 4 * PARTITION_TYPES {
+        let partition_cdf = &mut self.fc.partition_cdf[ctx - PARTITION_TYPES];
+        ContextWriter::partition_gather_vert_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      } else {
+        let partition_cdf =
+          &mut self.fc.partition_w128_cdf[ctx - 4 * PARTITION_TYPES];
+        ContextWriter::partition_gather_vert_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      }
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     } else {
       assert!(
@@ -338,11 +360,29 @@ impl<'a> ContextWriter<'a> {
       );
       assert!(bsize > BlockSize::BLOCK_8X8);
       let mut cdf = [0u16; 2];
-      ContextWriter::partition_gather_horz_alike(
-        &mut cdf,
-        partition_cdf,
-        bsize,
-      );
+      if ctx < PARTITION_TYPES {
+        let partition_cdf = &mut self.fc.partition_w8_cdf[ctx];
+        ContextWriter::partition_gather_horz_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      } else if ctx < 4 * PARTITION_TYPES {
+        let partition_cdf = &mut self.fc.partition_cdf[ctx - PARTITION_TYPES];
+        ContextWriter::partition_gather_horz_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      } else {
+        let partition_cdf =
+          &mut self.fc.partition_w128_cdf[ctx - 4 * PARTITION_TYPES];
+        ContextWriter::partition_gather_horz_alike(
+          &mut cdf,
+          partition_cdf,
+          bsize,
+        );
+      }
       w.symbol((p == PartitionType::PARTITION_SPLIT) as u32, &cdf);
     }
   }
