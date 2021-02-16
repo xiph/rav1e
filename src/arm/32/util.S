@@ -70,7 +70,7 @@
 .endm
 
 // This macro clobbers r7 (and r12 on windows) and stores data at the
-// bottom of the stack; sp+16 is the start of the space allocated that
+// bottom of the stack; sp is the start of the space allocated that
 // the caller can use.
 .macro sub_sp_align space
 #if CONFIG_THUMB
