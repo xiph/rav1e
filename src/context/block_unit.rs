@@ -1875,20 +1875,36 @@ impl<'a> ContextWriter<'a> {
     let eob_multi_size: usize = tx_size.area_log2() - 4;
     let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
 
-    symbol_with_update!(
-      self,
-      w,
-      eob_pt - 1,
-      match eob_multi_size {
-        0 => &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx],
-        1 => &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx],
-        2 => &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx],
-        3 => &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx],
-        4 => &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx],
-        5 => &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx],
-        _ => &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx],
+    match eob_multi_size {
+      0 => {
+        let cdf = &mut self.fc.eob_flag_cdf16[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
       }
-    );
+      1 => {
+        let cdf = &mut self.fc.eob_flag_cdf32[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+      2 => {
+        let cdf = &mut self.fc.eob_flag_cdf64[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+      3 => {
+        let cdf = &mut self.fc.eob_flag_cdf128[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+      4 => {
+        let cdf = &mut self.fc.eob_flag_cdf256[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+      5 => {
+        let cdf = &mut self.fc.eob_flag_cdf512[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+      _ => {
+        let cdf = &mut self.fc.eob_flag_cdf1024[plane_type][eob_multi_ctx];
+        symbol_with_update!(self, w, eob_pt - 1, cdf);
+      }
+    }
 
     let eob_offset_bits = k_eob_offset_bits[eob_pt as usize];
 
