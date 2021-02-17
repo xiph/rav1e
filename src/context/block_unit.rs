@@ -1744,12 +1744,8 @@ impl<'a> ContextWriter<'a> {
       MotionVector { row: mv.row - ref_mv.row, col: mv.col - ref_mv.col };
     let j: MvJointType = av1_get_mv_joint(diff);
 
-    symbol_with_update!(
-      self,
-      w,
-      j as u32,
-      &mut self.fc.nmv_context.joints_cdf
-    );
+    let cdf = &mut self.fc.nmv_context.joints_cdf;
+    symbol_with_update!(self, w, j as u32, cdf, 4);
 
     if mv_joint_vertical(j) {
       self.encode_mv_component(w, diff.row as i32, 0, mv_precision);
@@ -1776,7 +1772,7 @@ impl<'a> ContextWriter<'a> {
     for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
       let abs = delta.abs() as u32;
 
-      symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL), cdf);
+      symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL), cdf, 4);
 
       if abs >= DELTA_LF_SMALL {
         let bits = msb(abs as i32 - 1) as u32;
@@ -1957,7 +1953,8 @@ impl<'a> ContextWriter<'a> {
           self,
           w,
           (cmp::min(u32::cast_from(level), 3)) as u32,
-          &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
+          &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
+          4
         );
       }
 
@@ -1971,14 +1968,9 @@ impl<'a> ContextWriter<'a> {
             break;
           }
           let k = cmp::min(base_range - idx, T::cast_from(BR_CDF_SIZE - 1));
-          symbol_with_update!(
-            self,
-            w,
-            u32::cast_from(k),
-            &mut self.fc.coeff_br_cdf
-              [cmp::min(txs_ctx, TxSize::TX_32X32 as usize)][plane_type]
-              [br_ctx]
-          );
+          let cdf = &mut self.fc.coeff_br_cdf
+            [txs_ctx.min(TxSize::TX_32X32 as usize)][plane_type][br_ctx];
+          symbol_with_update!(self, w, u32::cast_from(k), cdf, 4);
           if k < T::cast_from(BR_CDF_SIZE - 1) {
             break;
           }

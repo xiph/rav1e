@@ -18,6 +18,7 @@ cfg_if::cfg_if! {
   }
 }
 
+use crate::context::CDFContextLog;
 use crate::util::{msb, ILog};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
@@ -26,6 +27,12 @@ pub const OD_BITRES: u8 = 3;
 const EC_PROB_SHIFT: u32 = 6;
 const EC_MIN_PROB: u32 = 4;
 type ec_window = u32;
+
+macro_rules! symbol_with_update_decl {($($n:expr),*) => {$(paste::item!{
+  fn [<symbol_with_update_ $n>](
+    &mut self, s: u32, cdf: &mut [u16; $n], log: &mut CDFContextLog,
+  );
+})*}}
 
 /// Public trait interface to a bitstream Writer: a Counter can be
 /// used to count bits for cost analysis without actually storing
@@ -43,9 +50,9 @@ pub trait Writer {
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
   /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
   fn symbol_with_update(
-    &mut self, s: u32, cdf: &mut [u16],
-    log: &mut crate::context::CDFContextLog,
+    &mut self, s: u32, cdf: &mut [u16], log: &mut CDFContextLog,
   );
+  symbol_with_update_decl!(4);
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
   /// Write a single bit with flat proability
@@ -482,6 +489,14 @@ impl WriterBase<WriterEncoder> {
   }
 }
 
+macro_rules! symbol_with_update_impl {($($n:expr),*) => {$(paste::item!{
+  fn [<symbol_with_update_ $n>](
+    &mut self, s: u32, cdf: &mut [u16; $n], log: &mut CDFContextLog,
+  ) {
+    self.symbol_with_update(s, cdf, log);
+  }
+})*}}
+
 /// Generic/shared implementation for Writers with StorageBackends (ie, Encoders and Recorders)
 impl<S> Writer for WriterBase<S>
 where
@@ -543,9 +558,9 @@ where
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be greater 32704. There should be at most 16 values.
   ///       The lower 6 bits of the last value hold the count.
+  #[inline(always)]
   fn symbol_with_update(
-    &mut self, s: u32, cdf: &mut [u16],
-    log: &mut crate::context::CDFContextLog,
+    &mut self, s: u32, cdf: &mut [u16], log: &mut CDFContextLog,
   ) {
     #[cfg(feature = "desync_finder")]
     {
@@ -558,6 +573,7 @@ where
 
     update_cdf(cdf, s);
   }
+  symbol_with_update_impl!(4);
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
   /// `s`: The index of the symbol to encode.

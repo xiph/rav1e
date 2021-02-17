@@ -221,7 +221,7 @@ impl<'a> ContextWriter<'a> {
       } else {
         &mut mvcomp.fp_cdf
       };
-      symbol_with_update!(self, w, fr, cdf);
+      symbol_with_update!(self, w, fr, cdf, 4);
     }
 
     // High precision bit

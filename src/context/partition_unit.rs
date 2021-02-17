@@ -314,7 +314,7 @@ impl<'a> ContextWriter<'a> {
     if has_rows && has_cols {
       if ctx < PARTITION_TYPES {
         let cdf = &mut self.fc.partition_w8_cdf[ctx];
-        symbol_with_update!(self, w, p as u32, cdf);
+        symbol_with_update!(self, w, p as u32, cdf, 4);
       } else if ctx < 4 * PARTITION_TYPES {
         let cdf = &mut self.fc.partition_cdf[ctx - PARTITION_TYPES];
         symbol_with_update!(self, w, p as u32, cdf);

@@ -546,6 +546,9 @@ impl fmt::Debug for CDFContext {
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     $w.symbol_with_update($s, $cdf, &mut $self.fc_log);
+    symbol_with_update!($self, $cdf);
+  };
+  ($self:ident, $cdf:expr) => {
     #[cfg(feature = "desync_finder")]
     {
       let cdf: &[_] = $cdf;
@@ -553,6 +556,10 @@ macro_rules! symbol_with_update {
         map.lookup(cdf.as_ptr() as usize);
       }
     }
+  };
+  ($self:ident, $w:ident, $s:expr, $cdf:expr, 4) => {
+    $w.symbol_with_update_4($s, $cdf, &mut $self.fc_log);
+    symbol_with_update!($self, $cdf);
   };
 }
 
