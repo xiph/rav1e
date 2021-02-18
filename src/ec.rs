@@ -52,7 +52,7 @@ pub trait Writer {
   fn symbol_with_update(
     &mut self, s: u32, cdf: &mut [u16], log: &mut CDFContextLog,
   );
-  symbol_with_update_decl!(4);
+  symbol_with_update_decl!(2, 4);
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
   /// Write a single bit with flat proability
@@ -573,7 +573,7 @@ where
 
     update_cdf(cdf, s);
   }
-  symbol_with_update_impl!(4);
+  symbol_with_update_impl!(2, 4);
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
   /// `s`: The index of the symbol to encode.

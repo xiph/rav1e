@@ -236,7 +236,8 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, skip: bool,
   ) {
     let ctx = self.bc.skip_context(bo);
-    symbol_with_update!(self, w, skip as u32, &mut self.fc.skip_cdfs[ctx]);
+    let cdf = &mut self.fc.skip_cdfs[ctx];
+    symbol_with_update!(self, w, skip as u32, cdf, 2);
   }
 
   pub fn get_segment_pred(&self, bo: TileBlockOffset) -> (u8, u8) {

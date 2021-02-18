@@ -200,18 +200,21 @@ impl<'a> ContextWriter<'a> {
     let hp = offset & 1; // high precision mv data
 
     // Sign
-    symbol_with_update!(self, w, sign, &mut mvcomp.sign_cdf);
+    let cdf = &mut mvcomp.sign_cdf;
+    symbol_with_update!(self, w, sign, cdf, 2);
 
     // Class
     symbol_with_update!(self, w, mv_class as u32, &mut mvcomp.classes_cdf);
 
     // Integer bits
     if mv_class == MV_CLASS_0 {
-      symbol_with_update!(self, w, d, &mut mvcomp.class0_cdf);
+      let cdf = &mut mvcomp.class0_cdf;
+      symbol_with_update!(self, w, d, cdf, 2);
     } else {
       let n = mv_class + CLASS0_BITS - 1; // number of bits
       for i in 0..n {
-        symbol_with_update!(self, w, (d >> i) & 1, &mut mvcomp.bits_cdf[i]);
+        let cdf = &mut mvcomp.bits_cdf[i];
+        symbol_with_update!(self, w, (d >> i) & 1, cdf, 2);
       }
     }
     // Fractional bits
@@ -231,7 +234,7 @@ impl<'a> ContextWriter<'a> {
       } else {
         &mut mvcomp.hp_cdf
       };
-      symbol_with_update!(self, w, hp, cdf);
+      symbol_with_update!(self, w, hp, cdf, 2);
     }
   }
 }

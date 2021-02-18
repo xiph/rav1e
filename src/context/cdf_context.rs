@@ -557,6 +557,10 @@ macro_rules! symbol_with_update {
       }
     }
   };
+  ($self:ident, $w:ident, $s:expr, $cdf:expr, 2) => {
+    $w.symbol_with_update_2($s, $cdf, &mut $self.fc_log);
+    symbol_with_update!($self, $cdf);
+  };
   ($self:ident, $w:ident, $s:expr, $cdf:expr, 4) => {
     $w.symbol_with_update_4($s, $cdf, &mut $self.fc_log);
     symbol_with_update!($self, $cdf);

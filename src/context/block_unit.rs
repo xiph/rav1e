@@ -759,12 +759,8 @@ impl<'a> ContextWriter<'a> {
   pub fn write_use_filter_intra(
     &mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize,
   ) {
-    symbol_with_update!(
-      self,
-      w,
-      enable as u32,
-      &mut self.fc.filter_intra_cdfs[block_size as usize]
-    );
+    let cdf = &mut self.fc.filter_intra_cdfs[block_size as usize];
+    symbol_with_update!(self, w, enable as u32, cdf, 2);
   }
 
   pub fn write_use_palette_mode(
@@ -780,23 +776,15 @@ impl<'a> ContextWriter<'a> {
 
     if luma_mode == PredictionMode::DC_PRED {
       let bsize_ctx = bsize.width_mi_log2() + bsize.height_mi_log2() - 2;
-      symbol_with_update!(
-        self,
-        w,
-        enable as u32,
-        &mut self.fc.palette_y_mode_cdfs[bsize_ctx][ctx_luma]
-      );
+      let cdf = &mut self.fc.palette_y_mode_cdfs[bsize_ctx][ctx_luma];
+      symbol_with_update!(self, w, enable as u32, cdf, 2);
     }
 
     if has_chroma(bo, bsize, xdec, ydec, cs)
       && chroma_mode == PredictionMode::DC_PRED
     {
-      symbol_with_update!(
-        self,
-        w,
-        enable as u32,
-        &mut self.fc.palette_uv_mode_cdfs[ctx_chroma]
-      );
+      let cdf = &mut self.fc.palette_uv_mode_cdfs[ctx_chroma];
+      symbol_with_update!(self, w, enable as u32, cdf, 2);
     }
   }
 
@@ -1699,29 +1687,18 @@ impl<'a> ContextWriter<'a> {
   pub fn write_inter_mode(
     &mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize,
   ) {
+    use PredictionMode::{GLOBALMV, NEARESTMV, NEWMV};
     let newmv_ctx = ctx & NEWMV_CTX_MASK;
-    symbol_with_update!(
-      self,
-      w,
-      (mode != PredictionMode::NEWMV) as u32,
-      &mut self.fc.newmv_cdf[newmv_ctx]
-    );
-    if mode != PredictionMode::NEWMV {
+    let cdf = &mut self.fc.newmv_cdf[newmv_ctx];
+    symbol_with_update!(self, w, (mode != NEWMV) as u32, cdf, 2);
+    if mode != NEWMV {
       let zeromv_ctx = (ctx >> GLOBALMV_OFFSET) & GLOBALMV_CTX_MASK;
-      symbol_with_update!(
-        self,
-        w,
-        (mode != PredictionMode::GLOBALMV) as u32,
-        &mut self.fc.zeromv_cdf[zeromv_ctx]
-      );
-      if mode != PredictionMode::GLOBALMV {
+      let cdf = &mut self.fc.zeromv_cdf[zeromv_ctx];
+      symbol_with_update!(self, w, (mode != GLOBALMV) as u32, cdf, 2);
+      if mode != GLOBALMV {
         let refmv_ctx = (ctx >> REFMV_OFFSET) & REFMV_CTX_MASK;
-        symbol_with_update!(
-          self,
-          w,
-          (mode != PredictionMode::NEARESTMV) as u32,
-          &mut self.fc.refmv_cdf[refmv_ctx]
-        );
+        let cdf = &mut self.fc.refmv_cdf[refmv_ctx];
+        symbol_with_update!(self, w, (mode != NEARESTMV) as u32, cdf, 2);
       }
     }
   }
@@ -1730,7 +1707,8 @@ impl<'a> ContextWriter<'a> {
   pub fn write_drl_mode(
     &mut self, w: &mut dyn Writer, drl_mode: bool, ctx: usize,
   ) {
-    symbol_with_update!(self, w, drl_mode as u32, &mut self.fc.drl_cdfs[ctx]);
+    let cdf = &mut self.fc.drl_cdfs[ctx];
+    symbol_with_update!(self, w, drl_mode as u32, cdf, 2);
   }
 
   pub fn write_mv(
@@ -1789,12 +1767,8 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut dyn Writer, bo: TileBlockOffset, is_inter: bool,
   ) {
     let ctx = self.bc.intra_inter_context(bo);
-    symbol_with_update!(
-      self,
-      w,
-      is_inter as u32,
-      &mut self.fc.intra_inter_cdfs[ctx]
-    );
+    let cdf = &mut self.fc.intra_inter_cdfs[ctx];
+    symbol_with_update!(self, w, is_inter as u32, cdf, 2);
   }
 
   pub fn write_coeffs_lv_map<T: Coefficient>(
@@ -1836,7 +1810,7 @@ impl<'a> ContextWriter<'a> {
 
     {
       let cdf = &mut self.fc.txb_skip_cdf[txs_ctx][txb_ctx.txb_skip_ctx];
-      symbol_with_update!(self, w, (eob == 0) as u32, cdf);
+      symbol_with_update!(self, w, (eob == 0) as u32, cdf, 2);
     }
 
     if eob == 0 {
@@ -1908,12 +1882,9 @@ impl<'a> ContextWriter<'a> {
       let mut eob_shift = eob_offset_bits - 1;
       let mut bit: u32 =
         if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 };
-      symbol_with_update!(
-        self,
-        w,
-        bit,
-        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize]
-      );
+      let cdf =
+        &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize];
+      symbol_with_update!(self, w, bit, cdf, 2);
       for i in 1..eob_offset_bits {
         eob_shift = eob_offset_bits as u16 - 1 - i as u16;
         bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 };
@@ -1989,12 +1960,8 @@ impl<'a> ContextWriter<'a> {
       let level = v.abs();
       let sign = if v < T::cast_from(0) { 1 } else { 0 };
       if c == 0 {
-        symbol_with_update!(
-          self,
-          w,
-          sign,
-          &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx]
-        );
+        let cdf = &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx];
+        symbol_with_update!(self, w, sign, cdf, 2);
       } else {
         w.bit(sign as u16);
       }
