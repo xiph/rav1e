@@ -21,6 +21,7 @@ use crate::rate::{
   RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
   FRAME_SUBTYPE_SEF,
 };
+use crate::rayon::prelude::*;
 use crate::scenechange::SceneChangeDetector;
 use crate::stats::EncoderStats;
 use crate::tiling::Area;
@@ -809,14 +810,14 @@ impl<T: Pixel> ContextInner<T> {
     let plane_org = &frame.planes[0];
     let plane_ref = &reference_frame.planes[0];
     let lookahead_intra_costs_lines =
-      fi.lookahead_intra_costs.chunks_exact(fi.w_in_imp_b);
+      fi.lookahead_intra_costs.par_chunks_exact(fi.w_in_imp_b);
     let block_importances_lines =
-      fi.block_importances.chunks_exact(fi.w_in_imp_b);
+      fi.block_importances.par_chunks_exact(fi.w_in_imp_b);
 
     let costs: Vec<_> = lookahead_intra_costs_lines
       .zip(block_importances_lines)
       .enumerate()
-      .flat_map(|(y, (lookahead_intra_costs, block_importances))| {
+      .flat_map_iter(|(y, (lookahead_intra_costs, block_importances))| {
         lookahead_intra_costs
           .iter()
           .zip(block_importances.iter())
@@ -866,7 +867,6 @@ impl<T: Pixel> ContextInner<T> {
             let propagate_amount = (intra_cost + future_importance)
               * propagate_fraction
               / len as f32;
-
             (propagate_amount, reference_x, reference_y)
           })
       })
