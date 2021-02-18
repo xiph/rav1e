@@ -183,7 +183,8 @@ impl<'a> ContextWriter<'a> {
               symbol_with_update!(self, w, 0, cdf, 2);
             }
             RESTORE_SWITCHABLE => {
-              symbol_with_update!(self, w, 0, &mut self.fc.lrf_switchable_cdf);
+              let cdf = &mut self.fc.lrf_switchable_cdf;
+              symbol_with_update!(self, w, 0, cdf, 3);
             }
             RESTORE_NONE => {}
             _ => unreachable!(),
@@ -196,12 +197,8 @@ impl<'a> ContextWriter<'a> {
               }
               RESTORE_SWITCHABLE => {
                 // Does *not* write 'RESTORE_SGRPROJ'
-                symbol_with_update!(
-                  self,
-                  w,
-                  2,
-                  &mut self.fc.lrf_switchable_cdf
-                );
+                let cdf = &mut self.fc.lrf_switchable_cdf;
+                symbol_with_update!(self, w, 2, cdf, 3);
               }
               _ => unreachable!(),
             }
@@ -238,12 +235,8 @@ impl<'a> ContextWriter<'a> {
               }
               RESTORE_SWITCHABLE => {
                 // Does *not* write 'RESTORE_WIENER'
-                symbol_with_update!(
-                  self,
-                  w,
-                  1,
-                  &mut self.fc.lrf_switchable_cdf
-                );
+                let cdf = &mut self.fc.lrf_switchable_cdf;
+                symbol_with_update!(self, w, 1, cdf, 3);
               }
               _ => unreachable!(),
             }

@@ -1917,7 +1917,8 @@ impl<'a> ContextWriter<'a> {
           w,
           (cmp::min(u32::cast_from(level), 3) - 1) as u32,
           &mut self.fc.coeff_base_eob_cdf[txs_ctx][plane_type]
-            [coeff_ctx as usize]
+            [coeff_ctx as usize],
+          3
         );
       } else {
         symbol_with_update!(

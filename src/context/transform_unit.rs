@@ -655,7 +655,7 @@ impl<'a> ContextWriter<'a> {
 
     if tx_size_cat > 0 {
       let cdf = &mut self.fc.tx_size_cdf[tx_size_cat - 1][tx_size_ctx];
-      symbol_with_update!(self, w, depth as u32, cdf);
+      symbol_with_update!(self, w, depth as u32, cdf, 3);
     } else {
       let cdf = &mut self.fc.tx_size_8x8_cdf[tx_size_ctx];
       symbol_with_update!(self, w, depth as u32, cdf, 2);
