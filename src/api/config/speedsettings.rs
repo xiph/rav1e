@@ -209,6 +209,17 @@ impl SpeedSettings {
     speed <= 1
   }
 
+  /// Set default rdo-lookahead-frames for different speed settings
+  pub fn rdo_lookahead_frames(speed: usize) -> usize {
+    match speed {
+      9..=10 => 10,
+      6..=8 => 20,
+      3..=5 => 30,
+      0..=2 => 40,
+      _ => 40,
+    }
+  }
+
   const fn rdo_tx_decision_preset(speed: usize) -> bool {
     speed <= 5
   }
