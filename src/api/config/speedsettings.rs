@@ -211,14 +211,12 @@ impl SpeedSettings {
 
   /// Set default rdo-lookahead-frames for different speed settings
   pub fn rdo_lookahead_frames(speed: usize) -> usize {
-    if speed == 10 || speed == 9 {
-      10
-    } else if speed <= 8 || speed >= 6 {
-      20
-    } else if speed <= 5 || speed >= 3 {
-      30
-    } else {
-      40
+    match speed {
+      9..=10 => 10,
+      6..=8 => 20,
+      3..=5 => 30,
+      0..=2 => 40,
+      _ => 40,
     }
   }
 
