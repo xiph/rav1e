@@ -146,6 +146,41 @@ mod rayon {
                 self.into_par_iter()
             }
         }
+
+        pub trait ParallelIterator: Iterator {
+          fn flat_map_iter<U, F>(self, f: F) -> std::iter::FlatMap<Self, U, F>
+          where
+            Self: Sized,
+            U: IntoIterator,
+            F: FnMut(<Self as Iterator>::Item) -> U,
+          {
+            self.flat_map(f)
+          }
+        }
+
+        impl<I: Iterator> ParallelIterator for I {}
+      }
+
+      pub mod slice {
+        pub trait ParallelSlice<T: Sync> {
+          fn par_chunks_exact(
+            &self, chunk_size: usize,
+          ) -> std::slice::ChunksExact<'_, T>;
+        }
+
+        impl<T: Sync> ParallelSlice<T> for [T] {
+          #[inline]
+          fn par_chunks_exact(
+            &self, chunk_size: usize,
+          ) -> std::slice::ChunksExact<'_, T> {
+            self.chunks_exact(chunk_size)
+          }
+        }
+      }
+
+      pub mod prelude {
+        pub use super::iter::*;
+        pub use super::slice::*;
       }
 
       pub fn join<A, B, RA, RB>(oper_a: A, oper_b: B) -> (RA, RB)
