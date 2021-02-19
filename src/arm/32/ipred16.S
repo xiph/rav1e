@@ -575,6 +575,7 @@ L(ipred_dc_left_h64):
         vpadd.i32       d0,  d0,  d0
         vrshrn.i32      d0,  q0,  #6
         vdup.16         q0,  d0[0]
+        bx              r3
 L(ipred_dc_left_w64):
         sub             r1,  r1,  #96
         vmov            q1,  q0
