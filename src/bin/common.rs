@@ -215,7 +215,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .arg(
       Arg::with_name("RDO_LOOKAHEAD_FRAMES")
         .help("Number of frames encoder should lookahead for RDO purposes\n\
-        [defaults for speeds: 10,9 - 10, 8,7,6 - 20, 5,4,3 - 30, 2,1,0 - 40]\n")
+        [default value for speed levels: 10,9 - 10; 8,7,6 - 20; 5,4,3 - 30; 2,1,0 - 40]\n")
         .long("rdo-lookahead-frames")
         .takes_value(true)
     )
