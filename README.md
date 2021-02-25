@@ -127,14 +127,15 @@ The resulting binary will not work on cpus that do not sport the same set of SIM
 
 > **NOTE** : You may use `rustc --print target-cpus` to check if the cpu is supported, if not `-C target-cpu=native` would be a no-op.
 
-### Building the C-API
+### Building the C API
 **rav1e** provides a C-compatible set of library, header and pkg-config file.
 
 To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
 
 ```sh
-cargo install cargo-c
-cargo cinstall --release
+$ cargo install cargo-c
+$ cargo cinstall --destdir=$HOME/librav1e --release
+# mv $HOME/librav1e/* / && rmdir $HOME/librav1e
 ```
 
 ## Usage
