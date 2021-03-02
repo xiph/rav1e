@@ -194,20 +194,20 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   // Use sums to calculate distortion
   let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6);
   let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
-  let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as f64;
-  RawDistortion::new(
-    (sse * ssim_boost(svar, dvar, bit_depth) + 0.5_f64) as u64,
-  )
+  let sse = (sum_d2 + sum_s2 - 2 * sum_sd) as u64;
+  RawDistortion::new(ssim_boost(svar, dvar, bit_depth).mul_u64(sse))
 }
 
 #[inline(always)]
-fn ssim_boost(svar: i64, dvar: i64, bit_depth: usize) -> f64 {
+fn ssim_boost(svar: i64, dvar: i64, bit_depth: usize) -> DistortionScale {
   let coeff_shift = bit_depth - 8;
 
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO
-  (4033_f64 / 16_384_f64)
-    * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
-    / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64)
+  DistortionScale::new(
+    (4033_f64 / 16_384_f64)
+      * (svar + dvar + (16_384 << (2 * coeff_shift))) as f64
+      / f64::sqrt(((16_265_089i64 << (4 * coeff_shift)) + svar * dvar) as f64),
+  )
 }
 
 #[allow(unused)]
