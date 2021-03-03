@@ -15,12 +15,10 @@ use rust_hawktracer::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
-  variances: Vec<u32>,
+  variances: Box<[u32]>,
   // Width and height of the original frame that is masked
   width: usize,
   height: usize,
-  // Side of unit (square) activity block in log2
-  granularity: usize,
 }
 
 impl ActivityMask {
@@ -28,24 +26,25 @@ impl ActivityMask {
   pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
     let PlaneConfig { width, height, .. } = luma_plane.cfg;
 
-    let granularity = 3;
+    // Width and height are padded to 8×8 block size.
+    let w_in_imp_b = width.align_power_of_two_and_shift(3);
+    let h_in_imp_b = height.align_power_of_two_and_shift(3);
 
     let aligned_luma = Rect {
       x: 0_isize,
       y: 0_isize,
-      width: (width >> granularity) << granularity,
-      height: (height >> granularity) << granularity,
+      width: w_in_imp_b << 3,
+      height: h_in_imp_b << 3,
     };
     let luma = PlaneRegion::new(luma_plane, aligned_luma);
 
-    let mut variances =
-      Vec::with_capacity((height >> granularity) * (width >> granularity));
+    let mut variances = Vec::with_capacity(w_in_imp_b * h_in_imp_b);
 
-    for y in 0..height >> granularity {
-      for x in 0..width >> granularity {
+    for y in 0..h_in_imp_b {
+      for x in 0..w_in_imp_b {
         let block_rect = Area::Rect {
-          x: (x << granularity) as isize,
-          y: (y << granularity) as isize,
+          x: (x << 3) as isize,
+          y: (y << 3) as isize,
           width: 8,
           height: 8,
         };
@@ -55,7 +54,7 @@ impl ActivityMask {
         variances.push(variance);
       }
     }
-    ActivityMask { variances, width, height, granularity }
+    ActivityMask { variances: variances.into_boxed_slice(), width, height }
   }
 }
 
