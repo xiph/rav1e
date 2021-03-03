@@ -85,7 +85,7 @@ cargo bench --features=bench
 Install `cargo-fuzz` with `cargo install cargo-fuzz`. Running fuzz targets with stable Rust requires `--sanitizer=none` or the shorter `-s none`.
 
 * List the fuzz targets with `cargo fuzz list`.
-* Run a fuzz target with `cargo fuzz run --santizer=none <target>`.
+* Run a fuzz target with `cargo fuzz run --sanitizer=none <target>`.
   * Parallel fuzzing: `cargo fuzz run -s none --jobs <n> <target> -- -workers=<n>`.
   * Bump the "slow unit" time limit: `cargo fuzz run -s none <target> -- -report_slow_units=600`.
   * Make the fuzzer generate long inputs right away: `cargo fuzz run -s none <target> -- -max_len=256 -len_control=0`.
