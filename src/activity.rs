@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::frame::*;
+use crate::rdo::{ssim_boost, DistortionScale};
 use crate::tiling::*;
 use crate::util::*;
 use itertools::izip;
@@ -55,6 +56,15 @@ impl ActivityMask {
       }
     }
     ActivityMask { variances: variances.into_boxed_slice(), width, height }
+  }
+
+  #[hawktracer(activity_mask_fill_scales)]
+  pub fn fill_scales(
+    &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,
+  ) {
+    for (dst, &src) in activity_scales.iter_mut().zip(self.variances.iter()) {
+      *dst = ssim_boost(src as i64, src as i64, bit_depth);
+    }
   }
 }
 
