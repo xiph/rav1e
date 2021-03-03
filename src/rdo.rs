@@ -199,7 +199,7 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
 }
 
 #[inline(always)]
-fn ssim_boost(svar: i64, dvar: i64, bit_depth: usize) -> DistortionScale {
+pub fn ssim_boost(svar: i64, dvar: i64, bit_depth: usize) -> DistortionScale {
   let coeff_shift = bit_depth - 8;
 
   //The two constants were tuned for CDEF, but can probably be better tuned for use in general RDO

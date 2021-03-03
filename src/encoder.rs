@@ -606,6 +606,8 @@ pub struct FrameInvariants<T: Pixel> {
   pub block_importances: Box<[f32]>,
   /// Pre-computed distortion_scale.
   pub distortion_scales: Box<[DistortionScale]>,
+  /// Pre-computed activity_scale.
+  pub activity_scales: Box<[DistortionScale]>,
 
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
@@ -743,6 +745,11 @@ impl<T: Pixel> FrameInvariants<T> {
       // dynamic allocation: once per frame
       block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
       distortion_scales: vec![
+        DistortionScale::default();
+        w_in_imp_b * h_in_imp_b
+      ]
+      .into_boxed_slice(),
+      activity_scales: vec![
         DistortionScale::default();
         w_in_imp_b * h_in_imp_b
       ]

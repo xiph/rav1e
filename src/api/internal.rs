@@ -1165,6 +1165,19 @@ impl<T: Pixel> ContextInner<T> {
       );
       frame_data.fi.set_quantizers(&qps);
 
+      if self.config.tune == Tune::Psychovisual {
+        let frame =
+          self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
+        frame_data.fi.activity_mask =
+          ActivityMask::from_plane(&frame.planes[0]);
+        frame_data.fi.activity_mask.fill_scales(
+          frame_data.fi.sequence.bit_depth,
+          &mut frame_data.fi.activity_scales,
+        );
+      } else {
+        frame_data.fi.activity_mask = ActivityMask::default();
+      }
+
       if self.rc_state.needs_trial_encode(fti) {
         let mut trial_fs = frame_data.fs.clone();
         let data =
@@ -1185,10 +1198,6 @@ impl<T: Pixel> ContextInner<T> {
         );
         frame_data.fi.set_quantizers(&qps);
       }
-
-      // TODO: replace with ActivityMask::from_plane() when
-      // the activity mask is actually used.
-      frame_data.fi.activity_mask = ActivityMask::default();
 
       let data =
         encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
