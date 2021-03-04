@@ -9,6 +9,8 @@
 
 use crate::context::*;
 use crate::header::PRIMARY_REF_NONE;
+use crate::partition::BlockSize;
+use crate::tiling::TileStateMut;
 use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
@@ -68,4 +70,55 @@ pub fn segmentation_optimize<T: Pixel>(
       }
     }
   }
+}
+
+pub fn select_segment<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, tile_bo: TileBlockOffset,
+  bsize: BlockSize, skip: bool,
+) -> std::ops::RangeInclusive<u8> {
+  use crate::rdo::spatiotemporal_scale;
+  use arrayvec::ArrayVec;
+
+  // If skip is true or segmentation is turned off, sidx is not coded.
+  if skip || !fi.enable_segmentation {
+    return 0..=0;
+  }
+
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  let scale = spatiotemporal_scale(fi, frame_bo, bsize);
+
+  // TODO: Replace this calculation with precomputed scale thresholds.
+  let segment_2_is_lossless = fi.base_q_idx as i16
+    + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
+    < 1;
+
+  let seg_ac_q: ArrayVec<[_; 3]> = if fi.enable_segmentation {
+    use crate::quantize::ac_q;
+    (0..=2)
+      .map(|sidx| {
+        ac_q(
+          (fi.base_q_idx as i16
+            + ts.segmentation.data[sidx][SegLvl::SEG_LVL_ALT_Q as usize])
+            .max(0)
+            .min(255) as u8,
+          0,
+          fi.sequence.bit_depth,
+        )
+      })
+      .collect()
+  } else {
+    Default::default()
+  };
+
+  let sidx = if scale.mul_u64(seg_ac_q[1] as u64) < seg_ac_q[0] as u64 {
+    1
+  } else if !segment_2_is_lossless
+    && scale.mul_u64(seg_ac_q[2] as u64) > seg_ac_q[0] as u64
+  {
+    2
+  } else {
+    0
+  };
+
+  sidx..=sidx
 }

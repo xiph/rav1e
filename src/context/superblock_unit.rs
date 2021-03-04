@@ -27,6 +27,11 @@ pub const BLOCK_TO_PLANE_SHIFT: usize = MI_SIZE_LOG2;
 pub const IMPORTANCE_BLOCK_TO_BLOCK_SHIFT: usize = 1;
 pub const LOCAL_BLOCK_MASK: usize = (1 << SUPERBLOCK_TO_BLOCK_SHIFT) - 1;
 
+pub const MAX_SB_IN_IMP_B: usize = 1
+  << (MAX_SB_SIZE_LOG2
+    - IMPORTANCE_BLOCK_TO_BLOCK_SHIFT
+    - BLOCK_TO_PLANE_SHIFT);
+
 /// Absolute offset in superblocks, where a superblock is defined
 /// to be an N*N square where N = (1 << SUPERBLOCK_TO_PLANE_SHIFT).
 #[derive(Clone, Copy, Debug, PartialEq)]
