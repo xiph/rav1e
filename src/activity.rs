@@ -73,45 +73,4 @@ impl ActivityMask {
     }
     ActivityMask { variances, width, height, granularity }
   }
-
-  pub fn variance_at(&self, x: usize, y: usize) -> Option<f64> {
-    let (dec_width, dec_height) =
-      (self.width >> self.granularity, self.height >> self.granularity);
-    if x > dec_width || y > dec_height {
-      None
-    } else {
-      Some(*self.variances.get(x + dec_width * y).unwrap())
-    }
-  }
-
-  pub fn mean_activity_of(&self, rect: Rect) -> Option<f64> {
-    let Rect { x, y, width, height } = rect;
-    let (x, y) = (x as usize, y as usize);
-    let granularity = self.granularity;
-    let (dec_x, dec_y) = (x >> granularity, y >> granularity);
-    let (dec_width, dec_height) =
-      (width >> granularity, height >> granularity);
-
-    if x > self.width
-      || y > self.height
-      || (x + width) > self.width
-      || (y + height) > self.height
-      || dec_width == 0
-      || dec_height == 0
-    {
-      // Region lies out of the frame or is smaller than 8x8 on some axis
-      None
-    } else {
-      let activity = self
-        .variances
-        .chunks_exact(self.width >> granularity)
-        .skip(dec_y)
-        .take(dec_height)
-        .map(|row| row.iter().skip(dec_x).take(dec_width).sum::<f64>())
-        .sum::<f64>()
-        / (dec_width as f64 * dec_height as f64);
-
-      Some(activity.cbrt().sqrt())
-    }
-  }
 }
