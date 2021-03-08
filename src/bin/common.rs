@@ -89,6 +89,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
+    .setting(AppSettings::ColoredHelp)
     .arg(Arg::with_name("FULLHELP")
       .help("Prints more detailed help information")
       .long("fullhelp"))
