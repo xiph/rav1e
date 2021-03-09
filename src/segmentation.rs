@@ -76,6 +76,7 @@ pub fn select_segment<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, tile_bo: TileBlockOffset,
   bsize: BlockSize, skip: bool,
 ) -> std::ops::RangeInclusive<u8> {
+  use crate::api::SegmentationLevel;
   use crate::rdo::spatiotemporal_scale;
   use arrayvec::ArrayVec;
 
@@ -84,14 +85,18 @@ pub fn select_segment<T: Pixel>(
     return 0..=0;
   }
 
-  let frame_bo = ts.to_frame_block_offset(tile_bo);
-  let scale = spatiotemporal_scale(fi, frame_bo, bsize);
-
-  // TODO: Replace this calculation with precomputed scale thresholds.
   let segment_2_is_lossless = fi.base_q_idx as i16
     + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
     < 1;
 
+  if fi.config.speed_settings.segmentation == SegmentationLevel::Full {
+    return if segment_2_is_lossless { 0..=1 } else { 0..=2 };
+  }
+
+  let frame_bo = ts.to_frame_block_offset(tile_bo);
+  let scale = spatiotemporal_scale(fi, frame_bo, bsize);
+
+  // TODO: Replace this calculation with precomputed scale thresholds.
   let seg_ac_q: ArrayVec<[_; 3]> = if fi.enable_segmentation {
     use crate::quantize::ac_q;
     (0..=2)
