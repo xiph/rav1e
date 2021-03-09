@@ -151,6 +151,9 @@ impl Config {
   ///
   /// The threadpool is shared across all the different parallel
   /// components in the encoder.
+  ///
+  /// If it is left unset `new_context()` will create a new default one
+  /// `new_*_channel()` will use the current global threadpool if present.
   pub fn with_threads(mut self, threads: usize) -> Self {
     self.threads = threads;
     self
@@ -166,6 +169,8 @@ impl Config {
 
   #[cfg(feature = "unstable")]
   /// Use the provided threadpool
+  ///
+  /// It takes priority over `with_threads()`
   pub fn with_thread_pool(mut self, pool: Arc<ThreadPool>) -> Self {
     self.pool = Some(pool);
     self
