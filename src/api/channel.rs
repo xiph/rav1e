@@ -238,16 +238,18 @@ pub type VideoDataChannel<T> = (FrameSender<T>, PacketReceiver<T>);
 impl Config {
   fn setup<T: Pixel>(
     &self,
-  ) -> Result<(ContextInner<T>, Arc<ThreadPool>), InvalidConfig> {
+  ) -> Result<(ContextInner<T>, Option<Arc<ThreadPool>>), InvalidConfig> {
     self.validate()?;
     let inner = self.new_inner()?;
 
     let pool = if let Some(ref p) = self.pool {
-      p.clone()
+      Some(p.clone())
+    } else if self.threads == 0 {
+      None
     } else {
       let pool =
         ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
-      Arc::new(pool)
+      Some(Arc::new(pool))
     };
 
     Ok((inner, pool))
@@ -463,7 +465,7 @@ impl Config {
 
     let pass_channel = (rc_data_sender, rc_data_receiver);
 
-    pool.spawn(move || {
+    let run = move || {
       for f in receive_frame.iter() {
         // info!("frame in {}", inner.frame_count);
         while !inner.needs_more_fi_lookahead() {
@@ -514,7 +516,13 @@ impl Config {
       }
 
       send_rc_pass1.send_pass_summary(&mut inner.rc_state);
-    });
+    };
+
+    if let Some(pool) = pool {
+      pool.spawn(run);
+    } else {
+      rayon::spawn(run);
+    }
 
     Ok((channel, pass_channel))
   }
