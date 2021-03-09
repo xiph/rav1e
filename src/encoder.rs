@@ -756,7 +756,8 @@ impl<T: Pixel> FrameInvariants<T> {
       .into_boxed_slice(),
       cpu_feature_level: Default::default(),
       activity_mask: Default::default(),
-      enable_segmentation: config.speed_settings.enable_segmentation,
+      enable_segmentation: config.speed_settings.segmentation
+        != SegmentationLevel::Disabled,
       enable_inter_txfm_split: config.speed_settings.enable_inter_tx_split,
       sequence,
       config,

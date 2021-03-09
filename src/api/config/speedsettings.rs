@@ -73,8 +73,10 @@ pub struct SpeedSettings {
   /// Enabled is slower.
   pub non_square_partition: bool,
 
-  /// Use segmentation.
-  pub enable_segmentation: bool,
+  /// Search level for segmentation.
+  ///
+  /// Full search is at least twice as slow.
+  pub segmentation: SegmentationLevel,
 
   /// Enable tx split for inter mode block.
   pub enable_inter_tx_split: bool,
@@ -114,7 +116,7 @@ impl Default for SpeedSettings {
       sgr_complexity: SGRComplexityLevel::Full,
       use_satd_subpel: true,
       non_square_partition: true,
-      enable_segmentation: true,
+      segmentation: SegmentationLevel::Full,
       enable_inter_tx_split: false,
       fine_directional_intra: false,
     }
@@ -159,7 +161,7 @@ impl SpeedSettings {
       sgr_complexity: Self::sgr_complexity_preset(speed),
       use_satd_subpel: Self::use_satd_subpel(speed),
       non_square_partition: Self::non_square_partition_preset(speed),
-      enable_segmentation: Self::enable_segmentation_preset(speed),
+      segmentation: Self::segmentation_preset(speed),
       enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
       fine_directional_intra: Self::fine_directional_intra_preset(speed),
     }
@@ -270,11 +272,12 @@ impl SpeedSettings {
     speed == 0
   }
 
-  // FIXME: this is currently only enabled at speed 0 because choosing a segment
-  // requires doing RDO, but once that is replaced by a less bruteforce
-  // solution we should be able to enable segmentation at all speeds.
-  const fn enable_segmentation_preset(speed: usize) -> bool {
-    speed == 0
+  fn segmentation_preset(speed: usize) -> SegmentationLevel {
+    if speed == 0 {
+      SegmentationLevel::Full
+    } else {
+      SegmentationLevel::Simple
+    }
   }
 
   // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
@@ -369,6 +372,40 @@ impl fmt::Display for SGRComplexityLevel {
       match self {
         SGRComplexityLevel::Full => "Full",
         SGRComplexityLevel::Reduced => "Reduced",
+      }
+    )
+  }
+}
+
+/// Search level for segmentation
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+)]
+pub enum SegmentationLevel {
+  /// No segmentation is signalled.
+  Disabled,
+  /// Segmentation index is derived from source statistics.
+  Simple,
+  /// Search all segmentation indices.
+  Full,
+}
+
+impl fmt::Display for SegmentationLevel {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        SegmentationLevel::Disabled => "Disabled",
+        SegmentationLevel::Simple => "Simple",
+        SegmentationLevel::Full => "Full",
       }
     )
   }
