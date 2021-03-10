@@ -87,7 +87,7 @@ mod wasm_bindgen {
 
 mod rayon {
   cfg_if::cfg_if! {
-    if #[cfg(target_arch="wasm32")] {
+    if #[cfg(all(target_arch="wasm32", not(target_feature = "atomics")))] {
       pub struct ThreadPoolBuilder ();
       impl ThreadPoolBuilder {
         pub fn new() -> ThreadPoolBuilder {
