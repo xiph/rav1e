@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct Context<T: Pixel> {
   pub(crate) inner: ContextInner<T>,
   pub(crate) config: EncoderConfig,
-  pub(crate) pool: Arc<crate::rayon::ThreadPool>,
+  pub(crate) pool: Option<Arc<crate::rayon::ThreadPool>>,
   pub(crate) is_flushing: bool,
 }
 
@@ -122,9 +122,12 @@ impl<T: Pixel> Context<T> {
     }
 
     let inner = &mut self.inner;
-    let pool = &mut self.pool;
+    let run = move || inner.send_frame(frame, params);
 
-    pool.install(|| inner.send_frame(frame, params))
+    match &self.pool {
+      Some(pool) => pool.install(run),
+      None => run(),
+    }
   }
 
   /// Returns the first-pass data of a two-pass encode for the frame that was
@@ -285,9 +288,12 @@ impl<T: Pixel> Context<T> {
   #[inline]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     let inner = &mut self.inner;
-    let pool = &mut self.pool;
+    let mut run = move || inner.receive_packet();
 
-    pool.install(|| inner.receive_packet())
+    match &self.pool {
+      Some(pool) => pool.install(run),
+      None => run(),
+    }
   }
 
   /// Flushes the encoder.
