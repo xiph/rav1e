@@ -253,11 +253,13 @@ impl Config {
     let inner = self.new_inner()?;
     let config = *inner.config;
     let pool = if let Some(ref p) = self.pool {
-      p.clone()
-    } else {
+      Some(p.clone())
+    } else if self.threads != 0 {
       let pool =
         ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
-      Arc::new(pool)
+      Some(Arc::new(pool))
+    } else {
+      None
     };
 
     Ok(Context { is_flushing: false, inner, pool, config })
