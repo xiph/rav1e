@@ -153,7 +153,7 @@ impl Config {
   /// components in the encoder.
   ///
   /// If it is left unset `new_context()` will create a new default one
-  /// `new_*_channel()` will use the current global threadpool if present.
+  /// `new_*_channel()` will use the default global threadpool.
   pub fn with_threads(mut self, threads: usize) -> Self {
     self.threads = threads;
     self
