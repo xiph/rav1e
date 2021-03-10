@@ -234,6 +234,21 @@ impl Config {
 
     Ok(inner)
   }
+
+  /// Create a new threadpool with this configuration if set,
+  /// or return `None` if global threadpool should be used instead.
+  pub(crate) fn new_thread_pool(&self) -> Option<Arc<ThreadPool>> {
+    if let Some(ref p) = self.pool {
+      Some(p.clone())
+    } else if self.threads != 0 {
+      let pool =
+        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
+      Some(Arc::new(pool))
+    } else {
+      None
+    }
+  }
+
   /// Creates a [`Context`] with this configuration.
   ///
   /// # Examples
@@ -252,15 +267,7 @@ impl Config {
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     let inner = self.new_inner()?;
     let config = *inner.config;
-    let pool = if let Some(ref p) = self.pool {
-      Some(p.clone())
-    } else if self.threads != 0 {
-      let pool =
-        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
-      Some(Arc::new(pool))
-    } else {
-      None
-    };
+    let pool = self.new_thread_pool();
 
     Ok(Context { is_flushing: false, inner, pool, config })
   }

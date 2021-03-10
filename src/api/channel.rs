@@ -242,15 +242,7 @@ impl Config {
     self.validate()?;
     let inner = self.new_inner()?;
 
-    let pool = if let Some(ref p) = self.pool {
-      Some(p.clone())
-    } else if self.threads == 0 {
-      None
-    } else {
-      let pool =
-        ThreadPoolBuilder::new().num_threads(self.threads).build().unwrap();
-      Some(Arc::new(pool))
-    };
+    let pool = self.new_thread_pool();
 
     Ok((inner, pool))
   }
