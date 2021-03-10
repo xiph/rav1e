@@ -152,8 +152,8 @@ impl Config {
   /// The threadpool is shared across all the different parallel
   /// components in the encoder.
   ///
-  /// If it is left unset `new_context()` will create a new default one
-  /// `new_*_channel()` will use the default global threadpool.
+  /// If it is left unset, the encoder will use the default global
+  /// threadpool provided by Rayon instead.
   pub fn with_threads(mut self, threads: usize) -> Self {
     self.threads = threads;
     self
