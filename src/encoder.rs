@@ -425,8 +425,8 @@ impl<T: Pixel> FrameState<T> {
     let luma_width = frame.planes[0].cfg.width;
     let luma_height = frame.planes[0].cfg.height;
 
-    let hres = frame.planes[0].downsampled(fi.width, fi.height);
-    let qres = hres.downsampled(fi.width, fi.height);
+    let hres = frame.planes[0].downscale_by_2(fi.width, fi.height);
+    let qres = hres.downscale_by_2(fi.width, fi.height);
 
     Self {
       sb_size_log2: fi.sb_size_log2(),
