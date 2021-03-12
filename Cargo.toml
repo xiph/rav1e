@@ -114,7 +114,7 @@ signal-hook = { version = "0.3", optional = true }
 [dev-dependencies]
 assert_cmd = "1.0"
 criterion = "0.3"
-pretty_assertions = "0.6"
+pretty_assertions = "0.7"
 interpolate_name = "0.2.2"
 rand = "0.8"
 rand_chacha = "0.3"
