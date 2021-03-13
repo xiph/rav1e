@@ -20,7 +20,7 @@ use crossbeam::channel::*;
 use crate::encoder::*;
 use crate::frame::*;
 use crate::rate::RCState;
-use crate::rayon::{ThreadPool, ThreadPoolBuilder};
+use crate::rayon::ThreadPool;
 use crate::util::Pixel;
 
 use std::io;
