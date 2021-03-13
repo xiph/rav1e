@@ -424,8 +424,8 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  /// Downscales plane by factor of 2, witdth and height for padding
-  pub fn downscale_by_2(
+  /// Downscales plane by factor of 2, width and height for padding
+  pub fn downsampled(
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
     let src = self;
@@ -757,7 +757,7 @@ pub mod test {
   }
 
   #[test]
-  fn downscale_by_2() {
+  fn downsampled() {
     #[rustfmt::skip]
     let plane = Plane::<u8> {
       data: PlaneData::from_slice(&[
@@ -784,7 +784,7 @@ pub mod test {
         yorigin: 3,
       },
     };
-    let downscale_by_2 = plane.downscale_by_2(4, 4);
+    let downsampled = plane.downsampled(4, 4);
 
     #[rustfmt::skip]
     assert_eq!(
@@ -798,11 +798,11 @@ pub mod test {
         6, 6, 6, 6, 6, 6, 6, 6,
         6, 6, 6, 6, 6, 6, 6, 6,
       ][..],
-      &downscale_by_2.data[..]
+      &downsampled.data[..]
     );
   }
   #[test]
-  fn test_plane_downscale_by_2_odd() {
+  fn test_plane_downsampled_odd() {
     #[rustfmt::skip]
     let plane = Plane::<u8> {
       data: PlaneData::from_slice(&[
@@ -829,7 +829,7 @@ pub mod test {
         yorigin: 3,
       },
     };
-    let downscale_by_2 = plane.downscale_by_2(3, 3);
+    let downsampled = plane.downsampled(3, 3);
 
     #[rustfmt::skip]
     assert_eq!(
@@ -843,7 +843,7 @@ pub mod test {
         6, 6, 6, 6, 6, 6, 6, 6,
         6, 6, 6, 6, 6, 6, 6, 6,
       ][..],
-      &downscale_by_2.data[..]
+      &downsampled.data[..]
     );
   }
   #[test]
