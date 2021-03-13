@@ -424,9 +424,9 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
-  /// Returns plane with half the resolution for height and width.
-  /// Downcaled with box 2x2 filter.
-  /// Padding dimmensions specify frame_width and frame_height.
+  /// Returns plane with half the resolution for width and height.
+  /// Downscaled with box 2x2 filter.
+  /// Padded to dimensions with frame_width and frame_height.
   pub fn downsampled(
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
