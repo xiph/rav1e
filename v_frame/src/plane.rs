@@ -757,7 +757,7 @@ pub mod test {
   }
 
   #[test]
-  fn downsampled() {
+  fn test_plane_downsample() {
     #[rustfmt::skip]
     let plane = Plane::<u8> {
       data: PlaneData::from_slice(&[
@@ -802,7 +802,7 @@ pub mod test {
     );
   }
   #[test]
-  fn test_plane_downsampled_odd() {
+  fn test_plane_downsample_odd() {
     #[rustfmt::skip]
     let plane = Plane::<u8> {
       data: PlaneData::from_slice(&[
