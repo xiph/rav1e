@@ -257,6 +257,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_output_frameno: u64,
   /// Optional opaque to be sent back to the user
   opaque_q: BTreeMap<u64, Opaque>,
+  is_flushing: bool,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -310,29 +311,12 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_frame: 1,
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
+      is_flushing: false,
     }
   }
 
-  #[hawktracer(send_frame)]
-  pub fn send_frame(
-    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
-  ) -> Result<(), EncoderStatus> {
-    let input_frameno = self.frame_count;
-    let is_flushing = frame.is_none();
-    if !is_flushing {
-      self.frame_count += 1;
-    }
-    self.frame_q.insert(input_frameno, frame);
-
-    if let Some(params) = params {
-      if params.frame_type_override == FrameTypeOverride::Key {
-        self.keyframes_forced.insert(input_frameno);
-      }
-      if let Some(op) = params.opaque {
-        self.opaque_q.insert(input_frameno, op);
-      }
-    }
-
+  // lookahead computations
+  pub(crate) fn compute_fi(&mut self) {
     if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       let lookahead_frames = self
         .frame_q
@@ -340,7 +324,7 @@ impl<T: Pixel> ContextInner<T> {
         .filter_map(|(&_input_frameno, frame)| frame.clone())
         .collect::<Vec<_>>();
 
-      if is_flushing {
+      if self.is_flushing {
         // This is the last time send_frame is called, process all the
         // remaining frames.
         for cur_lookahead_frames in
@@ -359,6 +343,30 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.compute_frame_invariants();
+  }
+
+  #[hawktracer(send_frame)]
+  pub fn send_frame(
+    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
+  ) -> Result<(), EncoderStatus> {
+    let input_frameno = self.frame_count;
+
+    self.is_flushing = frame.is_none();
+    if !self.is_flushing {
+      self.frame_count += 1;
+    }
+    self.frame_q.insert(input_frameno, frame);
+
+    if let Some(params) = params {
+      if params.frame_type_override == FrameTypeOverride::Key {
+        self.keyframes_forced.insert(input_frameno);
+      }
+      if let Some(op) = params.opaque {
+        self.opaque_q.insert(input_frameno, op);
+      }
+    }
+
+    self.compute_fi();
 
     Ok(())
   }
