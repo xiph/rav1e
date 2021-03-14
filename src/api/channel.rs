@@ -482,6 +482,7 @@ impl Config {
 
         let (frame, params) = f;
         let _ = inner.send_frame(frame, params); // TODO make sure it cannot fail.
+        inner.compute_fi();
       }
 
       inner.limit = Some(inner.frame_count);

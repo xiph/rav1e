@@ -366,8 +366,6 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    self.compute_fi();
-
     Ok(())
   }
 
@@ -1286,6 +1284,8 @@ impl<T: Pixel> ContextInner<T> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
     }
+
+    self.compute_fi();
 
     if self.needs_more_fi_lookahead() {
       return Err(EncoderStatus::NeedMoreData);
