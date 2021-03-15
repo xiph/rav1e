@@ -424,14 +424,15 @@ impl<T: Pixel> ContextInner<T> {
 
   fn set_frame_properties(
     &mut self, output_frameno: u64,
-  ) -> Result<(), EncoderStatus> {
+  ) -> Result<bool, EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
+    let valid = !fi.invalid;
 
     let frame =
       self.frame_q.get(&fi.input_frameno).as_ref().unwrap().as_ref().unwrap();
     self.frame_data.insert(output_frameno, FrameData::new(fi, frame.clone()));
 
-    Ok(())
+    Ok(valid)
   }
 
   #[allow(unused)]
@@ -780,12 +781,17 @@ impl<T: Pixel> ContextInner<T> {
 
   #[hawktracer(compute_frame_invariants)]
   pub fn compute_frame_invariants(&mut self) {
-    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
+    while let Ok(valid) =
+      self.set_frame_properties(self.next_lookahead_output_frameno)
     {
-      self
-        .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
-      if self.config.temporal_rdo() {
-        self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+      if valid {
+        self.compute_lookahead_motion_vectors(
+          self.next_lookahead_output_frameno,
+        );
+        if self.config.temporal_rdo() {
+          self
+            .compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+        }
       }
       self.next_lookahead_output_frameno += 1;
     }
