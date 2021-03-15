@@ -582,6 +582,13 @@ impl<T: Pixel> ContextInner<T> {
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
     let qps = {
       let frame_data = self.frame_data.get(&output_frameno).unwrap();
+      // We're only interested in valid frames which are not show-existing-frame.
+      // Those two don't modify the rec_buffer so there's no need to do anything
+      // special about it either, it'll propagate on its own.
+      if frame_data.fi.invalid || frame_data.fi.show_existing_frame {
+        return;
+      }
+
       let fti = frame_data.fi.get_frame_subtype();
       self.rc_state.select_qi(
         self,
@@ -593,13 +600,6 @@ impl<T: Pixel> ContextInner<T> {
     let frame_data = self.frame_data.get_mut(&output_frameno).unwrap();
     let fs = &mut frame_data.fs;
     let fi = &mut frame_data.fi;
-
-    // We're only interested in valid frames which are not show-existing-frame.
-    // Those two don't modify the rec_buffer so there's no need to do anything
-    // special about it either, it'll propagate on its own.
-    if fi.invalid || fi.show_existing_frame {
-      return;
-    }
 
     #[cfg(feature = "dump_lookahead_data")]
     {
