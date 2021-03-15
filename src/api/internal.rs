@@ -1001,7 +1001,7 @@ impl<T: Pixel> ContextInner<T> {
       let output_frame_data = self.frame_data.remove(&output_frameno).unwrap();
       let fi = &output_frame_data.fi;
 
-      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+      let frame = &output_frame_data.fs.input;
 
       // There can be at most 3 of these.
       let mut unique_indices = ArrayVec::<_, 3>::new();
