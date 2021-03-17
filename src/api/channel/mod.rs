@@ -24,8 +24,11 @@ use std::sync::Arc;
 mod data;
 pub use data::*;
 
+mod by_gop;
+pub use by_gop::*;
+
 impl Config {
-  fn setup<T: Pixel>(
+  pub(crate) fn setup<T: Pixel>(
     &self,
   ) -> Result<(ContextInner<T>, Option<Arc<ThreadPool>>), InvalidConfig> {
     self.validate()?;

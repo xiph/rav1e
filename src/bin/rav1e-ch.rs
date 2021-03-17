@@ -103,7 +103,6 @@ impl<D: Decoder> Source<D> {
         return false;
       }
     }
-
     match self.input.read_frame(send_frame, &video_info) {
       Ok(frame) => {
         self.count += 1;
@@ -120,7 +119,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   output: &mut dyn Muxer, mut source: Source<D>, pass1file: Option<File>,
   pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write + Send>>>,
-  metrics_enabled: MetricsEnabled,
+  metrics_enabled: MetricsEnabled, slots: usize,
 ) -> Result<(), CliError> {
   let ((mut send_frame, receive_packet), (send_rc, receive_rc)) =
     match (pass1file.is_some(), pass2file.is_some()) {
@@ -143,8 +142,13 @@ fn do_encode<T: Pixel, D: Decoder>(
         (channel, (Some(send_rc), None))
       }
       (false, false) => {
-        let channel =
-          cfg.new_channel().map_err(|e| e.context("Invalid setup"))?;
+        let channel = if slots == 0 {
+          cfg.new_channel().map_err(|e| e.context("Invalid setup"))?
+        } else {
+          cfg
+            .new_by_gop_channel(slots)
+            .map_err(|e| e.context("Invalid setup"))?
+        };
         (channel, (None, None))
       }
     };
@@ -560,6 +564,7 @@ fn run() -> Result<(), error::CliError> {
       pass2file,
       y4m_enc,
       cli.metrics_enabled,
+      cli.slots,
     )?
   } else {
     do_encode::<u16, y4m::Decoder<Box<dyn Read + Send>>>(
@@ -572,6 +577,7 @@ fn run() -> Result<(), error::CliError> {
       pass2file,
       y4m_enc,
       cli.metrics_enabled,
+      cli.slots,
     )?
   }
   if cli.benchmark {
