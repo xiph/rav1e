@@ -47,6 +47,7 @@ pub struct CliOptions {
   pub pass1file_name: Option<String>,
   pub pass2file_name: Option<String>,
   pub save_config: Option<String>,
+  pub slots: usize,
 }
 
 #[cfg(feature = "serialize")]
@@ -369,6 +370,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Overwrite output file.")
         .short("y")
     )
+    .arg(
+      Arg::with_name("SLOTS")
+      .help("Select the number of by_gop encoder-slots to allocate")
+      .long("slots")
+      .takes_value(true)
+      .default_value("0")
+    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -486,6 +494,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     panic!("A limit cannot be set above 1 in still picture mode");
   }
 
+  let slots = matches.value_of("SLOTS").unwrap().parse().unwrap();
+
   Ok(CliOptions {
     io,
     enc,
@@ -502,6 +512,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
     save_config,
+    slots,
   })
 }
 
