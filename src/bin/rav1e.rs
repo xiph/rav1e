@@ -508,6 +508,19 @@ fn run() -> Result<(), error::CliError> {
   );
   info!("Encoding settings: {}", cli.enc);
 
+  let tiling =
+    cfg.tiling_info().map_err(|e| e.context("Invalid configuration"))?;
+  if tiling.tile_count() == 1 {
+    info!("Using 1 tile");
+  } else {
+    info!(
+      "Using {} tiles ({}x{})",
+      tiling.tile_count(),
+      tiling.cols,
+      tiling.rows
+    );
+  }
+
   let progress = ProgressInfo::new(
     Rational { num: video_info.time_base.den, den: video_info.time_base.num },
     if cli.limit == 0 { None } else { Some(cli.limit) },

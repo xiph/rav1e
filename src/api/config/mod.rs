@@ -13,7 +13,6 @@ use std::sync::Arc;
 
 use crate::api::{ChromaSampling, Context, ContextInner, PixelRange};
 use crate::rayon::{ThreadPool, ThreadPoolBuilder};
-use crate::tiling::TilingInfo;
 use crate::util::Pixel;
 
 mod encoder;
@@ -25,6 +24,8 @@ pub use rate::{RateControlConfig, RateControlSummary};
 
 mod speedsettings;
 pub use speedsettings::*;
+
+pub use crate::tiling::TilingInfo;
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
@@ -379,5 +380,16 @@ impl Config {
     }
 
     Ok(())
+  }
+
+  /// Provide the tiling information for the current Config
+  ///
+  /// Useful for reporting and debugging.
+  pub fn tiling_info(&self) -> Result<TilingInfo, InvalidConfig> {
+    self.validate()?;
+
+    let seq = crate::encoder::Sequence::new(&self.enc);
+
+    Ok(seq.tiling)
   }
 }
