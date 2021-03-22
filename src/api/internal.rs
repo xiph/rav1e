@@ -27,7 +27,6 @@ use crate::stats::EncoderStats;
 use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
-use log::Level::Info;
 use rust_hawktracer::*;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
@@ -273,20 +272,6 @@ impl<T: Pixel> ContextInner<T> {
     let seq = Arc::new(Sequence::new(enc));
     let inter_cfg = InterConfig::new(enc);
     let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
-
-    if log_enabled!(Info) {
-      let tiling = seq.tiling;
-      if tiling.tile_count() == 1 {
-        info!("Using 1 tile");
-      } else {
-        info!(
-          "Using {} tiles ({}x{})",
-          tiling.tile_count(),
-          tiling.cols,
-          tiling.rows
-        );
-      }
-    }
 
     ContextInner {
       frame_count: 0,
