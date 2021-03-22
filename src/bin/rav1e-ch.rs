@@ -41,6 +41,7 @@ mod stats;
 use crate::common::*;
 use crate::error::*;
 use crate::stats::*;
+use rav1e::config::CpuFeatureLevel;
 use rav1e::prelude::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
@@ -314,6 +315,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     file_path: "trace.bin".into(),
     buffer_size: 4096,
   });
+
+  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
   run().map_err(|e| {
     error::print_error(&e);

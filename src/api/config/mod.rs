@@ -12,7 +12,6 @@ use thiserror::Error;
 use std::sync::Arc;
 
 use crate::api::{ChromaSampling, Context, ContextInner, PixelRange};
-use crate::cpu_features::CpuFeatureLevel;
 use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::tiling::TilingInfo;
 use crate::util::Pixel;
@@ -199,12 +198,6 @@ impl Config {
     );
 
     self.validate()?;
-
-    // Because we don't have a FrameInvariants yet,
-    // this is the only way to get the CpuFeatureLevel in use.
-    // Since we only call this once, this shouldn't cause
-    // performance issues.
-    info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
     let mut config = self.enc;
     config.set_key_frame_interval(
