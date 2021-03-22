@@ -358,6 +358,7 @@ fn init_logger() {
     // parameter:
     // `info!(target="special_target", "This log message is about special_target");`
     .level_for("rav1e", level)
+    .level_for("rav1e_ch", level)
     // output to stdout
     .chain(std::io::stderr())
     .apply()
