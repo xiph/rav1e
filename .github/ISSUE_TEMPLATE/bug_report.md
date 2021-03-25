@@ -30,5 +30,10 @@ $ rav1e --version
 Operating system:
 ```
 $ uname -a
-...
 ```
+
+**Console Output**
+Please paste the console output below if it is relevant,
+<Details>
+Snippet here
+</Details>
