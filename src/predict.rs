@@ -1031,6 +1031,7 @@ pub(crate) mod rust {
     bit_depth: usize, ief_params: Option<IntraEdgeFilterParameters>,
   ) {
     #[allow(clippy::collapsible_if)]
+    #[allow(clippy::collapsible_else_if)]
     #[allow(clippy::needless_return)]
     fn select_ief_strength(
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
