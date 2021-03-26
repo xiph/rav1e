@@ -12,7 +12,7 @@
 
 ![Image](structure.png)
 
-Source: [draw.io](structure.draw.io)
+Source: [draw.io](structure.drawio)
 
 ##  Overview of `src/*`
 
