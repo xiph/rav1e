@@ -12,76 +12,74 @@ on:
 
 jobs:
   rustfmt-clippy:
-
     if: >-
-     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
-     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+      (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - uses: ilammy/setup-nasm@v1
-    - name: Install stable
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
-        components: clippy, rustfmt
-    - name: Run rustfmt
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: -- --check --verbose
-    - name: Run clippy
-      uses: actions-rs/clippy-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
+      - uses: actions/checkout@v2
+      - uses: ilammy/setup-nasm@v1
+      - name: Install stable
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: clippy, rustfmt
+      - name: Run rustfmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: -- --check --verbose
+      - name: Run clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
 
   build-unix:
-
     strategy:
       matrix:
         conf:
-         - beta-build
-         - 1.44.1-tests
-         - aom-tests
-         - dav1d-tests
-         - no-asm-tests
-         - grcov-coveralls
-         - bench
-         - doc
-         - cargo-c
-         - check-no-default
-         - check-extra-feats
-         - fuzz
+          - beta-build
+          - 1.51.0-tests
+          - aom-tests
+          - dav1d-tests
+          - no-asm-tests
+          - grcov-coveralls
+          - bench
+          - doc
+          - cargo-c
+          - check-no-default
+          - check-extra-feats
+          - fuzz
         include:
-         - conf: beta-build
-           toolchain: beta
-         - conf: 1.44.1-tests
-           toolchain: 1.44.1
-         - conf: aom-tests
-           toolchain: stable
-         - conf: dav1d-tests
-           toolchain: stable
-         - conf: no-asm-tests
-           toolchain: stable
-         - conf: grcov-coveralls
-           toolchain: stable
-         - conf: bench
-           toolchain: stable
-         - conf: doc
-           toolchain: stable
-         - conf: cargo-c
-           toolchain: stable
-         - conf: check-no-default
-           toolchain: stable
-         - conf: check-extra-feats
-           toolchain: stable
-         - conf: fuzz
-           toolchain: stable
+          - conf: beta-build
+            toolchain: beta
+          - conf: 1.51.0-tests
+            toolchain: 1.51.0
+          - conf: aom-tests
+            toolchain: stable
+          - conf: dav1d-tests
+            toolchain: stable
+          - conf: no-asm-tests
+            toolchain: stable
+          - conf: grcov-coveralls
+            toolchain: stable
+          - conf: bench
+            toolchain: stable
+          - conf: doc
+            toolchain: stable
+          - conf: cargo-c
+            toolchain: stable
+          - conf: check-no-default
+            toolchain: stable
+          - conf: check-extra-feats
+            toolchain: stable
+          - conf: fuzz
+            toolchain: stable
 
     env:
       RUST_BACKTRACE: full
@@ -91,220 +89,219 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: 0
 
     if: >-
-     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
-     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+      (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set no-asm-tests env vars
-      if: matrix.conf == 'no-asm-tests'
-      run: |
-        echo "name=RAV1E_CPU_TARGET::rust" >> $GITHUB_ENV
-    - name: Install sccache
-      env:
-        LINK: https://github.com/mozilla/sccache/releases/download
-        SCCACHE_VERSION: 0.2.15
-      run: |
-        SCCACHE_FILE=sccache-v$SCCACHE_VERSION-x86_64-unknown-linux-musl
-        mkdir -p $HOME/.local/bin
-        curl -L "$LINK/v$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
-        chmod +x $SCCACHE_FILE/sccache
-        mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-    - name: Add nasm
-      env:
-        LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
-        NASM_VERSION: 2.15.05-1
-        NASM_SHA256: >-
-          c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
-      run: |
-        echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
-        echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
-    - name: Add aom
-      if: >
-        matrix.conf == '1.44.1-tests' || matrix.conf == 'aom-tests' ||
-        matrix.conf == 'grcov-coveralls'
-      env:
-        LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-        AOM_VERSION: 2.0.2-dmo0~bpo10+1
-        AOM_DEV_SHA256: >-
-          d31eee6524ea64c080312eeafc65355e378e043b1d738ff9b9bde3734a85779c
-        AOM_LIB_SHA256: >-
-          db8a04ca0984604f410c6bd8810ee31666a3bfd3964f3109cdb8f1ae33fec664
-      run: |
-        echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
-        echo "$LINK/libaom2_${AOM_VERSION}_amd64.deb" >> DEBS
-        echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
-        echo "$AOM_LIB_SHA256 libaom2_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
-    - name: Add dav1d
-      if: >
-        matrix.conf == '1.44.1-tests' || matrix.conf == 'dav1d-tests' ||
-        matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
-      env:
-        LINK: https://www.deb-multimedia.org/pool/main/d/dav1d-dmo
-        DAV1D_VERSION: 0.8.2-dmo1
-        DAV1D_DEV_SHA256: >-
-          04d30fc34056467b91a627563c61b9a0046a2e084bb649791cd31887a6c76d8e
-        DAV1D_LIB_SHA256: >-
-          0c3debb3a926e10009503e639dddcfd4082ed6e012340ca49682b738c243dedc
-      run: |
-        echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
-        echo "$LINK/libdav1d5_${DAV1D_VERSION}_amd64.deb" >> DEBS
-        echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
-        echo "$DAV1D_LIB_SHA256 libdav1d5_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
-    - name: Cache packages
-      uses: actions/cache@v2
-      continue-on-error: true
-      id: debs
-      with:
-        path: ~/.cache/debs
-        key: debs-${{ hashFiles('CHECKSUMS') }}
-    - name: Fetch packages
-      if: steps.debs.outputs.cache-hit != 'true'
-      run: |
-        mkdir -p ~/.cache/debs
-        cp DEBS CHECKSUMS ~/.cache/debs
-        cd ~/.cache/debs
-        xargs -a DEBS curl --remote-name-all
-        sha256sum -c CHECKSUMS
-    - name: Install packages
-      run: |
-        sudo dpkg -i ~/.cache/debs/*.deb
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      env:
-        LINK: https://github.com/lu-zero/cargo-c/releases/download
-        CARGO_C_VERSION: 0.7.1
-      run: |
-        curl -L "$LINK/v$CARGO_C_VERSION/cargo-c-linux.tar.gz" |
-        tar xz -C $HOME/.cargo/bin
-    - name: Install grcov
-      if: matrix.conf == 'grcov-coveralls'
-      env:
-        LINK: https://github.com/mozilla/grcov/releases/download
-        GRCOV_VERSION: 0.7.1
-      run: |
-        curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
-        tar xj -C $HOME/.cargo/bin
-    - name: Install ${{ matrix.toolchain }}
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: ${{ matrix.toolchain }}
-        override: true
-    - name: Generate Cargo.lock and Cargo.version
-      run: |
-        cargo update
-        cargo --version > Cargo.version
-    - name: Cache cargo registry
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: ~/.cargo/registry/cache
-        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
-    - name: Cache sccache output
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: /home/runner/.cache/sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-sccache-
-    - name: Start sccache server
-      run: |
-        sccache --start-server
-    - name: Run 1.44.1 tests
-      if: matrix.toolchain == '1.44.1' && matrix.conf == '1.44.1-tests'
-      run: |
-        cargo test --workspace --verbose \
-                   --features=decode_test,decode_test_dav1d,quick_test,capi
-    - name: Run aom tests
-      if: matrix.toolchain == 'stable' && matrix.conf == 'aom-tests'
-      run: |
-        cargo test --workspace --verbose --release \
-                   --features=decode_test \
-                   --color=always -- --color=always --ignored
-    - name: Run dav1d tests
-      if: matrix.toolchain == 'stable' && (matrix.conf == 'dav1d-tests' || matrix.conf == 'no-asm-tests')
-      run: |
-        cargo test --workspace --verbose --release \
-                   --features=decode_test_dav1d \
-                   --color=always -- --color=always --ignored
-    - name: Run build
-      if: matrix.conf == 'beta-build'
-      run: |
-        cargo build --verbose
-    - name: Run bench
-      if: matrix.toolchain == 'stable' && matrix.conf == 'bench'
-      run: |
-        cargo bench --features=bench --no-run --verbose
-    - name: Run doc
-      if: matrix.toolchain == 'stable' && matrix.conf == 'doc'
-      run: |
-        cargo doc --verbose --no-deps
-    - name: Check no default features
-      if: matrix.toolchain == 'stable' && matrix.conf == 'check-no-default'
-      run: |
-        cargo check --no-default-features
-    - name: Check extra features
-      if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
-      run: |
-        cargo check --features=check_asm,capi,dump_lookahead_data,serialize
-    - name: Run cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo cbuild
-    - name: Install cargo-fuzz
-      if: matrix.conf == 'fuzz'
-      run: |
-        cargo install cargo-fuzz
-    - name: Run cargo-fuzz
-      if: matrix.conf == 'fuzz'
-      run: |
-        cargo fuzz build --sanitizer none
-    - name: Run cargo clean
-      if: matrix.conf == 'grcov-coveralls'
-      uses: actions-rs/cargo@v1
-      with:
-        command: clean
-    - name: Run tests with coverage
-      if: matrix.conf == 'grcov-coveralls'
-      env:
-        CARGO_INCREMENTAL: 0
-        RUSTC_BOOTSTRAP: 1
-        RUSTFLAGS: >
-          -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-          -Cpanic=abort -Zpanic_abort_tests
-        RUSTDOCFLAGS: >
-          -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-          -Cpanic=abort -Zpanic_abort_tests
-      run: |
-        cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
-                   --features=decode_test,decode_test_dav1d,quick_test
-    - name: Run unit tests
-      if: matrix.conf == 'no-asm-tests'
-      run: |
-        cargo test --workspace --verbose
-    - name: Run grcov
-      if: matrix.conf == 'grcov-coveralls'
-      id: coverage
-      uses: actions-rs/grcov@v0.1
-    - name: Stop sccache server
-      run: |
-        sccache --stop-server
-    - name: Coveralls upload
-      if: matrix.conf == 'grcov-coveralls'
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: ${{ steps.coverage.outputs.report }}
+      - uses: actions/checkout@v2
+      - name: Set no-asm-tests env vars
+        if: matrix.conf == 'no-asm-tests'
+        run: |
+          echo "name=RAV1E_CPU_TARGET::rust" >> $GITHUB_ENV
+      - name: Install sccache
+        env:
+          LINK: https://github.com/mozilla/sccache/releases/download
+          SCCACHE_VERSION: 0.2.15
+        run: |
+          SCCACHE_FILE=sccache-v$SCCACHE_VERSION-x86_64-unknown-linux-musl
+          mkdir -p $HOME/.local/bin
+          curl -L "$LINK/v$SCCACHE_VERSION/$SCCACHE_FILE.tar.gz" | tar xz
+          chmod +x $SCCACHE_FILE/sccache
+          mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Add nasm
+        env:
+          LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
+          NASM_VERSION: 2.15.05-1
+          NASM_SHA256: >-
+            c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
+        run: |
+          echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
+          echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
+      - name: Add aom
+        if: >
+          matrix.conf == '1.51.0-tests' || matrix.conf == 'aom-tests' ||
+          matrix.conf == 'grcov-coveralls'
+        env:
+          LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
+          AOM_VERSION: 2.0.2-dmo0~bpo10+1
+          AOM_DEV_SHA256: >-
+            d31eee6524ea64c080312eeafc65355e378e043b1d738ff9b9bde3734a85779c
+          AOM_LIB_SHA256: >-
+            db8a04ca0984604f410c6bd8810ee31666a3bfd3964f3109cdb8f1ae33fec664
+        run: |
+          echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libaom2_${AOM_VERSION}_amd64.deb" >> DEBS
+          echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$AOM_LIB_SHA256 libaom2_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+      - name: Add dav1d
+        if: >
+          matrix.conf == '1.51.0-tests' || matrix.conf == 'dav1d-tests' ||
+          matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
+        env:
+          LINK: https://www.deb-multimedia.org/pool/main/d/dav1d-dmo
+          DAV1D_VERSION: 0.8.2-dmo1
+          DAV1D_DEV_SHA256: >-
+            04d30fc34056467b91a627563c61b9a0046a2e084bb649791cd31887a6c76d8e
+          DAV1D_LIB_SHA256: >-
+            0c3debb3a926e10009503e639dddcfd4082ed6e012340ca49682b738c243dedc
+        run: |
+          echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libdav1d5_${DAV1D_VERSION}_amd64.deb" >> DEBS
+          echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$DAV1D_LIB_SHA256 libdav1d5_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
+      - name: Cache packages
+        uses: actions/cache@v2
+        continue-on-error: true
+        id: debs
+        with:
+          path: ~/.cache/debs
+          key: debs-${{ hashFiles('CHECKSUMS') }}
+      - name: Fetch packages
+        if: steps.debs.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.cache/debs
+          cp DEBS CHECKSUMS ~/.cache/debs
+          cd ~/.cache/debs
+          xargs -a DEBS curl --remote-name-all
+          sha256sum -c CHECKSUMS
+      - name: Install packages
+        run: |
+          sudo dpkg -i ~/.cache/debs/*.deb
+      - name: Install cargo-c
+        if: matrix.conf == 'cargo-c'
+        env:
+          LINK: https://github.com/lu-zero/cargo-c/releases/download
+          CARGO_C_VERSION: 0.7.1
+        run: |
+          curl -L "$LINK/v$CARGO_C_VERSION/cargo-c-linux.tar.gz" |
+          tar xz -C $HOME/.cargo/bin
+      - name: Install grcov
+        if: matrix.conf == 'grcov-coveralls'
+        env:
+          LINK: https://github.com/mozilla/grcov/releases/download
+          GRCOV_VERSION: 0.7.1
+        run: |
+          curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
+          tar xj -C $HOME/.cargo/bin
+      - name: Install ${{ matrix.toolchain }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+      - name: Generate Cargo.lock and Cargo.version
+        run: |
+          cargo update
+          cargo --version > Cargo.version
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: ~/.cargo/registry/cache
+          key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+      - name: Cache sccache output
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: /home/runner/.cache/sccache
+          key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-sccache-
+      - name: Start sccache server
+        run: |
+          sccache --start-server
+      - name: Run 1.51.0 tests
+        if: matrix.toolchain == '1.51.0' && matrix.conf == '1.51.0-tests'
+        run: |
+          cargo test --workspace --verbose \
+                     --features=decode_test,decode_test_dav1d,quick_test,capi
+      - name: Run aom tests
+        if: matrix.toolchain == 'stable' && matrix.conf == 'aom-tests'
+        run: |
+          cargo test --workspace --verbose --release \
+                     --features=decode_test \
+                     --color=always -- --color=always --ignored
+      - name: Run dav1d tests
+        if: matrix.toolchain == 'stable' && (matrix.conf == 'dav1d-tests' || matrix.conf == 'no-asm-tests')
+        run: |
+          cargo test --workspace --verbose --release \
+                     --features=decode_test_dav1d \
+                     --color=always -- --color=always --ignored
+      - name: Run build
+        if: matrix.conf == 'beta-build'
+        run: |
+          cargo build --verbose
+      - name: Run bench
+        if: matrix.toolchain == 'stable' && matrix.conf == 'bench'
+        run: |
+          cargo bench --features=bench --no-run --verbose
+      - name: Run doc
+        if: matrix.toolchain == 'stable' && matrix.conf == 'doc'
+        run: |
+          cargo doc --verbose --no-deps
+      - name: Check no default features
+        if: matrix.toolchain == 'stable' && matrix.conf == 'check-no-default'
+        run: |
+          cargo check --no-default-features
+      - name: Check extra features
+        if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
+        run: |
+          cargo check --features=check_asm,capi,dump_lookahead_data,serialize
+      - name: Run cargo-c
+        if: matrix.conf == 'cargo-c'
+        run: |
+          cargo cbuild
+      - name: Install cargo-fuzz
+        if: matrix.conf == 'fuzz'
+        run: |
+          cargo install cargo-fuzz
+      - name: Run cargo-fuzz
+        if: matrix.conf == 'fuzz'
+        run: |
+          cargo fuzz build --sanitizer none
+      - name: Run cargo clean
+        if: matrix.conf == 'grcov-coveralls'
+        uses: actions-rs/cargo@v1
+        with:
+          command: clean
+      - name: Run tests with coverage
+        if: matrix.conf == 'grcov-coveralls'
+        env:
+          CARGO_INCREMENTAL: 0
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: >
+            -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
+            -Cpanic=abort -Zpanic_abort_tests
+          RUSTDOCFLAGS: >
+            -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
+            -Cpanic=abort -Zpanic_abort_tests
+        run: |
+          cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
+                     --features=decode_test,decode_test_dav1d,quick_test
+      - name: Run unit tests
+        if: matrix.conf == 'no-asm-tests'
+        run: |
+          cargo test --workspace --verbose
+      - name: Run grcov
+        if: matrix.conf == 'grcov-coveralls'
+        id: coverage
+        uses: actions-rs/grcov@v0.1
+      - name: Stop sccache server
+        run: |
+          sccache --stop-server
+      - name: Coveralls upload
+        if: matrix.conf == 'grcov-coveralls'
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: ${{ steps.coverage.outputs.report }}
 
   build-macos:
-
     strategy:
       matrix:
         include:
@@ -328,82 +325,82 @@ jobs:
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
 
     if: >-
-     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
-     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+      (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Install sccache
-      run: |
-        brew install sccache
-    - name: Install nasm
-      run: |
-        brew install nasm
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        brew install cargo-c
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: ${{ matrix.toolchain }}
-        override: true
-        target: ${{ matrix.target }}
-        default: true
-    - name: Generate Cargo.lock and Cargo.version
-      run: |
-        cargo update
-        cargo --version > Cargo.version
-    - name: Cache cargo registry
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: ~/.cargo/registry/cache
-        key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
-    - name: Cache sccache output
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: /Users/runner/Library/Caches/Mozilla.sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-sccache-
-    - name: Start sccache server
-      run: |
-        sccache --start-server
-    - name: Build
-      if: matrix.conf == 'cargo-build'
-      run: |
-        cargo build --release --target=${{ matrix.target }}
-    - name: Test
-      if: matrix.conf == 'cargo-test'
-      run: |
-        cargo test --workspace --verbose --target=${{ matrix.target }}
-    - name: Run cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo cbuild --target=${{ matrix.target }}
-    - name: Stop sccache server
-      run: |
-        sccache --stop-server
+      - uses: actions/checkout@v2
+      - name: Install sccache
+        run: |
+          brew install sccache
+      - name: Install nasm
+        run: |
+          brew install nasm
+      - name: Install cargo-c
+        if: matrix.conf == 'cargo-c'
+        run: |
+          brew install cargo-c
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.toolchain }}
+          override: true
+          target: ${{ matrix.target }}
+          default: true
+      - name: Generate Cargo.lock and Cargo.version
+        run: |
+          cargo update
+          cargo --version > Cargo.version
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: ~/.cargo/registry/cache
+          key: ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
+      - name: Cache sccache output
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: /Users/runner/Library/Caches/Mozilla.sccache
+          key: ${{ runner.os }}-${{ matrix.conf }}-sccache-${{ hashFiles('**/Cargo.*') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-sccache-
+      - name: Start sccache server
+        run: |
+          sccache --start-server
+      - name: Build
+        if: matrix.conf == 'cargo-build'
+        run: |
+          cargo build --release --target=${{ matrix.target }}
+      - name: Test
+        if: matrix.conf == 'cargo-test'
+        run: |
+          cargo test --workspace --verbose --target=${{ matrix.target }}
+      - name: Run cargo-c
+        if: matrix.conf == 'cargo-c'
+        run: |
+          cargo cbuild --target=${{ matrix.target }}
+      - name: Stop sccache server
+        run: |
+          sccache --stop-server
 
   build-windows:
     strategy:
       matrix:
         include:
-         - conf: cargo-build
-           target: x86_64-pc-windows-msvc
-         - conf: cargo-build
-           target: aarch64-pc-windows-msvc
-         - conf: cargo-test
-           target: x86_64-pc-windows-msvc
-         - conf: cargo-c
-           target: x86_64-pc-windows-gnu
+          - conf: cargo-build
+            target: x86_64-pc-windows-msvc
+          - conf: cargo-build
+            target: aarch64-pc-windows-msvc
+          - conf: cargo-test
+            target: x86_64-pc-windows-msvc
+          - conf: cargo-c
+            target: x86_64-pc-windows-gnu
 
     env:
       RUST_BACKTRACE: full
@@ -412,84 +409,83 @@ jobs:
       SCCACHE_DIR: C:\sccache
 
     if: >-
-     (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
-     (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
+      (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
     runs-on: windows-latest
-
     steps:
-    - uses: actions/checkout@v2
-    - uses: ilammy/setup-nasm@v1
-    - name: Install sccache
-      run: |
-        $LINK = "https://github.com/mozilla/sccache/releases/download/0.2.12"
-        $SCCACHE_FILE = "sccache-0.2.12-x86_64-pc-windows-msvc"
-        curl -LO "$LINK/$SCCACHE_FILE.tar.gz"
-        tar xzf "$SCCACHE_FILE.tar.gz"
-        echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    - name: Set MSVC x86_64 linker path
-      if: matrix.target != 'aarch64-pc-windows-msvc'
-      run: |
-        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
-        $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
-        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    - name: Set MSVC Arm64 linker path
-      if: matrix.target == 'aarch64-pc-windows-msvc'
-      run: |
-        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\Arm64"
-        $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-        $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
-        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-    - name: Install ${{ matrix.toolchain }}
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        target: ${{ matrix.target }}
-        override: true
-        default: true
-    - name: Install cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.7.3"
-        $CARGO_C_FILE = "cargo-c-windows-msvc"
-        curl -LO "$LINK/$CARGO_C_FILE.zip"
-        7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
-    - name: Generate Cargo.lock and Cargo.version
-      run: |
-        cargo update
-        cargo --version > Cargo.version
-    - name: Cache cargo registry
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: ~/.cargo/registry/cache
-        key: ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-cargo-registry-
-    - name: Cache sccache output
-      uses: actions/cache@v2
-      continue-on-error: true
-      with:
-        path: C:\sccache
-        key: ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-sccache-${{ hashFiles('**/Cargo.*') }}
-        restore-keys: |
-          ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-sccache-
-    - name: Start sccache server
-      run: |
-        sccache --start-server
-    - name: Build
-      if: matrix.conf == 'cargo-build'
-      run: |
-        cargo build --release
-    - name: Test
-      if: matrix.conf == 'cargo-test'
-      run: |
-        cargo test --workspace --verbose
-    - name: Run cargo-c
-      if: matrix.conf == 'cargo-c'
-      run: |
-        cargo cbuild
-    - name: Stop sccache server
-      run: |
-        sccache --stop-server
+      - uses: actions/checkout@v2
+      - uses: ilammy/setup-nasm@v1
+      - name: Install sccache
+        run: |
+          $LINK = "https://github.com/mozilla/sccache/releases/download/0.2.12"
+          $SCCACHE_FILE = "sccache-0.2.12-x86_64-pc-windows-msvc"
+          curl -LO "$LINK/$SCCACHE_FILE.tar.gz"
+          tar xzf "$SCCACHE_FILE.tar.gz"
+          echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Set MSVC x86_64 linker path
+        if: matrix.target != 'aarch64-pc-windows-msvc'
+        run: |
+          $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
+          $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
+          echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Set MSVC Arm64 linker path
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        run: |
+          $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\Arm64"
+          $env:PATH = "$env:PATH;${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $LinkPath = vswhere -latest -products * -find "$LinkGlob" | Select-Object -Last 1
+          echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Install ${{ matrix.toolchain }}
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: ${{ matrix.target }}
+          override: true
+          default: true
+      - name: Install cargo-c
+        if: matrix.conf == 'cargo-c'
+        run: |
+          $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.7.3"
+          $CARGO_C_FILE = "cargo-c-windows-msvc"
+          curl -LO "$LINK/$CARGO_C_FILE.zip"
+          7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
+      - name: Generate Cargo.lock and Cargo.version
+        run: |
+          cargo update
+          cargo --version > Cargo.version
+      - name: Cache cargo registry
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: ~/.cargo/registry/cache
+          key: ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-cargo-registry-
+      - name: Cache sccache output
+        uses: actions/cache@v2
+        continue-on-error: true
+        with:
+          path: C:\sccache
+          key: ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-sccache-${{ hashFiles('**/Cargo.*') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-sccache-
+      - name: Start sccache server
+        run: |
+          sccache --start-server
+      - name: Build
+        if: matrix.conf == 'cargo-build'
+        run: |
+          cargo build --release
+      - name: Test
+        if: matrix.conf == 'cargo-test'
+        run: |
+          cargo test --workspace --verbose
+      - name: Run cargo-c
+        if: matrix.conf == 'cargo-c'
+        run: |
+          cargo cbuild
+      - name: Stop sccache server
+        run: |
+          sccache --stop-server
