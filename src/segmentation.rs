@@ -97,7 +97,7 @@ pub fn select_segment<T: Pixel>(
   let scale = spatiotemporal_scale(fi, frame_bo, bsize);
 
   // TODO: Replace this calculation with precomputed scale thresholds.
-  let seg_ac_q: ArrayVec<[_; 3]> = if fi.enable_segmentation {
+  let seg_ac_q: ArrayVec<_, 3> = if fi.enable_segmentation {
     use crate::quantize::ac_q;
     (0..=2)
       .map(|sidx| {

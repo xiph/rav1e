@@ -2304,7 +2304,7 @@ pub fn encode_block_with_modes<T: Pixel>(
   // rdo_tx_size_type().
   cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, mode_decision.sidx);
 
-  let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
+  let mut mv_stack = ArrayVec::<CandidateMV, 9>::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
   let mode_context =
     cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
@@ -2453,7 +2453,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   if can_split {
     debug_assert!(is_square);
 
-    let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
+    let mut partition_types = ArrayVec::<PartitionType, 3>::new();
     if fi.config.speed_settings.non_square_partition
       || is_straddle_x
       || is_straddle_y
@@ -2490,7 +2490,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let subsize = bsize.subsize(partition);
       let hbsw = subsize.width_mi(); // Half the block size width in blocks
       let hbsh = subsize.height_mi(); // Half the block size height in blocks
-      let mut child_modes = ArrayVec::<[PartitionParameters; 4]>::new();
+      let mut child_modes = ArrayVec::<PartitionParameters, 4>::new();
       rd_cost = 0.0;
 
       if bsize >= BlockSize::BLOCK_8X8 {
@@ -2681,7 +2681,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   } else if can_split {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
-    let mut partition_types = ArrayVec::<[PartitionType; 3]>::new();
+    let mut partition_types = ArrayVec::<PartitionType, 3>::new();
 
     partition_types.push(PartitionType::PARTITION_SPLIT);
     if !must_split {
@@ -2749,7 +2749,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
       );
 
-      let mut mv_stack = ArrayVec::<[CandidateMV; 9]>::new();
+      let mut mv_stack = ArrayVec::<CandidateMV, 9>::new();
       let is_compound = ref_frames[1] != NONE_FRAME;
       let mode_context = cw.find_mvrefs(
         tile_bo,
