@@ -807,7 +807,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_mv(
-    mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
+    mv: MotionVector, mv_stack: &mut ArrayVec<CandidateMV, 9>,
   ) -> bool {
     for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
@@ -818,7 +818,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_mv_and_update_weight(
-    mv: MotionVector, mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32,
+    mv: MotionVector, mv_stack: &mut ArrayVec<CandidateMV, 9>, weight: u32,
   ) -> bool {
     for mut mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
@@ -830,7 +830,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn find_matching_comp_mv_and_update_weight(
-    mvs: [MotionVector; 2], mv_stack: &mut ArrayVec<[CandidateMV; 9]>,
+    mvs: [MotionVector; 2], mv_stack: &mut ArrayVec<CandidateMV, 9>,
     weight: u32,
   ) -> bool {
     for mv_cand in mv_stack {
@@ -848,7 +848,7 @@ impl<'a> ContextWriter<'a> {
 
   fn add_ref_mv_candidate(
     ref_frames: [RefType; 2], blk: &Block,
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, weight: u32,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, weight: u32,
     newmv_count: &mut usize, is_compound: bool,
   ) -> bool {
     if !blk.is_inter() {
@@ -908,7 +908,7 @@ impl<'a> ContextWriter<'a> {
 
   fn add_extra_mv_candidate<T: Pixel>(
     blk: &Block, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, fi: &FrameInvariants<T>,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, fi: &FrameInvariants<T>,
     is_compound: bool, ref_id_count: &mut [usize; 2],
     ref_id_mvs: &mut [[MotionVector; 2]; 2], ref_diff_count: &mut [usize; 2],
     ref_diff_mvs: &mut [[MotionVector; 2]; 2],
@@ -963,7 +963,7 @@ impl<'a> ContextWriter<'a> {
   fn scan_row_mbmi(
     &self, bo: TileBlockOffset, row_offset: isize, max_row_offs: isize,
     processed_rows: &mut isize, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, newmv_count: &mut usize,
     bsize: BlockSize, is_compound: bool,
   ) -> bool {
     let bc = &self.bc;
@@ -1029,7 +1029,7 @@ impl<'a> ContextWriter<'a> {
   fn scan_col_mbmi(
     &self, bo: TileBlockOffset, col_offset: isize, max_col_offs: isize,
     processed_cols: &mut isize, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, newmv_count: &mut usize,
     bsize: BlockSize, is_compound: bool,
   ) -> bool {
     let bc = &self.bc;
@@ -1094,7 +1094,7 @@ impl<'a> ContextWriter<'a> {
 
   fn scan_blk_mbmi(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, newmv_count: &mut usize,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, newmv_count: &mut usize,
     is_compound: bool,
   ) -> bool {
     if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {
@@ -1113,7 +1113,7 @@ impl<'a> ContextWriter<'a> {
     )
   }
 
-  fn add_offset(mv_stack: &mut ArrayVec<[CandidateMV; 9]>) {
+  fn add_offset(mv_stack: &mut ArrayVec<CandidateMV, 9>) {
     for mut cand_mv in mv_stack {
       cand_mv.weight += REF_CAT_LEVEL;
     }
@@ -1121,7 +1121,7 @@ impl<'a> ContextWriter<'a> {
 
   fn setup_mvref_list<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool,
   ) -> usize {
     let (_rf, _rf_num) = (INTRA_FRAME, 1);
@@ -1417,7 +1417,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn find_mvrefs<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<[CandidateMV; 9]>, bsize: BlockSize,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,
     fi: &FrameInvariants<T>, is_compound: bool,
   ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
@@ -1789,7 +1789,7 @@ impl<'a> ContextWriter<'a> {
     let height = av1_get_coded_tx_size(tx_size).height();
 
     // Create a slice with coeffs in scan order
-    let mut coeffs_storage: Aligned<ArrayVec<[T; 32 * 32]>> =
+    let mut coeffs_storage: Aligned<ArrayVec<T, { 32 * 32 }>> =
       Aligned::new(ArrayVec::new());
     let coeffs = &mut coeffs_storage.data;
     coeffs.extend(scan.iter().map(|&scan_idx| coeffs_in[scan_idx as usize]));

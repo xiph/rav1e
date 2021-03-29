@@ -23,9 +23,9 @@ pub struct EncoderStats {
   /// Stores count of pixels belonging to each transform type in this frame
   pub tx_type_counts: [usize; TX_TYPES],
   /// Stores count of pixels belonging to each luma prediction mode in this frame
-  pub luma_pred_mode_counts: ArrayVec<[usize; PREDICTION_MODES]>,
+  pub luma_pred_mode_counts: ArrayVec<usize, PREDICTION_MODES>,
   /// Stores count of pixels belonging to each chroma prediction mode in this frame
-  pub chroma_pred_mode_counts: ArrayVec<[usize; PREDICTION_MODES]>,
+  pub chroma_pred_mode_counts: ArrayVec<usize, PREDICTION_MODES>,
 }
 
 impl Default for EncoderStats {

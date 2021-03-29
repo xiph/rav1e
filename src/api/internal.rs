@@ -998,7 +998,7 @@ impl<T: Pixel> ContextInner<T> {
       let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
       // There can be at most 3 of these.
-      let mut unique_indices = ArrayVec::<[_; 3]>::new();
+      let mut unique_indices = ArrayVec::<_, 3>::new();
 
       for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
         if unique_indices.iter().find(|&&(_, r)| r == rec_index).is_none() {
