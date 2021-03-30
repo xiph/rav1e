@@ -789,19 +789,14 @@ pub mod test {
     let downsampled = plane.downsampled(4, 4);
 
     #[rustfmt::skip]
-    assert_eq!(
-      &[
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-      ][..],
-      &downsampled.data[..]
-    );
+    let expected = &[
+      5, 5,
+      6, 6,
+    ];
+
+    let v: Vec<_> = downsampled.iter().collect();
+
+    assert_eq!(&expected[..], &v);
   }
   #[test]
   fn test_plane_downsample_odd() {
@@ -834,19 +829,13 @@ pub mod test {
     let downsampled = plane.downsampled(3, 3);
 
     #[rustfmt::skip]
-    assert_eq!(
-      &[
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        5, 5, 5, 5, 5, 5, 5, 5,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-        6, 6, 6, 6, 6, 6, 6, 6,
-      ][..],
-      &downsampled.data[..]
-    );
+    let expected = &[
+      5, 5,
+      6, 6,
+    ];
+
+    let v: Vec<_> = downsampled.iter().collect();
+    assert_eq!(&expected[..], &v);
   }
   #[test]
   fn test_plane_pad() {
