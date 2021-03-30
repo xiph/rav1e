@@ -1081,11 +1081,11 @@ fn get_qidx<T: Pixel>(
 // For a transform block,
 // predict, transform, quantize, write coefficients to a bitstream,
 // dequantize, inverse-transform.
-pub fn encode_tx_block<T: Pixel>(
+pub fn encode_tx_block<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter,
-  w: &mut dyn Writer,
+  w: &mut W,
   p: usize,
   // Offset in the luma plane of the partition enclosing this block.
   tile_partition_bo: TileBlockOffset,
@@ -1556,9 +1556,9 @@ pub fn save_block_motion<T: Pixel>(
   }
 }
 
-pub fn encode_block_pre_cdef<T: Pixel>(
-  seq: &Sequence, ts: &TileStateMut<'_, T>, cw: &mut ContextWriter,
-  w: &mut dyn Writer, bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
+pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
+  seq: &Sequence, ts: &TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
+  bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
 ) -> bool {
   cw.bc.blocks.set_skip(tile_bo, bsize, skip);
   if ts.segmentation.enabled
@@ -1592,9 +1592,9 @@ pub fn encode_block_pre_cdef<T: Pixel>(
   cw.bc.cdef_coded
 }
 
-pub fn encode_block_post_cdef<T: Pixel>(
+pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
+  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
   ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
   tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
@@ -1969,9 +1969,9 @@ pub fn luma_ac<T: Pixel>(
   }
 }
 
-pub fn write_tx_blocks<T: Pixel>(
+pub fn write_tx_blocks<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
+  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
@@ -2129,9 +2129,9 @@ pub fn write_tx_blocks<T: Pixel>(
   (partition_has_coeff, tx_dist)
 }
 
-pub fn write_tx_tree<T: Pixel>(
+pub fn write_tx_tree<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut dyn Writer, luma_mode: PredictionMode,
+  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
@@ -2286,10 +2286,10 @@ pub fn write_tx_tree<T: Pixel>(
   (partition_has_coeff, tx_dist)
 }
 
-pub fn encode_block_with_modes<T: Pixel>(
+pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut dyn Writer,
-  w_post_cdef: &mut dyn Writer, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  bsize: BlockSize, tile_bo: TileBlockOffset,
   mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
 ) {
   let (mode_luma, mode_chroma) =

@@ -184,9 +184,8 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
 }
 
 impl<'a> ContextWriter<'a> {
-  pub fn encode_mv_component(
-    &mut self, w: &mut dyn Writer, comp: i32, axis: usize,
-    precision: MvSubpelPrecision,
+  pub fn encode_mv_component<W: Writer>(
+    &mut self, w: &mut W, comp: i32, axis: usize, precision: MvSubpelPrecision,
   ) {
     assert!(comp != 0);
     assert!(MV_LOW <= comp && comp <= MV_UPP);

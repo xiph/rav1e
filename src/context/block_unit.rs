@@ -695,8 +695,8 @@ impl<'a> ContextWriter<'a> {
     &self.fc.kf_y_cdf[above_ctx][left_ctx]
   }
 
-  pub fn write_intra_mode_kf(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, mode: PredictionMode,
+  pub fn write_intra_mode_kf<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, mode: PredictionMode,
   ) {
     static intra_mode_context: [usize; INTRA_MODES] =
       [0, 1, 2, 3, 4, 4, 4, 4, 3, 0, 1, 2, 0];
@@ -721,8 +721,8 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn write_intra_mode(
-    &mut self, w: &mut dyn Writer, bsize: BlockSize, mode: PredictionMode,
+  pub fn write_intra_mode<W: Writer>(
+    &mut self, w: &mut W, bsize: BlockSize, mode: PredictionMode,
   ) {
     let cdf =
       &mut self.fc.y_mode_cdf[size_group_lookup[bsize as usize] as usize];
@@ -730,9 +730,9 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn write_intra_uv_mode(
-    &mut self, w: &mut dyn Writer, uv_mode: PredictionMode,
-    y_mode: PredictionMode, bs: BlockSize,
+  pub fn write_intra_uv_mode<W: Writer>(
+    &mut self, w: &mut W, uv_mode: PredictionMode, y_mode: PredictionMode,
+    bs: BlockSize,
   ) {
     if bs.cfl_allowed() {
       let cdf = &mut self.fc.uv_mode_cfl_cdf[y_mode as usize];
@@ -744,8 +744,8 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn write_angle_delta(
-    &mut self, w: &mut dyn Writer, angle: i8, mode: PredictionMode,
+  pub fn write_angle_delta<W: Writer>(
+    &mut self, w: &mut W, angle: i8, mode: PredictionMode,
   ) {
     symbol_with_update!(
       self,
@@ -756,17 +756,17 @@ impl<'a> ContextWriter<'a> {
     );
   }
 
-  pub fn write_use_filter_intra(
-    &mut self, w: &mut dyn Writer, enable: bool, block_size: BlockSize,
+  pub fn write_use_filter_intra<W: Writer>(
+    &mut self, w: &mut W, enable: bool, block_size: BlockSize,
   ) {
     let cdf = &mut self.fc.filter_intra_cdfs[block_size as usize];
     symbol_with_update!(self, w, enable as u32, cdf, 2);
   }
 
-  pub fn write_use_palette_mode(
-    &mut self, w: &mut dyn Writer, enable: bool, bsize: BlockSize,
-    bo: TileBlockOffset, luma_mode: PredictionMode,
-    chroma_mode: PredictionMode, xdec: usize, ydec: usize, cs: ChromaSampling,
+  pub fn write_use_palette_mode<W: Writer>(
+    &mut self, w: &mut W, enable: bool, bsize: BlockSize, bo: TileBlockOffset,
+    luma_mode: PredictionMode, chroma_mode: PredictionMode, xdec: usize,
+    ydec: usize, cs: ChromaSampling,
   ) {
     if enable {
       unimplemented!(); // TODO
@@ -1649,8 +1649,8 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_compound_mode(
-    &mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize,
+  pub fn write_compound_mode<W: Writer>(
+    &mut self, w: &mut W, mode: PredictionMode, ctx: usize,
   ) {
     let newmv_ctx = ctx & NEWMV_CTX_MASK;
     let refmv_ctx = (ctx >> REFMV_OFFSET) & REFMV_CTX_MASK;
@@ -1684,8 +1684,8 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, val, &mut self.fc.compound_mode_cdf[ctx]);
   }
 
-  pub fn write_inter_mode(
-    &mut self, w: &mut dyn Writer, mode: PredictionMode, ctx: usize,
+  pub fn write_inter_mode<W: Writer>(
+    &mut self, w: &mut W, mode: PredictionMode, ctx: usize,
   ) {
     use PredictionMode::{GLOBALMV, NEARESTMV, NEWMV};
     let newmv_ctx = ctx & NEWMV_CTX_MASK;
@@ -1704,15 +1704,15 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn write_drl_mode(
-    &mut self, w: &mut dyn Writer, drl_mode: bool, ctx: usize,
+  pub fn write_drl_mode<W: Writer>(
+    &mut self, w: &mut W, drl_mode: bool, ctx: usize,
   ) {
     let cdf = &mut self.fc.drl_cdfs[ctx];
     symbol_with_update!(self, w, drl_mode as u32, cdf, 2);
   }
 
-  pub fn write_mv(
-    &mut self, w: &mut dyn Writer, mv: MotionVector, ref_mv: MotionVector,
+  pub fn write_mv<W: Writer>(
+    &mut self, w: &mut W, mv: MotionVector, ref_mv: MotionVector,
     mv_precision: MvSubpelPrecision,
   ) {
     // <https://aomediacodec.github.io/av1-spec/#assign-mv-semantics>
@@ -1733,9 +1733,8 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_block_deblock_deltas(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, multi: bool,
-    planes: usize,
+  pub fn write_block_deblock_deltas<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, multi: bool, planes: usize,
   ) {
     let block = &self.bc.blocks[bo];
     let deltas_count = if multi { FRAME_LF_COUNT + planes - 3 } else { 1 };
@@ -1763,18 +1762,18 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_is_inter(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, is_inter: bool,
+  pub fn write_is_inter<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, is_inter: bool,
   ) {
     let ctx = self.bc.intra_inter_context(bo);
     let cdf = &mut self.fc.intra_inter_cdfs[ctx];
     symbol_with_update!(self, w, is_inter as u32, cdf, 2);
   }
 
-  pub fn write_coeffs_lv_map<T: Coefficient>(
-    &mut self, w: &mut dyn Writer, plane: usize, bo: TileBlockOffset,
-    coeffs_in: &[T], eob: usize, pred_mode: PredictionMode, tx_size: TxSize,
-    tx_type: TxType, plane_bsize: BlockSize, xdec: usize, ydec: usize,
+  pub fn write_coeffs_lv_map<T: Coefficient, W: Writer>(
+    &mut self, w: &mut W, plane: usize, bo: TileBlockOffset, coeffs_in: &[T],
+    eob: usize, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
+    plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool, frame_clipped_txw: usize,
     frame_clipped_txh: usize,
   ) -> bool {
