@@ -49,7 +49,7 @@ pub struct PlaneConfig {
 
 impl PlaneConfig {
   /// Stride alignment in bytes.
-  const STRIDE_ALIGNMENT_LOG2: usize = 5;
+  const STRIDE_ALIGNMENT_LOG2: usize = 6;
 
   #[inline]
   pub fn new(
@@ -177,7 +177,7 @@ impl<T: Pixel> PlaneData<T> {
       // FIXME: wasm32 allocator fails for alignment larger than 3
       const DATA_ALIGNMENT_LOG2: usize = 3;
     } else {
-      const DATA_ALIGNMENT_LOG2: usize = 5;
+      const DATA_ALIGNMENT_LOG2: usize = 6;
     }
   }
 
