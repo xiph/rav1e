@@ -53,7 +53,7 @@ impl<T> AlignedBoxedSlice<T> {
       // FIXME: wasm32 allocator fails for alignment larger than 3
       const DATA_ALIGNMENT_LOG2: usize = 3;
     } else {
-      const DATA_ALIGNMENT_LOG2: usize = 5;
+      const DATA_ALIGNMENT_LOG2: usize = 6;
     }
   }
 
