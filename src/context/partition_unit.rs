@@ -232,8 +232,8 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn write_skip(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, skip: bool,
+  pub fn write_skip<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, skip: bool,
   ) {
     let ctx = self.bc.skip_context(bo);
     let cdf = &mut self.fc.skip_cdfs[ctx];
@@ -282,7 +282,7 @@ impl<'a> ContextWriter<'a> {
     (r as u8, cdf_index)
   }
 
-  pub fn write_cfl_alphas(&mut self, w: &mut dyn Writer, cfl: CFLParams) {
+  pub fn write_cfl_alphas<W: Writer>(&mut self, w: &mut W, cfl: CFLParams) {
     symbol_with_update!(self, w, cfl.joint_sign(), &mut self.fc.cfl_sign_cdf);
     for uv in 0..2 {
       if cfl.sign[uv] != CFL_SIGN_ZERO {
@@ -417,9 +417,9 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_segmentation(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
-    skip: bool, last_active_segid: u8,
+  pub fn write_segmentation<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, bsize: BlockSize, skip: bool,
+    last_active_segid: u8,
   ) {
     let (pred, cdf_index) = self.get_segment_pred(bo);
     if skip {

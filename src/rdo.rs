@@ -998,14 +998,14 @@ pub fn rdo_mode_decision<T: Pixel>(
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
     let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
-    let wr: &mut dyn Writer = &mut WriterCounter::new();
+    let mut wr = WriterCounter::new();
     let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
 
     write_tx_blocks(
       fi,
       ts,
       cw,
-      wr,
+      &mut wr,
       best.pred_mode_luma,
       best.pred_mode_luma,
       angle_delta,
@@ -1022,14 +1022,14 @@ pub fn rdo_mode_decision<T: Pixel>(
     cw.rollback(&cw_checkpoint);
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
       if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi) {
-        let wr: &mut dyn Writer = &mut WriterCounter::new();
+        let mut wr = WriterCounter::new();
         let tell = wr.tell_frac();
 
         encode_block_pre_cdef(
           &fi.sequence,
           ts,
           cw,
-          wr,
+          &mut wr,
           bsize,
           tile_bo,
           best.skip,
@@ -1038,7 +1038,7 @@ pub fn rdo_mode_decision<T: Pixel>(
           fi,
           ts,
           cw,
-          wr,
+          &mut wr,
           best.pred_mode_luma,
           chroma_mode,
           angle_delta,
@@ -1694,14 +1694,14 @@ pub fn rdo_tx_type_decision<T: Pixel>(
       );
     }
 
-    let wr: &mut dyn Writer = &mut WriterCounter::new();
+    let mut wr = WriterCounter::new();
     let tell = wr.tell_frac();
     let (_, tx_dist) = if is_inter {
       write_tx_tree(
         fi,
         ts,
         cw,
-        wr,
+        &mut wr,
         mode,
         0,
         tile_bo,
@@ -1718,7 +1718,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
         fi,
         ts,
         cw,
-        wr,
+        &mut wr,
         mode,
         mode,
         AngleDelta::default(),
@@ -2031,9 +2031,9 @@ fn rdo_loop_plane_error<T: Pixel>(
 // the LRU area we're optimizing.  This area covers the largest LRU in
 // any of the present planes, but may consist of a number of
 // superblocks and full, smaller LRUs in the other planes
-pub fn rdo_loop_decision<T: Pixel>(
+pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   base_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
-  ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut dyn Writer,
+  ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
   deblock_p: bool,
 ) {
   let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {

@@ -523,8 +523,8 @@ pub struct TXB_CTX {
 }
 
 impl<'a> ContextWriter<'a> {
-  pub fn write_tx_type(
-    &mut self, w: &mut dyn Writer, tx_size: TxSize, tx_type: TxType,
+  pub fn write_tx_type<W: Writer>(
+    &mut self, w: &mut W, tx_size: TxSize, tx_type: TxType,
     y_mode: PredictionMode, is_inter: bool, use_reduced_tx_set: bool,
   ) {
     let square_tx_size = tx_size.sqr();
@@ -604,8 +604,8 @@ impl<'a> ContextWriter<'a> {
     0
   }
 
-  pub fn write_tx_size_intra(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
+  pub fn write_tx_size_intra<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, bsize: BlockSize,
     tx_size: TxSize,
   ) {
     fn tx_size_to_depth(tx_size: TxSize, bsize: BlockSize) -> usize {
@@ -720,8 +720,8 @@ impl<'a> ContextWriter<'a> {
     category * 3 + above + left
   }
 
-  pub fn write_tx_size_inter(
-    &mut self, w: &mut dyn Writer, bo: TileBlockOffset, bsize: BlockSize,
+  pub fn write_tx_size_inter<W: Writer>(
+    &mut self, w: &mut W, bo: TileBlockOffset, bsize: BlockSize,
     tx_size: TxSize, txfm_split: bool, tbx: usize, tby: usize, depth: usize,
   ) {
     if bo.0.x >= self.bc.blocks.cols() || bo.0.y >= self.bc.blocks.rows() {

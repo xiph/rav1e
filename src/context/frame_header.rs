@@ -11,9 +11,9 @@ use super::*;
 
 impl CDFContext {
   // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
-  pub fn count_lrf_switchable(
-    &self, w: &dyn Writer, rs: &TileRestorationState,
-    filter: RestorationFilter, pli: usize,
+  pub fn count_lrf_switchable<W: Writer>(
+    &self, w: &W, rs: &TileRestorationState, filter: RestorationFilter,
+    pli: usize,
   ) -> u32 {
     match filter {
       RestorationFilter::None => w.symbol_bits(0, &self.lrf_switchable_cdf),
@@ -61,9 +61,8 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
-  pub fn write_ref_frames<T: Pixel>(
-    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>,
-    bo: TileBlockOffset,
+  pub fn write_ref_frames<T: Pixel, W: Writer>(
+    &mut self, w: &mut W, fi: &FrameInvariants<T>, bo: TileBlockOffset,
   ) {
     let rf = self.bc.blocks[bo].ref_frames;
     let sz = self.bc.blocks[bo].n4_w.min(self.bc.blocks[bo].n4_h);
@@ -156,15 +155,15 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn count_lrf_switchable(
-    &self, w: &dyn Writer, rs: &TileRestorationState,
-    filter: RestorationFilter, pli: usize,
+  pub fn count_lrf_switchable<W: Writer>(
+    &self, w: &W, rs: &TileRestorationState, filter: RestorationFilter,
+    pli: usize,
   ) -> u32 {
     self.fc.count_lrf_switchable(w, rs, filter, pli)
   }
 
-  pub fn write_lrf<T: Pixel>(
-    &mut self, w: &mut dyn Writer, fi: &FrameInvariants<T>,
+  pub fn write_lrf<T: Pixel, W: Writer>(
+    &mut self, w: &mut W, fi: &FrameInvariants<T>,
     rs: &mut TileRestorationStateMut, sbo: TileSuperBlockOffset, pli: usize,
   ) {
     if !fi.allow_intrabc {
@@ -266,8 +265,8 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  pub fn write_cdef(
-    &mut self, w: &mut dyn Writer, strength_index: u8, bits: u8,
+  pub fn write_cdef<W: Writer>(
+    &mut self, w: &mut W, strength_index: u8, bits: u8,
   ) {
     w.literal(bits, strength_index as u32);
   }
