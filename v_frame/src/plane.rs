@@ -796,7 +796,7 @@ pub mod test {
 
     let v: Vec<_> = downsampled.iter().collect();
 
-    assert_eq!(&expected[..], &v);
+    assert_eq!(&expected[..], &v[..]);
   }
   #[test]
   fn test_plane_downsample_odd() {
@@ -835,7 +835,7 @@ pub mod test {
     ];
 
     let v: Vec<_> = downsampled.iter().collect();
-    assert_eq!(&expected[..], &v);
+    assert_eq!(&expected[..], &v[..]);
   }
   #[test]
   fn test_plane_pad() {
