@@ -1043,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "rav1e"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "aom-sys",
  "arbitrary",
