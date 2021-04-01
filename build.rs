@@ -112,14 +112,22 @@ fn build_nasm_files() {
     let mut config_include_arg = String::from("-I");
     config_include_arg.push_str(&out_dir);
     config_include_arg.push('/');
-    nasm_rs::compile_library_args(
-      "rav1easm",
-      asm_files,
-      &[&config_include_arg, "-Isrc/"],
-    )
-    .expect(
+    let mut nasm = nasm_rs::Build::new();
+    for file in asm_files {
+        nasm.file(file);
+    }
+    nasm.flag(&config_include_arg);
+    nasm.flag("-Isrc/");
+    let obj = nasm.compile_objects().expect(
       "NASM build failed. Make sure you have nasm installed. https://nasm.us",
     );
+    // cc is better at finding the correct archiver
+    let mut cc = cc::Build::new();
+    for o in obj {
+      cc.object(o);
+    }
+    cc.compile("rav1easm");
+
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
     println!("cargo:rustc-link-search={}", out_dir);
