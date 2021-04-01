@@ -114,7 +114,7 @@ fn build_nasm_files() {
     config_include_arg.push('/');
     let mut nasm = nasm_rs::Build::new();
     for file in asm_files {
-        nasm.file(file);
+      nasm.file(file);
     }
     nasm.flag(&config_include_arg);
     nasm.flag("-Isrc/");
