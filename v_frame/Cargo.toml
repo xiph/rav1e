@@ -10,6 +10,7 @@ repository = "https://github.com/xiph/rav1e/"
 [features]
 serialize = ["serde"]
 wasm = ["wasm-bindgen"]
+tracing = ["rust_hawktracer/profiling_enabled"]
 
 [dependencies]
 cfg-if = "1.0"
@@ -18,3 +19,4 @@ num-derive = "0.3"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 wasm-bindgen = { version = "0.2.63", optional = true }
+rust_hawktracer = "0.7.0"
