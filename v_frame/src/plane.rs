@@ -7,12 +7,19 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::alloc::{alloc, dealloc, Layout};
-use std::fmt::{Debug, Display, Formatter};
-use std::iter::FusedIterator;
+use rust_hawktracer::*;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
+use std::{
+  alloc::{alloc, dealloc, Layout},
+  u32,
+};
+use std::{
+  fmt::{Debug, Display, Formatter},
+  usize,
+};
+use std::{iter::FusedIterator, ops::DerefMut};
 
 use crate::math::*;
 use crate::pixel::*;
