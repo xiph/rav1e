@@ -7,7 +7,11 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use rayon::current_num_threads;
+use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 use rust_hawktracer::*;
+use std::cmp;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
@@ -480,6 +484,77 @@ impl<T: Pixel> Plane<T> {
     new
   }
 
+  /// Returns plane with downscaled resolution
+  /// Downscaling the plane by integer value
+  /// Not padded
+  #[hawktracer(downscale)]
+  pub fn downscale(&self, scale: usize) -> Plane<T> {
+    let box_pixels = scale * scale;
+    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
+
+    let src = self;
+    let data_origin = src.data_origin();
+
+    // unsafe: all pixels initialized in this function
+    let mut new_plane = unsafe {
+      Plane::new_uninitialized(
+        src.cfg.width / scale,
+        src.cfg.height / scale,
+        0,
+        0,
+        0,
+        0,
+      )
+    };
+
+    let stride = new_plane.cfg.stride;
+    let width = new_plane.cfg.width;
+    let height = new_plane.cfg.height;
+
+    // Par iter over dst chunks
+    let np_raw_slice = new_plane.data.deref_mut();
+    let threads = current_num_threads();
+    let chunk_rows = cmp::max((height + threads / 2) / threads, 1);
+
+    let chunk_size = chunk_rows * stride;
+
+    let height_limit = height * stride;
+    np_raw_slice[0..height_limit]
+      .par_chunks_mut(chunk_size)
+      .enumerate()
+      .for_each(|(chunk_idx, chunk)| {
+        // Iter dst rows
+        let dst_rows = chunk.chunks_mut(stride);
+        for (row_offset, dst_row) in dst_rows.enumerate() {
+          let row_idx = chunk_idx * chunk_rows + row_offset;
+
+          // Iter dst cols
+          for (col_idx, dst) in dst_row[0..width].iter_mut().enumerate() {
+            let mut sum = half_box_pixels;
+            // Sum box of size scale * scale
+
+            // Iter src row
+            for y in 0..scale {
+              let src_row_idx = row_idx * scale + y;
+              let src_row = &data_origin[(src_row_idx * src.cfg.stride)..];
+
+              // Iter src col
+              for x in 0..scale {
+                let src_col_idx = col_idx * scale + x;
+                sum += u32::cast_from(src_row[src_col_idx]);
+              }
+            }
+
+            // Box average
+            let avg = sum as usize / box_pixels;
+            *dst = T::cast_from(avg);
+          }
+        }
+      });
+
+    new_plane
+  }
+
   /// Iterates over the pixels in the plane, skipping the padding.
   pub fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
@@ -844,6 +919,128 @@ pub mod test {
     let v: Vec<_> = downsampled.iter().collect();
     assert_eq!(&expected[..], &v[..]);
   }
+
+  #[test]
+  fn test_plane_downscale() {
+    #[rustfmt::skip]
+    let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 1, 4, 5, 0, 0,
+        0, 0, 2, 3, 6, 7, 0, 0,
+        0, 0, 8, 9, 7, 5, 0, 0,
+        0, 0, 9, 8, 3, 1, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ]),
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 9,
+        width: 4,
+        height: 4,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 2,
+        yorigin: 3,
+      },
+    };
+    let downscaled = plane.downscale(2);
+
+    #[rustfmt::skip]
+    let expected = &[
+      2, 6,
+      9, 4
+    ];
+
+    let v: Vec<_> = downscaled.iter().collect();
+    assert_eq!(&expected[..], &v[..]);
+  }
+
+  #[test]
+  fn test_plane_downscale_odd() {
+    #[rustfmt::skip]
+  let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        1, 2, 3, 4, 1, 2, 3, 4,
+        0, 0, 8, 7, 6, 5, 8, 7,
+        6, 5, 8, 7, 6, 5, 8, 7,
+        6, 5, 8, 7, 0, 0, 2, 3,
+        4, 5, 0, 0, 9, 8, 7, 6,
+        0, 0, 0, 0, 2, 3, 4, 5,
+        0, 0, 0, 0, 2, 3, 4, 5,
+      ]),
+      cfg: PlaneConfig {
+        stride: 8,
+        alloc_height: 7,
+        width: 8,
+        height: 7,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 0,
+        yorigin: 0,
+      },
+    };
+
+    let downscaled = plane.downscale(3);
+
+    #[rustfmt::skip]
+    let expected = &[
+      4, 5,
+      3, 3
+    ];
+
+    let v: Vec<_> = downscaled.iter().collect();
+    assert_eq!(&expected[..], &v[..]);
+  }
+
+  #[test]
+  fn test_plane_downscale_odd_2() {
+    #[rustfmt::skip]
+    let plane = Plane::<u8> {
+      data: PlaneData::from_slice(&[
+        9, 8, 3, 1, 0, 1, 4, 5, 0, 0,
+        0, 1, 4, 5, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 9, 0,
+        0, 2, 3, 6, 7, 0, 0, 0, 0, 0,
+        0, 0, 8, 9, 7, 5, 0, 0, 0, 0,
+        9, 8, 3, 1, 0, 1, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 2, 3, 6, 7, 0,
+        0, 0, 0, 0, 0, 0, 8, 9, 7, 5,
+        0, 0, 0, 0, 9, 8, 3, 1, 0, 0
+      ]),
+      cfg: PlaneConfig {
+        stride: 10,
+        alloc_height: 10,
+        width: 10,
+        height: 10,
+        xdec: 0,
+        ydec: 0,
+        xpad: 0,
+        ypad: 0,
+        xorigin: 0,
+        yorigin: 0,
+      },
+    };
+    let downscaled = plane.downscale(3);
+
+    #[rustfmt::skip]
+    let expected = &[
+      3, 1, 2,
+      4, 4, 1,
+      0, 0, 4,
+    ];
+
+    let v: Vec<_> = downscaled.iter().collect();
+    assert_eq!(&expected[..], &v[..]);
+  }
+
   #[test]
   fn test_plane_pad() {
     #[rustfmt::skip]
