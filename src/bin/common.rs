@@ -214,6 +214,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .alias("low_latency")
     )
     .arg(
+      Arg::with_name("NO_SCENE_DETECTION")
+        .help("Disables scene detection entirely\n\
+            Has a significant speed-to-quality trade-off in full encodes. Experimental for rav1e-by-gop")
+        .long("no-scene-detection")
+        .alias("no_scene_detection")
+    )
+    .arg(
       Arg::with_name("RDO_LOOKAHEAD_FRAMES")
         .help("Number of frames encoder should lookahead for RDO purposes\n\
         [default value for speed levels: 10,9 - 10; 8,7,6 - 20; 5,4,3 - 30; 2,1,0 - 40]\n")
@@ -704,6 +711,10 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   cfg.low_latency = matches.is_present("LOW_LATENCY");
+  // Disables scene_detection
+  if matches.is_present("NO_SCENE_DETECTION") {
+    cfg.speed_settings.no_scene_detection = true;
+  }
 
   Ok(cfg)
 }
