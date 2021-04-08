@@ -217,8 +217,8 @@ impl Config {
     let mut inner = ContextInner::new(&config);
 
     if self.rate_control.emit_pass_data {
-      let params = inner.rc_state.get_twopass_out_params(&inner, 0);
-      inner.rc_state.init_first_pass(params.pass1_log_base_q);
+      let pass1_log_base_q = inner.rc_state.get_twopass_out_params(&inner, 0);
+      inner.rc_state.init_first_pass(pass1_log_base_q);
     }
 
     if let Some(ref s) = self.rate_control.summary {

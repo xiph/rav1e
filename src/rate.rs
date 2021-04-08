@@ -786,20 +786,6 @@ impl QuantizerParameters {
   }
 }
 
-// The parameters that are required by twopass_out().
-// We need a reference to the enclosing ContextInner to compute these, but
-//  twopass_out() cannot take such a reference, since it needs a &mut self
-//  reference to do its job, and RCState is contained inside ContextInner.
-// In practice we don't modify anything in RCState until after we're finished
-//  reading from ContextInner, but Rust's borrow checker does not have a way to
-//  express that.
-// There's probably a cleaner way to do this, but going with something simple
-//  for now, since this is not exposed in the public API.
-pub(crate) struct TwoPassOutParams {
-  pub pass1_log_base_q: i64,
-  done_processing: bool,
-}
-
 impl RCState {
   pub fn new(
     frame_width: i32, frame_height: i32, framerate_num: i64,
@@ -1475,19 +1461,17 @@ impl RCState {
 
   pub(crate) fn get_twopass_out_params<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64,
-  ) -> TwoPassOutParams {
+  ) -> i64 {
     let mut pass1_log_base_q = 0;
-    let mut done_processing = false;
     if !self.pass1_data_retrieved {
       if self.twopass_state == PASS_SINGLE {
         pass1_log_base_q = self
           .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None)
           .log_base_q;
       }
-    } else {
-      done_processing = ctx.done_processing();
     }
-    TwoPassOutParams { pass1_log_base_q, done_processing }
+
+    pass1_log_base_q
   }
 
   // Initialize the first pass and emit a placeholder summary
@@ -1499,18 +1483,6 @@ impl RCState {
       debug_assert!(self.twopass_state == PASS_2);
     }
     self.twopass_state += PASS_1;
-  }
-
-  // Prepare a placeholder summary
-  fn emit_placeholder_summary(&mut self) -> &[u8] {
-    // Fill in dummy summary values.
-    let mut cur_pos = 0;
-    cur_pos = self.buffer_val(TWOPASS_MAGIC as i64, 4, cur_pos);
-    cur_pos = self.buffer_val(TWOPASS_VERSION as i64, 4, cur_pos);
-    cur_pos = self.buffer_val(0, TWOPASS_HEADER_SZ - 8, cur_pos);
-    debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
-    self.pass1_data_retrieved = true;
-    &self.pass1_buffer[..cur_pos]
   }
 
   // Frame-specific pass data
@@ -1559,26 +1531,6 @@ impl RCState {
     debug_assert!(cur_pos == TWOPASS_HEADER_SZ);
     self.pass1_summary_retrieved = true;
     &self.pass1_buffer[..cur_pos]
-  }
-
-  // Initialize the first pass, emit either summary or frame-specific data
-  // depending on the previous call
-  pub(crate) fn twopass_out(
-    &mut self, params: TwoPassOutParams,
-  ) -> Option<&[u8]> {
-    if !self.pass1_data_retrieved {
-      if self.twopass_state != PASS_1 && self.twopass_state != PASS_2_PLUS_1 {
-        self.init_first_pass(params.pass1_log_base_q);
-        Some(self.emit_placeholder_summary())
-      } else {
-        self.emit_frame_data()
-      }
-    } else if params.done_processing && !self.pass1_summary_retrieved {
-      Some(self.emit_summary())
-    } else {
-      // The data for this frame has already been retrieved.
-      None
-    }
   }
 
   // Initialize the rate control for second pass encoding
