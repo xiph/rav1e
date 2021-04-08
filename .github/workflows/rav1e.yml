@@ -126,16 +126,16 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-          AOM_VERSION: 2.0.2-dmo0~bpo10+1
+          AOM_VERSION: 3.0.0-dmo0~bpo10+1
           AOM_DEV_SHA256: >-
-            d31eee6524ea64c080312eeafc65355e378e043b1d738ff9b9bde3734a85779c
+            40b273179f1d9d75202b18295b8fe3e406076e061831d66c2b469bc1a10e5bce
           AOM_LIB_SHA256: >-
-            db8a04ca0984604f410c6bd8810ee31666a3bfd3964f3109cdb8f1ae33fec664
+            1bb977ff6b7c42e4e0d5f743670008fc71e79eb5a9fdf83154fe7890379e9a17
         run: |
           echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
-          echo "$LINK/libaom2_${AOM_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libaom3_${AOM_VERSION}_amd64.deb" >> DEBS
           echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
-          echo "$AOM_LIB_SHA256 libaom2_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$AOM_LIB_SHA256 libaom3_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add dav1d
         if: >
           matrix.conf == '1.51.0-tests' || matrix.conf == 'dav1d-tests' ||
