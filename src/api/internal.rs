@@ -257,6 +257,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_output_frameno: u64,
   /// Optional opaque to be sent back to the user
   opaque_q: BTreeMap<u64, Opaque>,
+  is_flushing: bool,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -310,29 +311,12 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_frame: 1,
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
+      is_flushing: false,
     }
   }
 
-  #[hawktracer(send_frame)]
-  pub fn send_frame(
-    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
-  ) -> Result<(), EncoderStatus> {
-    let input_frameno = self.frame_count;
-    let is_flushing = frame.is_none();
-    if !is_flushing {
-      self.frame_count += 1;
-    }
-    self.frame_q.insert(input_frameno, frame);
-
-    if let Some(params) = params {
-      if params.frame_type_override == FrameTypeOverride::Key {
-        self.keyframes_forced.insert(input_frameno);
-      }
-      if let Some(op) = params.opaque {
-        self.opaque_q.insert(input_frameno, op);
-      }
-    }
-
+  // lookahead computations
+  pub(crate) fn compute_fi(&mut self) {
     if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
       let lookahead_frames = self
         .frame_q
@@ -340,7 +324,7 @@ impl<T: Pixel> ContextInner<T> {
         .filter_map(|(&_input_frameno, frame)| frame.clone())
         .collect::<Vec<_>>();
 
-      if is_flushing {
+      if self.is_flushing {
         // This is the last time send_frame is called, process all the
         // remaining frames.
         for cur_lookahead_frames in
@@ -359,6 +343,28 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     self.compute_frame_invariants();
+  }
+
+  #[hawktracer(send_frame)]
+  pub fn send_frame(
+    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
+  ) -> Result<(), EncoderStatus> {
+    let input_frameno = self.frame_count;
+
+    self.is_flushing = frame.is_none();
+    if !self.is_flushing {
+      self.frame_count += 1;
+    }
+    self.frame_q.insert(input_frameno, frame);
+
+    if let Some(params) = params {
+      if params.frame_type_override == FrameTypeOverride::Key {
+        self.keyframes_forced.insert(input_frameno);
+      }
+      if let Some(op) = params.opaque {
+        self.opaque_q.insert(input_frameno, op);
+      }
+    }
 
     Ok(())
   }
@@ -418,14 +424,15 @@ impl<T: Pixel> ContextInner<T> {
 
   fn set_frame_properties(
     &mut self, output_frameno: u64,
-  ) -> Result<(), EncoderStatus> {
+  ) -> Result<bool, EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
+    let valid = !fi.invalid;
 
     let frame =
       self.frame_q.get(&fi.input_frameno).as_ref().unwrap().as_ref().unwrap();
     self.frame_data.insert(output_frameno, FrameData::new(fi, frame.clone()));
 
-    Ok(())
+    Ok(valid)
   }
 
   #[allow(unused)]
@@ -576,6 +583,13 @@ impl<T: Pixel> ContextInner<T> {
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
     let qps = {
       let frame_data = self.frame_data.get(&output_frameno).unwrap();
+      // We're only interested in valid frames which are not show-existing-frame.
+      // Those two don't modify the rec_buffer so there's no need to do anything
+      // special about it either, it'll propagate on its own.
+      if frame_data.fi.invalid || frame_data.fi.show_existing_frame {
+        return;
+      }
+
       let fti = frame_data.fi.get_frame_subtype();
       self.rc_state.select_qi(
         self,
@@ -587,13 +601,6 @@ impl<T: Pixel> ContextInner<T> {
     let frame_data = self.frame_data.get_mut(&output_frameno).unwrap();
     let fs = &mut frame_data.fs;
     let fi = &mut frame_data.fi;
-
-    // We're only interested in valid frames which are not show-existing-frame.
-    // Those two don't modify the rec_buffer so there's no need to do anything
-    // special about it either, it'll propagate on its own.
-    if fi.invalid || fi.show_existing_frame {
-      return;
-    }
 
     #[cfg(feature = "dump_lookahead_data")]
     {
@@ -774,12 +781,17 @@ impl<T: Pixel> ContextInner<T> {
 
   #[hawktracer(compute_frame_invariants)]
   pub fn compute_frame_invariants(&mut self) {
-    while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
+    while let Ok(valid) =
+      self.set_frame_properties(self.next_lookahead_output_frameno)
     {
-      self
-        .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
-      if self.config.temporal_rdo() {
-        self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+      if valid {
+        self.compute_lookahead_motion_vectors(
+          self.next_lookahead_output_frameno,
+        );
+        if self.config.temporal_rdo() {
+          self
+            .compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+        }
       }
       self.next_lookahead_output_frameno += 1;
     }
@@ -995,7 +1007,7 @@ impl<T: Pixel> ContextInner<T> {
       let output_frame_data = self.frame_data.remove(&output_frameno).unwrap();
       let fi = &output_frame_data.fi;
 
-      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+      let frame = &output_frame_data.fs.input;
 
       // There can be at most 3 of these.
       let mut unique_indices = ArrayVec::<_, 3>::new();
@@ -1278,6 +1290,8 @@ impl<T: Pixel> ContextInner<T> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
     }
+
+    self.compute_fi();
 
     if self.needs_more_fi_lookahead() {
       return Err(EncoderStatus::NeedMoreData);

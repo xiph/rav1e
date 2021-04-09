@@ -274,8 +274,9 @@ fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
 }
 
 fn get_frame_invariants<T: Pixel>(
-  ctx: Context<T>,
+  mut ctx: Context<T>,
 ) -> impl Iterator<Item = FrameInvariants<T>> {
+  ctx.inner.compute_fi();
   ctx.inner.frame_data.into_iter().map(|(_, v)| v.fi)
 }
 
@@ -1777,6 +1778,7 @@ fn lookahead_size_properly_bounded(
   for i in 0..LIMIT {
     let input = ctx.new_frame();
     let _ = ctx.send_frame(input);
+    ctx.inner.compute_fi();
     pre_receive_frame_q_lens[i] = ctx.inner.frame_q.len();
     pre_receive_fi_lens[i] = ctx.inner.frame_data.len();
     while ctx.receive_packet().is_ok() {
@@ -2047,6 +2049,7 @@ fn min_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
+    ctx.inner.compute_fi();
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap();
     if i == 0 {
@@ -2078,6 +2081,7 @@ fn min_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
+    ctx.inner.compute_fi();
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap();
     if i == 0 {
@@ -2112,6 +2116,7 @@ fn max_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
+    ctx.inner.compute_fi();
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap();
     if i == 0 {
@@ -2143,6 +2148,7 @@ fn max_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
+    ctx.inner.compute_fi();
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap();
     if i == 0 {
