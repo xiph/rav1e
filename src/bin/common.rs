@@ -370,13 +370,6 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Overwrite output file.")
         .short("y")
     )
-    .arg(
-      Arg::with_name("SLOTS")
-      .help("Select the number of by_gop encoder-slots to allocate")
-      .long("slots")
-      .takes_value(true)
-      .default_value("0")
-    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -400,6 +393,17 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
                      .takes_value(true)
                 )
     );
+
+  if cfg!(feature = "unstable") {
+    app = app.arg(
+      Arg::with_name("SLOTS")
+        .help("Maximum number of GOPs that can be encoded in parallel")
+        .long("parallel_gops")
+        .long("slots")
+        .takes_value(true)
+        .default_value("0"),
+    );
+  }
 
   let matches = app.clone().get_matches();
 
@@ -494,7 +498,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     panic!("A limit cannot be set above 1 in still picture mode");
   }
 
-  let slots = matches.value_of("SLOTS").unwrap().parse().unwrap();
+  let slots = if cfg!(feature = "unstable") {
+    matches.value_of("SLOTS").unwrap().parse().unwrap()
+  } else {
+    0
+  };
 
   Ok(CliOptions {
     io,

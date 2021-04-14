@@ -52,8 +52,11 @@ impl Config {
     if rc.emit_pass_data || rc.summary.is_some() {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
-
-    let (v, _) = self.new_channel_internal()?;
+    let v = if self.slots > 1 {
+      self.new_by_gop_channel(self.slots)?
+    } else {
+      self.new_channel_internal()?.0
+    };
 
     Ok(v)
   }
@@ -73,6 +76,13 @@ impl Config {
     if !rc.emit_pass_data {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
     }
+
+    if self.slots > 1 {
+      log::warn!(
+        "Parallel gop encoding does not support multi pass rate control"
+      );
+    }
+
     let (v, (_, r)) = self.new_channel_internal()?;
 
     Ok((v, r.unwrap()))
@@ -89,6 +99,12 @@ impl Config {
     let rc = &self.rate_control;
     if rc.emit_pass_data || rc.summary.is_none() {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
+    }
+
+    if self.slots > 1 {
+      log::warn!(
+        "Parallel gop encoding does not support multi pass rate control"
+      );
     }
 
     let (v, (s, _)) = self.new_channel_internal()?;
@@ -110,6 +126,12 @@ impl Config {
     let rc = &self.rate_control;
     if rc.summary.is_none() || !rc.emit_pass_data {
       return Err(InvalidConfig::RateControlConfigurationMismatch);
+    }
+
+    if self.slots > 1 {
+      log::warn!(
+        "Parallel gop encoding does not support multi pass rate control"
+      );
     }
 
     let (v, (s, r)) = self.new_channel_internal()?;
