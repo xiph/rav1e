@@ -154,6 +154,10 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let mut sum_d2_cols: [u32; 8] = [0; 8];
   let mut sum_sd_cols: [u32; 8] = [0; 8];
 
+  // Check upfront that 8 rows are available.
+  let _row1 = &src1[7];
+  let _row2 = &src2[7];
+
   for j in 0..8 {
     let row1 = &src1[j][0..8];
     let row2 = &src2[j][0..8];
