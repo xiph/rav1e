@@ -8,9 +8,9 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 #![deny(missing_docs)]
 
+use crate::api::channel::*;
 use crate::api::color::*;
 use crate::api::config::*;
-use crate::api::internal::*;
 use crate::api::util::*;
 
 use bitstream_io::*;
@@ -21,16 +21,17 @@ use crate::util::Pixel;
 
 use std::fmt;
 use std::io;
-use std::sync::Arc;
 
 /// The encoder context.
 ///
 /// Contains the encoding state.
 pub struct Context<T: Pixel> {
-  pub(crate) inner: ContextInner<T>,
   pub(crate) config: EncoderConfig,
-  pub(crate) pool: Option<Arc<crate::rayon::ThreadPool>>,
   pub(crate) is_flushing: bool,
+  frame_sender: Option<FrameSender<T>>,
+  packet_receiver: PacketReceiver<T>,
+  rc_data_sender: Option<RcDataSender>,
+  rc_data_receiver: Option<RcDataReceiver>,
 }
 
 impl<T: Pixel> Context<T> {
@@ -106,27 +107,16 @@ impl<T: Pixel> Context<T> {
     let (frame, params) = frame.into();
 
     if frame.is_none() {
-      if self.is_flushing {
-        return Ok(());
-      }
-      self.inner.limit = Some(self.inner.frame_count);
-      self.is_flushing = true;
-    } else if self.is_flushing
-      || (self.inner.config.still_picture && self.inner.frame_count > 0)
-    {
-      return Err(EncoderStatus::EnoughData);
-    // The rate control can process at most std::i32::MAX frames
-    } else if self.inner.frame_count == std::i32::MAX as u64 - 1 {
-      self.inner.limit = Some(self.inner.frame_count);
-      self.is_flushing = true;
+      self.frame_sender = None;
+      return Ok(());
     }
 
-    let inner = &mut self.inner;
-    let run = move || inner.send_frame(frame, params);
-
-    match &self.pool {
-      Some(pool) => pool.install(run),
-      None => run(),
+    if let Some(ref mut sender) = self.frame_sender {
+      sender
+        .send((frame.unwrap(), params))
+        .map_err(|_| EncoderStatus::EnoughData)
+    } else {
+      Err(EncoderStatus::EnoughData)
     }
   }
 
@@ -151,11 +141,7 @@ impl<T: Pixel> Context<T> {
   /// enum.EncoderStatus.html#variant.LimitReached
   #[inline]
   pub fn twopass_out(&mut self) -> Option<&[u8]> {
-    let params = self
-      .inner
-      .rc_state
-      .get_twopass_out_params(&self.inner, self.inner.output_frameno);
-    self.inner.rc_state.twopass_out(params)
+    None
   }
 
   /// Returns the number of bytes of the stats file needed before the next
@@ -170,7 +156,7 @@ impl<T: Pixel> Context<T> {
   /// [`twopass_in`]: #method.twopass_in
   #[inline]
   pub fn twopass_bytes_needed(&mut self) -> usize {
-    self.inner.rc_state.twopass_in(None).unwrap_or(0)
+    0
   }
 
   /// Provides the stats data produced in the first pass of a two-pass encode
@@ -185,8 +171,8 @@ impl<T: Pixel> Context<T> {
   /// [`receive_packet`]: #method.receive_packet
   /// [`twopass_bytes_needed`]: #method.twopass_bytes_needed
   #[inline]
-  pub fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, EncoderStatus> {
-    self.inner.rc_state.twopass_in(Some(buf)).or(Err(EncoderStatus::Failure))
+  pub fn twopass_in(&mut self, _buf: &[u8]) -> Result<usize, EncoderStatus> {
+    Err(EncoderStatus::Failure)
   }
 
   /// Encodes the next frame and returns the encoded data.
@@ -287,12 +273,28 @@ impl<T: Pixel> Context<T> {
   /// ```
   #[inline]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
-    let inner = &mut self.inner;
-    let mut run = move || inner.receive_packet();
-
-    match &self.pool {
-      Some(pool) => pool.install(run),
-      None => run(),
+    use crossbeam::channel::TryRecvError::*;
+    let ret = self.packet_receiver.try_recv();
+    match ret {
+      Ok(pkt) => Ok(pkt),
+      Err(e) => {
+        match e {
+          // TODO: use the right amount of frames
+          Empty => {
+            if self.frame_sender.as_ref().map_or(false, |s| {
+              s.len() < self.config.rdo_lookahead_frames * 2
+            }) {
+              Err(EncoderStatus::NeedMoreData)
+            } else {
+              self
+                .packet_receiver
+                .recv()
+                .map_err(|_| EncoderStatus::LimitReached)
+            }
+          }
+          Disconnected => Err(EncoderStatus::LimitReached),
+        }
+      }
     }
   }
 
@@ -385,19 +387,15 @@ impl<T: Pixel> Context<T> {
   ///
   /// It will return a `RcData::Summary` once the encoder is flushed.
   pub fn rc_receive_pass_data(&mut self) -> Option<RcData> {
-    if self.inner.done_processing() && self.inner.rc_state.pass1_data_retrieved
-    {
-      let data = self.inner.rc_state.emit_summary();
-      Some(RcData::Summary(data.to_vec().into_boxed_slice()))
-    } else if self.inner.rc_state.pass1_data_retrieved {
-      None
-    } else if let Some(data) = self.inner.rc_state.emit_frame_data() {
-      Some(RcData::Frame(data.to_vec().into_boxed_slice()))
-    } else {
-      unreachable!(
-        "The encoder received more frames than its internal limit allows"
-      )
-    }
+    self.rc_data_receiver.as_mut().and_then(|r| {
+      let data = r.recv().ok();
+      match data {
+        Some(RcData::Summary(_)) => println!("-> Summary"),
+        Some(RcData::Frame(_)) => println!("-> Data"),
+        _ => println!("-> No data"),
+      }
+      data
+    })
   }
 
   /// Lower bound number of pass data packets required to progress the
@@ -406,11 +404,18 @@ impl<T: Pixel> Context<T> {
   /// It should be called iteratively until it returns 0.
   ///
   pub fn rc_second_pass_data_required(&self) -> usize {
-    if self.inner.done_processing() {
-      0
-    } else {
-      self.inner.rc_state.twopass_in_frames_needed() as usize
-    }
+    self.rc_data_sender.as_ref().map_or(0, |s| {
+      let reservoir_delay =
+        self.config.reservoir_frame_delay.unwrap_or(0) as usize;
+      if s.len() <= reservoir_delay
+        && self.packet_receiver.len() == 0
+        && s.limit > s.count
+      {
+        1
+      } else {
+        0
+      }
+    })
   }
 
   /// Feed the first pass Rate Control data to the encoder,
@@ -422,11 +427,10 @@ impl<T: Pixel> Context<T> {
   pub fn rc_send_pass_data(
     &mut self, data: &[u8],
   ) -> Result<(), EncoderStatus> {
-    self
-      .inner
-      .rc_state
-      .parse_frame_data_packet(data)
-      .map_err(|_| EncoderStatus::Failure)
+    let data = Vec::from(data).into_boxed_slice();
+    self.rc_data_sender.as_mut().map_or(Err(EncoderStatus::Failure), |s| {
+      s.send(RcData::Frame(data)).map_err(|_| EncoderStatus::Failure)
+    })
   }
 }
 
@@ -442,5 +446,37 @@ impl<T: Pixel> fmt::Debug for Context<T> {
       }}",
       self.config, self.is_flushing,
     )
+  }
+}
+
+impl Config {
+  /// Creates a [`Context`] with this configuration.
+  ///
+  /// # Examples
+  ///
+  /// ```
+  /// use rav1e::prelude::*;
+  ///
+  /// # fn main() -> Result<(), InvalidConfig> {
+  /// let cfg = Config::default();
+  /// let ctx: Context<u8> = cfg.new_context()?;
+  /// # Ok(())
+  /// # }
+  /// ```
+  ///
+  /// [`Context`]: struct.Context.html
+  pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
+    let ((frame_sender, packet_receiver), (rc_data_sender, rc_data_receiver)) =
+      self.new_channel_internal(false)?;
+    let config = self.enc;
+
+    Ok(Context {
+      is_flushing: false,
+      config,
+      frame_sender: Some(frame_sender),
+      packet_receiver,
+      rc_data_sender,
+      rc_data_receiver,
+    })
   }
 }
