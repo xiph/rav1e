@@ -29,7 +29,7 @@ jobs:
 
     - name: Install cargo-c
       run: |
-        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.7.1"
+        $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.8.0"
         $CARGO_C_FILE = "cargo-c-windows-msvc"
         curl -LO "$LINK/$CARGO_C_FILE.zip"
         7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
