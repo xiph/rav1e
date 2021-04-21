@@ -479,7 +479,7 @@ jobs:
       - name: Build
         if: matrix.conf == 'cargo-build'
         run: |
-          cargo build --release
+          cargo build --release --target=${{ matrix.target }}
       - name: Test
         if: matrix.conf == 'cargo-test'
         run: |
