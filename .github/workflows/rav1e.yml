@@ -54,6 +54,7 @@ jobs:
           - cargo-c
           - check-no-default
           - check-extra-feats
+          - check-unstable-feats
           - fuzz
         include:
           - conf: beta-build
@@ -77,6 +78,8 @@ jobs:
           - conf: check-no-default
             toolchain: stable
           - conf: check-extra-feats
+            toolchain: stable
+          - conf: check-unstable-feats
             toolchain: stable
           - conf: fuzz
             toolchain: stable
@@ -252,6 +255,10 @@ jobs:
         if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
         run: |
           cargo check --features=check_asm,capi,dump_lookahead_data,serialize
+      - name: Check extra features
+        if: matrix.toolchain == 'stable' && matrix.conf == 'check-unstable-feats'
+        run: |
+          cargo check --features=unstable,channel-api
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
