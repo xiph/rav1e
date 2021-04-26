@@ -136,8 +136,8 @@ impl SpeedSettings {
   /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, full SGR search.
   /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
   ///        full SGR search.
-  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        full SGR search.
+  /// - 2: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
+  ///        bottom-up encoding, full SGR search.
   /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
   ///        bottom-up encoding, full SGR search.
   /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
@@ -170,7 +170,7 @@ impl SpeedSettings {
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
   /// or better quality compared to 16x16 (to which reduced TX set does not apply).
   fn partition_range_preset(speed: usize) -> PartitionRange {
-    if speed <= 2 {
+    if speed <= 1 {
       PartitionRange::new(BlockSize::BLOCK_4X4, BlockSize::BLOCK_64X64)
     } else if speed <= 8 {
       PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64)
@@ -208,7 +208,7 @@ impl SpeedSettings {
   }
 
   const fn encode_bottomup_preset(speed: usize) -> bool {
-    speed <= 1
+    speed <= 2
   }
 
   /// Set default rdo-lookahead-frames for different speed settings
@@ -216,8 +216,8 @@ impl SpeedSettings {
     match speed {
       9..=10 => 10,
       6..=8 => 20,
-      3..=5 => 30,
-      0..=2 => 40,
+      2..=5 => 30,
+      0..=1 => 40,
       _ => 40,
     }
   }
@@ -227,7 +227,7 @@ impl SpeedSettings {
   }
 
   fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
-    if speed <= 2 {
+    if speed <= 1 {
       PredictionModesSetting::ComplexAll
     } else if speed <= 6 {
       PredictionModesSetting::ComplexKeyframes
