@@ -271,7 +271,7 @@ impl SpeedSettings {
   }
 
   const fn non_square_partition_preset(speed: usize) -> bool {
-    speed == 0
+    speed <= 1
   }
 
   fn segmentation_preset(speed: usize) -> SegmentationLevel {
