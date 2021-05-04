@@ -63,6 +63,7 @@ filter_shuf2:  db  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  4,  5,  2,  3, -1, -1
 filter_shuf3:  db 12, 13,  0,  1,  2,  3,  4,  5,  6,  7, 10, 11,  8,  9, -1, -1
 
 pw_2:    times 2 dw 2
+pw_4:    times 2 dw 4
 pw_512:  times 2 dw 512
 pw_2048: times 2 dw 2048
 pd_8:    dd 8
@@ -95,6 +96,7 @@ JMP_TABLE ipred_cfl_16bpc,        avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                         s4-8*4, s8-8*4, s16-8*4, s32-8*4
 JMP_TABLE ipred_cfl_left_16bpc,   avx2, h4, h8, h16, h32
 JMP_TABLE ipred_cfl_ac_420_16bpc, avx2, w16_wpad_pad1, w16_wpad_pad2, w16_wpad_pad3
+JMP_TABLE ipred_cfl_ac_422_16bpc, avx2, w16_wpad_pad1, w16_wpad_pad2, w16_wpad_pad3
 
 cextern filter_intra_taps
 
@@ -1963,6 +1965,195 @@ DEFINE_ARGS ac, ypx, stride, wpad, hpad, iptr, h, sz, ac_bak
     psrld               xm3, 1
     paddd               xm0, xm1
     pshuflw             xm1, xm0, q1032
+    paddd               xm0, xm3
+    paddd               xm0, xm1
+    psrld               xm0, xm2
+    vpbroadcastw         m0, xm0
+.sub_loop:
+    mova                 m1, [ac_bakq]
+    psubw                m1, m0
+    mova          [ac_bakq], m1
+    add             ac_bakq, 32
+    sub                 szd, 16
+    jg .sub_loop
+    RET
+
+cglobal ipred_cfl_ac_422_16bpc, 4, 9, 6, ac, ypx, stride, wpad, hpad, w, h, sz, ac_bak
+    movifnidn         hpadd, hpadm
+    movifnidn            wd, wm
+    mov                  hd, hm
+    mov                 szd, wd
+    mov             ac_bakq, acq
+    imul                szd, hd
+    shl               hpadd, 2
+    sub                  hd, hpadd
+    vpbroadcastd         m2, [pw_4]
+    pxor                 m4, m4
+    cmp                  wd, 8
+    jg .w16
+    je .w8
+DEFINE_ARGS ac, ypx, stride, wpad, hpad, stride3, h, sz, ac_bak
+.w4:
+    lea            stride3q, [strideq*3]
+.w4_loop:
+    mova                xm0, [ypxq+strideq*0]
+    mova                xm1, [ypxq+strideq*1]
+    vinserti128          m0, [ypxq+strideq*2], 1
+    vinserti128          m1, [ypxq+stride3q ], 1
+    pmaddwd              m0, m2
+    pmaddwd              m1, m2
+    paddd                m4, m0
+    packssdw             m0, m1
+    paddd                m4, m1
+    mova              [acq], m0
+    lea                ypxq, [ypxq+strideq*4]
+    add                 acq, 32
+    sub                  hd, 4
+    jg .w4_loop
+    test              hpadd, hpadd
+    jz .calc_avg
+    vpermq               m0, m0, q3333
+    vextracti128        xm1, m1, 1
+    pslld               xm1, 2
+.w4_hpad_loop:
+    mova              [acq], m0
+    paddd                m4, m1
+    add                 acq, 32
+    sub               hpadd, 4
+    jg .w4_hpad_loop
+    jmp .calc_avg
+.w8:
+    test              wpadd, wpadd
+    jnz .w8_wpad
+.w8_loop:
+    pmaddwd              m0, m2, [ypxq+strideq*0]
+    pmaddwd              m1, m2, [ypxq+strideq*1]
+    paddd                m4, m0
+    packssdw             m0, m1
+    paddd                m4, m1
+    vpermq               m0, m0, q3120
+    mova              [acq], m0
+    lea                ypxq, [ypxq+strideq*2]
+    add                 acq, 32
+    sub                  hd, 2
+    jg .w8_loop
+    jmp .w8_hpad
+.w8_wpad:
+    vpbroadcastd         m0, [ypxq+strideq*0+12]
+    vpbroadcastd         m1, [ypxq+strideq*1+12]
+    vinserti128          m0, [ypxq+strideq*0+ 0], 0
+    vinserti128          m1, [ypxq+strideq*1+ 0], 0
+    pmaddwd              m0, m2
+    pmaddwd              m1, m2
+    paddd                m4, m0
+    packssdw             m0, m1
+    paddd                m4, m1
+    vpermq               m0, m0, q3120
+    mova              [acq], m0
+    lea                ypxq, [ypxq+strideq*2]
+    add                 acq, 32
+    sub                  hd, 2
+    jg .w8_wpad
+.w8_hpad:
+    test              hpadd, hpadd
+    jz .calc_avg
+    vpermq               m0, m0, q3232
+    paddd                m1, m1
+.w8_hpad_loop:
+    mova              [acq], m0
+    paddd                m4, m1
+    add                 acq, 32
+    sub               hpadd, 2
+    jg .w8_hpad_loop
+    jmp .calc_avg
+.w16:
+    test              wpadd, wpadd
+    jnz .w16_wpad
+.w16_loop:
+    pmaddwd              m3, m2, [ypxq+strideq*0+ 0]
+    pmaddwd              m0, m2, [ypxq+strideq*0+32]
+    pmaddwd              m1, m2, [ypxq+strideq*1+ 0]
+    pmaddwd              m5, m2, [ypxq+strideq*1+32]
+    paddd                m4, m3
+    packssdw             m3, m0
+    paddd                m4, m0
+    packssdw             m0, m1, m5
+    paddd                m1, m5
+    paddd                m4, m1
+    vpermq               m3, m3, q3120
+    vpermq               m0, m0, q3120
+    mova           [acq+ 0], m3
+    mova           [acq+32], m0
+    lea                ypxq, [ypxq+strideq*2]
+    add                 acq, 64
+    sub                  hd, 2
+    jg .w16_loop
+    jmp .w16_hpad
+.w16_wpad:
+DEFINE_ARGS ac, ypx, stride, wpad, hpad, iptr, h, sz, ac_bak
+    lea               iptrq, [ipred_cfl_ac_422_16bpc_avx2_table]
+    mov               wpadd, wpadd
+    movsxd            wpadq, [iptrq+wpadq*4+4]
+    add               iptrq, wpadq
+    jmp               iptrq
+.w16_wpad_pad3:
+    vpbroadcastd         m0, [ypxq+strideq*0+12]
+    vpbroadcastd         m3, [ypxq+strideq*1+12]
+    vinserti128          m5, m0, [ypxq+strideq*0], 0
+    vinserti128          m1, m3, [ypxq+strideq*1], 0
+    jmp .w16_wpad_end
+.w16_wpad_pad2:
+    mova                 m5, [ypxq+strideq*0+ 0]
+    mova                 m1, [ypxq+strideq*1+ 0]
+    vpbroadcastd         m0, [ypxq+strideq*0+28]
+    vpbroadcastd         m3, [ypxq+strideq*1+28]
+    jmp .w16_wpad_end
+.w16_wpad_pad1:
+    mova                 m5, [ypxq+strideq*0+ 0]
+    mova                 m1, [ypxq+strideq*1+ 0]
+    vpbroadcastd         m0, [ypxq+strideq*0+44]
+    vpbroadcastd         m3, [ypxq+strideq*1+44]
+    vinserti128          m0, [ypxq+strideq*0+32], 0
+    vinserti128          m3, [ypxq+strideq*1+32], 0
+.w16_wpad_end:
+    pmaddwd              m5, m2
+    pmaddwd              m1, m2
+    pmaddwd              m0, m2
+    pmaddwd              m3, m2
+    paddd                m4, m5
+    packssdw             m5, m0
+    paddd                m4, m0
+    packssdw             m0, m1, m3
+    paddd                m1, m3
+    paddd                m4, m1
+    vpermq               m5, m5, q3120
+    vpermq               m0, m0, q3120
+    mova           [acq+ 0], m5
+    mova           [acq+32], m0
+    lea                ypxq, [ypxq+strideq*2]
+    add                 acq, 64
+    sub                  hd, 2
+    jz .w16_hpad
+    jmp               iptrq
+.w16_hpad:
+    test              hpadd, hpadd
+    jz .calc_avg
+.w16_hpad_loop:
+    mova              [acq], m0
+    paddd                m4, m1
+    add                 acq, 32
+    dec               hpadd
+    jg .w16_hpad_loop
+.calc_avg:
+    vextracti128        xm0, m4, 1
+    tzcnt               r1d, szd
+    movd                xm2, r1d
+    paddd               xm0, xm4
+    movd                xm3, szd
+    punpckhqdq          xm1, xm0, xm0
+    paddd               xm0, xm1
+    psrld               xm3, 1
+    psrlq               xm1, xm0, 32
     paddd               xm0, xm3
     paddd               xm0, xm1
     psrld               xm0, xm2
