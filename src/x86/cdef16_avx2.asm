@@ -1,5 +1,5 @@
-; Copyright (c) 2017-2021, The rav1e contributors
-; Copyright (c) 2021, Nathan Egge
+; Copyright © 2021, VideoLAN and dav1d authors
+; Copyright © 2021, Two Orioles, LLC
 ; All rights reserved.
 ;
 ; Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,39 @@
 
 %if ARCH_X86_64
 
+SECTION_RODATA
+
+dir_shift: times 2 dw 0x4000
+           times 2 dw 0x1000
+
+cextern cdef_dir_8bpc_avx2.main
+
 SECTION .text
 
-cextern cdef_dir_8bpc_avx2
+%macro REPX 2-*
+    %xdefine %%f(x) %1
+%rep %0 - 1
+    %rotate 1
+    %%f(%1)
+%endrep
+%endmacro
 
 INIT_YMM avx2
-cglobal cdef_dir_16bpc, 4, 4, 3, 32 + 8*8, src, ss, var, bdmax
-  popcnt  bdmaxd, bdmaxd
-  movzx   bdmaxq, bdmaxw
-  sub     bdmaxq, 8
-  movq       xm2, bdmaxq
-  DEFINE_ARGS src, ss, var, ss3
-  lea       ss3q, [ssq*3]
-  mova       xm0, [srcq + ssq*0]
-  mova       xm1, [srcq + ssq*1]
-  vinserti128 m0, [srcq + ssq*2], 1
-  vinserti128 m1, [srcq + ss3q], 1
-  psraw       m0, xm2
-  psraw       m1, xm2
-  vpackuswb   m0, m1
-  mova [rsp + 32 + 0*8], m0
-  lea       srcq, [srcq + ssq*4]
-  mova       xm0, [srcq + ssq*0]
-  mova       xm1, [srcq + ssq*1]
-  vinserti128 m0, [srcq + ssq*2], 1
-  vinserti128 m1, [srcq + ss3q], 1
-  psraw       m0, xm2
-  psraw       m1, xm2
-  vpackuswb   m0, m1
-  mova [rsp + 32 + 4*8], m0
-  lea       srcq, [rsp + 32] ; WIN64 shadow space
-  mov        ssq, 8
-  call mangle(private_prefix %+ _cdef_dir_8bpc %+ SUFFIX)
-  RET
+cglobal cdef_dir_16bpc, 4, 7, 6, src, stride, var, bdmax
+    lea             r6, [dir_shift]
+    shr         bdmaxd, 11 ; 0 for 10bpc, 1 for 12bpc
+    vpbroadcastd    m4, [r6+bdmaxq*4]
+    lea             r6, [strideq*3]
+    mova           xm0, [srcq+strideq*0]
+    mova           xm1, [srcq+strideq*1]
+    mova           xm2, [srcq+strideq*2]
+    mova           xm3, [srcq+r6       ]
+    lea           srcq, [srcq+strideq*4]
+    vinserti128     m0, [srcq+r6       ], 1
+    vinserti128     m1, [srcq+strideq*2], 1
+    vinserti128     m2, [srcq+strideq*1], 1
+    vinserti128     m3, [srcq+strideq*0], 1
+    REPX {pmulhuw x, m4}, m0, m1, m2, m3
+    jmp mangle(private_prefix %+ _cdef_dir_8bpc %+ SUFFIX).main
 
 %endif ; ARCH_X86_64
