@@ -71,6 +71,7 @@ BIDIR_JMP_TABLE w_avg,      avx2,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE mask,       avx2,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420, avx2,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_422, avx2,    4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_444, avx2,    4, 8, 16, 32, 64, 128
 
 %macro BASE_JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - %3)
@@ -3128,6 +3129,125 @@ ALIGN function_align
     pavgb                m4, m5
     vpermd               m4, m15, m4
     mova            [maskq], m4
+    add               maskq, 32
+    ret
+
+cglobal w_mask_444_16bpc, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_444_avx2_table
+    lea                  r7, [w_mask_444_avx2_table]
+    tzcnt                wd, wm
+    mov                 r6d, r8m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd        m10, [base+pw_27615]
+    vpbroadcastd         m4, [base+pw_64]
+    vpbroadcastd         m5, [base+bidir_rnd+r6*4]
+    vpbroadcastd         m6, [base+bidir_mul+r6*4]
+    mov               maskq, maskmp
+    add                  wq, r7
+    call .main
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti128        xm0, m0, 1
+    movq   [dstq+strideq*2], xm0
+    movhps [dstq+stride3q ], xm0
+    cmp                  hd, 8
+    jl .w4_end
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti128        xm1, m1, 1
+    movq   [dstq+strideq*2], xm1
+    movhps [dstq+stride3q ], xm1
+    je .w4_end
+    call .main
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti128        xm0, m0, 1
+    movq   [dstq+strideq*2], xm0
+    movhps [dstq+stride3q ], xm0
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti128        xm1, m1, 1
+    movq   [dstq+strideq*2], xm1
+    movhps [dstq+stride3q ], xm1
+.w4_end:
+    RET
+.w8_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w8:
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    mova         [dstq+strideq*2], xm1
+    vextracti128 [dstq+stride3q ], m1, 1
+    sub                  hd, 4
+    jg .w8_loop
+.w8_end:
+    RET
+.w16_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+.w16:
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    sub                  hd, 2
+    jg .w16_loop
+    RET
+.w32_loop:
+    call .main
+    add                dstq, strideq
+.w32:
+    mova        [dstq+32*0], m0
+    mova        [dstq+32*1], m1
+    dec                  hd
+    jg .w32_loop
+    RET
+.w64_loop:
+    call .main
+    add                dstq, strideq
+.w64:
+    mova        [dstq+32*0], m0
+    mova        [dstq+32*1], m1
+    call .main
+    mova        [dstq+32*2], m0
+    mova        [dstq+32*3], m1
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128_loop:
+    call .main
+    add                dstq, strideq
+.w128:
+    mova        [dstq+32*0], m0
+    mova        [dstq+32*1], m1
+    call .main
+    mova        [dstq+32*2], m0
+    mova        [dstq+32*3], m1
+    call .main
+    mova        [dstq+32*4], m0
+    mova        [dstq+32*5], m1
+    call .main
+    mova        [dstq+32*6], m0
+    mova        [dstq+32*7], m1
+    dec                  hd
+    jg .w128_loop
+    RET
+ALIGN function_align
+.main:
+    W_MASK                0, 2, 4, 5, 6
+    W_MASK                1, 3, 4, 5, 6
+    packuswb             m2, m3
+    vpermq               m2, m2, q3120
+    add               tmp1q, 32*2
+    add               tmp2q, 32*2
+    mova            [maskq], m2
     add               maskq, 32
     ret
 
