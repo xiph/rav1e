@@ -61,6 +61,7 @@ ipred_hv_shuf: db  6,  7,  6,  7,  0,  1,  2,  3,  2,  3,  2,  3,  8,  9, 10, 11
 filter_shuf1:  db  8,  9,  0,  1,  2,  3,  4,  5,  6,  7, 14, 15, 12, 13, -1, -1
 filter_shuf2:  db  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  4,  5,  2,  3, -1, -1
 filter_shuf3:  db 12, 13,  0,  1,  2,  3,  4,  5,  6,  7, 10, 11,  8,  9, -1, -1
+pal_pred_shuf: db  0,  2,  4,  6,  8, 10, 12, 14,  1,  3,  5,  7,  9, 11, 13, 15
 
 pw_2:    times 2 dw 2
 pw_4:    times 2 dw 4
@@ -97,6 +98,7 @@ JMP_TABLE ipred_cfl_16bpc,        avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
 JMP_TABLE ipred_cfl_left_16bpc,   avx2, h4, h8, h16, h32
 JMP_TABLE ipred_cfl_ac_420_16bpc, avx2, w16_wpad_pad1, w16_wpad_pad2, w16_wpad_pad3
 JMP_TABLE ipred_cfl_ac_422_16bpc, avx2, w16_wpad_pad1, w16_wpad_pad2, w16_wpad_pad3
+JMP_TABLE pal_pred_16bpc,         avx2, w4, w8, w16, w32, w64
 
 cextern filter_intra_taps
 
@@ -2165,6 +2167,110 @@ DEFINE_ARGS ac, ypx, stride, wpad, hpad, iptr, h, sz, ac_bak
     add             ac_bakq, 32
     sub                 szd, 16
     jg .sub_loop
+    RET
+
+cglobal pal_pred_16bpc, 4, 6, 5, dst, stride, pal, idx, w, h
+    vbroadcasti128       m3, [palq]
+    lea                  r2, [pal_pred_16bpc_avx2_table]
+    tzcnt                wd, wm
+    vbroadcasti128       m4, [pal_pred_shuf]
+    movifnidn            hd, hm
+    movsxd               wq, [r2+wq*4]
+    pshufb               m3, m4
+    punpckhqdq           m4, m3, m3
+    add                  wq, r2
+DEFINE_ARGS dst, stride, stride3, idx, w, h
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    mova                xm2, [idxq]
+    add                idxq, 16
+    pshufb              xm1, xm3, xm2
+    pshufb              xm2, xm4, xm2
+    punpcklbw           xm0, xm1, xm2
+    punpckhbw           xm1, xm2
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*2], xm1
+    movhps [dstq+strideq*1], xm0
+    movhps [dstq+stride3q ], xm1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w4
+    RET
+.w8:
+    movu                 m2, [idxq] ; only 16-byte alignment
+    add                idxq, 32
+    pshufb               m1, m3, m2
+    pshufb               m2, m4, m2
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova         [dstq+strideq*0], xm0
+    mova         [dstq+strideq*1], xm1
+    vextracti128 [dstq+strideq*2], m0, 1
+    vextracti128 [dstq+stride3q ], m1, 1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w8
+    RET
+.w16:
+    vpermq               m2, [idxq+ 0], q3120
+    vpermq               m5, [idxq+32], q3120
+    add                idxq, 64
+    pshufb               m1, m3, m2
+    pshufb               m2, m4, m2
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    pshufb               m1, m3, m5
+    pshufb               m2, m4, m5
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova   [dstq+strideq*2], m0
+    mova   [dstq+stride3q ], m1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w16
+    RET
+.w32:
+    vpermq               m2, [idxq+ 0], q3120
+    vpermq               m5, [idxq+32], q3120
+    add                idxq, 64
+    pshufb               m1, m3, m2
+    pshufb               m2, m4, m2
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova [dstq+strideq*0+ 0], m0
+    mova [dstq+strideq*0+32], m1
+    pshufb               m1, m3, m5
+    pshufb               m2, m4, m5
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova [dstq+strideq*1+ 0], m0
+    mova [dstq+strideq*1+32], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w32
+    RET
+.w64:
+    vpermq               m2, [idxq+ 0], q3120
+    vpermq               m5, [idxq+32], q3120
+    add                idxq, 64
+    pshufb               m1, m3, m2
+    pshufb               m2, m4, m2
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova          [dstq+ 0], m0
+    mova          [dstq+32], m1
+    pshufb               m1, m3, m5
+    pshufb               m2, m4, m5
+    punpcklbw            m0, m1, m2
+    punpckhbw            m1, m2
+    mova          [dstq+64], m0
+    mova          [dstq+96], m1
+    add                 dstq, strideq
+    dec                   hd
+    jg .w64
     RET
 
 %endif
