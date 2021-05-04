@@ -58,9 +58,13 @@ smooth_weights: SMOOTH_WEIGHT_TABLE         \
 
 ipred_hv_shuf: db  6,  7,  6,  7,  0,  1,  2,  3,  2,  3,  2,  3,  8,  9, 10, 11
                db  4,  5,  4,  5,  4,  5,  6,  7,  0,  1,  0,  1, 12, 13, 14, 15
+filter_shuf1:  db  8,  9,  0,  1,  2,  3,  4,  5,  6,  7, 14, 15, 12, 13, -1, -1
+filter_shuf2:  db  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  4,  5,  2,  3, -1, -1
+filter_shuf3:  db 12, 13,  0,  1,  2,  3,  4,  5,  6,  7, 10, 11,  8,  9, -1, -1
 
 pw_512:  times 2 dw 512
 pw_2048: times 2 dw 2048
+pd_8:    dd 8
 pd_128:  dd 128
 pd_256:  dd 256
 
@@ -85,9 +89,12 @@ JMP_TABLE ipred_paeth_16bpc,      avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_16bpc,     avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_h_16bpc,   avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_v_16bpc,   avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_filter_16bpc,     avx2, w4, w8, w16, w32
 JMP_TABLE ipred_cfl_16bpc,        avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                         s4-8*4, s8-8*4, s16-8*4, s32-8*4
 JMP_TABLE ipred_cfl_left_16bpc,   avx2, h4, h8, h16, h32
+
+cextern filter_intra_taps
 
 SECTION .text
 
@@ -1100,6 +1107,388 @@ ALIGN function_align
     test                xb, 64
     jz .w64_loop_x
     RET
+
+%macro FILTER_1BLK 5 ; dst, src, tmp, shuf, bdmax
+%ifnum %4
+    pshufb             xm%2, xm%4
+%else
+    pshufb             xm%2, %4
+%endif
+    vinserti128         m%2, xm%2, 1
+    pshufd              m%1, m%2, q0000
+    pmaddwd             m%1, m2
+    pshufd              m%3, m%2, q1111
+    pmaddwd             m%3, m3
+    paddd               m%1, m1
+    paddd               m%1, m%3
+    pshufd              m%3, m%2, q2222
+    pmaddwd             m%3, m4
+    paddd               m%1, m%3
+    pshufd              m%3, m%2, q3333
+    pmaddwd             m%3, m5
+    paddd               m%1, m%3
+    psrad               m%1, 4
+    packusdw            m%1, m%1
+    pminsw              m%1, m%5
+%endmacro
+
+%macro FILTER_2BLK 7 ; dst, src, tmp_dst, tmp_src, tmp, shuf, bdmax
+    pshufb              m%2, m%6
+    vpermq              m%4, m%2, q3232
+    vinserti128         m%2, xm%2, 1
+    pshufd              m%1, m%2, q0000
+    pshufd              m%3, m%4, q0000
+    pmaddwd             m%1, m2
+    pmaddwd             m%3, m2
+    paddd               m%1, m1
+    paddd               m%3, m1
+    pshufd              m%5, m%2, q1111
+    pmaddwd             m%5, m3
+    paddd               m%1, m%5
+    pshufd              m%5, m%4, q1111
+    pmaddwd             m%5, m3
+    paddd               m%3, m%5
+    pshufd              m%5, m%2, q2222
+    pmaddwd             m%5, m4
+    paddd               m%1, m%5
+    pshufd              m%5, m%4, q2222
+    pmaddwd             m%5, m4
+    paddd               m%3, m%5
+    pshufd              m%5, m%2, q3333
+    pmaddwd             m%5, m5
+    paddd               m%1, m%5
+    pshufd              m%5, m%4, q3333
+    pmaddwd             m%5, m5
+    paddd               m%3, m%5
+    psrad               m%1, 4
+    psrad               m%3, 4
+    packusdw            m%1, m%3
+    pminsw              m%1, m%7
+%endmacro
+
+; The ipred_filter SIMD processes 4x2 blocks in the following order which
+; increases parallelism compared to doing things row by row. One redundant
+; block is calculated for w8 and w16, two for w32.
+;     w4     w8       w16             w32
+;     1     1 2     1 2 3 5     1 2 3 5 b c d f
+;     2     2 3     2 4 5 7     2 4 5 7 c e f h
+;     3     3 4     4 6 7 9     4 6 7 9 e g h j
+; ___ 4 ___ 4 5 ___ 6 8 9 a ___ 6 8 9 a g i j k ___
+;           5       8           8       i
+
+cglobal ipred_filter_16bpc, 3, 9, 0, dst, stride, tl, w, h, filter
+%assign org_stack_offset stack_offset
+%define base r6-ipred_filter_16bpc_avx2_table
+    lea                  r6, [filter_intra_taps]
+    tzcnt                wd, wm
+%ifidn filterd, filterm
+    movzx           filterd, filterb
+%else
+    movzx           filterd, byte filterm
+%endif
+    shl             filterd, 6
+    add             filterq, r6
+    lea                  r6, [ipred_filter_16bpc_avx2_table]
+    vbroadcasti128       m0, [tlq-6]
+    movsxd               wq, [r6+wq*4]
+    vpbroadcastd         m1, [base+pd_8]
+    pmovsxbw             m2, [filterq+16*0]
+    pmovsxbw             m3, [filterq+16*1]
+    pmovsxbw             m4, [filterq+16*2]
+    pmovsxbw             m5, [filterq+16*3]
+    add                  wq, r6
+    mov                  hd, hm
+    jmp                  wq
+.w4:
+    WIN64_SPILL_XMM      10
+    mova                xm8, [base+filter_shuf2]
+    vpbroadcastw         m9, r8m ; bitdepth_max
+    lea                  r7, [6+hq*2]
+    sub                 tlq, r7
+    jmp .w4_loop_start
+.w4_loop:
+    pinsrq              xm0, [tlq+hq*2], 0
+    lea                dstq, [dstq+strideq*2]
+.w4_loop_start:
+    FILTER_1BLK           6, 0, 7, 8, 9
+    vextracti128        xm0, m6, 1
+    movq   [dstq+strideq*0], xm6
+    movq   [dstq+strideq*1], xm0
+    sub                  hd, 2
+    jg .w4_loop
+    RET
+ALIGN function_align
+.w8:
+    %assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM      16
+    vbroadcasti128      m14, [base+filter_shuf3]
+    vpbroadcastw        m15, r8m ; bitdepth_max
+    FILTER_1BLK          10, 0, 7, [base+filter_shuf2], 15
+    vpermq               m6, m10, q1302         ; ____ ____ | ____ 4321
+    pslldq               m8, m0, 4
+    psrldq               m7, m6, 2
+    psrldq               m0, m6, 10
+    punpcklwd            m7, m0
+    vpblendd             m8, m6, 0x33           ; _0__ 4321 | ____ 4321
+    vpblendd             m8, m7, 0x40           ; _056 4321 | ____ 4321
+    vpblendd             m8, [tlq-6], 0x30      ; _056 4321 | ____ 4321
+    lea                  r7, [16+hq*2]
+    sub                 tlq, r7
+    jmp .w8_loop_start
+.w8_loop:
+    vpermq               m8, m9, q1302          ; ____ 4321 | ____ 4321
+    vpermq               m6, m9, q2031
+    psrldq               m0, m6, 2
+    psrldq               m6, 10
+    punpcklwd            m6, m0
+    vpblendd             m8, m7, 0x80           ; _0__ 4321 | ____ 4321
+    vpblendd             m8, m6, 0x40           ; _056 4321 | ____ 4321
+    mova                m10, m9
+.w8_loop_start:
+    vpblendd             m8, [tlq+hq*2], 0x0C   ; _056 4321 | _056 4321
+    call .main
+    vpblendd            m10, m9, 0xCC
+    mova         [dstq+strideq*0], xm10
+    vextracti128 [dstq+strideq*1], m10, 1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    %assign stack_offset stack_offset - stack_size_padded
+    ALLOC_STACK          32, 16
+    vpbroadcastw        m15, r8m ; bitdepth_max
+    sub                  hd, 2
+    TAIL_CALL .w16_main, 0
+.w16_main:
+    mova               xm10, [base+filter_shuf2]
+    FILTER_1BLK          13, 0, 6, 10, 15
+    vpermq              m12, m13, q3120
+    mova               xm14, [base+filter_shuf3]
+    vinserti128         m14, [base+filter_shuf1], 1
+    vpbroadcastq         m0, [tlq+10]
+    vpblendd             m0, [tlq-16], 0x4C     ; ___0 4321 | _056 ____
+    psrldq               m6, m12, 8
+    vpblendd             m0, m6, 0x03           ; ___0 4321 | _056 4321
+    punpcklwd            m6, m12
+    vpblendd             m0, m6, 0x80           ; 56_0 4321 | _056 4321
+    FILTER_2BLK          12, 0, 6, 7, 8, 14, 15
+    vpblendd            m13, m12, 0xCC
+    vpermq              m12, m12, q2031         ; 6___ 5___
+    psrldq              xm6, xm12, 2
+    psrldq              xm8, xm12, 12
+    vpblendd            xm6, xm8, 0x01
+    pblendw             xm6, [tlq+10], 0xF8     ; 4321 056_
+    FILTER_1BLK          11, 6, 8, 10, 15
+    vpermq              m11, m11, q3120
+    pshufd               m9, m11, q1032
+    movu                 m8, [tlq+6]            ; __43 210_ | ____ ____
+    pshufd               m8, m8, q3021          ; __0_ 4321 | ____ ____
+    pshufhw              m8, m8, q3201          ; ___0 4321 | ____ ____
+    vpblendd             m9, m8, 0x70           ; ___0 4321 | ____ 4321
+    mova         [dstq+strideq*0], xm13
+    vextracti128 [dstq+strideq*1], m13, 1
+    lea                  r7, [20+hq*2]
+    sub                 tlq, r7
+    vpermq               m6, m12, q0123         ; ____ 4321 | ____ 4321
+    jmp .w16_loop_start
+.w16_loop:
+    vpermq              m13, m13, q3322
+    vpermq              m11,  m9, q2020
+    vpermq               m9,  m9, q1302
+    vpermq               m6, m12, q0123
+    psrldq               m7, 4
+    vpblendd            m13, m10, 0xCC
+    vpblendd             m9, m7, 0x40
+    mova                 m0, [rsp+8]
+    mova         [dstq+strideq*0], xm13
+    vextracti128 [dstq+strideq*1], m13, 1
+.w16_loop_start:
+    mova                m13, m12
+    vpblendd             m0, [tlq+hq*2], 0x0C
+    psrldq               m7, m12, 8
+    punpcklwd            m7, m12
+    vpblendd             m0, m6, 0x33           ; ___0 4321 | _056 4321
+    vpblendd             m0, m7, 0x80           ; 56_0 4321 | _056 4321
+    FILTER_2BLK          10, 0, 6, 7, 8, 14, 15
+    vpermq              m12, m10, q2031
+    mova            [rsp+8], m0
+    psrldq               m8, m11, 8
+    psrldq              xm6, xm12, 2
+    psrldq              xm7, xm12, 10
+    psrldq              xm0, xm13, 2
+    punpcklwd            m8, m11
+    punpcklwd           xm7, xm6
+    vpblendd             m8, m9, 0x73           ; 56_0 4321 | ____ 4321
+    vpblendd             m8, m7, 0x04           ; 56_0 4321 | __56 4321
+    vpblendd             m8, m0, 0x08           ; 56_0 4321 | _056 4321
+    call .main
+    vpermq               m8, m11, q3120
+    vpblendd             m6, m8, m9, 0xCC
+    mova         [dstq+strideq*0+16], xm6
+    vextracti128 [dstq+strideq*1+16], m6, 1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w16_loop
+    vpermq               m8, m9, q3120
+    vextracti128        xm0, m8, 1              ; 4321 ____
+    pshufd             xm11, xm11, q1032
+    vpblendd            xm0, xm11, 0x02         ; 4321 0___
+    psrldq              xm6, xm8, 2
+    psrldq              xm7, xm8, 12
+    pblendw             xm0, xm6, 0x4           ; 4321 05__
+    pblendw             xm0, xm7, 0x2           ; 4321 056_
+    FILTER_1BLK           6, 0, 7, [base+filter_shuf2], 15
+    vpermq              m12, m13, q1302
+    vpblendd            m12, m10, 0xCC
+    vpblendd             m9, m6, 0xCC
+    mova         [dstq+strideq*0+ 0], xm12
+    mova         [dstq+strideq*0+16], xm9
+    vextracti128 [dstq+strideq*1+ 0], m12, 1
+    vextracti128 [dstq+strideq*1+16], m9, 1
+    ret
+ALIGN function_align
+.w32:
+    %assign stack_offset org_stack_offset
+    ALLOC_STACK          64, 16
+    vpbroadcastw        m15, r8m ; bitdepth_max
+    sub                  hd, 2
+    lea                  r3, [dstq+32]
+    lea                 r5d, [hd*2+20]
+    call .w16_main
+    mov                dstq, r3
+    lea                 tlq, [tlq+r5+32]
+    sub                 r5d, 20
+    shr                 r5d, 1
+    sub                 r5d, 2
+    lea                  r4, [dstq+strideq*2-2]
+DEFINE_ARGS dst, stride, tl, stride3, left, h
+    lea            stride3q, [strideq*3]
+    movu                 m8, [tlq-6]                        ; 4321 0___
+    mova               xm10, [base+filter_shuf2]
+    pinsrw              xm0, xm8, [dstq+strideq*0-2], 2
+    pinsrw              xm0, xm0, [dstq+strideq*1-2], 1     ; 4321 056_
+    pinsrw              xm9, [leftq+strideq*0], 5
+    pinsrw              xm9, [leftq+strideq*1], 4
+    FILTER_1BLK          13, 0, 6, 10, 15
+    vpermq              m12, m13, q3120
+    mova               xm14, [base+filter_shuf3]
+    vinserti128         m14, [base+filter_shuf1], 1
+    psrldq               m6, m12, 8
+    punpcklwd            m7, m6, m12
+    vpblendd             m0, m6, 0x03           ; ___0 ____ | _0__ 4321
+    vpblendd             m0, m7, 0x80           ; 56_0 ____ | _0__ 4321
+    vpblendd             m0, m8, 0x30           ; 56_0 4321 | _0__ 4321
+    vpblendd             m0, m9, 0x04           ; 56_0 4321 | _056 4321
+    FILTER_2BLK          12, 0, 6, 7, 8, 14, 15
+    vpblendd            m13, m12, 0xCC
+    pinsrw              xm9, [leftq+strideq*2], 3
+    pinsrw              xm9, [leftq+stride3q ], 2
+    lea               leftq, [leftq+strideq*4]
+    pinsrw              xm9, [leftq+strideq*0], 1
+    pinsrw              xm9, [leftq+strideq*1], 0
+    movq           [rsp+32], xm9
+    mov                 r7d, 1
+    pslldq               m8, m9, 4
+    vpblendd             m0, m8, 0x0C           ; ___0 ____ | _056 ____
+    vpermq              m12, m12, q2031         ; 6___ 5___
+    psrldq              xm6, xm12, 2
+    psrldq              xm7, xm12, 12
+    vpblendd            xm6, xm7, 0x01          ; ____ _56_
+    pblendw             xm6, [tlq+10], 0xF8     ; 4321 056_
+    FILTER_1BLK          11, 6, 7, 10, 15
+    vpermq              m11, m11, q3120
+    pshufd               m9, m11, q1032
+    vbroadcasti128       m8, [tlq+22]           ; __43 210_ | ____ ____
+    pshufd               m8, m8, q3021          ; __0_ 4321 | ____ ____
+    pshufhw              m8, m8, q3201          ; ___0 4321 | ____ ____
+    vpblendd             m9, m8, 0x70           ; ___0 4321 | ____ 4321
+    mova         [dstq+strideq*0], xm13
+    vextracti128 [dstq+strideq*1], m13, 1
+    vpermq               m6, m12, q0123         ; ____ 4321 | ____ 4321
+    jmp .w32_loop_start
+.w32_loop_last:
+    mova                 m0, [rsp+0]
+    jmp .w32_loop
+.w32_loop_left:
+    mova                 m0, [rsp+0]
+    vpblendd             m0, [rsp+32+r7*4-12], 0x0C
+    dec                 r7d
+    jg .w32_loop
+    cmp                  hd, 2
+    je .w32_loop
+    pinsrw              xm6, [rsp+32], 6
+    pinsrw              xm6, [leftq+strideq*2], 5
+    pinsrw              xm6, [leftq+stride3q ], 4
+    lea               leftq, [leftq+strideq*4]
+    pinsrw              xm6, [leftq+strideq*0], 3
+    pinsrw              xm6, [leftq+strideq*1], 2
+    pinsrw              xm6, [leftq+strideq*2], 1
+    pinsrw              xm6, [leftq+stride3q ], 0
+    lea               leftq, [leftq+strideq*4]
+    movu           [rsp+36], xm6
+    pinsrw              xm6, [leftq+strideq*0], 1
+    pinsrw              xm6, [leftq+strideq*1], 0
+    movd           [rsp+32], xm6
+    mov                 r7d, 4
+.w32_loop:
+    vpermq              m13, m13, q3322
+    vpermq              m11,  m9, q2020
+    vpermq               m9,  m9, q1302
+    vpermq               m6, m12, q0123
+    psrldq               m7, 4
+    vpblendd            m13, m10, 0xCC
+    vpblendd             m9, m7, 0x40           ; ___0 4321 | ____ 4321
+    mova         [dstq+strideq*0], xm13
+    vextracti128 [dstq+strideq*1], m13, 1
+.w32_loop_start:
+    mova                m13, m12
+    psrldq               m7, m12, 8
+    punpcklwd            m7, m12
+    vpblendd             m0, m6, 0x33           ; ___0 4321 | _056 4321
+    vpblendd             m0, m7, 0x80           ; 56_0 4321 | _056 4321
+    FILTER_2BLK          10, 0, 6, 7, 8, 14, 15
+    vpermq              m12, m10, q2031
+    mova            [rsp+0], m0
+    psrldq               m8, m11, 8
+    psrldq              xm6, xm12, 2
+    psrldq              xm7, xm12, 10
+    psrldq              xm0, xm13, 2
+    punpcklwd            m8, m11
+    punpcklwd           xm7, xm6
+    vpblendd             m8, m9, 0x73           ; 56_0 4321 | ____ 4321
+    vpblendd             m8, m7, 0x04           ; 56_0 4321 | __56 4321
+    vpblendd             m8, m0, 0x08           ; 56_0 4321 | _056 4321
+    call .main
+    vpermq               m8, m11, q3120
+    vpblendd             m6, m8, m9, 0xCC
+    mova         [dstq+strideq*0+16], xm6
+    vextracti128 [dstq+strideq*1+16], m6, 1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w32_loop_left
+    jz .w32_loop_last
+    vpermq               m8, m9, q3120
+    vextracti128        xm0, m8, 1              ; 4321 ____
+    pshufd             xm11, xm11, q1032
+    vpblendd            xm0, xm11, 0x02         ; 4321 0___
+    psrldq              xm6, xm8, 2
+    psrldq              xm7, xm8, 12
+    pblendw             xm0, xm6, 0x4           ; 4321 05__
+    pblendw             xm0, xm7, 0x2           ; 4321 056_
+    FILTER_1BLK           6, 0, 7, [base+filter_shuf2], 15
+    vpermq              m12, m13, q1302
+    vpblendd            m12, m10, 0xCC
+    vpblendd             m9, m6, 0xCC
+    mova         [dstq+strideq*0+ 0], xm12
+    mova         [dstq+strideq*0+16], xm9
+    vextracti128 [dstq+strideq*1+ 0], m12, 1
+    vextracti128 [dstq+strideq*1+16], m9, 1
+    RET
+.main:
+    FILTER_2BLK           9, 8, 6, 7, 0, 14, 15
+    ret
 
 %if WIN64
 DECLARE_REG_TMP 5
