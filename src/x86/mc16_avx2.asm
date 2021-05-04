@@ -45,6 +45,7 @@ bidir_mul:        dw   2048,   2048,   8192,   8192
 %define pw_16 prep_mul
 
 pw_2:     times 2 dw 2
+pw_64:    times 2 dw 64
 pw_2048:  times 2 dw 2048
 pw_8192:  times 2 dw 8192
 pw_32766: times 2 dw 32766
@@ -65,6 +66,7 @@ pd_65538: dd 65538
 
 BIDIR_JMP_TABLE avg,        avx2,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_avg,      avx2,    4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE mask,       avx2,    4, 8, 16, 32, 64, 128
 
 %macro BASE_JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - %3)
@@ -2703,6 +2705,49 @@ ALIGN function_align
     pminsw               m1, m8
     pminsw               m2, m8
     pminsw               m3, m8
+    ret
+
+cglobal mask_16bpc, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-mask_avx2_table
+    lea                  r7, [mask_avx2_table]
+    tzcnt                wd, wm
+    mov                 r6d, r7m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd         m8, [base+pw_64]
+    vpbroadcastd         m9, [base+bidir_rnd+r6*4]
+    vpbroadcastd        m10, [base+bidir_mul+r6*4]
+    mov               maskq, maskmp
+    add                  wq, r7
+    BIDIR_FN
+ALIGN function_align
+.main:
+%macro MASK 1
+    pmovzxbw             m5, [maskq+16*%1]
+    mova                m%1, [tmp1q+32*%1]
+    mova                 m6, [tmp2q+32*%1]
+    punpckhwd            m4, m%1, m6
+    punpcklwd           m%1, m6
+    psubw                m7, m8, m5
+    punpckhwd            m6, m5, m7 ; m, 64-m
+    punpcklwd            m5, m7
+    pmaddwd              m4, m6     ; tmp1 * m + tmp2 * (64-m)
+    pmaddwd             m%1, m5
+    psrad                m4, 5
+    psrad               m%1, 5
+    packssdw            m%1, m4
+    pmaxsw              m%1, m9
+    psubsw              m%1, m9
+    pmulhw              m%1, m10
+%endmacro
+    MASK                  0
+    MASK                  1
+    MASK                  2
+    MASK                  3
+    add               maskq, 16*4
+    add               tmp1q, 32*4
+    add               tmp2q, 32*4
     ret
 
 %endif ; ARCH_X86_64
