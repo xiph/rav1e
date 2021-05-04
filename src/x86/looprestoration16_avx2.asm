@@ -30,6 +30,8 @@
 
 SECTION_RODATA 32
 
+sgr_lshuf3:    db  0,  1,  0,  1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11
+sgr_lshuf5:    db  0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9
 wiener_shufA:  db  2,  3,  4,  5,  4,  5,  6,  7,  6,  7,  8,  9,  8,  9, 10, 11
 wiener_shufB:  db  6,  7,  4,  5,  8,  9,  6,  7, 10, 11,  8,  9, 12, 13, 10, 11
 wiener_shufC:  db  6,  7,  8,  9,  8,  9, 10, 11, 10, 11, 12, 13, 12, 13, 14, 15
@@ -49,7 +51,18 @@ pb_m6_m5:      times 2 db  -6, -5
 pb_m2_m1:      times 2 db  -2, -1
 pb_2_3:        times 2 db   2,  3
 pb_6_7:        times 2 db   6,  7
+pw_1023:       times 2 dw 1023
+pd_8:          dd 8
+pd_25:         dd 25
+pd_4096:       dd 4096
+pd_34816:      dd 34816
 pd_m262128     dd -262128
+pd_0xf00800a4: dd 0xf00800a4
+pd_0xf00801c7: dd 0xf00801c7
+
+%define pw_256 sgr_lshuf5
+
+cextern sgr_x_by_x_avx2
 
 SECTION .text
 
@@ -647,6 +660,1922 @@ ALIGN function_align
     mova    [dstq+r10], m0
     add            r10, 32
     jl .v_loop
+    ret
+
+cglobal sgr_filter_5x5_16bpc, 5, 14, 16, 400*24+16, dst, dst_stride, left, lpf, \
+                                                    lpf_stride, w, edge, params, h
+    movifnidn       wd, wm
+    mov        paramsq, paramsmp
+    lea            r13, [sgr_x_by_x_avx2+256*4]
+    mov          edged, r8m
+    mov             hd, r6m
+    add             wd, wd
+    vpbroadcastw    m7, [paramsq+8] ; w0
+    add           lpfq, wq
+    vpbroadcastd    m8, [pd_8]
+    lea             t1, [rsp+wq+20]
+    vpbroadcastd    m9, [pd_25]
+    add           dstq, wq
+    vpbroadcastd   m10, [paramsq+0] ; s0
+    lea             t3, [rsp+wq*2+400*12+16]
+    vpbroadcastd   m11, [pd_0xf00800a4]
+    lea             t4, [rsp+wq+400*20+16]
+    vpbroadcastd   m12, [pw_256]
+    neg             wq
+    vpbroadcastd   m13, [pd_34816]  ; (1 << 11) + (1 << 15)
+    pxor            m6, m6
+    vpbroadcastd   m14, [pw_1023]
+    psllw           m7, 4
+    mova          xm15, [sgr_lshuf5]
+    test         edgeb, 4 ; LR_HAVE_TOP
+    jz .no_top
+    call .h_top
+    add           lpfq, lpf_strideq
+    mov             t2, t1
+    call .top_fixup
+    add             t1, 400*6
+    call .h_top
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    mov      [rsp+8*1], lpf_strideq
+    add            r10, lpf_strideq
+    mov      [rsp+8*0], r10 ; below
+    mov             t0, t2
+    dec             hd
+    jz .height1
+    or           edged, 16
+    call .h
+.main:
+    add           lpfq, dst_strideq
+    call .hv
+    call .prep_n
+    sub             hd, 2
+    jl .extend_bottom
+.main_loop:
+    add           lpfq, dst_strideq
+    test            hd, hd
+    jz .odd_height
+    call .h
+    add           lpfq, dst_strideq
+    call .hv
+    call .n0
+    call .n1
+    sub             hd, 2
+    jge .main_loop
+    test         edgeb, 8 ; LR_HAVE_BOTTOM
+    jz .extend_bottom
+    mov           lpfq, [rsp+8*0]
+    call .h_top
+    add           lpfq, [rsp+8*1]
+    call .hv_bottom
+.end:
+    call .n0
+    call .n1
+.end2:
+    RET
+.height1:
+    call .hv
+    call .prep_n
+    jmp .odd_height_end
+.odd_height:
+    call .hv
+    call .n0
+    call .n1
+.odd_height_end:
+    call .v
+    call .n0
+    jmp .end2
+.extend_bottom:
+    call .v
+    jmp .end
+.no_top:
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    mov      [rsp+8*1], lpf_strideq
+    lea            r10, [r10+lpf_strideq*2]
+    mov      [rsp+8*0], r10
+    call .h
+    lea             t2, [t1+400*6]
+    call .top_fixup
+    dec             hd
+    jz .no_top_height1
+    or           edged, 16
+    mov             t0, t1
+    mov             t1, t2
+    jmp .main
+.no_top_height1:
+    call .v
+    call .prep_n
+    jmp .odd_height_end
+.extend_right:
+    vpbroadcastw    m0, [lpfq-2]
+    movu            m1, [r13+r10+ 0]
+    movu            m2, [r13+r10+16]
+    vpblendvb       m4, m0, m1
+    vpblendvb       m5, m0, m2
+    ret
+.h: ; horizontal boxsum
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 10
+    jmp .h_main
+.h_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, xm15
+    vinserti128     m4, [lpfq+wq+10], 1
+    jmp .h_main
+.h_top:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+.h_loop:
+    movu            m4, [lpfq+r10- 2]
+.h_main:
+    movu            m5, [lpfq+r10+14]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .h_have_right
+    cmp           r10d, -36
+    jl .h_have_right
+    call .extend_right
+.h_have_right:
+    palignr         m2, m5, m4, 2
+    paddw           m0, m4, m2
+    palignr         m3, m5, m4, 6
+    paddw           m0, m3
+    punpcklwd       m1, m2, m3
+    pmaddwd         m1, m1
+    punpckhwd       m2, m3
+    pmaddwd         m2, m2
+    shufpd          m5, m4, m5, 0x05
+    paddw           m0, m5
+    punpcklwd       m3, m4, m5
+    pmaddwd         m3, m3
+    paddd           m1, m3
+    punpckhwd       m3, m4, m5
+    pmaddwd         m3, m3
+    shufps          m4, m5, q2121
+    paddw           m0, m4             ; sum
+    punpcklwd       m5, m4, m6
+    pmaddwd         m5, m5
+    punpckhwd       m4, m6
+    pmaddwd         m4, m4
+    paddd           m2, m3
+    test         edgeb, 16             ; y > 0
+    jz .h_loop_end
+    paddw           m0, [t1+r10+400*0]
+    paddd           m1, [t1+r10+400*2]
+    paddd           m2, [t1+r10+400*4]
+.h_loop_end:
+    paddd           m1, m5             ; sumsq
+    paddd           m2, m4
+    mova [t1+r10+400*0], m0
+    mova [t1+r10+400*2], m1
+    mova [t1+r10+400*4], m2
+    add            r10, 32
+    jl .h_loop
+    ret
+.top_fixup:
+    lea            r10, [wq-4]
+.top_fixup_loop: ; the sums of the first row needs to be doubled
+    mova            m0, [t1+r10+400*0]
+    mova            m1, [t1+r10+400*2]
+    mova            m2, [t1+r10+400*4]
+    paddw           m0, m0
+    paddd           m1, m1
+    paddd           m2, m2
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m1
+    mova [t2+r10+400*4], m2
+    add            r10, 32
+    jl .top_fixup_loop
+    ret
+ALIGN function_align
+.hv: ; horizontal boxsum + vertical boxsum + ab
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 10
+    jmp .hv_main
+.hv_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, xm15
+    vinserti128     m4, [lpfq+wq+10], 1
+    jmp .hv_main
+.hv_bottom:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv_extend_left
+.hv_loop:
+    movu            m4, [lpfq+r10- 2]
+.hv_main:
+    movu            m5, [lpfq+r10+14]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .hv_have_right
+    cmp           r10d, -36
+    jl .hv_have_right
+    call .extend_right
+.hv_have_right:
+    palignr         m3, m5, m4, 2
+    paddw           m0, m4, m3
+    palignr         m1, m5, m4, 6
+    paddw           m0, m1
+    punpcklwd       m2, m3, m1
+    pmaddwd         m2, m2
+    punpckhwd       m3, m1
+    pmaddwd         m3, m3
+    shufpd          m5, m4, m5, 0x05
+    paddw           m0, m5
+    punpcklwd       m1, m4, m5
+    pmaddwd         m1, m1
+    paddd           m2, m1
+    punpckhwd       m1, m4, m5
+    pmaddwd         m1, m1
+    shufps          m4, m5, q2121
+    paddw           m0, m4            ; h sum
+    punpcklwd       m5, m4, m6
+    pmaddwd         m5, m5
+    punpckhwd       m4, m6
+    pmaddwd         m4, m4
+    paddd           m3, m1
+    paddd           m2, m5            ; h sumsq
+    paddd           m3, m4
+    paddw           m1, m0, [t1+r10+400*0]
+    paddd           m4, m2, [t1+r10+400*2]
+    paddd           m5, m3, [t1+r10+400*4]
+    test            hd, hd
+    jz .hv_last_row
+.hv_main2:
+    paddw           m1, [t2+r10+400*0] ; hv sum
+    paddd           m4, [t2+r10+400*2] ; hv sumsq
+    paddd           m5, [t2+r10+400*4]
+    mova [t0+r10+400*0], m0
+    mova [t0+r10+400*2], m2
+    mova [t0+r10+400*4], m3
+    psrlw           m3, m1, 1
+    paddd           m4, m8
+    pavgw           m3, m6             ; (b + 2) >> 2
+    paddd           m5, m8
+    psrld           m4, 4              ; (a + 8) >> 4
+    punpcklwd       m2, m3, m6
+    psrld           m5, 4
+    punpckhwd       m3, m6
+    pmulld          m4, m9             ; a * 25
+    pmulld          m5, m9
+    pmaddwd         m2, m2             ; b * b
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    pmaxud          m5, m3
+    psubd           m4, m2             ; p
+    psubd           m5, m3
+    pmulld          m4, m10            ; p * s
+    pmulld          m5, m10
+    pmaddwd         m0, m11            ; b * 164
+    pmaddwd         m1, m11
+    paddusw         m4, m11
+    paddusw         m5, m11
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    psubw           m2, m12, m2        ; a
+    paddd           m0, m13            ; x * b * 164 + (1 << 11) + (1 << 15)
+    paddd           m1, m13
+    mova    [t4+r10+4], m2
+    psrld           m0, 12             ; b
+    psrld           m1, 12
+    mova         [t3+r10*2+ 8], xm0
+    vextracti128 [t3+r10*2+40], m0, 1
+    mova         [t3+r10*2+24], xm1
+    vextracti128 [t3+r10*2+56], m1, 1
+    add            r10, 32
+    jl .hv_loop
+    mov             t2, t1
+    mov             t1, t0
+    mov             t0, t2
+    ret
+.hv_last_row: ; esoteric edge case for odd heights
+    mova   [t1+r10+400*0], m1
+    paddw              m1, m0
+    mova   [t1+r10+400*2], m4
+    paddd              m4, m2
+    mova   [t1+r10+400*4], m5
+    paddd              m5, m3
+    jmp .hv_main2
+.v: ; vertical boxsum + ab
+    lea            r10, [wq-4]
+.v_loop:
+    mova            m0, [t1+r10+400*0]
+    mova            m2, [t1+r10+400*2]
+    mova            m3, [t1+r10+400*4]
+    paddw           m1, m0, [t2+r10+400*0]
+    paddd           m4, m2, [t2+r10+400*2]
+    paddd           m5, m3, [t2+r10+400*4]
+    paddw           m0, m0
+    paddd           m2, m2
+    paddd           m3, m3
+    paddw           m1, m0             ; hv sum
+    paddd           m4, m2             ; hv sumsq
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    paddd           m4, m8
+    pavgw           m3, m6             ; (b + 2) >> 2
+    paddd           m5, m8
+    psrld           m4, 4              ; (a + 8) >> 4
+    punpcklwd       m2, m3, m6
+    psrld           m5, 4
+    punpckhwd       m3, m6
+    pmulld          m4, m9             ; a * 25
+    pmulld          m5, m9
+    pmaddwd         m2, m2             ; b * b
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    pmaxud          m5, m3
+    psubd           m4, m2             ; p
+    psubd           m5, m3
+    pmulld          m4, m10            ; p * s
+    pmulld          m5, m10
+    pmaddwd         m0, m11            ; b * 164
+    pmaddwd         m1, m11
+    paddusw         m4, m11
+    paddusw         m5, m11
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    psubw           m2, m12, m2        ; a
+    paddd           m0, m13            ; x * b * 164 + (1 << 11) + (1 << 15)
+    paddd           m1, m13
+    mova    [t4+r10+4], m2
+    psrld           m0, 12             ; b
+    psrld           m1, 12
+    mova         [t3+r10*2+ 8], xm0
+    vextracti128 [t3+r10*2+40], m0, 1
+    mova         [t3+r10*2+24], xm1
+    vextracti128 [t3+r10*2+56], m1, 1
+    add            r10, 32
+    jl .v_loop
+    ret
+.prep_n: ; initial neighbor setup
+    mov            r10, wq
+.prep_n_loop:
+    movu            m0, [t4+r10*1+ 2]
+    movu            m1, [t3+r10*2+ 4]
+    movu            m2, [t3+r10*2+36]
+    paddw           m3, m0, [t4+r10*1+ 0]
+    paddd           m4, m1, [t3+r10*2+ 0]
+    paddd           m5, m2, [t3+r10*2+32]
+    paddw           m3, [t4+r10*1+ 4]
+    paddd           m4, [t3+r10*2+ 8]
+    paddd           m5, [t3+r10*2+40]
+    paddw           m0, m3
+    psllw           m3, 2
+    paddd           m1, m4
+    pslld           m4, 2
+    paddd           m2, m5
+    pslld           m5, 2
+    paddw           m0, m3             ; a 565
+    paddd           m1, m4             ; b 565
+    paddd           m2, m5
+    mova [t4+r10*1+400*2+ 0], m0
+    mova [t3+r10*2+400*4+ 0], m1
+    mova [t3+r10*2+400*4+32], m2
+    add            r10, 32
+    jl .prep_n_loop
+    ret
+ALIGN function_align
+.n0: ; neighbor + output (even rows)
+    mov            r10, wq
+.n0_loop:
+    movu            m0, [t4+r10*1+ 2]
+    movu            m1, [t3+r10*2+ 4]
+    movu            m2, [t3+r10*2+36]
+    paddw           m3, m0, [t4+r10*1+ 0]
+    paddd           m4, m1, [t3+r10*2+ 0]
+    paddd           m5, m2, [t3+r10*2+32]
+    paddw           m3, [t4+r10*1+ 4]
+    paddd           m4, [t3+r10*2+ 8]
+    paddd           m5, [t3+r10*2+40]
+    paddw           m0, m3
+    psllw           m3, 2
+    paddd           m1, m4
+    pslld           m4, 2
+    paddd           m2, m5
+    pslld           m5, 2
+    paddw           m0, m3             ; a 565
+    paddd           m1, m4             ; b 565
+    paddd           m2, m5
+    paddw           m3, m0, [t4+r10*1+400*2+ 0]
+    paddd           m4, m1, [t3+r10*2+400*4+ 0]
+    paddd           m5, m2, [t3+r10*2+400*4+32]
+    mova [t4+r10*1+400*2+ 0], m0
+    mova [t3+r10*2+400*4+ 0], m1
+    mova [t3+r10*2+400*4+32], m2
+    mova            m0, [dstq+r10]
+    punpcklwd       m1, m0, m6          ; src
+    punpcklwd       m2, m3, m6          ; a
+    pmaddwd         m2, m1              ; a * src
+    punpckhwd       m1, m0, m6
+    punpckhwd       m3, m6
+    pmaddwd         m3, m1
+    vinserti128     m1, m4, xm5, 1
+    vperm2i128      m4, m5, 0x31
+    paddd           m2, m1              ; a * src + b + (1 << 8)
+    paddd           m3, m4
+    psrld           m2, 9
+    psrld           m3, 9
+    packssdw        m2, m3
+    psllw           m1, m0, 4
+    psubw           m2, m1
+    pmulhrsw        m2, m7
+    paddw           m0, m2
+    pmaxsw          m0, m6
+    pminsw          m0, m14
+    mova    [dstq+r10], m0
+    add            r10, 32
+    jl .n0_loop
+    add           dstq, dst_strideq
+    ret
+ALIGN function_align
+.n1: ; neighbor + output (odd rows)
+    mov            r10, wq
+.n1_loop:
+    mova            m0, [dstq+r10]
+    mova            m3, [t4+r10*1+400*2+ 0]
+    mova            m4, [t3+r10*2+400*4+ 0]
+    mova            m5, [t3+r10*2+400*4+32]
+    punpcklwd       m1, m0, m6          ; src
+    punpcklwd       m2, m3, m6          ; a
+    pmaddwd         m2, m1
+    punpckhwd       m1, m0, m6
+    punpckhwd       m3, m6
+    pmaddwd         m3, m1
+    vinserti128     m1, m4, xm5, 1
+    vperm2i128      m4, m5, 0x31
+    paddd           m2, m1              ; a * src + b + (1 <<7)
+    paddd           m3, m4
+    psrld           m2, 8
+    psrld           m3, 8
+    packssdw        m2, m3
+    psllw           m1, m0, 4
+    psubw           m2, m1
+    pmulhrsw        m2, m7
+    paddw           m0, m2
+    pmaxsw          m0, m6
+    pminsw          m0, m14
+    mova    [dstq+r10], m0
+    add            r10, 32
+    jl .n1_loop
+    add           dstq, dst_strideq
+    ret
+
+cglobal sgr_filter_3x3_16bpc, 5, 14, 15, 400*42+8, dst, dst_stride, left, lpf, \
+                                                   lpf_stride, w, edge, params, h
+    movifnidn       wd, wm
+    mov        paramsq, paramsmp
+    lea            r13, [sgr_x_by_x_avx2+256*4]
+    mov          edged, r8m
+    add             wd, wd
+    mov             hd, r6m
+    add           lpfq, wq
+    vpbroadcastw    m7, [paramsq+10] ; w1
+    lea             t1, [rsp+wq+12]
+    vpbroadcastd    m8, [pd_8]
+    add           dstq, wq
+    vpbroadcastd    m9, [paramsq+ 4] ; s1
+    lea             t3, [rsp+wq*2+400*12+8]
+    vpbroadcastd   m10, [pd_0xf00801c7]
+    lea             t4, [rsp+wq+400*32+8]
+    vpbroadcastd   m11, [pd_34816]
+    neg             wq
+    vpbroadcastd   m12, [pw_256]
+    pxor            m6, m6
+    vpbroadcastd   m13, [pw_1023]
+    psllw           m7, 4
+    mova          xm14, [sgr_lshuf3]
+    test         edgeb, 4 ; LR_HAVE_TOP
+    jz .no_top
+    call .h_top
+    add           lpfq, lpf_strideq
+    mov             t2, t1
+    add             t1, 400*6
+    call .h_top
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    add            r10, lpf_strideq
+    mov          [rsp], r10 ; below
+    call .hv0
+.main:
+    dec             hd
+    jz .height1
+    add           lpfq, dst_strideq
+    call .hv1
+    call .prep_n
+    sub             hd, 2
+    jl .extend_bottom
+.main_loop:
+    add           lpfq, dst_strideq
+    call .hv0
+    test            hd, hd
+    jz .odd_height
+    add           lpfq, dst_strideq
+    call .hv1
+    call .n0
+    call .n1
+    sub             hd, 2
+    jge .main_loop
+    test         edgeb, 8 ; LR_HAVE_BOTTOM
+    jz .extend_bottom
+    mov           lpfq, [rsp]
+    call .hv0_bottom
+    add           lpfq, lpf_strideq
+    call .hv1_bottom
+.end:
+    call .n0
+    call .n1
+.end2:
+    RET
+.height1:
+    call .v1
+    call .prep_n
+    jmp .odd_height_end
+.odd_height:
+    call .v1
+    call .n0
+    call .n1
+.odd_height_end:
+    call .v0
+    call .v1
+    call .n0
+    jmp .end2
+.extend_bottom:
+    call .v0
+    call .v1
+    jmp .end
+.no_top:
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    lea            r10, [r10+lpf_strideq*2]
+    mov          [rsp], r10
+    call .h
+    lea            r10, [wq-4]
+    lea             t2, [t1+400*6]
+.top_fixup_loop:
+    mova            m0, [t1+r10+400*0]
+    mova            m1, [t1+r10+400*2]
+    mova            m2, [t1+r10+400*4]
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m1
+    mova [t2+r10+400*4], m2
+    add            r10, 32
+    jl .top_fixup_loop
+    call .v0
+    jmp .main
+.extend_right:
+    vpbroadcastw    m0, [lpfq-2]
+    movu            m1, [r13+r10+ 2]
+    movu            m2, [r13+r10+18]
+    vpblendvb       m4, m0, m1
+    vpblendvb       m5, m0, m2
+    ret
+.h: ; horizontal boxsum
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 12
+    jmp .h_main
+.h_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, xm14
+    vinserti128     m4, [lpfq+wq+12], 1
+    jmp .h_main
+.h_top:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+.h_loop:
+    movu            m4, [lpfq+r10+ 0]
+.h_main:
+    movu            m5, [lpfq+r10+16]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .h_have_right
+    cmp           r10d, -34
+    jl .h_have_right
+    call .extend_right
+.h_have_right:
+    palignr         m0, m5, m4, 2
+    paddw           m1, m4, m0
+    punpcklwd       m2, m4, m0
+    pmaddwd         m2, m2
+    punpckhwd       m3, m4, m0
+    pmaddwd         m3, m3
+    palignr         m5, m4, 4
+    paddw           m1, m5             ; sum
+    punpcklwd       m4, m5, m6
+    pmaddwd         m4, m4
+    punpckhwd       m5, m6
+    pmaddwd         m5, m5
+    paddd           m2, m4             ; sumsq
+    paddd           m3, m5
+    mova [t1+r10+400*0], m1
+    mova [t1+r10+400*2], m2
+    mova [t1+r10+400*4], m3
+    add            r10, 32
+    jl .h_loop
+    ret
+ALIGN function_align
+.hv0: ; horizontal boxsum + vertical boxsum + ab (even rows)
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv0_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 12
+    jmp .hv0_main
+.hv0_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, xm14
+    vinserti128     m4, [lpfq+wq+12], 1
+    jmp .hv0_main
+.hv0_bottom:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv0_extend_left
+.hv0_loop:
+    movu            m4, [lpfq+r10+ 0]
+.hv0_main:
+    movu            m5, [lpfq+r10+16]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .hv0_have_right
+    cmp           r10d, -34
+    jl .hv0_have_right
+    call .extend_right
+.hv0_have_right:
+    palignr         m0, m5, m4, 2
+    paddw           m1, m4, m0
+    punpcklwd       m2, m4, m0
+    pmaddwd         m2, m2
+    punpckhwd       m3, m4, m0
+    pmaddwd         m3, m3
+    palignr         m5, m4, 4
+    paddw           m1, m5             ; sum
+    punpcklwd       m4, m5, m6
+    pmaddwd         m4, m4
+    punpckhwd       m5, m6
+    pmaddwd         m5, m5
+    paddd           m2, m4             ; sumsq
+    paddd           m3, m5
+    paddw           m0, m1, [t1+r10+400*0]
+    paddd           m4, m2, [t1+r10+400*2]
+    paddd           m5, m3, [t1+r10+400*4]
+    mova [t1+r10+400*0], m1
+    mova [t1+r10+400*2], m2
+    mova [t1+r10+400*4], m3
+    paddw           m1, m0, [t2+r10+400*0]
+    paddd           m2, m4, [t2+r10+400*2]
+    paddd           m3, m5, [t2+r10+400*4]
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m4
+    mova [t2+r10+400*4], m5
+    paddd           m2, m8
+    paddd           m3, m8
+    psrld           m2, 4              ; (a + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m6             ; (b + 2) >> 2
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m2
+    punpckhwd       m3, m6
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m9             ; p * s
+    pmulld          m5, m9
+    pmaddwd         m0, m10            ; b * 455
+    pmaddwd         m1, m10
+    paddusw         m4, m10
+    paddusw         m5, m10
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m11            ; x * b * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m11
+    psubw           m2, m12, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*0+ 4], m2
+    mova         [t3+r10*2+400*0+ 8], xm0
+    vextracti128 [t3+r10*2+400*0+40], m0, 1
+    mova         [t3+r10*2+400*0+24], xm1
+    vextracti128 [t3+r10*2+400*0+56], m1, 1
+    add            r10, 32
+    jl .hv0_loop
+    ret
+ALIGN function_align
+.hv1: ; horizontal boxsums + vertical boxsums + ab (odd rows)
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv1_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 12
+    jmp .hv1_main
+.hv1_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, xm14
+    vinserti128     m4, [lpfq+wq+12], 1
+    jmp .hv1_main
+.hv1_bottom:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv1_extend_left
+.hv1_loop:
+    movu            m4, [lpfq+r10+ 0]
+.hv1_main:
+    movu            m5, [lpfq+r10+16]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .hv1_have_right
+    cmp           r10d, -34
+    jl .hv1_have_right
+    call .extend_right
+.hv1_have_right:
+    palignr         m1, m5, m4, 2
+    paddw           m0, m4, m1
+    punpcklwd       m2, m4, m1
+    pmaddwd         m2, m2
+    punpckhwd       m3, m4, m1
+    pmaddwd         m3, m3
+    palignr         m5, m4, 4
+    paddw           m0, m5             ; h sum
+    punpcklwd       m1, m5, m6
+    pmaddwd         m1, m1
+    punpckhwd       m5, m6
+    pmaddwd         m5, m5
+    paddd           m2, m1             ; h sumsq
+    paddd           m3, m5
+    paddw           m1, m0, [t2+r10+400*0]
+    paddd           m4, m2, [t2+r10+400*2]
+    paddd           m5, m3, [t2+r10+400*4]
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m2
+    mova [t2+r10+400*4], m3
+    paddd           m4, m8
+    paddd           m5, m8
+    psrld           m4, 4              ; (a + 8) >> 4
+    psrld           m5, 4
+    pslld           m2, m4, 3
+    pslld           m3, m5, 3
+    paddd           m4, m2             ; ((a + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m6             ; (b + 2) >> 2
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m2
+    punpckhwd       m3, m6
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m9             ; p * s
+    pmulld          m5, m9
+    pmaddwd         m0, m10            ; b * 455
+    pmaddwd         m1, m10
+    paddusw         m4, m10
+    paddusw         m5, m10
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m11            ; x * b * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m11
+    psubw           m2, m12, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*2 +4], m2
+    mova         [t3+r10*2+400*4+ 8], xm0
+    vextracti128 [t3+r10*2+400*4+40], m0, 1
+    mova         [t3+r10*2+400*4+24], xm1
+    vextracti128 [t3+r10*2+400*4+56], m1, 1
+    add            r10, 32
+    jl .hv1_loop
+    mov            r10, t2
+    mov             t2, t1
+    mov             t1, r10
+    ret
+.v0: ; vertical boxsums + ab (even rows)
+    lea            r10, [wq-4]
+.v0_loop:
+    mova            m0, [t1+r10+400*0]
+    mova            m4, [t1+r10+400*2]
+    mova            m5, [t1+r10+400*4]
+    paddw           m0, m0
+    paddd           m4, m4
+    paddd           m5, m5
+    paddw           m1, m0, [t2+r10+400*0]
+    paddd           m2, m4, [t2+r10+400*2]
+    paddd           m3, m5, [t2+r10+400*4]
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m4
+    mova [t2+r10+400*4], m5
+    paddd           m2, m8
+    paddd           m3, m8
+    psrld           m2, 4              ; (a + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m6             ; (b + 2) >> 2
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m2
+    punpckhwd       m3, m6
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m9             ; p * s
+    pmulld          m5, m9
+    pmaddwd         m0, m10            ; b * 455
+    pmaddwd         m1, m10
+    paddusw         m4, m10
+    paddusw         m5, m10
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m11            ; x * b * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m11
+    psubw           m2, m12, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*0+ 4], m2
+    mova         [t3+r10*2+400*0+ 8], xm0
+    vextracti128 [t3+r10*2+400*0+40], m0, 1
+    mova         [t3+r10*2+400*0+24], xm1
+    vextracti128 [t3+r10*2+400*0+56], m1, 1
+    add            r10, 32
+    jl .v0_loop
+    ret
+.v1: ; vertical boxsums + ab (odd rows)
+    lea            r10, [wq-4]
+.v1_loop:
+    mova            m0, [t1+r10+400*0]
+    mova            m4, [t1+r10+400*2]
+    mova            m5, [t1+r10+400*4]
+    paddw           m1, m0, [t2+r10+400*0]
+    paddd           m2, m4, [t2+r10+400*2]
+    paddd           m3, m5, [t2+r10+400*4]
+    mova [t2+r10+400*0], m0
+    mova [t2+r10+400*2], m4
+    mova [t2+r10+400*4], m5
+    paddd           m2, m8
+    paddd           m3, m8
+    psrld           m2, 4              ; (a + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m6             ; (b + 2) >> 2
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m2
+    punpckhwd       m3, m6
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m6         ; b
+    punpckhwd       m1, m6
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m9             ; p * s
+    pmulld          m5, m9
+    pmaddwd         m0, m10            ; b * 455
+    pmaddwd         m1, m10
+    paddusw         m4, m10
+    paddusw         m5, m10
+    psrad           m3, m4, 20         ; min(z, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m11            ; x * b * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m11
+    psubw           m2, m12, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*2+ 4], m2
+    mova         [t3+r10*2+400*4+ 8], xm0
+    vextracti128 [t3+r10*2+400*4+40], m0, 1
+    mova         [t3+r10*2+400*4+24], xm1
+    vextracti128 [t3+r10*2+400*4+56], m1, 1
+    add            r10, 32
+    jl .v1_loop
+    mov            r10, t2
+    mov             t2, t1
+    mov             t1, r10
+    ret
+.prep_n: ; initial neighbor setup
+    mov            r10, wq
+.prep_n_loop:
+    mova           xm0, [t4+r10*1+400*0+0]
+    paddw          xm0, [t4+r10*1+400*0+4]
+    paddw          xm2, xm0, [t4+r10*1+400*0+2]
+    mova            m1, [t3+r10*2+400*0+0]
+    paddd           m1, [t3+r10*2+400*0+8]
+    paddd           m3, m1, [t3+r10*2+400*0+4]
+    psllw          xm2, 2                ; a[-1] 444
+    pslld           m3, 2                ; b[-1] 444
+    psubw          xm2, xm0              ; a[-1] 343
+    psubd           m3, m1               ; b[-1] 343
+    mova [t4+r10*1+400* 4], xm2
+    mova [t3+r10*2+400* 8], m3
+    mova           xm0, [t4+r10*1+400*2+0]
+    paddw          xm0, [t4+r10*1+400*2+4]
+    paddw          xm2, xm0, [t4+r10*1+400*2+2]
+    mova            m1, [t3+r10*2+400*4+0]
+    paddd           m1, [t3+r10*2+400*4+8]
+    paddd           m3, m1, [t3+r10*2+400*4+4]
+    psllw          xm2, 2                 ; a[ 0] 444
+    pslld           m3, 2                 ; b[ 0] 444
+    mova [t4+r10*1+400* 6], xm2
+    mova [t3+r10*2+400*12], m3
+    psubw          xm2, xm0               ; a[ 0] 343
+    psubd           m3, m1                ; b[ 0] 343
+    mova [t4+r10*1+400* 8], xm2
+    mova [t3+r10*2+400*16], m3
+    add            r10, 16
+    jl .prep_n_loop
+    ret
+ALIGN function_align
+.n0: ; neighbor + output (even rows)
+    mov            r10, wq
+.n0_loop:
+    mova            m3, [t4+r10*1+400*0+0]
+    paddw           m3, [t4+r10*1+400*0+4]
+    paddw           m1, m3, [t4+r10*1+400*0+2]
+    psllw           m1, 2                ; a[ 1] 444
+    psubw           m2, m1, m3           ; a[ 1] 343
+    paddw           m3, m2, [t4+r10*1+400*4]
+    paddw           m3, [t4+r10*1+400*6]
+    mova [t4+r10*1+400*4], m2
+    mova [t4+r10*1+400*6], m1
+    mova            m4, [t3+r10*2+400*0+0]
+    paddd           m4, [t3+r10*2+400*0+8]
+    paddd           m1, m4, [t3+r10*2+400*0+4]
+    pslld           m1, 2                ; b[ 1] 444
+    psubd           m2, m1, m4           ; b[ 1] 343
+    paddd           m4, m2, [t3+r10*2+400* 8+ 0]
+    paddd           m4, [t3+r10*2+400*12+ 0]
+    mova [t3+r10*2+400* 8+ 0], m2
+    mova [t3+r10*2+400*12+ 0], m1
+    mova            m5, [t3+r10*2+400*0+32]
+    paddd           m5, [t3+r10*2+400*0+40]
+    paddd           m1, m5, [t3+r10*2+400*0+36]
+    pslld           m1, 2
+    psubd           m2, m1, m5
+    paddd           m5, m2, [t3+r10*2+400* 8+32]
+    paddd           m5, [t3+r10*2+400*12+32]
+    mova [t3+r10*2+400* 8+32], m2
+    mova [t3+r10*2+400*12+32], m1
+    mova            m0, [dstq+r10]
+    punpcklwd       m1, m0, m6
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m1               ; a * src
+    punpckhwd       m1, m0, m6
+    punpckhwd       m3, m6
+    pmaddwd         m3, m1
+    vinserti128     m1, m4, xm5, 1
+    vperm2i128      m4, m5, 0x31
+    paddd           m2, m1               ; a * src + b + (1 << 8)
+    paddd           m3, m4
+    psrld           m2, 9
+    psrld           m3, 9
+    packssdw        m2, m3
+    psllw           m1, m0, 4
+    psubw           m2, m1
+    pmulhrsw        m2, m7
+    paddw           m0, m2
+    pmaxsw          m0, m6
+    pminsw          m0, m13
+    mova    [dstq+r10], m0
+    add            r10, 32
+    jl .n0_loop
+    add           dstq, dst_strideq
+    ret
+ALIGN function_align
+.n1: ; neighbor + output (odd rows)
+    mov            r10, wq
+.n1_loop:
+    mova            m3, [t4+r10*1+400*2+0]
+    paddw           m3, [t4+r10*1+400*2+4]
+    paddw           m1, m3, [t4+r10*1+400*2+2]
+    psllw           m1, 2                ; a[ 1] 444
+    psubw           m2, m1, m3           ; a[ 1] 343
+    paddw           m3, m2, [t4+r10*1+400*6]
+    paddw           m3, [t4+r10*1+400*8]
+    mova [t4+r10*1+400*6], m1
+    mova [t4+r10*1+400*8], m2
+    mova            m4, [t3+r10*2+400*4+0]
+    paddd           m4, [t3+r10*2+400*4+8]
+    paddd           m1, m4, [t3+r10*2+400*4+4]
+    pslld           m1, 2                ; b[ 1] 444
+    psubd           m2, m1, m4           ; b[ 1] 343
+    paddd           m4, m2, [t3+r10*2+400*12+ 0]
+    paddd           m4, [t3+r10*2+400*16+ 0]
+    mova [t3+r10*2+400*12+ 0], m1
+    mova [t3+r10*2+400*16+ 0], m2
+    mova            m5, [t3+r10*2+400*4+32]
+    paddd           m5, [t3+r10*2+400*4+40]
+    paddd           m1, m5, [t3+r10*2+400*4+36]
+    pslld           m1, 2
+    psubd           m2, m1, m5
+    paddd           m5, m2, [t3+r10*2+400*12+32]
+    paddd           m5, [t3+r10*2+400*16+32]
+    mova [t3+r10*2+400*12+32], m1
+    mova [t3+r10*2+400*16+32], m2
+    mova            m0, [dstq+r10]
+    punpcklwd       m1, m0, m6
+    punpcklwd       m2, m3, m6
+    pmaddwd         m2, m1               ; a * src
+    punpckhwd       m1, m0, m6
+    punpckhwd       m3, m6
+    pmaddwd         m3, m1
+    vinserti128     m1, m4, xm5, 1
+    vperm2i128      m4, m5, 0x31
+    paddd           m2, m1               ; a * src + b + (1 << 8)
+    paddd           m3, m4
+    psrld           m2, 9
+    psrld           m3, 9
+    packssdw        m2, m3
+    psllw           m1, m0, 4
+    psubw           m2, m1
+    pmulhrsw        m2, m7
+    paddw           m0, m2
+    pmaxsw          m0, m6
+    pminsw          m0, m13
+    mova    [dstq+r10], m0
+    add            r10, 32
+    jl .n1_loop
+    add           dstq, dst_strideq
+    ret
+
+cglobal sgr_filter_mix_16bpc, 5, 14, 16, 400*66+8, dst, dst_stride, left, lpf, \
+                                                   lpf_stride, w, edge, params, h
+    movifnidn       wd, wm
+    mov        paramsq, paramsmp
+    lea            r13, [sgr_x_by_x_avx2+256*4]
+    mov          edged, r8m
+    add             wd, wd
+    mov             hd, r6m
+    add           lpfq, wq
+    vpbroadcastd    m9, [pd_8]
+    lea             t1, [rsp+wq+12]
+    vpbroadcastd   m10, [pd_34816]
+    add           dstq, wq
+    vpbroadcastd   m11, [pw_256]
+    lea             t3, [rsp+wq*2+400*24+8]
+    vpbroadcastd   m12, [pd_0xf00801c7]
+    lea             t4, [rsp+wq+400*52+8]
+    vpbroadcastd   m15, [paramsq+8] ; w0 w1
+    neg             wq
+    vpbroadcastd   m13, [paramsq+0] ; s0
+    pxor            m7, m7
+    vpbroadcastd   m14, [paramsq+4] ; s1
+    psllw          m15, 2
+    test         edgeb, 4 ; LR_HAVE_TOP
+    jz .no_top
+    call .h_top
+    add           lpfq, lpf_strideq
+    mov             t2, t1
+    call mangle(private_prefix %+ _sgr_filter_5x5_16bpc_avx2).top_fixup
+    add             t1, 400*12
+    call .h_top
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    add            r10, lpf_strideq
+    mov          [rsp], r10 ; below
+    call .hv0
+.main:
+    dec             hd
+    jz .height1
+    add           lpfq, dst_strideq
+    call .hv1
+    call .prep_n
+    sub             hd, 2
+    jl .extend_bottom
+.main_loop:
+    add           lpfq, dst_strideq
+    call .hv0
+    test            hd, hd
+    jz .odd_height
+    add           lpfq, dst_strideq
+    call .hv1
+    call .n0
+    call .n1
+    sub             hd, 2
+    jge .main_loop
+    test         edgeb, 8 ; LR_HAVE_BOTTOM
+    jz .extend_bottom
+    mov           lpfq, [rsp]
+    call .hv0_bottom
+    add           lpfq, lpf_strideq
+    call .hv1_bottom
+.end:
+    call .n0
+    call .n1
+.end2:
+    RET
+.height1:
+    call .v1
+    call .prep_n
+    jmp .odd_height_end
+.odd_height:
+    call .v1
+    call .n0
+    call .n1
+.odd_height_end:
+    call .v0
+    call .v1
+    call .n0
+    jmp .end2
+.extend_bottom:
+    call .v0
+    call .v1
+    jmp .end
+.no_top:
+    lea            r10, [lpfq+lpf_strideq*4]
+    mov           lpfq, dstq
+    lea            r10, [r10+lpf_strideq*2]
+    mov          [rsp], r10
+    call .h
+    lea            r10, [wq-4]
+    lea             t2, [t1+400*12]
+.top_fixup_loop:
+    mova            m0, [t1+r10+400* 0]
+    mova            m1, [t1+r10+400* 2]
+    mova            m2, [t1+r10+400* 4]
+    paddw           m0, m0
+    mova            m3, [t1+r10+400* 6]
+    paddd           m1, m1
+    mova            m4, [t1+r10+400* 8]
+    paddd           m2, m2
+    mova            m5, [t1+r10+400*10]
+    mova [t2+r10+400* 0], m0
+    mova [t2+r10+400* 2], m1
+    mova [t2+r10+400* 4], m2
+    mova [t2+r10+400* 6], m3
+    mova [t2+r10+400* 8], m4
+    mova [t2+r10+400*10], m5
+    add            r10, 32
+    jl .top_fixup_loop
+    call .v0
+    jmp .main
+.h: ; horizontal boxsum
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 10
+    jmp .h_main
+.h_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, [sgr_lshuf5]
+    vinserti128     m4, [lpfq+wq+10], 1
+    jmp .h_main
+.h_top:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .h_extend_left
+.h_loop:
+    movu            m4, [lpfq+r10- 2]
+.h_main:
+    movu            m5, [lpfq+r10+14]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .h_have_right
+    cmp           r10d, -36
+    jl .h_have_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_16bpc_avx2).extend_right
+.h_have_right:
+    palignr         m3, m5, m4, 2
+    palignr         m0, m5, m4, 4
+    paddw           m1, m3, m0
+    punpcklwd       m2, m3, m0
+    pmaddwd         m2, m2
+    punpckhwd       m3, m0
+    pmaddwd         m3, m3
+    palignr         m0, m5, m4, 6
+    paddw           m1, m0             ; sum3
+    punpcklwd       m6, m0, m7
+    pmaddwd         m6, m6
+    punpckhwd       m0, m7
+    pmaddwd         m0, m0
+    paddd           m2, m6             ; sumsq3
+    shufpd          m6, m4, m5, 0x05
+    punpcklwd       m5, m6, m4
+    paddw           m8, m4, m6
+    pmaddwd         m5, m5
+    punpckhwd       m6, m4
+    pmaddwd         m6, m6
+    paddd           m3, m0
+    mova [t1+r10+400* 6], m1
+    mova [t1+r10+400* 8], m2
+    mova [t1+r10+400*10], m3
+    paddw           m8, m1             ; sum5
+    paddd           m5, m2             ; sumsq5
+    paddd           m6, m3
+    mova [t1+r10+400* 0], m8
+    mova [t1+r10+400* 2], m5
+    mova [t1+r10+400* 4], m6
+    add            r10, 32
+    jl .h_loop
+    ret
+ALIGN function_align
+.hv0: ; horizontal boxsum + vertical boxsum + ab3 (even rows)
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv0_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 10
+    jmp .hv0_main
+.hv0_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, [sgr_lshuf5]
+    vinserti128     m4, [lpfq+wq+10], 1
+    jmp .hv0_main
+.hv0_bottom:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv0_extend_left
+.hv0_loop:
+    movu            m4, [lpfq+r10- 2]
+.hv0_main:
+    movu            m5, [lpfq+r10+14]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .hv0_have_right
+    cmp           r10d, -36
+    jl .hv0_have_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_16bpc_avx2).extend_right
+.hv0_have_right:
+    palignr         m3, m5, m4, 2
+    palignr         m0, m5, m4, 4
+    paddw           m1, m3, m0
+    punpcklwd       m2, m3, m0
+    pmaddwd         m2, m2
+    punpckhwd       m3, m0
+    pmaddwd         m3, m3
+    palignr         m0, m5, m4, 6
+    paddw           m1, m0             ; h sum3
+    punpcklwd       m6, m0, m7
+    pmaddwd         m6, m6
+    punpckhwd       m0, m7
+    pmaddwd         m0, m0
+    paddd           m2, m6             ; h sumsq3
+    shufpd          m6, m4, m5, 0x05
+    punpcklwd       m5, m6, m4
+    paddw           m8, m4, m6
+    pmaddwd         m5, m5
+    punpckhwd       m6, m4
+    pmaddwd         m6, m6
+    paddd           m3, m0
+    paddw           m8, m1             ; h sum5
+    paddd           m5, m2             ; h sumsq5
+    paddd           m6, m3
+    mova [t3+r10*2+400*8+ 8], m8 ; we need a clean copy of the last row TODO: t4?
+    mova [t3+r10*2+400*0+ 8], m5 ; in case height is odd
+    mova [t3+r10*2+400*0+40], m6
+    paddw           m8, [t1+r10+400* 0]
+    paddd           m5, [t1+r10+400* 2]
+    paddd           m6, [t1+r10+400* 4]
+    mova [t1+r10+400* 0], m8
+    mova [t1+r10+400* 2], m5
+    mova [t1+r10+400* 4], m6
+    paddw           m0, m1, [t1+r10+400* 6]
+    paddd           m4, m2, [t1+r10+400* 8]
+    paddd           m5, m3, [t1+r10+400*10]
+    mova [t1+r10+400* 6], m1
+    mova [t1+r10+400* 8], m2
+    mova [t1+r10+400*10], m3
+    paddw           m1, m0, [t2+r10+400* 6]
+    paddd           m2, m4, [t2+r10+400* 8]
+    paddd           m3, m5, [t2+r10+400*10]
+    mova [t2+r10+400* 6], m0
+    mova [t2+r10+400* 8], m4
+    mova [t2+r10+400*10], m5
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a3 + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a3 + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m7             ; (b3 + 2) >> 2
+    punpcklwd       m2, m3, m7
+    pmaddwd         m2, m2
+    punpckhwd       m3, m7
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m7         ; b3
+    punpckhwd       m1, m7
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p3
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m14            ; p3 * s1
+    pmulld          m5, m14
+    pmaddwd         m0, m12            ; b3 * 455
+    pmaddwd         m1, m12
+    paddusw         m4, m12
+    paddusw         m5, m12
+    psrad           m3, m4, 20         ; min(z3, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m10            ; x3 * b3 * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m10
+    psubw           m2, m11, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*2+ 4], m2
+    mova         [t3+r10*2+400*4+ 8], xm0
+    vextracti128 [t3+r10*2+400*4+40], m0, 1
+    mova         [t3+r10*2+400*4+24], xm1
+    vextracti128 [t3+r10*2+400*4+56], m1, 1
+    add            r10, 32
+    jl .hv0_loop
+    ret
+ALIGN function_align
+.hv1: ; horizontal boxsums + vertical boxsums + ab (odd rows)
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv1_extend_left
+    vpbroadcastq   xm5, [leftq]
+    vinserti128     m5, [lpfq+wq], 1
+    mova            m4, [lpfq+wq]
+    add          leftq, 8
+    palignr         m4, m5, 10
+    jmp .hv1_main
+.hv1_extend_left:
+    mova           xm4, [lpfq+wq]
+    pshufb         xm4, [sgr_lshuf5]
+    vinserti128     m4, [lpfq+wq+10], 1
+    jmp .hv1_main
+.hv1_bottom:
+    lea            r10, [wq-4]
+    test         edgeb, 1 ; LR_HAVE_LEFT
+    jz .hv1_extend_left
+.hv1_loop:
+    movu            m4, [lpfq+r10- 2]
+.hv1_main:
+    movu            m5, [lpfq+r10+14]
+    test         edgeb, 2 ; LR_HAVE_RIGHT
+    jnz .hv1_have_right
+    cmp           r10d, -36
+    jl .hv1_have_right
+    call mangle(private_prefix %+ _sgr_filter_5x5_16bpc_avx2).extend_right
+.hv1_have_right:
+    palignr         m6, m5, m4, 2
+    palignr         m3, m5, m4, 4
+    paddw           m2, m6, m3
+    punpcklwd       m0, m6, m3
+    pmaddwd         m0, m0
+    punpckhwd       m6, m3
+    pmaddwd         m6, m6
+    palignr         m3, m5, m4, 6
+    paddw           m2, m3             ; h sum3
+    punpcklwd       m1, m3, m7
+    pmaddwd         m1, m1
+    punpckhwd       m3, m7
+    pmaddwd         m3, m3
+    paddd           m0, m1             ; h sumsq3
+    shufpd          m1, m4, m5, 0x05
+    punpckhwd       m5, m4, m1
+    paddw           m8, m4, m1
+    pmaddwd         m5, m5
+    punpcklwd       m4, m1
+    pmaddwd         m4, m4
+    paddd           m6, m3
+    paddw           m1, m2, [t2+r10+400* 6]
+    mova [t2+r10+400* 6], m2
+    paddw           m8, m2             ; h sum5
+    paddd           m2, m0, [t2+r10+400* 8]
+    paddd           m3, m6, [t2+r10+400*10]
+    mova [t2+r10+400* 8], m0
+    mova [t2+r10+400*10], m6
+    paddd           m4, m0             ; h sumsq5
+    paddd           m5, m6
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a3 + 8) >> 4
+    psrld           m3, 4
+    pslld           m0, m2, 3
+    pslld           m6, m3, 3
+    paddd           m2, m0             ; ((a3 + 8) >> 4) * 9
+    paddd           m3, m6
+    psrlw           m6, m1, 1
+    pavgw           m6, m7             ; (b3 + 2) >> 2
+    punpcklwd       m0, m6, m7
+    pmaddwd         m0, m0
+    punpckhwd       m6, m7
+    pmaddwd         m6, m6
+    pmaxud          m2, m0
+    psubd           m2, m0             ; p3
+    pmaxud          m3, m6
+    psubd           m3, m6
+    punpcklwd       m0, m1, m7         ; b3
+    punpckhwd       m1, m7
+    pmulld          m2, m14            ; p3 * s1
+    pmulld          m3, m14
+    pmaddwd         m0, m12            ; b3 * 455
+    pmaddwd         m1, m12
+    paddusw         m2, m12
+    paddusw         m3, m12
+    psrad           m7, m2, 20         ; min(z3, 255) - 256
+    vpgatherdd      m6, [r13+m7*4], m2
+    psrad           m2, m3, 20
+    vpgatherdd      m7, [r13+m2*4], m3
+    pmulld          m0, m6
+    packssdw        m6, m7
+    pmulld          m7, m1
+    paddd           m0, m10            ; x3 * b3 * 455 + (1 << 11) + (1 << 15)
+    paddd           m7, m10
+    psubw           m6, m11, m6
+    psrld           m0, 12
+    psrld           m7, 12
+    paddw           m1, m8, [t2+r10+400*0]
+    paddd           m2, m4, [t2+r10+400*2]
+    paddd           m3, m5, [t2+r10+400*4]
+    paddw           m1, [t1+r10+400*0]
+    paddd           m2, [t1+r10+400*2]
+    paddd           m3, [t1+r10+400*4]
+    mova [t2+r10+400*0], m8
+    mova [t2+r10+400*2], m4
+    mova [t2+r10+400*4], m5
+    mova         [t4+r10*1+400*4 +4], m6
+    mova         [t3+r10*2+400*8+ 8], xm0
+    vextracti128 [t3+r10*2+400*8+40], m0, 1
+    mova         [t3+r10*2+400*8+24], xm7
+    vextracti128 [t3+r10*2+400*8+56], m7, 1
+    vpbroadcastd    m4, [pd_25]
+    pxor            m7, m7
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a5 + 8) >> 4
+    psrld           m3, 4
+    pmulld          m2, m4             ; ((a5 + 8) >> 4) * 25
+    pmulld          m3, m4
+    psrlw           m5, m1, 1
+    pavgw           m5, m7             ; (b5 + 2) >> 2
+    punpcklwd       m4, m5, m7
+    pmaddwd         m4, m4
+    punpckhwd       m5, m7
+    pmaddwd         m5, m5
+    punpcklwd       m0, m1, m7         ; b5
+    punpckhwd       m1, m7
+    pmaxud          m2, m4
+    psubd           m2, m4             ; p5
+    vpbroadcastd    m4, [pd_0xf00800a4]
+    pmaxud          m3, m5
+    psubd           m3, m5
+    pmulld          m2, m13            ; p5 * s0
+    pmulld          m3, m13
+    pmaddwd         m0, m4             ; b5 * 164
+    pmaddwd         m1, m4
+    paddusw         m2, m4
+    paddusw         m3, m4
+    psrad           m5, m2, 20         ; min(z5, 255) - 256
+    vpgatherdd      m4, [r13+m5*4], m2
+    psrad           m2, m3, 20
+    vpgatherdd      m5, [r13+m2*4], m3
+    pmulld          m0, m4
+    pmulld          m1, m5
+    packssdw        m4, m5
+    paddd           m0, m10            ; x5 * b5 * 164 + (1 << 11) + (1 << 15)
+    paddd           m1, m10
+    psubw           m4, m11, m4
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*0+ 4], m4
+    mova         [t3+r10*2+400*0+ 8], xm0
+    vextracti128 [t3+r10*2+400*0+40], m0, 1
+    mova         [t3+r10*2+400*0+24], xm1
+    vextracti128 [t3+r10*2+400*0+56], m1, 1
+    add            r10, 32
+    jl .hv1_loop
+    mov            r10, t2
+    mov             t2, t1
+    mov             t1, r10
+    ret
+.v0: ; vertical boxsums + ab3 (even rows)
+    lea            r10, [wq-4]
+.v0_loop:
+    mova            m0, [t1+r10+400* 6]
+    mova            m4, [t1+r10+400* 8]
+    mova            m5, [t1+r10+400*10]
+    paddw           m0, m0
+    paddd           m4, m4
+    paddd           m5, m5
+    paddw           m1, m0, [t2+r10+400* 6]
+    paddd           m2, m4, [t2+r10+400* 8]
+    paddd           m3, m5, [t2+r10+400*10]
+    mova [t2+r10+400* 6], m0
+    mova [t2+r10+400* 8], m4
+    mova [t2+r10+400*10], m5
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a3 + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a3 + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m7             ; (b3 + 2) >> 2
+    punpcklwd       m2, m3, m7
+    pmaddwd         m2, m2
+    punpckhwd       m3, m7
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m7         ; b3
+    punpckhwd       m1, m7
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p3
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m14            ; p3 * s1
+    pmulld          m5, m14
+    pmaddwd         m0, m12            ; b3 * 455
+    pmaddwd         m1, m12
+    paddusw         m4, m12
+    paddusw         m5, m12
+    psrad           m3, m4, 20         ; min(z3, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m10            ; x3 * b3 * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m10
+    psubw           m2, m11, m2
+    psrld           m0, 12
+    psrld           m1, 12
+    mova            m3, [t1+r10+400*0]
+    mova            m4, [t1+r10+400*2]
+    mova            m5, [t1+r10+400*4]
+    mova [t3+r10*2+400*8+ 8], m3
+    mova [t3+r10*2+400*0+ 8], m4
+    mova [t3+r10*2+400*0+40], m5
+    paddw           m3, m3 ; cc5
+    paddd           m4, m4
+    paddd           m5, m5
+    mova [t1+r10+400*0], m3
+    mova [t1+r10+400*2], m4
+    mova [t1+r10+400*4], m5
+    mova         [t4+r10*1+400*2+ 4], m2
+    mova         [t3+r10*2+400*4+ 8], xm0
+    vextracti128 [t3+r10*2+400*4+40], m0, 1
+    mova         [t3+r10*2+400*4+24], xm1
+    vextracti128 [t3+r10*2+400*4+56], m1, 1
+    add            r10, 32
+    jl .v0_loop
+    ret
+.v1: ; vertical boxsums + ab (odd rows)
+    lea            r10, [wq-4]
+.v1_loop:
+    mova            m4, [t1+r10+400* 6]
+    mova            m5, [t1+r10+400* 8]
+    mova            m6, [t1+r10+400*10]
+    paddw           m1, m4, [t2+r10+400* 6]
+    paddd           m2, m5, [t2+r10+400* 8]
+    paddd           m3, m6, [t2+r10+400*10]
+    mova [t2+r10+400* 6], m4
+    mova [t2+r10+400* 8], m5
+    mova [t2+r10+400*10], m6
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a3 + 8) >> 4
+    psrld           m3, 4
+    pslld           m4, m2, 3
+    pslld           m5, m3, 3
+    paddd           m4, m2             ; ((a3 + 8) >> 4) * 9
+    paddd           m5, m3
+    psrlw           m3, m1, 1
+    pavgw           m3, m7             ; (b3 + 2) >> 2
+    punpcklwd       m2, m3, m7
+    pmaddwd         m2, m2
+    punpckhwd       m3, m7
+    pmaddwd         m3, m3
+    punpcklwd       m0, m1, m7         ; b3
+    punpckhwd       m1, m7
+    pmaxud          m4, m2
+    psubd           m4, m2             ; p3
+    pmaxud          m5, m3
+    psubd           m5, m3
+    pmulld          m4, m14            ; p3 * s1
+    pmulld          m5, m14
+    pmaddwd         m0, m12            ; b3 * 455
+    pmaddwd         m1, m12
+    paddusw         m4, m12
+    paddusw         m5, m12
+    psrad           m3, m4, 20         ; min(z3, 255) - 256
+    vpgatherdd      m2, [r13+m3*4], m4
+    psrad           m4, m5, 20
+    vpgatherdd      m3, [r13+m4*4], m5
+    pmulld          m0, m2
+    pmulld          m1, m3
+    packssdw        m2, m3
+    paddd           m0, m10            ; x3 * b3 * 455 + (1 << 11) + (1 << 15)
+    paddd           m1, m10
+    psubw           m2, m11, m2
+    psrld           m0, 12
+    psrld           m8, m1, 12
+    mova [t4+r10*1+400*4+4], m2
+    mova            m4, [t3+r10*2+400*8+ 8]
+    mova            m5, [t3+r10*2+400*0+ 8]
+    mova            m6, [t3+r10*2+400*0+40]
+    paddw           m1, m4, [t2+r10+400*0]
+    paddd           m2, m5, [t2+r10+400*2]
+    paddd           m3, m6, [t2+r10+400*4]
+    paddw           m1, [t1+r10+400*0]
+    paddd           m2, [t1+r10+400*2]
+    paddd           m3, [t1+r10+400*4]
+    mova [t2+r10+400*0], m4
+    mova [t2+r10+400*2], m5
+    mova [t2+r10+400*4], m6
+    vpbroadcastd    m4, [pd_25]
+    mova         [t3+r10*2+400*8+ 8], xm0
+    vextracti128 [t3+r10*2+400*8+40], m0, 1
+    mova         [t3+r10*2+400*8+24], xm8
+    vextracti128 [t3+r10*2+400*8+56], m8, 1
+    paddd           m2, m9
+    paddd           m3, m9
+    psrld           m2, 4              ; (a5 + 8) >> 4
+    psrld           m3, 4
+    pmulld          m2, m4             ; ((a5 + 8) >> 4) * 25
+    pmulld          m3, m4
+    psrlw           m5, m1, 1
+    pavgw           m5, m7             ; (b5 + 2) >> 2
+    punpcklwd       m4, m5, m7
+    pmaddwd         m4, m4
+    punpckhwd       m5, m7
+    pmaddwd         m5, m5
+    punpcklwd       m0, m1, m7         ; b5
+    punpckhwd       m1, m7
+    pmaxud          m2, m4
+    psubd           m2, m4             ; p5
+    vpbroadcastd    m4, [pd_0xf00800a4]
+    pmaxud          m3, m5
+    psubd           m3, m5
+    pmulld          m2, m13            ; p5 * s0
+    pmulld          m3, m13
+    pmaddwd         m0, m4             ; b5 * 164
+    pmaddwd         m1, m4
+    paddusw         m2, m4
+    paddusw         m3, m4
+    psrad           m5, m2, 20         ; min(z5, 255) - 256
+    vpgatherdd      m4, [r13+m5*4], m2
+    psrad           m2, m3, 20
+    vpgatherdd      m5, [r13+m2*4], m3
+    pmulld          m0, m4
+    pmulld          m1, m5
+    packssdw        m4, m5
+    paddd           m0, m10            ; x5 * b5 * 164 + (1 << 11) + (1 << 15)
+    paddd           m1, m10
+    psubw           m4, m11, m4
+    psrld           m0, 12
+    psrld           m1, 12
+    mova         [t4+r10*1+400*0+ 4], m4
+    mova         [t3+r10*2+400*0+ 8], xm0
+    vextracti128 [t3+r10*2+400*0+40], m0, 1
+    mova         [t3+r10*2+400*0+24], xm1
+    vextracti128 [t3+r10*2+400*0+56], m1, 1
+    add            r10, 32
+    jl .v1_loop
+    mov            r10, t2
+    mov             t2, t1
+    mov             t1, r10
+    ret
+.prep_n: ; initial neighbor setup
+    mov            r10, wq
+.prep_n_loop:
+    movu           xm0, [t4+r10*1+400*0+2]
+    paddw          xm2, xm0, [t4+r10*1+400*0+0]
+    paddw          xm2, [t4+r10*1+400*0+4]
+    movu            m1, [t3+r10*2+400*0+4]
+    paddd           m3, m1, [t3+r10*2+400*0+0]
+    paddd           m3, [t3+r10*2+400*0+8]
+    paddw          xm0, xm2
+    paddd           m1, m3
+    psllw          xm2, 2
+    pslld           m3, 2
+    paddw          xm0, xm2              ; a5 565
+    paddd           m1, m3               ; b5 565
+    mova [t4+r10*1+400* 6], xm0
+    mova [t3+r10*2+400*12], m1
+    mova           xm0, [t4+r10*1+400*2+0]
+    paddw          xm0, [t4+r10*1+400*2+4]
+    paddw          xm2, xm0, [t4+r10*1+400*2+2]
+    mova            m1, [t3+r10*2+400*4+0]
+    paddd           m1, [t3+r10*2+400*4+8]
+    paddd           m3, m1, [t3+r10*2+400*4+4]
+    psllw          xm2, 2                ; a3[-1] 444
+    pslld           m3, 2                ; b3[-1] 444
+    psubw          xm2, xm0              ; a3[-1] 343
+    psubd           m3, m1               ; b3[-1] 343
+    mova [t4+r10*1+400* 8], xm2
+    mova [t3+r10*2+400*16], m3
+    mova           xm0, [t4+r10*1+400*4+0]
+    paddw          xm0, [t4+r10*1+400*4+4]
+    paddw          xm2, xm0, [t4+r10*1+400*4+2]
+    mova            m1, [t3+r10*2+400*8+0]
+    paddd           m1, [t3+r10*2+400*8+8]
+    paddd           m3, m1, [t3+r10*2+400*8+4]
+    psllw          xm2, 2                 ; a3[ 0] 444
+    pslld           m3, 2                 ; b3[ 0] 444
+    mova [t4+r10*1+400*10], xm2
+    mova [t3+r10*2+400*20], m3
+    psubw          xm2, xm0               ; a3[ 0] 343
+    psubd           m3, m1                ; b3[ 0] 343
+    mova [t4+r10*1+400*12], xm2
+    mova [t3+r10*2+400*24], m3
+    add            r10, 16
+    jl .prep_n_loop
+    ret
+ALIGN function_align
+.n0: ; neighbor + output (even rows)
+    mov            r10, wq
+.n0_loop:
+    movu           xm2, [t4+r10*1+2]
+    paddw          xm0, xm2, [t4+r10*1+0]
+    paddw          xm0, [t4+r10*1+4]
+    paddw          xm2, xm0
+    psllw          xm0, 2
+    paddw          xm0, xm2              ; a5
+    movu            m1, [t3+r10*2+4]
+    paddd           m4, m1, [t3+r10*2+0]
+    paddd           m4, [t3+r10*2+8]
+    paddd           m1, m4
+    pslld           m4, 2
+    paddd           m4, m1               ; b5
+    paddw          xm2, xm0, [t4+r10*1+400* 6]
+    mova [t4+r10*1+400* 6], xm0
+    paddd           m0, m4, [t3+r10*2+400*12]
+    mova [t3+r10*2+400*12], m4
+    mova           xm3, [t4+r10*1+400*2+0]
+    paddw          xm3, [t4+r10*1+400*2+4]
+    paddw          xm5, xm3, [t4+r10*1+400*2+2]
+    psllw          xm5, 2                ; a3[ 1] 444
+    psubw          xm4, xm5, xm3         ; a3[ 1] 343
+    paddw          xm3, xm4, [t4+r10*1+400* 8]
+    paddw          xm3, [t4+r10*1+400*10]
+    mova [t4+r10*1+400* 8], xm4
+    mova [t4+r10*1+400*10], xm5
+    mova            m1, [t3+r10*2+400*4+0]
+    paddd           m1, [t3+r10*2+400*4+8]
+    paddd           m5, m1, [t3+r10*2+400*4+4]
+    pslld           m5, 2                ; b3[ 1] 444
+    psubd           m4, m5, m1           ; b3[ 1] 343
+    paddd           m1, m4, [t3+r10*2+400*16]
+    paddd           m1, [t3+r10*2+400*20]
+    mova [t3+r10*2+400*16], m4
+    mova [t3+r10*2+400*20], m5
+    pmovzxwd        m4, [dstq+r10]
+    pmovzxwd        m2, xm2              ; a5
+    pmovzxwd        m3, xm3              ; a3
+    pmaddwd         m2, m4               ; a5 * src
+    pmaddwd         m3, m4               ; a3 * src
+    pslld           m4, 13
+    psubd           m0, m4
+    psubd           m1, m4
+    paddd           m0, m2               ; a5 * src + b5 + (1 << 8) - (src << 13)
+    paddd           m1, m3               ; a3 * src + b3 + (1 << 8) - (src << 13)
+    psrld           m0, 9
+    pslld           m1, 7
+    pblendw         m0, m1, 0xaa
+    pmaddwd         m0, m15
+    vpbroadcastd    m1, [pd_4096]
+    paddd           m4, m1
+    paddd           m0, m4
+    psrad           m0, 7
+    vextracti128   xm1, m0, 1
+    packusdw       xm0, xm1              ; clip
+    psrlw          xm0, 6
+    mova    [dstq+r10], xm0
+    add            r10, 16
+    jl .n0_loop
+    add           dstq, dst_strideq
+    ret
+ALIGN function_align
+.n1: ; neighbor + output (odd rows)
+    mov            r10, wq
+.n1_loop:
+    mova           xm3, [t4+r10*1+400*4+0]
+    paddw          xm3, [t4+r10*1+400*4+4]
+    paddw          xm5, xm3, [t4+r10*1+400*4+2]
+    psllw          xm5, 2                ; a3[ 1] 444
+    psubw          xm4, xm5, xm3         ; a3[ 1] 343
+    paddw          xm3, xm4, [t4+r10*1+400*12]
+    paddw          xm3, [t4+r10*1+400*10]
+    mova [t4+r10*1+400*10], xm5
+    mova [t4+r10*1+400*12], xm4
+    mova            m1, [t3+r10*2+400*8+0]
+    paddd           m1, [t3+r10*2+400*8+8]
+    paddd           m5, m1, [t3+r10*2+400*8+4]
+    pslld           m5, 2                ; b3[ 1] 444
+    psubd           m4, m5, m1           ; b3[ 1] 343
+    paddd           m1, m4, [t3+r10*2+400*24]
+    paddd           m1, [t3+r10*2+400*20]
+    mova [t3+r10*2+400*20], m5
+    mova [t3+r10*2+400*24], m4
+    pmovzxwd        m4, [dstq+r10]
+    pmovzxwd        m0, [t4+r10*1+400* 6]
+    pmovzxwd        m3, xm3
+    pmaddwd         m0, m4               ; a5 * src
+    pmaddwd         m3, m4               ; a3 * src
+    pslld           m4, 12
+    psubd           m2, m4, [t3+r10*2+400*12]
+    paddd           m4, m4
+    psubd           m1, m4
+    psubd           m0, m2               ; a5 * src + b5 + (1 << 8) - (src << 13)
+    paddd           m1, m3               ; a3 * src + b3 + (1 << 8) - (src << 13)
+    psrld           m0, 8
+    pslld           m1, 7
+    pblendw         m0, m1, 0xaa
+    pmaddwd         m0, m15
+    vpbroadcastd    m1, [pd_4096]
+    paddd           m4, m1
+    paddd           m0, m4
+    psrad           m0, 7
+    vextracti128   xm1, m0, 1
+    packusdw       xm0, xm1              ; clip
+    psrlw          xm0, 6
+    mova    [dstq+r10], xm0
+    add            r10, 16
+    jl .n1_loop
+    add           dstq, dst_strideq
     ret
 
 %endif ; ARCH_X86_64
