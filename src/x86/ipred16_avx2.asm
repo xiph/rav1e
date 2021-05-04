@@ -105,6 +105,7 @@ JMP_TABLE ipred_smooth_16bpc,     avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_h_16bpc,   avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_v_16bpc,   avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_z1_16bpc,         avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_z3_16bpc,         avx2, h4, h8, h16, h32, h64
 JMP_TABLE ipred_filter_16bpc,     avx2, w4, w8, w16, w32
 JMP_TABLE ipred_cfl_16bpc,        avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                         s4-8*4, s8-8*4, s16-8*4, s32-8*4
@@ -1871,6 +1872,1051 @@ ALIGN function_align
     dec                  hd
     jg .w64_end_loop
 .w64_end:
+    RET
+
+cglobal ipred_z3_16bpc, 4, 9, 0, dst, stride, tl, w, h, angle, dy, org_w, maxbase
+    %assign org_stack_offset stack_offset
+    lea                  r6, [ipred_z3_16bpc_avx2_table]
+    tzcnt                hd, hm
+    movifnidn        angled, anglem
+    lea                  r7, [dr_intra_derivative+45*2-1]
+    sub                 tlq, 2
+    movsxd               hq, [r6+hq*4]
+    sub              angled, 180
+    add                  hq, r6
+    mov                 dyd, angled
+    neg                 dyd
+    xor              angled, 0x400
+    or                  dyq, ~0x7e
+    movzx               dyd, word [r7+dyq]
+    vpbroadcastd         m5, [pw_62]
+    mov              org_wd, wd
+    jmp                  hq
+.h4:
+    ALLOC_STACK         -64, 7
+    lea                  r7, [strideq*3]
+    cmp              angleb, 40
+    jae .h4_no_upsample
+    lea                 r4d, [angleq-1024]
+    sar                 r4d, 7
+    add                 r4d, wd
+    jg .h4_no_upsample ; !enable_intra_edge_filter || w > 8 || (w == 8 && is_sm)
+    mova                xm2, [tlq-14]            ; 0 1 2 3 4 5 6 7
+    pblendw             xm1, xm2, [tlq-16], 0xfe ; 0 0 1 2 3 4 5 6
+    vpblendd            xm0, xm1, [tlq-18], 0x0e ; 0 0 0 1 2 3 4 5
+    pshufd              xm3, xm1, q0000
+    paddw               xm1, xm2
+    paddw               xm0, [tlq-12]            ; 1 2 3 4 5 6 7 8
+    vpbroadcastw        xm4, r8m ; pixel_max
+    add                 dyd, dyd
+    psubw               xm0, xm1, xm0
+    mova           [rsp+ 0], xm3
+    movd                xm3, dyd
+    psraw               xm0, 3
+    neg                 dyd
+    paddw               xm1, xm0
+    pxor                xm0, xm0
+    lea                 r2d, [dyq+(16<<6)+63] ; ypos
+    pmaxsw              xm1, xm0
+    pavgw               xm1, xm0
+    vpbroadcastw         m3, xm3
+    pminsw              xm1, xm4
+    punpckhwd           xm0, xm1, xm2
+    punpcklwd           xm1, xm2
+    paddw                m2, m3, m3
+    mova           [rsp+32], xm0
+    punpcklwd            m3, m2
+    mova           [rsp+16], xm1
+    paddw                m4, m2, m2
+    paddw                m2, m3
+    vpblendd             m3, m2, 0xf0 ; ypos0 ypos1   ypos2 ypos3
+.h4_upsample_loop:
+    lea                 r4d, [r2+dyq]
+    shr                 r2d, 6
+    movu                xm1, [rsp+r2*2]
+    lea                 r2d, [r4+dyq]
+    shr                 r4d, 6
+    movu                xm2, [rsp+r4*2]
+    lea                 r4d, [r2+dyq]
+    shr                 r2d, 6
+    vinserti128          m1, [rsp+r2*2], 1
+    lea                 r2d, [r4+dyq]
+    shr                 r4d, 6
+    vinserti128          m2, [rsp+r4*2], 1
+    psrld                m0, m1, 16
+    pblendw              m0, m2, 0xaa ; a3 b3 a2 b2 a1 b1 a0 b0   c3 d3 c2 d2 c1 d1 c0 d0
+    pslld                m2, 16
+    pblendw              m1, m2, 0xaa
+    pand                 m2, m5, m3
+    psllw                m2, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    paddw                m3, m4
+    paddw                m1, m0
+    vextracti128        xm2, m1, 1
+    punpckhdq           xm0, xm1, xm2 ; a1 b1 c1 d1 a0 b0 c0 d0
+    punpckldq           xm1, xm2      ; a3 b3 c3 d3 a2 b2 c2 d2
+    movhps [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm0
+    movhps [dstq+strideq*2], xm1
+    movq   [dstq+r7       ], xm1
+    add                dstq, 8
+    sub                  wd, 4
+    jg .h4_upsample_loop
+    RET
+ALIGN function_align
+.filter_strength: ; h4/h8/h16
+%define base r4-z_filter_t0
+    lea                  r4, [z_filter_t0]
+    movd                xm0, maxbased
+    movd                xm1, angled
+    shr              angled, 8 ; is_sm << 1
+    vpbroadcastb         m0, xm0
+    vpbroadcastb         m1, xm1
+    pcmpeqb              m0, [base+z_filter_wh]
+    pand                 m0, m1
+    mova                xm1, [r4+angleq*8]
+    pcmpgtb              m0, m1
+    pmovmskb            r5d, m0
+    ret
+.h4_no_upsample:
+    mov            maxbased, 7
+    test             angled, 0x400 ; !enable_intra_edge_filter
+    jnz .h4_main
+    lea            maxbased, [wq+3]
+    call .filter_strength
+    mov            maxbased, 7
+    test                r5d, r5d
+    jz .h4_main ; filter_strength == 0
+    popcnt              r5d, r5d
+    mova                xm0, [tlq-14]       ; 0 1 2 3 4 5 6 7
+    movu                xm3, [tlq-12]       ; 1 2 3 4 5 6 7 8
+    vpbroadcastd        xm2, [base+z_filter_k-4+r5*4+12*1]
+    vpbroadcastd        xm4, [base+z_filter_k-4+r5*4+12*0]
+    pmullw              xm2, xm0
+    pblendw             xm0, [tlq-16], 0xfe ; 0 0 1 2 3 4 5 6
+    paddw               xm1, xm0, xm3
+    movd           [rsp+12], xm0
+    pmullw              xm1, xm4
+    cmp                 r5d, 3
+    jne .h4_filter_3tap
+    pblendw             xm3, [tlq-10], 0x7f ; 2 3 4 5 6 7 8 8
+    vpblendd            xm0, [tlq-18], 0x0e ; 0 0 0 1 2 3 4 5
+    movzx               r4d, word [tlq-14]
+    movzx               r2d, word [tlq-12]
+    inc            maxbased
+    paddw               xm1, xm2
+    paddw               xm0, xm3
+    sub                 r2d, r4d
+    paddw               xm2, xm0, xm0
+    lea                 r2d, [r2+r4*8+4]
+    shr                 r2d, 3
+    mov            [rsp+14], r2w
+.h4_filter_3tap:
+    pxor                xm0, xm0
+    paddw               xm1, xm2
+    lea                 tlq, [rsp+30]
+    psrlw               xm1, 3
+    cmp                  wd, 8
+    sbb            maxbased, -1
+    pavgw               xm0, xm1
+    mova           [rsp+16], xm0
+.h4_main:
+    movd                xm3, dyd
+    neg            maxbaseq
+    vbroadcasti128       m1, [z_base_inc]
+    vpbroadcastw         m6, [tlq+maxbaseq*2]
+    shl            maxbased, 6
+    vpbroadcastw         m3, xm3
+    lea                 r4d, [maxbaseq+3*64]
+    neg                 dyq
+    movd                xm2, r4d
+    sub                 tlq, 8
+    lea                  r4, [dyq+63] ; ypos
+    punpcklwd            m1, m1
+    paddw                m0, m3, m3
+    vpbroadcastw         m2, xm2
+    punpcklwd            m3, m0
+    paddw                m4, m0, m0
+    paddw                m0, m3
+    psubw                m2, m1
+    vpblendd             m3, m0, 0xf0 ; ypos0 ypos1   ypos2 ypos3
+    or             maxbased, 63
+    paddw                m3, m2
+.h4_loop:
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base0
+    movu                xm1, [tlq+r4*2]
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base1
+    movu                xm2, [tlq+r5*2]
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base2
+    vinserti128          m1, [tlq+r4*2], 1
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base3
+    vinserti128          m2, [tlq+r5*2], 1
+    punpckhwd            m0, m1, m2
+    punpcklwd            m1, m2
+    pand                 m2, m5, m3
+    palignr              m0, m1, 4    ; a3 b3 a2 b2 a1 b1 a0 b0   c3 d3 c2 d2 c1 d1 c0 d0
+    psllw                m2, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    psraw                m2, m3, 15   ; ypos < max_base_y
+    paddw                m3, m4
+    paddw                m1, m0
+    vpblendvb            m1, m6, m1, m2
+    vextracti128        xm2, m1, 1
+    punpckhdq           xm0, xm1, xm2 ; a1 b1 c1 d1 a0 b0 c0 d0
+    punpckldq           xm1, xm2      ; a3 b3 c3 d3 a2 b2 c2 d2
+    movhps [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm0
+    movhps [dstq+strideq*2], xm1
+    movq   [dstq+r7       ], xm1
+    sub                  wd, 4
+    jz .h4_end
+    add                dstq, 8
+    cmp                 r4d, maxbased
+    jg .h4_loop
+.h4_end_loop:
+    movq   [dstq+strideq*0], xm6
+    movq   [dstq+strideq*1], xm6
+    movq   [dstq+strideq*2], xm6
+    movq   [dstq+r7       ], xm6
+    add                dstq, 8
+    sub                  wd, 4
+    jg .h4_end_loop
+.h4_end:
+    RET
+.h8:
+    lea                 r4d, [angleq+216]
+    %assign stack_offset org_stack_offset
+    ALLOC_STACK         -64, 8
+    mov                 r4b, wb
+    lea                  r7, [strideq*3]
+    cmp                 r4d, 8
+    ja .h8_no_upsample ; !enable_intra_edge_filter || is_sm || d >= 40 || w > 8
+    mova                 m2, [tlq-30]     ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    paddw                m1, m2, [tlq-32] ; _ 0 1 2 3 4 5 6   7 8 9 a b c d e
+    movu                 m0, [tlq-34]     ; _ _ 0 1 2 3 4 5   6 7 8 9 a b c d
+    cmp                  wd, 8
+    je .h8_upsample_w8
+    pshufhw             xm3, xm2, q1000
+    vpblendd             m0, m3, 0x0f     ; _ _ _ _ 4 4 4 5   6 7 8 9 a b c d
+.h8_upsample_w8:
+    paddw                m0, [tlq-28]     ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    vpbroadcastw         m4, r8m ; pixel_max
+    add                 dyd, dyd
+    psubw                m0, m1, m0
+    movd                xm6, dyd
+    psraw                m0, 3
+    neg                 dyd
+    paddw                m1, m0
+    pxor                 m0, m0
+    pmaxsw               m1, m0
+    lea                 r4d, [dyq+(16<<6)+63] ; ypos
+    pavgw                m1, m0
+    vpbroadcastw         m6, xm6
+    pminsw               m1, m4
+    punpckhwd            m0, m1, m2
+    punpcklwd            m1, m2
+    vextracti128   [rsp+48], m0, 1
+    vextracti128   [rsp+32], m1, 1
+    paddw                m7, m6, m6
+    mova           [rsp+16], xm0
+    mova           [rsp+ 0], xm1
+    punpcklwd            m6, m7 ; ypos0 ypos1
+.h8_upsample_loop:
+    lea                 r2d, [r4+dyq]
+    shr                 r4d, 6 ; base0
+    movu                 m1, [rsp+r4*2]
+    lea                 r4d, [r2+dyq]
+    shr                 r2d, 6 ; base1
+    movu                 m2, [rsp+r2*2]
+    lea                 r2d, [r4+dyq]
+    shr                 r4d, 6 ; base2
+    movu                 m3, [rsp+r4*2]
+    lea                 r4d, [r2+dyq]
+    shr                 r2d, 6 ; base3
+    movu                 m4, [rsp+r2*2]
+    psrld                m0, m1, 16
+    pblendw              m0, m2, 0xaa ; a7 b7 a6 b6 a5 b5 a4 b4   a3 b3 a2 b2 a1 b1 a0 b0
+    pslld                m2, 16
+    pblendw              m1, m2, 0xaa
+    psrld                m2, m3, 16
+    pblendw              m2, m4, 0xaa ; c7 d7 c6 d6 c5 d5 c4 d4   c3 d3 c2 d2 c1 d1 c0 d0
+    pslld                m4, 16
+    pblendw              m3, m4, 0xaa
+    pand                 m4, m5, m6
+    paddw                m6, m7
+    psllw                m4, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m4
+    pand                 m4, m5, m6
+    psllw                m4, 9
+    psubw                m3, m2
+    pmulhrsw             m3, m4
+    paddw                m6, m7
+    lea                  r2, [dstq+strideq*4]
+    paddw                m1, m0
+    paddw                m3, m2
+    punpckhdq            m0, m1, m3   ; a5 b5 c5 d5 a4 b4 c4 d4   a1 b1 c1 d1 a0 b0 c0 d0
+    punpckldq            m1, m3       ; a7 b7 c7 d7 a6 b6 c6 d6   a3 b3 c3 d3 a2 b2 c2 d2
+    vextracti128        xm2, m0, 1
+    vextracti128        xm3, m1, 1
+    movhps [r2  +strideq*0], xm0
+    movq   [r2  +strideq*1], xm0
+    movhps [r2  +strideq*2], xm1
+    movq   [r2  +r7       ], xm1
+    movhps [dstq+strideq*0], xm2
+    movq   [dstq+strideq*1], xm2
+    movhps [dstq+strideq*2], xm3
+    movq   [dstq+r7       ], xm3
+    add                dstq, 8
+    sub                  wd, 4
+    jg .h8_upsample_loop
+    RET
+.h8_no_intra_edge_filter:
+    and            maxbased, 7
+    or             maxbased, 8 ; imin(w+7, 15)
+    jmp .h8_main
+.h8_no_upsample:
+    lea            maxbased, [wq+7]
+    test             angled, 0x400
+    jnz .h8_no_intra_edge_filter
+    call .filter_strength
+    test                r5d, r5d
+    jz .h8_main
+    popcnt              r5d, r5d
+    mova                 m0, [tlq-30]           ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    movu                 m3, [tlq-28]           ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    vpbroadcastd         m2, [base+z_filter_k-4+r5*4+12*1]
+    vpbroadcastd         m4, [base+z_filter_k-4+r5*4+12*0]
+    pmullw               m2, m0
+    cmp                  wd, 8
+    jl .h8_filter_w4
+    punpcklwd           xm0, xm0
+    vpblendd             m1, m0, [tlq-32], 0xfe ; 0 0 1 2 3 4 5 6   7 8 9 a b c d e
+    movd           [rsp+28], xm0
+    paddw                m1, m3
+    mov                 r4d, 16
+    pmullw               m1, m4
+    cmovg          maxbased, r4d
+    cmp                 r5d, 3
+    jne .h8_filter_3tap
+    punpckhwd            m3, m3
+    vpblendd             m0, [tlq-34], 0xfe     ; 0 0 0 1 2 3 4 5   6 7 8 9 a b c d
+    vpblendd             m3, [tlq-26], 0x7f     ; 2 3 4 5 6 7 8 9   a b c d e f g g
+    movzx               r4d, word [tlq-30]
+    movzx               r2d, word [tlq-28]
+    inc            maxbased
+    paddw                m1, m2
+    paddw                m0, m3
+    sub                 r2d, r4d
+    paddw                m2, m0, m0
+    lea                 r2d, [r2+r4*8+4]
+    shr                 r2d, 3
+    mov            [rsp+30], r2w
+    jmp .h8_filter_3tap
+.h8_filter_w4:
+    pshufhw             xm1, xm0, q2100
+    vinserti128          m1, [tlq-16], 1        ; _ _ _ _ 4 4 5 6   7 8 9 a b c d e
+    paddw                m1, m3
+    pmullw               m1, m4
+.h8_filter_3tap:
+    pxor                 m0, m0
+    paddw                m1, m2
+    lea                 tlq, [rsp+62]
+    psrlw                m1, 3
+    pavgw                m0, m1
+    mova           [rsp+32], m0
+.h8_main:
+    movd                xm4, dyd
+    neg            maxbaseq
+    vbroadcasti128       m1, [z_base_inc]
+    vpbroadcastw         m7, [tlq+maxbaseq*2]
+    shl            maxbased, 6
+    vpbroadcastw         m4, xm4
+    lea                 r4d, [maxbaseq+7*64]
+    neg                 dyq
+    movd                xm2, r4d
+    sub                 tlq, 16
+    lea                  r4, [dyq+63]
+    paddw                m6, m4, m4
+    vpbroadcastw         m2, xm2
+    vpblendd             m4, m6, 0xf0 ; ypos0 ypos1
+    psubw                m2, m1
+    or             maxbased, 63
+    paddw                m4, m2
+.h8_loop:
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base0
+    movu                xm0, [tlq+r4*2+2]
+    movu                xm1, [tlq+r4*2]
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base1
+    vinserti128          m0, [tlq+r5*2+2], 1
+    vinserti128          m1, [tlq+r5*2], 1
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base2
+    pand                 m3, m5, m4
+    psllw                m3, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m3
+    psraw                m3, m4, 15
+    paddw                m4, m6
+    paddw                m0, m1
+    movu                xm1, [tlq+r4*2+2]
+    movu                xm2, [tlq+r4*2]
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base3
+    vpblendvb            m0, m7, m0, m3
+    vinserti128          m1, [tlq+r5*2+2], 1
+    vinserti128          m2, [tlq+r5*2], 1
+    pand                 m3, m5, m4
+    psllw                m3, 9
+    psubw                m2, m1
+    pmulhrsw             m2, m3
+    psraw                m3, m4, 15
+    paddw                m4, m6
+    lea                  r5, [dstq+strideq*4]
+    paddw                m1, m2
+    vpblendvb            m1, m7, m1, m3
+    punpckhwd            m2, m0, m1   ; a3 c3 a2 c2 a1 c1 a0 c0   b3 d3 b2 d2 b1 d1 b0 d0
+    vextracti128        xm3, m2, 1
+    punpcklwd            m0, m1       ; a7 c7 a6 c6 a5 c5 a4 c5   b7 d7 b6 d6 b5 d5 b4 d4
+    punpckhwd           xm1, xm2, xm3 ; a1 b1 c1 d1 a0 b0 c0 d0
+    punpcklwd           xm2, xm3      ; a3 b3 c3 d3 a2 b2 c2 d2
+    vextracti128        xm3, m0, 1
+    movhps [dstq+strideq*0], xm1
+    movq   [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm2
+    movq   [dstq+r7       ], xm2
+    punpckhwd           xm1, xm0, xm3 ; a5 b5 c5 d5 a4 b4 c4 d4
+    punpcklwd           xm0, xm3      ; a7 b7 c7 d7 a6 b6 c6 d6
+    movhps [r5  +strideq*0], xm1
+    movq   [r5  +strideq*1], xm1
+    movhps [r5  +strideq*2], xm0
+    movq   [r5  +r7       ], xm0
+    sub                  wd, 4
+    jz .h8_end
+    add                dstq, 8
+    cmp                 r4d, maxbased
+    jg .h8_loop
+    lea                  r6, [strideq*5]
+    lea                  r2, [strideq+r7*2] ; stride*7
+    test                 wd, 4
+    jz .h8_end_loop
+    movq   [dstq+strideq*0], xm7
+    movq   [dstq+strideq*1], xm7
+    movq   [dstq+strideq*2], xm7
+    movq   [dstq+r7       ], xm7
+    movq   [dstq+strideq*4], xm7
+    movq   [dstq+r6       ], xm7
+    movq   [dstq+r7*2     ], xm7
+    movq   [dstq+r2       ], xm7
+    add                dstq, 8
+    sub                  wd, 4
+    jz .h8_end
+.h8_end_loop:
+    mova   [dstq+strideq*0], xm7
+    mova   [dstq+strideq*1], xm7
+    mova   [dstq+strideq*2], xm7
+    mova   [dstq+r7       ], xm7
+    mova   [dstq+strideq*4], xm7
+    mova   [dstq+r6       ], xm7
+    mova   [dstq+r7*2     ], xm7
+    mova   [dstq+r2       ], xm7
+    add                dstq, 16
+    sub                  wd, 8
+    jg .h8_end_loop
+.h8_end:
+    RET
+.h16_no_intra_edge_filter:
+    and            maxbased, 15
+    or             maxbased, 16 ; imin(w+15, 31)
+    jmp .h16_main
+ALIGN function_align
+.h16:
+    %assign stack_offset org_stack_offset
+    ALLOC_STACK         -96, 10
+    lea            maxbased, [wq+15]
+    lea                  r7, [strideq*3]
+    test             angled, 0x400
+    jnz .h16_no_intra_edge_filter
+    call .filter_strength
+    test                r5d, r5d
+    jz .h16_main ; filter_strength == 0
+    popcnt              r5d, r5d
+    movu                 m0, [tlq-28]            ; 3 4 5 6 7 8 9 a   b c d e f g h i
+    paddw                m1, m0, [tlq-32]        ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    vpbroadcastd         m6, [base+z_filter_k-4+r5*4+12*1]
+    vpbroadcastd         m7, [base+z_filter_k-4+r5*4+12*0]
+    pmullw               m2, m6, [tlq-30]        ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    pmullw               m1, m7
+    paddw                m1, m2
+    cmp                  wd, 8
+    jg .h16_filter_w16
+    mova                xm3, [tlq-46]            ; 0 1 2 3 4 5 6 7
+    pmullw              xm6, xm3
+    jl .h16_filter_w4
+    pblendw             xm3, [tlq-48], 0xfe      ; 0 0 1 2 3 4 5 6
+    cmp                 r5d, 3
+    jne .h16_filter_w8_3tap
+    vpblendd            xm4, xm3, [tlq-50], 0x0e ; 0 0 0 1 2 3 4 5
+.h16_filter_w8_5tap:
+    punpckhwd            m0, m0
+    vpblendd             m0, [tlq-26], 0x7f      ; 4 5 6 7 8 9 a b   c d e f g h i i
+    paddw               xm4, [tlq-42]            ; 2 3 4 5 6 7 8 9
+    paddw                m0, [tlq-34]            ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    paddw               xm4, xm4
+    paddw                m0, m0
+    paddw               xm6, xm4
+    paddw                m1, m0
+.h16_filter_w8_3tap:
+    paddw               xm3, [tlq-44]            ; 1 2 3 4 5 6 7 8
+    pmullw              xm3, xm7
+    pxor                 m0, m0
+    paddw               xm3, xm6
+    psrlw               xm3, 3
+    pavgw               xm3, xm0
+    mova           [rsp+48], xm3
+    jmp .h16_filter_end
+.h16_filter_w4:
+    pshufhw             xm3, xm3, q2100          ; _ _ _ _ 4 4 5 6
+    cmp                 r5d, 3
+    jne .h16_filter_w8_3tap
+    pshufhw             xm4, xm3, q2100          ; _ _ _ _ 4 4 4 5
+    jmp .h16_filter_w8_5tap
+.h16_filter_w16:
+    mova                 m3, [tlq-62]            ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    pmullw               m6, m3
+    punpcklwd           xm3, xm3
+    vpblendd             m4, m3, [tlq-64], 0xfe  ; 0 0 1 2 3 4 5 6   7 8 9 a b c d e
+    paddw                m4, [tlq-60]            ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    mov                 r4d, 32
+    cmp                  wd, 16
+    cmovg          maxbased, r4d
+    movd           [rsp+28], xm3
+    pmullw               m4, m7
+    cmp                 r5d, 3
+    jne .h16_filter_w16_3tap
+    punpckhwd            m0, m0
+    vpblendd             m3, [tlq-66], 0xfe      ; 0 0 0 1 2 3 4 5   6 7 8 9 a b c d
+    vpblendd             m0, [tlq-26], 0x7f      ; 4 5 6 7 8 9 a b   c d e f g h i i
+    paddw                m3, [tlq-58]            ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    paddw                m0, [tlq-34]            ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    movzx               r4d, word [tlq-62]
+    movzx               r2d, word [tlq-60]
+    or             maxbased, 1
+    paddw                m3, m3
+    sub                 r2d, r4d
+    paddw                m0, m0
+    lea                 r2d, [r2+r4*8+4]
+    paddw                m4, m3
+    shr                 r2d, 3
+    paddw                m1, m0
+    mov            [rsp+30], r2w
+.h16_filter_w16_3tap:
+    pxor                 m0, m0
+    paddw                m4, m6
+    psrlw                m4, 3
+    pavgw                m4, m0
+    mova           [rsp+32], m4
+.h16_filter_end:
+    psrlw                m1, 3
+    lea                 tlq, [rsp+94]
+    pavgw                m1, m0
+    mova           [rsp+64], m1
+.h16_main:
+    movd                xm8, dyd
+    neg            maxbaseq
+    vpbroadcastw         m9, [tlq+maxbaseq*2]
+    shl            maxbased, 6
+    vpbroadcastw         m8, xm8
+    lea                 r4d, [maxbaseq+dyq+15*64]
+    neg                 dyq
+    movd                xm7, r4d
+    sub                 tlq, 32
+    lea                  r4, [dyq+63]
+    vpbroadcastw         m7, xm7
+    or             maxbased, 63
+    psubw                m7, [z_base_inc]
+.h16_loop:
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base0
+    movu                 m0, [tlq+r4*2+2]
+    movu                 m2, [tlq+r4*2]
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base1
+    movu                 m1, [tlq+r5*2+2]
+    movu                 m3, [tlq+r5*2]
+    lea                  r5, [r4+dyq]
+    sar                  r4, 6 ; base3
+    pand                 m6, m5, m7
+    psllw                m6, 9
+    psubw                m2, m0
+    pmulhrsw             m2, m6
+    psraw                m6, m7, 15
+    paddw                m7, m8
+    paddw                m0, m2
+    movu                 m2, [tlq+r4*2+2]
+    movu                 m4, [tlq+r4*2]
+    lea                  r4, [r5+dyq]
+    sar                  r5, 6 ; base3
+    vpblendvb            m0, m9, m0, m6
+    pand                 m6, m5, m7
+    psllw                m6, 9
+    psubw                m3, m1
+    pmulhrsw             m3, m6
+    psraw                m6, m7, 15
+    paddw                m7, m8
+    paddw                m1, m3
+    vpblendvb            m1, m9, m1, m6
+    pand                 m6, m5, m7
+    psllw                m6, 9
+    psubw                m4, m2
+    pmulhrsw             m4, m6
+    psraw                m6, m7, 15
+    paddw                m7, m8
+    paddw                m2, m4
+    movu                 m3, [tlq+r5*2+2]
+    movu                 m4, [tlq+r5*2]
+    vpblendvb            m2, m9, m2, m6
+    pand                 m6, m5, m7
+    psllw                m6, 9
+    psubw                m4, m3
+    pmulhrsw             m4, m6
+    psraw                m6, m7, 15
+    paddw                m7, m8
+    lea                  r5, [dstq+strideq*4]
+    paddw                m3, m4
+    vpblendvb            m3, m9, m3, m6
+    punpckhwd            m4, m0, m1 ; ab bb aa ba a9 b9 a8 b8   a3 b3 a2 b2 a1 b1 a0 b0
+    punpcklwd            m0, m1     ; af bf ae be ad bd ac bc   a7 b7 a6 b6 a5 b5 a4 b4
+    punpckhwd            m1, m2, m3 ; cb db ca da c9 d9 c8 d8   c3 d3 c2 d2 c1 d1 c0 d0
+    punpcklwd            m2, m3     ; cf df ce de cd dd cc dc   c7 d7 c6 d6 c5 d5 c4 d4
+    punpckhdq            m3, m4, m1 ; a9 b9 c9 d9 a8 b8 c8 d8   a1 b1 c1 d1 a0 b0 c0 d0
+    vextracti128        xm6, m3, 1
+    punpckldq            m4, m1     ; ab bb cb db aa ba ca da   a3 b3 c3 d3 a2 b2 c2 d2
+    punpckhdq            m1, m0, m2 ; ad bd cd dd ac bc cc dc   a5 b5 c5 d5 a4 b4 c4 d4
+    punpckldq            m0, m2     ; af bf cf df ae be ce de   a7 b7 c7 d7 a6 b6 c6 d6
+    vextracti128        xm2, m4, 1
+    movhps [dstq+strideq*0], xm6
+    movq   [dstq+strideq*1], xm6
+    vextracti128        xm6, m1, 1
+    movhps [dstq+strideq*2], xm2
+    movq   [dstq+r7       ], xm2
+    vextracti128        xm2, m0, 1
+    movhps [r5  +strideq*0], xm6
+    movq   [r5  +strideq*1], xm6
+    movhps [r5  +strideq*2], xm2
+    movq   [r5  +r7       ], xm2
+    lea                  r5, [dstq+strideq*8]
+    movhps [r5  +strideq*0], xm3
+    movq   [r5  +strideq*1], xm3
+    movhps [r5  +strideq*2], xm4
+    movq   [r5  +r7       ], xm4
+    lea                  r5, [r5+strideq*4]
+    movhps [r5  +strideq*0], xm1
+    movq   [r5  +strideq*1], xm1
+    movhps [r5  +strideq*2], xm0
+    movq   [r5  +r7       ], xm0
+    sub                  wd, 4
+    jz .h16_end
+    add                dstq, 8
+    cmp                 r4d, maxbased
+    jg .h16_loop
+    mov                  hd, 4
+.h16_end_loop0:
+    mov                 r6d, wd
+    mov                  r2, dstq
+    test                 wb, 4
+    jz .h16_end_loop
+    movq   [dstq+strideq*0], xm9
+    movq   [dstq+strideq*1], xm9
+    movq   [dstq+strideq*2], xm9
+    movq   [dstq+r7       ], xm9
+    and                 r6d, 120
+    jz .h16_end_w4
+    add                dstq, 8
+.h16_end_loop:
+    mova   [dstq+strideq*0], xm9
+    mova   [dstq+strideq*1], xm9
+    mova   [dstq+strideq*2], xm9
+    mova   [dstq+r7       ], xm9
+    add                dstq, 16
+    sub                 r6d, 8
+    jg .h16_end_loop
+.h16_end_w4:
+    lea                dstq, [r2+strideq*4]
+    dec                  hd
+    jg .h16_end_loop0
+.h16_end:
+    RET
+.h32:
+    %assign stack_offset org_stack_offset
+    ALLOC_STACK        -160, 9
+    lea            maxbased, [wq+31]
+    and            maxbased, 31
+    or             maxbased, 32 ; imin(w+31, 63)
+    test             angled, 0x400
+    jnz .h32_main
+    vpbroadcastd         m2, [pw_3]
+    movu                 m0, [tlq-28]       ; 3 4 5 6 7 8 9 a   b c d e f g h i
+    punpckhwd            m1, m0, m0
+    vpblendd             m1, [tlq-26], 0x7f ; 4 5 6 7 8 9 a b   c d e f g h i i
+    paddw                m0, [tlq-30]       ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    paddw                m1, m2
+    paddw                m0, [tlq-32]       ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    pavgw                m1, [tlq-34]       ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    lea                  r4, [rsp+128]
+    paddw                m0, m1
+    lea                 r5d, [maxbaseq-31]
+    psrlw                m0, 2
+    mova               [r4], m0
+.h32_filter_loop:
+    mova                 m0, [tlq-62]
+    paddw                m1, m2, [tlq-66]
+    paddw                m0, [tlq-64]
+    pavgw                m1, [tlq-58]
+    paddw                m0, [tlq-60]
+    sub                 tlq, 32
+    sub                  r4, 32
+    paddw                m0, m1
+    psrlw                m0, 2
+    mova               [r4], m0
+    sub                 r5d, 16
+    jg .h32_filter_loop
+    jl .h32_filter_h8
+    mova                 m0, [tlq-62]           ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    punpcklwd           xm1, xm0, xm0
+    paddw                m2, [tlq-58]           ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    paddw                m0, [tlq-60]           ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    vpblendd             m3, m1, [tlq-66], 0xfe ; 0 0 0 1 2 3 4 5   6 7 8 9 a b c d
+    vpblendd             m1, [tlq-64], 0xfe     ; 0 0 1 2 3 4 5 6   7 8 9 a b c d e
+    movzx               r5d, word [tlq-62]
+    movzx               r2d, word [tlq-60]
+    pavgw                m2, m3
+    sub                 r2d, r5d
+    paddw                m0, m1
+    lea                 r2d, [r2+r5*8+4]
+    paddw                m0, m2
+    shr                 r2d, 3
+    psrlw                m0, 2
+    mova            [r4-32], m0
+    mov             [r4-36], r5w
+    mov             [r4-34], r2w
+    lea                 tlq, [rsp+158]
+    mov                 r4d, 65
+    cmp                  wd, 64
+    cmove          maxbased, r4d
+    jmp .h32_main
+.h32_filter_h8:
+    mova                xm0, [tlq-46]            ; 0 1 2 3 4 5 6 7
+    pblendw             xm1, xm0, [tlq-48], 0xfe ; 0 0 1 2 3 4 5 6
+    paddw               xm2, [tlq-42]            ; 2 3 4 5 6 7 8 9
+    paddw               xm0, [tlq-44]            ; 1 2 3 4 5 6 7 8
+    vpblendd            xm3, xm1, [tlq-50], 0x0e ; 0 0 0 1 2 3 4 5
+    lea                 tlq, [rsp+158]
+    pavgw               xm2, xm3
+    paddw               xm0, xm1
+    paddw               xm0, xm2
+    psrlw               xm0, 2
+    mova            [r4-16], xm0
+.h32_main:
+    movd                xm6, dyd
+    neg            maxbaseq
+    vpbroadcastw         m7, [tlq+maxbaseq*2]
+    shl            maxbased, 6
+    vpbroadcastw         m6, xm6
+    lea                 r4d, [maxbaseq+dyq+15*64]
+    neg                 dyq
+    movd                xm4, r4d
+    vpbroadcastd         m8, [pw_m1024]
+    lea                  r4, [dyq+63]
+    vpbroadcastw         m4, xm4
+    or             maxbased, 63
+    psubw                m4, [z_base_inc]
+.h32_loop:
+    mov                  r5, r4
+    sar                  r5, 6
+    movu                 m1, [tlq+r5*2-64]
+    movu                 m0, [tlq+r5*2-62]
+    pand                 m3, m5, m4
+    psllw                m3, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m3
+    pcmpgtw              m2, m8, m4
+    paddw                m0, m1
+    vpblendvb            m0, m7, m0, m2
+    movu                 m2, [tlq+r5*2-32]
+    movu                 m1, [tlq+r5*2-30]
+    add                  r4, dyq
+    sub                 rsp, 64
+    psubw                m2, m1
+    pmulhrsw             m2, m3
+    psraw                m3, m4, 15
+    paddw                m4, m6
+    mova         [rsp+32*0], m0
+    paddw                m1, m2
+    vpblendvb            m1, m7, m1, m3
+    mova         [rsp+32*1], m1
+    dec                  wd
+    jz .h32_transpose
+    cmp                 r4d, maxbased
+    jg .h32_loop
+.h32_end_loop:
+    sub                 rsp, 64
+    mova         [rsp+32*0], m7
+    mova         [rsp+32*1], m7
+    dec                  wd
+    jg .h32_end_loop
+.h32_transpose:
+    lea                  r3, [strideq*3]
+    lea                  r4, [strideq*5]
+    mov                  r8, dstq
+    lea                  r5, [strideq+r3*2]
+.h32_transpose_loop0:
+    lea                  r6, [rsp+32]
+    lea                  r2, [r8+org_wq*2-16]
+.h32_transpose_loop:
+    mova                 m0, [r6+64*7]
+    mova                 m1, [r6+64*6]
+    mova                 m2, [r6+64*5]
+    mova                 m3, [r6+64*4]
+    mova                 m4, [r6+64*3]
+    mova                 m5, [r6+64*2]
+    mova                 m6, [r6+64*1]
+    mova                 m7, [r6+64*0]
+    punpckhwd            m8, m0, m1 ; a3 b3 a2 b2 a1 b1 a0 b0
+    punpcklwd            m0, m1     ; a7 b7 a6 b6 a5 b5 a4 b4
+    punpckhwd            m1, m2, m3 ; c3 d3 c2 d2 c1 d1 c0 d0
+    punpcklwd            m2, m3     ; c7 d7 c6 d6 c5 d5 c4 d4
+    punpckhwd            m3, m4, m5 ; e3 f3 e2 f2 e1 f1 e0 f0
+    punpcklwd            m4, m5     ; e7 f7 e6 f6 e5 f5 e4 f4
+    punpckhwd            m5, m6, m7 ; g3 h3 g2 h2 g1 h1 g0 h0
+    punpcklwd            m6, m7     ; g7 h7 g6 h6 g5 h5 g4 h4
+    lea                dstq, [r2+strideq*8]
+    sub                  r6, 32
+    punpckhdq            m7, m8, m1 ; a1 b1 c1 d1 a0 b0 c0 d0
+    punpckldq            m8, m1     ; a3 b3 c3 d3 a2 b2 c2 d2
+    punpckhdq            m1, m3, m5 ; e1 f1 g1 h1 e0 f0 g0 h0
+    punpckldq            m3, m5     ; e3 f3 g3 h3 e2 f2 g2 h2
+    punpckhqdq           m5, m7, m1 ;  8  0
+    vextracti128 [r2  +strideq*0], m5, 1
+    punpcklqdq           m7, m1     ;  9  1
+    mova         [dstq+strideq*0], xm5
+    punpckhqdq           m1, m8, m3 ; 10  2
+    vextracti128 [r2  +strideq*1], m7, 1
+    punpcklqdq           m8, m3     ; 11  3
+    mova         [dstq+strideq*1], xm7
+    punpckhdq            m3, m0, m2 ; a5 b5 c5 d5 a4 b4 c4 d4
+    vextracti128 [r2  +strideq*2], m1, 1
+    punpckldq            m0, m2     ; a7 b7 c7 d7 a6 b6 c6 d6
+    mova         [dstq+strideq*2], xm1
+    punpckhdq            m2, m4, m6 ; e5 f5 g5 h5 e4 f4 g4 h4
+    vextracti128 [r2  +r3       ], m8, 1
+    punpckldq            m4, m6     ; e7 f7 g7 h7 e6 f6 g6 h6
+    mova         [dstq+r3       ], xm8
+    punpckhqdq           m6, m3, m2 ; 12  4
+    vextracti128 [r2  +strideq*4], m6, 1
+    punpcklqdq           m3, m2     ; 13  5
+    mova         [dstq+strideq*4], xm6
+    punpckhqdq           m2, m0, m4 ; 14  6
+    vextracti128 [r2  +r4       ], m3, 1
+    punpcklqdq           m0, m4     ; 15  7
+    mova         [dstq+r4       ], xm3
+    vextracti128 [r2  +r3*2     ], m2, 1
+    mova         [dstq+r3*2     ], xm2
+    vextracti128 [r2  +r5       ], m0, 1
+    mova         [dstq+r5       ], xm0
+    lea                  r2, [dstq+strideq*8]
+    cmp                  r6, rsp
+    jae .h32_transpose_loop
+    add                 rsp, 64*8
+    sub              org_wd, 8
+    jg .h32_transpose_loop0
+.h32_end:
+    RET
+.h64:
+    %assign stack_offset org_stack_offset
+    ALLOC_STACK        -256, 10
+    lea            maxbased, [wq+63]
+    test             angled, 0x400
+    jnz .h64_main
+    vpbroadcastd         m2, [pw_3]
+    movu                 m0, [tlq-28]       ; 3 4 5 6 7 8 9 a   b c d e f g h i
+    punpckhwd            m1, m0, m0
+    vpblendd             m1, [tlq-26], 0x7f ; 4 5 6 7 8 9 a b   c d e f g h i i
+    paddw                m0, [tlq-30]       ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    paddw                m1, m2
+    paddw                m0, [tlq-32]       ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    pavgw                m1, [tlq-34]       ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    lea                  r4, [rsp+224]
+    paddw                m0, m1
+    lea                 r5d, [wq+32]
+    psrlw                m0, 2
+    mova               [r4], m0
+.h64_filter_loop:
+    mova                 m0, [tlq-62]
+    paddw                m1, m2, [tlq-66]
+    paddw                m0, [tlq-64]
+    pavgw                m1, [tlq-58]
+    paddw                m0, [tlq-60]
+    sub                 tlq, 32
+    sub                  r4, 32
+    paddw                m0, m1
+    psrlw                m0, 2
+    mova               [r4], m0
+    sub                 r5d, 16
+    jg .h64_filter_loop
+    mova                 m0, [tlq-62]           ; 0 1 2 3 4 5 6 7   8 9 a b c d e f
+    punpcklwd           xm1, xm0, xm0
+    paddw                m2, [tlq-58]           ; 2 3 4 5 6 7 8 9   a b c d e f g h
+    paddw                m0, [tlq-60]           ; 1 2 3 4 5 6 7 8   9 a b c d e f g
+    vpblendd             m3, m1, [tlq-66], 0xfe ; 0 0 0 1 2 3 4 5   6 7 8 9 a b c d
+    vpblendd             m1, [tlq-64], 0xfe     ; 0 0 1 2 3 4 5 6   7 8 9 a b c d e
+    lea                 tlq, [rsp+254]
+    pavgw                m2, m3
+    paddw                m0, m1
+    paddw                m0, m2
+    psrlw                m0, 2
+    mova            [r4-32], m0
+.h64_main:
+    neg            maxbaseq
+    movd                xm4, dyd
+    vpbroadcastw         m6, [tlq+maxbaseq*2]
+    shl            maxbased, 6
+    vpbroadcastw         m4, xm4
+    lea                 r4d, [maxbaseq+dyq+15*64]
+    neg                 dyq
+    vpbroadcastd         m7, [pw_m1024]
+    movd                xm3, r4d
+    lea                  r4, [dyq+63]
+    paddw                m8, m7, m7
+    vpbroadcastw         m3, xm3
+    or             maxbased, 63
+    paddw                m9, m8, m7
+    psubw                m3, [z_base_inc]
+.h64_loop:
+    mov                  r5, r4
+    sar                  r5, 6
+    movu                 m1, [tlq+r5*2-128]
+    movu                 m0, [tlq+r5*2-126]
+    pand                 m2, m5, m3
+    psllw                m2, 9
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    sub                 rsp, 128
+    paddw                m0, m1
+    pcmpgtw              m1, m9, m3
+    vpblendvb            m0, m6, m0, m1
+    mova         [rsp+32*0], m0
+    movu                 m1, [tlq+r5*2-96]
+    movu                 m0, [tlq+r5*2-94]
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    paddw                m0, m1
+    pcmpgtw              m1, m8, m3
+    vpblendvb            m0, m6, m0, m1
+    mova         [rsp+32*1], m0
+    movu                 m1, [tlq+r5*2-64]
+    movu                 m0, [tlq+r5*2-62]
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    paddw                m0, m1
+    pcmpgtw              m1, m7, m3
+    vpblendvb            m0, m6, m0, m1
+    mova         [rsp+32*2], m0
+    movu                 m1, [tlq+r5*2-32]
+    movu                 m0, [tlq+r5*2-30]
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    add                  r4, dyq
+    psraw                m2, m3, 15
+    paddw                m3, m4
+    paddw                m0, m1
+    vpblendvb            m0, m6, m0, m2
+    mova         [rsp+32*3], m0
+    dec                  wd
+    jz .h64_transpose
+    cmp                 r4d, maxbased
+    jg .h64_loop
+.h64_end_loop:
+    sub                 rsp, 128
+    mova         [rsp+32*0], m6
+    mova         [rsp+32*1], m6
+    mova         [rsp+32*2], m6
+    mova         [rsp+32*3], m6
+    dec                  wd
+    jg .h64_end_loop
+.h64_transpose:
+    lea                  r2, [strideq*3]
+    lea                  r3, [strideq*5]
+    mov                  r5, dstq
+    lea                  r4, [strideq+r2*2]
+.h64_transpose_loop0:
+    lea                  r6, [rsp+112]
+    lea                dstq, [r5+org_wq*2-32]
+.h64_transpose_loop:
+    mova                xm0, [r6+128*15]
+    vinserti128          m0, [r6+128* 7], 1
+    mova                xm1, [r6+128*14]
+    vinserti128          m1, [r6+128* 6], 1
+    mova                xm2, [r6+128*13]
+    vinserti128          m2, [r6+128* 5], 1
+    mova                xm3, [r6+128*12]
+    vinserti128          m3, [r6+128* 4], 1
+    mova                xm4, [r6+128*11]
+    vinserti128          m4, [r6+128* 3], 1
+    mova                xm5, [r6+128*10]
+    vinserti128          m5, [r6+128* 2], 1
+    mova                xm6, [r6+128* 9]
+    vinserti128          m6, [r6+128* 1], 1
+    mova                xm7, [r6+128* 8]
+    vinserti128          m7, [r6+128* 0], 1
+    punpckhwd            m8, m0, m1
+    punpcklwd            m0, m1
+    punpckhwd            m1, m2, m3
+    punpcklwd            m2, m3
+    punpckhwd            m3, m4, m5
+    punpcklwd            m4, m5
+    punpckhwd            m5, m6, m7
+    punpcklwd            m6, m7
+    sub                  r6, 16
+    punpckhdq            m7, m8, m1
+    punpckldq            m8, m1
+    punpckhdq            m1, m3, m5
+    punpckldq            m3, m5
+    punpckhqdq           m5, m7, m1
+    punpcklqdq           m7, m1
+    punpckhqdq           m1, m8, m3
+    punpcklqdq           m8, m3
+    punpckhdq            m3, m0, m2
+    mova   [dstq+strideq*0], m5
+    punpckldq            m0, m2
+    mova   [dstq+strideq*1], m7
+    punpckhdq            m2, m4, m6
+    mova   [dstq+strideq*2], m1
+    punpckldq            m4, m6
+    mova   [dstq+r2       ], m8
+    punpckhqdq           m6, m3, m2
+    mova   [dstq+strideq*4], m6
+    punpcklqdq           m3, m2
+    mova   [dstq+r3       ], m3
+    punpckhqdq           m2, m0, m4
+    mova   [dstq+r2*2     ], m2
+    punpcklqdq           m0, m4
+    mova   [dstq+r4       ], m0
+    lea                dstq, [dstq+strideq*8]
+    cmp                  r6, rsp
+    jae .h64_transpose_loop
+    add                 rsp, 128*16
+    sub              org_wd, 16
+    jg .h64_transpose_loop0
+.h64_end:
     RET
 
 %macro FILTER_1BLK 5 ; dst, src, tmp, shuf, bdmax
