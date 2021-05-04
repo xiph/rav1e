@@ -50,6 +50,7 @@ pw_8192:  times 2 dw 8192
 pw_32766: times 2 dw 32766
 pd_32:    dd 32
 pd_512:   dd 512
+pd_65538: dd 65538
 
 %macro BIDIR_JMP_TABLE 2-*
     %xdefine %1_%2_table (%%table - 2*%3)
@@ -63,6 +64,7 @@ pd_512:   dd 512
 %endmacro
 
 BIDIR_JMP_TABLE avg,        avx2,    4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_avg,      avx2,    4, 8, 16, 32, 64, 128
 
 %macro BASE_JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - %3)
@@ -2627,6 +2629,80 @@ ALIGN function_align
     pmulhw               m1, m5
     pmulhw               m2, m5
     pmulhw               m3, m5
+    ret
+
+cglobal w_avg_16bpc, 4, 7, 9, dst, stride, tmp1, tmp2, w, h, stride3
+    lea                  r6, [w_avg_avx2_table]
+    tzcnt                wd, wm
+    mov                 t0d, r6m ; weight
+    vpbroadcastw         m8, r7m ; pixel_max
+    vpbroadcastd         m7, [r6-w_avg_avx2_table+pd_65538]
+    movsxd               wq, [r6+wq*4]
+    paddw                m7, m8
+    add                  wq, r6
+    lea                 r6d, [t0-16]
+    shl                 t0d, 16
+    sub                 t0d, r6d ; 16-weight, weight
+    pslld                m7, 7
+    rorx                r6d, t0d, 30 ; << 2
+    test          dword r7m, 0x800
+    cmovz               r6d, t0d
+    movifnidn            hd, hm
+    movd                xm6, r6d
+    vpbroadcastd         m6, xm6
+    BIDIR_FN
+ALIGN function_align
+.main:
+    mova                 m4, [tmp1q+32*0]
+    mova                 m0, [tmp2q+32*0]
+    punpckhwd            m5, m0, m4
+    punpcklwd            m0, m4
+    mova                 m4, [tmp1q+32*1]
+    mova                 m1, [tmp2q+32*1]
+    pmaddwd              m5, m6
+    pmaddwd              m0, m6
+    paddd                m5, m7
+    paddd                m0, m7
+    psrad                m5, 8
+    psrad                m0, 8
+    packusdw             m0, m5
+    punpckhwd            m5, m1, m4
+    punpcklwd            m1, m4
+    mova                 m4, [tmp1q+32*2]
+    mova                 m2, [tmp2q+32*2]
+    pmaddwd              m5, m6
+    pmaddwd              m1, m6
+    paddd                m5, m7
+    paddd                m1, m7
+    psrad                m5, 8
+    psrad                m1, 8
+    packusdw             m1, m5
+    punpckhwd            m5, m2, m4
+    punpcklwd            m2, m4
+    mova                 m4, [tmp1q+32*3]
+    mova                 m3, [tmp2q+32*3]
+    add               tmp1q, 32*4
+    add               tmp2q, 32*4
+    pmaddwd              m5, m6
+    pmaddwd              m2, m6
+    paddd                m5, m7
+    paddd                m2, m7
+    psrad                m5, 8
+    psrad                m2, 8
+    packusdw             m2, m5
+    punpckhwd            m5, m3, m4
+    punpcklwd            m3, m4
+    pmaddwd              m5, m6
+    pmaddwd              m3, m6
+    paddd                m5, m7
+    paddd                m3, m7
+    psrad                m5, 8
+    psrad                m3, 8
+    packusdw             m3, m5
+    pminsw               m0, m8
+    pminsw               m1, m8
+    pminsw               m2, m8
+    pminsw               m3, m8
     ret
 
 %endif ; ARCH_X86_64
