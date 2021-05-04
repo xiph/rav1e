@@ -50,6 +50,9 @@ prep_mul:         dw 16, 16,  4,  4
 put_8tap_h_rnd:   dd 34, 40
 prep_8tap_1d_rnd: dd     8 - (8192 <<  4)
 prep_8tap_2d_rnd: dd    32 - (8192 <<  5)
+warp8x8t_rnd:     dd 16384 - (8192 << 15)
+warp8x8_shift:    dd  5,  3
+warp8x8_rnd:      dw   4096,   4096,  16384,  16384
 bidir_rnd:        dw -16400, -16400, -16388, -16388
 bidir_mul:        dw   2048,   2048,   8192,   8192
 
@@ -64,6 +67,7 @@ pw_32766: times 2 dw 32766
 pw_m512:  times 2 dw -512
 pd_32:    dd 32
 pd_512:   dd 512
+pd_32768: dd 32768
 pd_65538: dd 65538
 
 %macro BIDIR_JMP_TABLE 2-*
@@ -142,6 +146,8 @@ HV_JMP_TABLE prep, bilin, avx2, 7,    4, 8, 16, 32, 64, 128
 
 cextern mc_subpel_filters
 %define subpel_filters (mangle(private_prefix %+ _mc_subpel_filters)-8)
+
+cextern mc_warp_filter
 
 SECTION .text
 
@@ -2498,6 +2504,206 @@ cglobal prep_8tap_16bpc, 4, 8, 0, tmp, src, stride, w, h, mx, my
     POP                  r8
 %endif
     RET
+
+%macro WARP_V 5 ; dst, 01, 23, 45, 67
+    lea               tmp1d, [myq+deltaq*4]
+    lea               tmp2d, [myq+deltaq*1]
+    shr                 myd, 10
+    shr               tmp1d, 10
+    movq                xm8, [filterq+myq  *8]
+    vinserti128          m8, [filterq+tmp1q*8], 1 ; a e
+    lea               tmp1d, [tmp2q+deltaq*4]
+    lea                 myd, [tmp2q+deltaq*1]
+    shr               tmp2d, 10
+    shr               tmp1d, 10
+    movq                xm0, [filterq+tmp2q*8]
+    vinserti128          m0, [filterq+tmp1q*8], 1 ; b f
+    lea               tmp1d, [myq+deltaq*4]
+    lea               tmp2d, [myq+deltaq*1]
+    shr                 myd, 10
+    shr               tmp1d, 10
+    movq                xm9, [filterq+myq  *8]
+    vinserti128          m9, [filterq+tmp1q*8], 1 ; c g
+    lea               tmp1d, [tmp2q+deltaq*4]
+    lea                 myd, [tmp2q+gammaq]       ; my += gamma
+    punpcklwd            m8, m0
+    shr               tmp2d, 10
+    shr               tmp1d, 10
+    movq                xm0, [filterq+tmp2q*8]
+    vinserti128          m0, [filterq+tmp1q*8], 1 ; d h
+    punpcklwd            m0, m9, m0
+    punpckldq            m9, m8, m0
+    punpckhdq            m0, m8, m0
+    punpcklbw            m8, m11, m9 ; a0 a1 b0 b1 c0 c1 d0 d1 << 8
+    punpckhbw            m9, m11, m9 ; a2 a3 b2 b3 c2 c3 d2 d3 << 8
+    pmaddwd             m%2, m8
+    pmaddwd              m9, m%3
+    punpcklbw            m8, m11, m0 ; a4 a5 b4 b5 c4 c5 d4 d5 << 8
+    punpckhbw            m0, m11, m0 ; a6 a7 b6 b7 c6 c7 d6 d7 << 8
+    pmaddwd              m8, m%4
+    pmaddwd              m0, m%5
+    paddd                m9, m%2
+    mova                m%2, m%3
+    paddd                m0, m8
+    mova                m%3, m%4
+    mova                m%4, m%5
+    paddd               m%1, m0, m9
+%endmacro
+
+cglobal warp_affine_8x8t_16bpc, 4, 14, 16, tmp, ts
+    mov                 r6d, r7m
+    lea                  r9, [$$]
+    shr                 r6d, 11
+    vpbroadcastd        m13, [r9-$$+warp8x8_shift+r6*4]
+    vpbroadcastd        m14, [warp8x8t_rnd]
+    call mangle(private_prefix %+ _warp_affine_8x8_16bpc_avx2).main
+    jmp .start
+.loop:
+    call mangle(private_prefix %+ _warp_affine_8x8_16bpc_avx2).main2
+    lea                tmpq, [tmpq+tsq*4]
+.start:
+    paddd                m7, m14
+    paddd                m0, m14
+    psrad                m7, 15
+    psrad                m0, 15
+    packssdw             m7, m0
+    vpermq               m7, m7, q3120
+    mova         [tmpq+tsq*0], xm7
+    vextracti128 [tmpq+tsq*2], m7, 1
+    dec                 r4d
+    jg .loop
+.end:
+    RET
+
+cglobal warp_affine_8x8_16bpc, 4, 14, 16, dst, ds, src, ss, abcd, mx, tmp2, \
+                                          alpha, beta, filter, tmp1, delta, \
+                                          my, gamma
+    mov                 r6d, r7m
+    lea             filterq, [$$]
+    shr                 r6d, 11
+    vpbroadcastd        m13, [filterq-$$+warp8x8_shift+r6*4]
+    vpbroadcastd        m14, [filterq-$$+warp8x8_rnd  +r6*4]
+    vpbroadcastw        m15, r7m ; pixel_max
+    call .main
+    jmp .start
+.loop:
+    call .main2
+    lea                dstq, [dstq+dsq*2]
+.start:
+    psrad                m7, 16
+    psrad                m0, 16
+    packusdw             m7, m0
+    pmulhrsw             m7, m14
+    pminsw               m7, m15
+    vpermq               m7, m7, q3120
+    mova         [dstq+dsq*0], xm7
+    vextracti128 [dstq+dsq*1], m7, 1
+    dec                 r4d
+    jg .loop
+.end:
+    RET
+ALIGN function_align
+.main:
+    ; Stack args offset by one (r4m -> r5m etc.) due to call
+%if WIN64
+    mov               abcdq, r5m
+    mov                 mxd, r6m
+%endif
+    movsx            alphad, word [abcdq+2*0]
+    movsx             betad, word [abcdq+2*1]
+    vpbroadcastd        m12, [pd_32768]
+    pxor                m11, m11
+    add             filterq, mc_warp_filter-$$
+    lea               tmp1q, [ssq*3]
+    add                 mxd, 512+(64<<10)
+    lea               tmp2d, [alphaq*3]
+    sub                srcq, tmp1q    ; src -= src_stride*3
+    sub               betad, tmp2d    ; beta -= alpha*3
+    mov                 myd, r7m
+    call .h
+    psrld                m1, m0, 16
+    call .h
+    pblendw              m1, m0, 0xaa ; 01
+    psrld                m2, m0, 16
+    call .h
+    pblendw              m2, m0, 0xaa ; 12
+    psrld                m3, m0, 16
+    call .h
+    pblendw              m3, m0, 0xaa ; 23
+    psrld                m4, m0, 16
+    call .h
+    pblendw              m4, m0, 0xaa ; 34
+    psrld                m5, m0, 16
+    call .h
+    pblendw              m5, m0, 0xaa ; 45
+    psrld                m6, m0, 16
+    call .h
+    pblendw              m6, m0, 0xaa ; 56
+    movsx            deltad, word [abcdq+2*2]
+    movsx            gammad, word [abcdq+2*3]
+    add                 myd, 512+(64<<10)
+    mov                 r4d, 4
+    lea               tmp1d, [deltaq*3]
+    sub              gammad, tmp1d    ; gamma -= delta*3
+.main2:
+    call .h
+    psrld                m7, m6, 16
+    pblendw              m7, m0, 0xaa ; 67
+    WARP_V                7, 1, 3, 5, 7
+    call .h
+    psrld               m10, m5, 16
+    pblendw             m10, m0, 0xaa ; 78
+    WARP_V                0, 2, 4, 6, 10
+    ret
+ALIGN function_align
+.h:
+    lea               tmp1d, [mxq+alphaq*4]
+    lea               tmp2d, [mxq+alphaq*1]
+    movu               xm10, [srcq-6]
+    vinserti128         m10, [srcq+2], 1
+    shr                 mxd, 10 ; 0
+    shr               tmp1d, 10 ; 4
+    movq                xm0, [filterq+mxq  *8]
+    vinserti128          m0, [filterq+tmp1q*8], 1
+    lea               tmp1d, [tmp2q+alphaq*4]
+    lea                 mxd, [tmp2q+alphaq*1]
+    movu                xm8, [srcq-4]
+    vinserti128          m8, [srcq+4], 1
+    shr               tmp2d, 10 ; 1
+    shr               tmp1d, 10 ; 5
+    movq                xm9, [filterq+tmp2q*8]
+    vinserti128          m9, [filterq+tmp1q*8], 1
+    lea               tmp1d, [mxq+alphaq*4]
+    lea               tmp2d, [mxq+alphaq*1]
+    shr                 mxd, 10 ; 2
+    shr               tmp1d, 10 ; 6
+    punpcklbw            m0, m11, m0
+    pmaddwd              m0, m10
+    movu               xm10, [srcq-2]
+    vinserti128         m10, [srcq+6], 1
+    punpcklbw            m9, m11, m9
+    pmaddwd              m9, m8
+    movq                xm8, [filterq+mxq  *8]
+    vinserti128          m8, [filterq+tmp1q*8], 1
+    lea               tmp1d, [tmp2q+alphaq*4]
+    lea                 mxd, [tmp2q+betaq] ; mx += beta
+    phaddd               m0, m9 ; 0 1   4 5
+    movu                xm9, [srcq+0]
+    vinserti128          m9, [srcq+8], 1
+    shr               tmp2d, 10 ; 3
+    shr               tmp1d, 10 ; 7
+    punpcklbw            m8, m11, m8
+    pmaddwd              m8, m10
+    movq               xm10, [filterq+tmp2q*8]
+    vinserti128         m10, [filterq+tmp1q*8], 1
+    punpcklbw           m10, m11, m10
+    pmaddwd              m9, m10
+    add                srcq, ssq
+    phaddd               m8, m9 ; 2 3   6 7
+    phaddd               m0, m8 ; 0 1 2 3   4 5 6 7
+    vpsllvd              m0, m13
+    paddd                m0, m12 ; rounded 14-bit result in upper 16 bits of dword
+    ret
 
 %macro BIDIR_FN 0
     call .main
