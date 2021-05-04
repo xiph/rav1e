@@ -30,11 +30,39 @@
 
 SECTION_RODATA 32
 
+%macro SMOOTH_WEIGHT_TABLE 1-*
+    %rep %0
+        dw %1, 256-%1
+        %rotate 1
+    %endrep
+%endmacro
+
+; sm_weights[], but modified to precalculate x and 256-x
+smooth_weights: SMOOTH_WEIGHT_TABLE         \
+      0,   0, 255, 128, 255, 149,  85,  64, \
+    255, 197, 146, 105,  73,  50,  37,  32, \
+    255, 225, 196, 170, 145, 123, 102,  84, \
+     68,  54,  43,  33,  26,  20,  17,  16, \
+    255, 240, 225, 210, 196, 182, 169, 157, \
+    145, 133, 122, 111, 101,  92,  83,  74, \
+     66,  59,  52,  45,  39,  34,  29,  25, \
+     21,  17,  14,  12,  10,   9,   8,   8, \
+    255, 248, 240, 233, 225, 218, 210, 203, \
+    196, 189, 182, 176, 169, 163, 156, 150, \
+    144, 138, 133, 127, 121, 116, 111, 106, \
+    101,  96,  91,  86,  82,  77,  73,  69, \
+     65,  61,  57,  54,  50,  47,  44,  41, \
+     38,  35,  32,  29,  27,  25,  22,  20, \
+     18,  16,  15,  13,  12,  10,   9,   8, \
+      7,   6,   6,   5,   5,   4,   4,   4
+
 ipred_hv_shuf: db  6,  7,  6,  7,  0,  1,  2,  3,  2,  3,  2,  3,  8,  9, 10, 11
                db  4,  5,  4,  5,  4,  5,  6,  7,  0,  1,  0,  1, 12, 13, 14, 15
 
 pw_512:  times 2 dw 512
 pw_2048: times 2 dw 2048
+pd_128:  dd 128
+pd_256:  dd 256
 
 %macro JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - 2*4)
@@ -53,6 +81,9 @@ JMP_TABLE ipred_dc_16bpc,         avx2, h4, h8, h16, h32, h64, w4, w8, w16, w32,
 JMP_TABLE ipred_dc_left_16bpc,    avx2, h4, h8, h16, h32, h64
 JMP_TABLE ipred_h_16bpc,          avx2, w4, w8, w16, w32, w64
 JMP_TABLE ipred_paeth_16bpc,      avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_smooth_16bpc,     avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_smooth_h_16bpc,   avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_smooth_v_16bpc,   avx2, w4, w8, w16, w32, w64
 
 SECTION .text
 
@@ -569,6 +600,501 @@ ALIGN function_align
     add               dstq, strideq
     dec                 hd
     jg .w64_loop
+    RET
+
+%macro SMOOTH 4 ; src[1-2], mul[1-2]
+    pmaddwd              m0, m%3, m%1
+    pmaddwd              m1, m%4, m%2
+    paddd                m0, m2
+    paddd                m1, m2
+    psrld                m0, 8
+    psrld                m1, 8
+    packssdw             m0, m1
+%endmacro
+
+cglobal ipred_smooth_v_16bpc, 3, 7, 6, dst, stride, tl, w, h, weights
+%define base r6-ipred_smooth_v_16bpc_avx2_table
+    lea                 r6, [ipred_smooth_v_16bpc_avx2_table]
+    tzcnt               wd, wm
+    mov                 hd, hm
+    movsxd              wq, [r6+wq*4]
+    vpbroadcastd        m2, [base+pd_128]
+    lea            weightsq, [base+smooth_weights+hq*8]
+    neg                 hq
+    vpbroadcastw        m5, [tlq+hq*2] ; bottom
+    add                 wq, r6
+    jmp                 wq
+.w4:
+    vpbroadcastq        m3, [tlq+2]
+    punpcklwd           m3, m5 ; top, bottom
+    movshdup            m5, [base+ipred_hv_shuf]
+    lea                 r3, [strideq*3]
+    punpcklqdq          m4, m5, m5
+    punpckhqdq          m5, m5
+.w4_loop:
+    vbroadcasti128      m1, [weightsq+hq*4]
+    pshufb              m0, m1, m4
+    pshufb              m1, m5
+    SMOOTH               3, 3, 0, 1
+    vextracti128       xm1, m0, 1
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+r3       ], xm1
+    lea               dstq, [dstq+strideq*4]
+    add                 hq, 4
+    jl .w4_loop
+.ret:
+    RET
+ALIGN function_align
+.w8:
+    vbroadcasti128      m4, [tlq+2]
+    punpcklwd           m3, m4, m5
+    punpckhwd           m4, m5
+    movshdup            m5, [base+ipred_hv_shuf]
+.w8_loop:
+    vpbroadcastq        m1, [weightsq+hq*4]
+    pshufb              m1, m5
+    SMOOTH               3, 4, 1, 1
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    lea               dstq, [dstq+strideq*2]
+    add                 hq, 2
+    jl .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    movu                m4, [tlq+2]
+    punpcklwd           m3, m4, m5
+    punpckhwd           m4, m5
+.w16_loop:
+    vpbroadcastd        m1, [weightsq+hq*4]
+    vpbroadcastd        m5, [weightsq+hq*4+4]
+    SMOOTH               3, 4, 1, 1
+    mova  [dstq+strideq*0], m0
+    SMOOTH               3, 4, 5, 5
+    mova  [dstq+strideq*1], m0
+    lea               dstq, [dstq+strideq*2]
+    add                 hq, 2
+    jl .w16_loop
+    RET
+ALIGN function_align
+.w32:
+    WIN64_SPILL_XMM      8
+    movu                m4, [tlq+2]
+    movu                m7, [tlq+34]
+    punpcklwd           m3, m4, m5
+    punpckhwd           m4, m5
+    punpcklwd           m6, m7, m5
+    punpckhwd           m7, m5
+.w32_loop:
+    vpbroadcastd        m5, [weightsq+hq*4]
+    SMOOTH               3, 4, 5, 5
+    mova       [dstq+32*0], m0
+    SMOOTH               6, 7, 5, 5
+    mova       [dstq+32*1], m0
+    add               dstq, strideq
+    inc                 hq
+    jl .w32_loop
+    RET
+ALIGN function_align
+.w64:
+    WIN64_SPILL_XMM     12
+    movu                m4, [tlq+ 2]
+    movu                m7, [tlq+34]
+    movu                m9, [tlq+66]
+    movu               m11, [tlq+98]
+    punpcklwd           m3, m4, m5
+    punpckhwd           m4, m5
+    punpcklwd           m6, m7, m5
+    punpckhwd           m7, m5
+    punpcklwd           m8, m9, m5
+    punpckhwd           m9, m5
+    punpcklwd          m10, m11, m5
+    punpckhwd          m11, m5
+.w64_loop:
+    vpbroadcastd        m5, [weightsq+hq*4]
+    SMOOTH               3, 4, 5, 5
+    mova       [dstq+32*0], m0
+    SMOOTH               6, 7, 5, 5
+    mova       [dstq+32*1], m0
+    SMOOTH               8, 9, 5, 5
+    mova       [dstq+32*2], m0
+    SMOOTH              10, 11, 5, 5
+    mova       [dstq+32*3], m0
+    add               dstq, strideq
+    inc                 hq
+    jl .w64_loop
+    RET
+
+cglobal ipred_smooth_h_16bpc, 3, 7, 6, dst, stride, tl, w, h
+%define base r6-ipred_smooth_h_16bpc_avx2_table
+    lea                 r6, [ipred_smooth_h_16bpc_avx2_table]
+    mov                 wd, wm
+    mov                 hd, hm
+    vpbroadcastw        m3, [tlq+wq*2] ; right
+    tzcnt               wd, wd
+    movsxd              wq, [r6+wq*4]
+    vpbroadcastd        m2, [base+pd_128]
+    add                 wq, r6
+    jmp                 wq
+.w4:
+    vbroadcasti128      m4, [base+smooth_weights+4*4]
+    movsldup            m5, [base+ipred_hv_shuf]
+    sub                tlq, 8
+    sub                tlq, hq
+    sub                tlq, hq
+    lea                 r3, [strideq*3]
+.w4_loop:
+    vpbroadcastq        m1, [tlq+hq*2]
+    pshufb              m1, m5
+    punpcklwd           m0, m1, m3 ; left, right
+    punpckhwd           m1, m3
+    SMOOTH               0, 1, 4, 4
+    vextracti128       xm1, m0, 1
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+r3       ], xm1
+    lea               dstq, [dstq+strideq*4]
+    sub                 hd, 4
+    jg .w4_loop
+    RET
+ALIGN function_align
+.w8:
+    WIN64_SPILL_XMM      7
+    vbroadcasti128      m4, [base+smooth_weights+8*4+16*0]
+    vbroadcasti128      m5, [base+smooth_weights+8*4+16*1]
+    movsldup            m6, [base+ipred_hv_shuf]
+    sub                tlq, 4
+    sub                tlq, hq
+    sub                tlq, hq
+.w8_loop:
+    vpbroadcastd        m1, [tlq+hq*2]
+    pshufb              m1, m6
+    punpcklwd           m0, m1, m3
+    punpckhwd           m1, m3
+    SMOOTH               0, 1, 4, 5
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    lea               dstq, [dstq+strideq*2]
+    sub                 hq, 2
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    WIN64_SPILL_XMM      6
+    mova               xm4, [base+smooth_weights+16*4+16*0]
+    mova               xm5, [base+smooth_weights+16*4+16*1]
+    vinserti128         m4, [base+smooth_weights+16*4+16*2], 1
+    vinserti128         m5, [base+smooth_weights+16*4+16*3], 1
+    sub                tlq, 2
+    sub                tlq, hq
+    sub                tlq, hq
+.w16_loop:
+    vpbroadcastw        m1, [tlq+hq*2]
+    punpcklwd           m0, m1, m3
+    punpckhwd           m1, m3
+    SMOOTH               0, 1, 4, 5
+    mova            [dstq], m0
+    add               dstq, strideq
+    dec                 hq
+    jg .w16_loop
+    RET
+ALIGN function_align
+.w32:
+    WIN64_SPILL_XMM     10
+    mova               xm6, [base+smooth_weights+32*4+16*0]
+    mova               xm7, [base+smooth_weights+32*4+16*1]
+    vinserti128         m6, [base+smooth_weights+32*4+16*2], 1
+    vinserti128         m7, [base+smooth_weights+32*4+16*3], 1
+    mova               xm8, [base+smooth_weights+32*4+16*4]
+    mova               xm9, [base+smooth_weights+32*4+16*5]
+    vinserti128         m8, [base+smooth_weights+32*4+16*6], 1
+    vinserti128         m9, [base+smooth_weights+32*4+16*7], 1
+    sub                tlq, 2
+    sub                tlq, hq
+    sub                tlq, hq
+.w32_loop:
+    vpbroadcastw        m5, [tlq+hq*2]
+    punpcklwd           m4, m5, m3
+    punpckhwd           m5, m3
+    SMOOTH               4, 5, 6, 7
+    mova       [dstq+32*0], m0
+    SMOOTH               4, 5, 8, 9
+    mova       [dstq+32*1], m0
+    add               dstq, strideq
+    dec                 hq
+    jg .w32_loop
+    RET
+ALIGN function_align
+.w64:
+%assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM     14
+    mova               xm6, [base+smooth_weights+64*4+16* 0]
+    mova               xm7, [base+smooth_weights+64*4+16* 1]
+    vinserti128         m6, [base+smooth_weights+64*4+16* 2], 1
+    vinserti128         m7, [base+smooth_weights+64*4+16* 3], 1
+    mova               xm8, [base+smooth_weights+64*4+16* 4]
+    mova               xm9, [base+smooth_weights+64*4+16* 5]
+    vinserti128         m8, [base+smooth_weights+64*4+16* 6], 1
+    vinserti128         m9, [base+smooth_weights+64*4+16* 7], 1
+    mova              xm10, [base+smooth_weights+64*4+16* 8]
+    mova              xm11, [base+smooth_weights+64*4+16* 9]
+    vinserti128        m10, [base+smooth_weights+64*4+16*10], 1
+    vinserti128        m11, [base+smooth_weights+64*4+16*11], 1
+    mova              xm12, [base+smooth_weights+64*4+16*12]
+    mova              xm13, [base+smooth_weights+64*4+16*13]
+    vinserti128        m12, [base+smooth_weights+64*4+16*14], 1
+    vinserti128        m13, [base+smooth_weights+64*4+16*15], 1
+    sub                tlq, 2
+    sub                tlq, hq
+    sub                tlq, hq
+.w64_loop:
+    vpbroadcastw        m5, [tlq+hq*2]
+    punpcklwd           m4, m5, m3
+    punpckhwd           m5, m3
+    SMOOTH               4, 5, 6, 7
+    mova       [dstq+32*0], m0
+    SMOOTH               4, 5, 8, 9
+    mova       [dstq+32*1], m0
+    SMOOTH               4, 5, 10, 11
+    mova       [dstq+32*2], m0
+    SMOOTH               4, 5, 12, 13
+    mova       [dstq+32*3], m0
+    add               dstq, strideq
+    dec                 hq
+    jg .w64_loop
+    RET
+
+%macro SMOOTH_2D_END 6 ; src[1-2], mul[1-2], add[1-2]
+    pmaddwd             m0, m%1, m%3
+    pmaddwd             m1, m%2, m%4
+    paddd               m0, m%5
+    paddd               m1, m%6
+    paddd               m0, m5
+    paddd               m1, m5
+    psrld               m0, 9
+    psrld               m1, 9
+    packssdw            m0, m1
+%endmacro
+
+cglobal ipred_smooth_16bpc, 3, 7, 6, dst, stride, tl, w, h, v_weights
+%define base r6-ipred_smooth_16bpc_avx2_table
+    lea                 r6, [ipred_smooth_16bpc_avx2_table]
+    mov                 wd, wm
+    vpbroadcastw        m4, [tlq+wq*2] ; right
+    tzcnt               wd, wd
+    mov                 hd, hm
+    sub                tlq, hq
+    sub                tlq, hq
+    movsxd              wq, [r6+wq*4]
+    vpbroadcastd        m5, [base+pd_256]
+    add                 wq, r6
+    lea         v_weightsq, [base+smooth_weights+hq*4]
+    jmp                 wq
+.w4:
+    WIN64_SPILL_XMM     11
+    vpbroadcastw        m0, [tlq] ; bottom
+    vpbroadcastq        m6, [tlq+hq*2+2]
+    movsldup            m7, [base+ipred_hv_shuf]
+    movshdup            m9, [base+ipred_hv_shuf]
+    vbroadcasti128     m10, [base+smooth_weights+4*4]
+    punpcklwd           m6, m0 ; top, bottom
+    punpcklqdq          m8, m9, m9
+    punpckhqdq          m9, m9
+    lea                 r3, [strideq*3]
+    sub                tlq, 8
+.w4_loop:
+    vbroadcasti128      m1, [v_weightsq]
+    vpbroadcastq        m3, [tlq+hq*2]
+    pshufb              m3, m7
+    punpcklwd           m2, m3, m4 ; left, right
+    punpckhwd           m3, m4
+    pmaddwd             m2, m10
+    pmaddwd             m3, m10
+    pshufb              m0, m1, m8
+    pshufb              m1, m9
+    SMOOTH_2D_END        6, 6, 0, 1, 2, 3
+    vextracti128       xm1, m0, 1
+    movq   [dstq+strideq*0], xm0
+    movq   [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+r3       ], xm1
+    lea               dstq, [dstq+strideq*4]
+    add         v_weightsq, 16
+    sub                 hd, 4
+    jg .w4_loop
+    RET
+ALIGN function_align
+.w8:
+%assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM     12
+    vpbroadcastw        m0, [tlq] ; bottom
+    vbroadcasti128      m7, [tlq+hq*2+2]
+    movsldup            m8, [base+ipred_hv_shuf]
+    movshdup            m9, [base+ipred_hv_shuf]
+    vbroadcasti128     m10, [base+smooth_weights+8*4+16*0]
+    vbroadcasti128     m11, [base+smooth_weights+8*4+16*1]
+    punpcklwd           m6, m7, m0 ; top, bottom
+    punpckhwd           m7, m0
+    sub                tlq, 4
+.w8_loop:
+    vpbroadcastq        m1, [v_weightsq]
+    vpbroadcastd        m3, [tlq+hq*2]
+    pshufb              m3, m8
+    punpcklwd           m2, m3, m4 ; left, right
+    punpckhwd           m3, m4
+    pmaddwd             m2, m10
+    pmaddwd             m3, m11
+    pshufb              m1, m9
+    SMOOTH_2D_END        6, 7, 1, 1, 2, 3
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    lea               dstq, [dstq+strideq*2]
+    add         v_weightsq, 8
+    sub                 hd, 2
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+%assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM     14
+    vpbroadcastw        m0, [tlq] ; bottom
+    movu                m7, [tlq+hq*2+2]
+    mova               xm8, [base+smooth_weights+16*4+16*0]
+    mova               xm9, [base+smooth_weights+16*4+16*1]
+    vinserti128         m8, [base+smooth_weights+16*4+16*2], 1
+    vinserti128         m9, [base+smooth_weights+16*4+16*3], 1
+    punpcklwd           m6, m7, m0 ; top, bottom
+    punpckhwd           m7, m0
+    sub                tlq, 2
+.w16_loop:
+    vpbroadcastd       m10, [v_weightsq+0]
+    vpbroadcastd       m11, [v_weightsq+4]
+    vpbroadcastw        m3, [tlq+hq*2-0]
+    vpbroadcastw       m13, [tlq+hq*2-2]
+    punpcklwd           m2, m3, m4 ; left, right
+    punpckhwd           m3, m4
+    punpcklwd          m12, m13, m4
+    punpckhwd          m13, m4
+    pmaddwd             m2, m8
+    pmaddwd             m3, m9
+    pmaddwd            m12, m8
+    pmaddwd            m13, m9
+    SMOOTH_2D_END        6, 7, 10, 10, 2, 3
+    mova  [dstq+strideq*0], m0
+    SMOOTH_2D_END        6, 7, 11, 11, 12, 13
+    mova  [dstq+strideq*1], m0
+    lea               dstq, [dstq+strideq*2]
+    add         v_weightsq, 8
+    sub                 hq, 2
+    jg .w16_loop
+    RET
+ALIGN function_align
+.w32:
+%assign stack_offset stack_offset - stack_size_padded
+    WIN64_SPILL_XMM     16
+    vpbroadcastw        m0, [tlq] ; bottom
+    movu                m7, [tlq+hq*2+ 2]
+    movu                m9, [tlq+hq*2+34]
+    mova              xm10, [base+smooth_weights+32*4+16*0]
+    mova              xm11, [base+smooth_weights+32*4+16*1]
+    vinserti128        m10, [base+smooth_weights+32*4+16*2], 1
+    vinserti128        m11, [base+smooth_weights+32*4+16*3], 1
+    mova              xm12, [base+smooth_weights+32*4+16*4]
+    mova              xm13, [base+smooth_weights+32*4+16*5]
+    vinserti128        m12, [base+smooth_weights+32*4+16*6], 1
+    vinserti128        m13, [base+smooth_weights+32*4+16*7], 1
+    punpcklwd           m6, m7, m0
+    punpckhwd           m7, m0
+    punpcklwd           m8, m9, m0
+    punpckhwd           m9, m0
+    sub                tlq, 2
+.w32_loop:
+    vpbroadcastw        m3, [tlq+hq*2]
+    punpcklwd           m2, m3, m4
+    punpckhwd           m3, m4
+    pmaddwd            m14, m2, m10
+    pmaddwd            m15, m3, m11
+    pmaddwd             m2, m12
+    pmaddwd             m3, m13
+    vpbroadcastd        m1, [v_weightsq]
+    pmaddwd             m0, m6, m1
+    paddd               m0, m14
+    paddd               m0, m5
+    psrld               m0, 9
+    pmaddwd            m14, m7, m1
+    paddd              m14, m15
+    paddd              m14, m5
+    psrld              m14, 9
+    packssdw            m0, m14
+    mova       [dstq+32*0], m0
+    SMOOTH_2D_END        8, 9, 1, 1, 2, 3
+    mova       [dstq+32*1], m0
+    add               dstq, strideq
+    add         v_weightsq, 4
+    dec                 hd
+    jg .w32_loop
+    RET
+ALIGN function_align
+.w64:
+%assign stack_offset stack_offset - stack_size_padded
+    PROLOGUE 0, 11, 16, dst, stride, tl, tl_base, h, v_weights, dummy, v_weights_base, x, y, dst_base
+    mov          dst_baseq, dstq
+    mov           tl_baseq, tlq
+    mov    v_weights_baseq, v_weightsq
+    xor                 xq, xq
+.w64_loop_x:
+    mov                 yq, hq
+    lea                tlq, [tl_baseq+hq*2]
+    vpbroadcastw        m0, [tl_baseq] ; bottom
+    movu                m7, [tlq+xq*2+ 2]
+    movu                m9, [tlq+xq*2+34]
+    mova              xm10, [base+smooth_weights+64*4+16*0]
+    mova              xm11, [base+smooth_weights+64*4+16*1]
+    vinserti128        m10, [base+smooth_weights+64*4+16*2], 1
+    vinserti128        m11, [base+smooth_weights+64*4+16*3], 1
+    mova              xm12, [base+smooth_weights+64*4+16*4]
+    mova              xm13, [base+smooth_weights+64*4+16*5]
+    vinserti128        m12, [base+smooth_weights+64*4+16*6], 1
+    vinserti128        m13, [base+smooth_weights+64*4+16*7], 1
+    punpcklwd           m6, m7, m0
+    punpckhwd           m7, m0
+    punpcklwd           m8, m9, m0
+    punpckhwd           m9, m0
+    lea                tlq, [tl_baseq-2]
+.w64_loop_y:
+    vpbroadcastd        m1, [v_weightsq]
+    vpbroadcastw        m3, [tlq+yq*2]
+    punpcklwd           m2, m3, m4
+    punpckhwd           m3, m4
+    pmaddwd            m14, m2, m10
+    pmaddwd            m15, m3, m11
+    pmaddwd             m2, m12
+    pmaddwd             m3, m13
+    pmaddwd             m0, m6, m1
+    paddd               m0, m14
+    paddd               m0, m5
+    psrld               m0, 9
+    pmaddwd            m14, m7, m1
+    paddd              m14, m15
+    paddd              m14, m5
+    psrld              m14, 9
+    packssdw            m0, m14
+    mova       [dstq+32*0], m0
+    SMOOTH_2D_END        8, 9, 1, 1, 2, 3
+    mova       [dstq+32*1], m0
+    add               dstq, strideq
+    add         v_weightsq, 4
+    dec                 yq
+    jg .w64_loop_y
+    lea               dstq, [dst_baseq+32*2]
+    add                 r6, 16*8
+    mov         v_weightsq, v_weights_baseq
+    add                 xq, 32
+    test                xb, 64
+    jz .w64_loop_x
     RET
 
 %endif
