@@ -28,7 +28,10 @@
 
 %if ARCH_X86_64
 
-SECTION_RODATA
+SECTION_RODATA 32
+
+ipred_hv_shuf: db  6,  7,  6,  7,  0,  1,  2,  3,  2,  3,  2,  3,  8,  9, 10, 11
+               db  4,  5,  4,  5,  4,  5,  6,  7,  0,  1,  0,  1, 12, 13, 14, 15
 
 pw_512:  times 2 dw 512
 pw_2048: times 2 dw 2048
@@ -49,6 +52,7 @@ JMP_TABLE ipred_dc_16bpc,         avx2, h4, h8, h16, h32, h64, w4, w8, w16, w32,
                                         s4-10*4, s8-10*4, s16-10*4, s32-10*4, s64-10*4
 JMP_TABLE ipred_dc_left_16bpc,    avx2, h4, h8, h16, h32, h64
 JMP_TABLE ipred_h_16bpc,          avx2, w4, w8, w16, w32, w64
+JMP_TABLE ipred_paeth_16bpc,      avx2, w4, w8, w16, w32, w64
 
 SECTION .text
 
@@ -433,6 +437,138 @@ INIT_YMM avx2
     lea                dstq, [dstq+strideq*2]
     sub                  hd, 2
     jg .w64
+    RET
+
+%macro PAETH 3 ; top, signed_ldiff, ldiff
+    paddw               m0, m%2, m1
+    psubw               m7, m3, m0  ; tldiff
+    psubw               m0, m%1     ; tdiff
+    pabsw               m7, m7
+    pabsw               m0, m0
+    pminsw              m7, m0
+    pcmpeqw             m0, m7
+    pcmpgtw             m7, m%3, m7
+    vpblendvb           m0, m3, m%1, m0
+    vpblendvb           m0, m1, m0, m7
+%endmacro
+
+cglobal ipred_paeth_16bpc, 3, 6, 8, dst, stride, tl, w, h
+%define base r5-ipred_paeth_16bpc_avx2_table
+    movifnidn           hd, hm
+    lea                 r5, [ipred_paeth_16bpc_avx2_table]
+    tzcnt               wd, wd
+    movsxd              wq, [r5+wq*4]
+    vpbroadcastw        m3, [tlq]   ; topleft
+    add                 wq, r5
+    jmp                 wq
+.w4:
+    vpbroadcastq        m2, [tlq+2] ; top
+    movsldup            m6, [base+ipred_hv_shuf]
+    lea                 r3, [strideq*3]
+    psubw               m4, m2, m3
+    pabsw               m5, m4
+.w4_loop:
+    sub                tlq, 8
+    vpbroadcastq        m1, [tlq]
+    pshufb              m1, m6      ; left
+    PAETH                2, 4, 5
+    vextracti128       xm1, m0, 1
+    movq  [dstq+strideq*0], xm0
+    movq  [dstq+strideq*1], xm1
+    movhps [dstq+strideq*2], xm0
+    movhps [dstq+r3       ], xm1
+    lea               dstq, [dstq+strideq*4]
+    sub                 hd, 4
+    jg .w4_loop
+    RET
+ALIGN function_align
+.w8:
+    vbroadcasti128      m2, [tlq+2]
+    movsldup            m6, [base+ipred_hv_shuf]
+    lea                 r3, [strideq*3]
+    psubw               m4, m2, m3
+    pabsw               m5, m4
+.w8_loop:
+    sub                tlq, 4
+    vpbroadcastd        m1, [tlq]
+    pshufb              m1, m6
+    PAETH                2, 4, 5
+    mova         [dstq+strideq*0], xm0
+    vextracti128 [dstq+strideq*1], m0, 1
+    lea               dstq, [dstq+strideq*2]
+    sub                 hd, 2
+    jg .w8_loop
+    RET
+ALIGN function_align
+.w16:
+    movu                m2, [tlq+2]
+    psubw               m4, m2, m3
+    pabsw               m5, m4
+.w16_loop:
+    sub                tlq, 2
+    vpbroadcastw        m1, [tlq]
+    PAETH                2, 4, 5
+    mova            [dstq], m0
+    add               dstq, strideq
+    dec                 hd
+    jg .w16_loop
+    RET
+ALIGN function_align
+.w32:
+    movu                m2, [tlq+2]
+    movu                m6, [tlq+34]
+%if WIN64
+    movaps             r4m, xmm8
+    movaps             r6m, xmm9
+%endif
+    psubw               m4, m2, m3
+    psubw               m8, m6, m3
+    pabsw               m5, m4
+    pabsw               m9, m8
+.w32_loop:
+    sub                tlq, 2
+    vpbroadcastw        m1, [tlq]
+    PAETH                2, 4, 5
+    mova       [dstq+32*0], m0
+    PAETH                6, 8, 9
+    mova       [dstq+32*1], m0
+    add               dstq, strideq
+    dec                 hd
+    jg .w32_loop
+%if WIN64
+    movaps            xmm8, r4m
+    movaps            xmm9, r6m
+%endif
+    RET
+ALIGN function_align
+.w64:
+    WIN64_SPILL_XMM 16
+    movu                m2, [tlq+ 2]
+    movu                m6, [tlq+34]
+    movu               m10, [tlq+66]
+    movu               m13, [tlq+98]
+    psubw               m4, m2, m3
+    psubw               m8, m6, m3
+    psubw              m11, m10, m3
+    psubw              m14, m13, m3
+    pabsw               m5, m4
+    pabsw               m9, m8
+    pabsw              m12, m11
+    pabsw              m15, m14
+.w64_loop:
+    sub                tlq, 2
+    vpbroadcastw        m1, [tlq]
+    PAETH                2, 4, 5
+    mova       [dstq+32*0], m0
+    PAETH                6, 8, 9
+    mova       [dstq+32*1], m0
+    PAETH               10, 11, 12
+    mova       [dstq+32*2], m0
+    PAETH               13, 14, 15
+    mova       [dstq+32*3], m0
+    add               dstq, strideq
+    dec                 hd
+    jg .w64_loop
     RET
 
 %endif
