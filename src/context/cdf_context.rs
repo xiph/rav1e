@@ -701,8 +701,8 @@ impl<'a> ContextWriter<'a> {
     let fc_log = CDFContextLog::new(fc);
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
-      fc,
       bc,
+      fc,
       fc_log,
       #[cfg(feature = "desync_finder")]
       fc_map: Default::default(),

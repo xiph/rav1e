@@ -561,14 +561,8 @@ impl IntraEdgeFilterParameters {
         .into(),
         None => None,
       },
-      above_ref_frame_types: match above_ctx {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
-      left_ref_frame_types: match left_ctx {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
+      above_ref_frame_types: above_ctx.map(|bi| bi.reference_types),
+      left_ref_frame_types: left_ctx.map(|bi| bi.reference_types),
     }
   }
 

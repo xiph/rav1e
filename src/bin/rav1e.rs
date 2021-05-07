@@ -400,26 +400,23 @@ fn run() -> Result<(), error::CliError> {
     Ok(d) => d,
   };
   let video_info = y4m_dec.get_video_details();
-  let y4m_enc = match cli.io.rec {
-    Some(rec) => Some(
-      y4m::encode(
-        video_info.width,
-        video_info.height,
-        y4m::Ratio::new(
-          video_info.time_base.den as usize,
-          video_info.time_base.num as usize,
-        ),
-      )
-      .with_colorspace(y4m_dec.get_colorspace())
-      .with_pixel_aspect(y4m::Ratio {
-        num: video_info.sample_aspect_ratio.num as usize,
-        den: video_info.sample_aspect_ratio.den as usize,
-      })
-      .write_header(rec)
-      .unwrap(),
-    ),
-    None => None,
-  };
+  let y4m_enc = cli.io.rec.map(|rec| {
+    y4m::encode(
+      video_info.width,
+      video_info.height,
+      y4m::Ratio::new(
+        video_info.time_base.den as usize,
+        video_info.time_base.num as usize,
+      ),
+    )
+    .with_colorspace(y4m_dec.get_colorspace())
+    .with_pixel_aspect(y4m::Ratio {
+      num: video_info.sample_aspect_ratio.num as usize,
+      den: video_info.sample_aspect_ratio.den as usize,
+    })
+    .write_header(rec)
+    .unwrap()
+  });
 
   cli.enc.width = video_info.width;
   cli.enc.height = video_info.height;

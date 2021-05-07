@@ -26,6 +26,7 @@ pub trait Decoder: Send {
 
 #[derive(Debug)]
 pub enum DecodeError {
+  #[allow(clippy::upper_case_acronyms)]
   EOF,
   BadInput,
   UnknownColorspace,
