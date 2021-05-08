@@ -11,7 +11,7 @@ Distortion is a metric selected based on user options, such as MSE for PSNR opti
 
 ![](tile_group.svg)
 
-The bitstream is composed of a hiearchy of units, and rav1e's RDO loops are structured in the same way. After computing some lookahead information, rav1e's first task is to split the frame into tiles (sometimes just one). These are processed completely independently, and usually in parallel.
+The bitstream is composed of a hierarchy of units, and rav1e's RDO loops are structured in the same way. After computing some lookahead information, rav1e's first task is to split the frame into tiles (sometimes just one). These are processed completely independently, and usually in parallel.
 
 The next split is into superblocks, which are currently always 64x64 pixels in the luma plane. rav1e processes superblocks serially, one at a time. Although choices made in a superblock affect later superblocks, rav1e will never revisit a superblock once it has determined the best way to code it - it writes it and continues on.
 
@@ -41,7 +41,7 @@ Inter mode
 
 rav1e's intra search starts with populating a list of inter modes to search. Modes such as NEWMV are always added, however modes such as NEARMV are only added if the current motion vector list is sufficiently long enough for them to be coded. Compound modes are added in a similar manner, if enabled.
 
-Next, a rough distortion approximation based on SATD of the residual is computed. This is also computed at the partition level, however unlike intra mode, this is not an approximation. The resulting list is sorted and pruned to the best 9 entires.
+Next, a rough distortion approximation based on SATD of the residual is computed. This is also computed at the partition level, however unlike intra mode, this is not an approximation. The resulting list is sorted and pruned to the best 9 entries.
 
 Next, each of the modes is fully encoded (with bitstream write disabled). The real distortion and bitrate are measured, and the best mode is chosen.
 
