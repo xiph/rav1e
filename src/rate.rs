@@ -388,7 +388,7 @@ impl IIRBessel2 {
   // This does not alter the x/y state, but changes the reaction time of the
   //  filter.
   // Altering the time constant of a reactive filter without altering internal
-  //  state is something that has to be done carefuly, but our design operates
+  //  state is something that has to be done carefully, but our design operates
   //  at high enough delays and with small enough time constant changes to make
   //  it safe.
   pub fn reinit(&mut self, delay: i32) {
@@ -823,7 +823,7 @@ impl RCState {
     // Insane framerates or frame sizes mean insane bitrates.
     // Let's not get carried away.
     // We also subtract 16 bits from each temporal unit to account for the
-    //  temporal delimeter, whose bits are not included in the frame sizes
+    //  temporal delimiter, whose bits are not included in the frame sizes
     //  reported to update_state().
     // TODO: Support constraints imposed by levels.
     let bits_per_tu = clamp(
@@ -1427,7 +1427,7 @@ impl RCState {
         self.reservoir_fullness -= bits;
         if show_frame {
           self.reservoir_fullness += self.bits_per_tu;
-          // TODO: Properly account for temporal delimeter bits.
+          // TODO: Properly account for temporal delimiter bits.
         }
         // If we're too quick filling the buffer and overflow is capped, that
         //  rate is lost forever.
