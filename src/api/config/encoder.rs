@@ -105,7 +105,7 @@ pub struct EncoderConfig {
   /// Number of frames to read ahead for the RDO lookahead computation.
   pub rdo_lookahead_frames: usize,
 
-  /// Settings which affect the enconding speed vs. quality trade-off.
+  /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
 
