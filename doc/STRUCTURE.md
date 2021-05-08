@@ -31,7 +31,7 @@ The below table gives a brief overview of design of [`src/*`](../src/)
 | [bin/rav1e.rs](../src/bin/rav1e.rs)                   | CLI Interface for encoding from y4m files with rav1e                                                       |
 | [bin/stats.rs](../src/bin/stats.rs)                   | Functions for displaying Frame summary, progress info, metrics of the encoding process                     |
 | [bin/kv.rs](../src/bin/kv.rs)                         | Serialisation configuration of Key-value strings                                                           |
-| [bin/errror.rs](../src/bin/error.rs)                  | Functions and enums to parse various errors and displaying                                                 |
+| [bin/error.rs](../src/bin/error.rs)                   | Functions and enums to parse various errors and displaying                                                 |
 | [bin/muxer/*.rs](../src/bin/muxer/)                   | Contains IVF Muxer functions for header definition, writing frames and flushing                            |
 | [bin/decoder/*.rs](../src/bin/decoder/)               | Decoder related structures and functions                                                                   |
 | [capi.rs](../src/capi.rs)                             | C Compatible API for using rav1e as a library                                                              |
