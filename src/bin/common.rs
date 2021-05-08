@@ -355,7 +355,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("METRICS")
-        .help("Calulate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
+        .help("Calculate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
         .long("metrics")
     )
     .arg(
