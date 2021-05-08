@@ -191,7 +191,7 @@ mod test {
         let mut qcoeffs = Aligned::new([0i16; 32 * 32]);
         let mut rcoeffs = Aligned::new([0i16; 32 * 32]);
 
-        // Generate quantized coefficients upto the eob
+        // Generate quantized coefficients up to the eob
         let between = Uniform::from(-std::i16::MAX..=std::i16::MAX);
         for (i, qcoeff) in qcoeffs.data.iter_mut().enumerate().take(eob) {
           *qcoeff = between.sample(&mut rng)
