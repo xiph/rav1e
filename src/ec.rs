@@ -86,7 +86,7 @@ pub trait Writer {
   ) -> u32;
   /// Return current length of range-coded bitstream in integer bits
   fn tell(&mut self) -> u32;
-  /// Return currrent length of range-coded bitstream in fractional
+  /// Return current length of range-coded bitstream in fractional
   /// bits with OD_BITRES decimal precision
   fn tell_frac(&mut self) -> u32;
   /// Save current point in coding/recording to a checkpoint
@@ -669,7 +669,7 @@ where
       }
     }
   }
-  /// Resturns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite subexponential
+  /// Returns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite subexponential
   /// n: size of interval
   /// k: 'parameter'
   /// v: value to encode
