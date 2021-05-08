@@ -68,7 +68,7 @@ impl<T: Pixel> FrameAlloc for Frame<T> {
   }
 }
 
-/// Public Trait for calulating Padding
+/// Public Trait for calculating Padding
 pub(crate) trait FramePad {
   fn pad(&mut self, w: usize, h: usize, planes: usize);
 }
