@@ -16,7 +16,10 @@ use crate::api::InterConfig;
 use crossbeam::channel::*;
 
 // use crate::encoder::*;
+use crate::config::CpuFeatureLevel;
+use crate::encoder::Sequence;
 use crate::frame::*;
+use crate::scenechange::SceneChangeDetector;
 use crate::util::Pixel;
 
 use std::collections::BTreeMap;
@@ -37,20 +40,26 @@ impl<T: Pixel> SubGop<T> {
 
 // TODO: Make the detector logic fitting the model
 struct SceneChange {
-  frames: u64,
+  frames: usize,
   pyramid_size: usize,
-  min_key_frame_interval: u64,
-  max_key_frame_interval: u64,
+  processed: u64,
+  last_keyframe: u64,
+  detector: SceneChangeDetector,
 }
 
 impl SceneChange {
   fn new(pyramid_size: usize, enc: &EncoderConfig) -> Self {
-    Self {
-      frames: 0,
+    let seq = Arc::new(Sequence::new(enc));
+
+    let detector = SceneChangeDetector::new(
+      *enc,
+      CpuFeatureLevel::default(),
       pyramid_size,
-      min_key_frame_interval: enc.min_key_frame_interval,
-      max_key_frame_interval: enc.max_key_frame_interval,
-    }
+      seq,
+      true,
+    );
+
+    Self { frames: 0, pyramid_size, processed: 0, last_keyframe: 0, detector }
   }
 
   // Tell where to split the lookahead
@@ -58,24 +67,27 @@ impl SceneChange {
   fn split<T: Pixel>(
     &mut self, lookahead: &[Arc<Frame<T>>],
   ) -> Option<(usize, bool)> {
-    self.frames += 1;
+    self.processed += 1;
 
-    let new_gop = if self.frames < self.min_key_frame_interval {
-      false
-    } else if self.frames >= self.max_key_frame_interval {
-      self.frames = 0;
-      true
-    } else {
-      false
-    };
+    let new_gop = self.detector.analyze_next_frame(
+      &lookahead[self.frames..],
+      self.processed,
+      self.last_keyframe,
+    );
 
-    let len = lookahead.len();
+    if new_gop {
+      self.last_keyframe = self.processed;
+    }
 
-    if len > self.pyramid_size {
-      Some((self.pyramid_size, new_gop))
+    if self.frames > self.pyramid_size {
+      self.frames -= self.pyramid_size + 1;
+      Some((self.pyramid_size + 2, new_gop))
     } else if new_gop {
-      Some((len - 1, true))
+      let frames = self.frames + 1;
+      self.frames = 0;
+      Some((frames, true))
     } else {
+      self.frames += 1;
       None
     }
   }
@@ -235,11 +247,11 @@ impl Config {
     &self, s: &rayon::ScopeFifo, r: Receiver<FrameInput<T>>,
   ) -> Receiver<SubGop<T>> {
     let inter_cfg = InterConfig::new(&self.enc);
-    let lookahead_distance =
-      inter_cfg.keyframe_lookahead_distance() as usize + 1;
+    let pyramid_size = inter_cfg.keyframe_lookahead_distance() as usize;
+    let lookahead_distance = pyramid_size + 1 + 1;
     let (send, recv) = bounded(lookahead_distance * 2);
 
-    let mut sc = SceneChange::new(lookahead_distance, &self.enc);
+    let mut sc = SceneChange::new(pyramid_size, &self.enc);
 
     s.spawn_fifo(move |_| {
       let mut lookahead = Vec::new();
@@ -261,11 +273,13 @@ impl Config {
         }
       }
 
-      while let Some((split_pos, end_gop)) = sc.split(&lookahead) {
-        let rem = lookahead.split_off(split_pos);
-        let _ = send.send(SubGop { frames: lookahead, end_gop });
+      while lookahead.len() > lookahead_distance {
+        if let Some((split_pos, end_gop)) = sc.split(&lookahead) {
+          let rem = lookahead.split_off(split_pos);
+          let _ = send.send(SubGop { frames: lookahead, end_gop });
 
-        lookahead = rem;
+          lookahead = rem;
+        }
       }
 
       if !lookahead.is_empty() {
