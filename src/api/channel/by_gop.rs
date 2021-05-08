@@ -10,6 +10,7 @@
 use crate::api::channel::data::*;
 use crate::api::config::*;
 use crate::api::util::*;
+use crate::api::EncoderConfig;
 use crate::api::InterConfig;
 
 use crossbeam::channel::*;
@@ -34,7 +35,7 @@ impl<T: Pixel> SubGop<T> {
 }
 */
 
-// Extra
+// TODO: Make the detector logic fitting the model
 struct SceneChange {
   frames: u64,
   pyramid_size: usize,
@@ -43,20 +44,17 @@ struct SceneChange {
 }
 
 impl SceneChange {
-  fn new(
-    pyramid_size: usize, min_key_frame_interval: u64,
-    max_key_frame_interval: u64,
-  ) -> Self {
+  fn new(pyramid_size: usize, enc: &EncoderConfig) -> Self {
     Self {
       frames: 0,
       pyramid_size,
-      min_key_frame_interval,
-      max_key_frame_interval,
+      min_key_frame_interval: enc.min_key_frame_interval,
+      max_key_frame_interval: enc.max_key_frame_interval,
     }
   }
 
   // Tell where to split the lookahead
-  // 7 is currently hardcoded, it should be a parameter
+  //
   fn split<T: Pixel>(
     &mut self, lookahead: &[Arc<Frame<T>>],
   ) -> Option<(usize, bool)> {
@@ -241,11 +239,7 @@ impl Config {
       inter_cfg.keyframe_lookahead_distance() as usize + 1;
     let (send, recv) = bounded(lookahead_distance * 2);
 
-    let mut sc = SceneChange::new(
-      lookahead_distance,
-      self.enc.min_key_frame_interval,
-      self.enc.max_key_frame_interval,
-    );
+    let mut sc = SceneChange::new(lookahead_distance, &self.enc);
 
     s.spawn_fifo(move |_| {
       let mut lookahead = Vec::new();
