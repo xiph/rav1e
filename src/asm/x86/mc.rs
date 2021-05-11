@@ -7,8 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![allow(dead_code)]
-
 use crate::cpu_features::CpuFeatureLevel;
 use crate::frame::*;
 use crate::mc::FilterMode::*;
@@ -351,13 +349,14 @@ decl_mc_hbd_fns!(
   (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_16bpc_avx2),
   (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_16bpc_avx2),
   (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_16bpc_avx2),
-  (SHARP, SHARP, rav1e_put_8tap_sharp_16bpc_avx2)
+  (SHARP, SHARP, rav1e_put_8tap_sharp_16bpc_avx2),
+  (BILINEAR, BILINEAR, rav1e_put_bilin_16bpc_avx2)
 );
 
 cpu_function_lookup_table!(
   PUT_HBD_FNS: [[Option<PutHBDFn>; 16]],
   default: [None; 16],
-  []
+  [AVX2]
 );
 
 macro_rules! decl_mct_fns {
@@ -458,13 +457,14 @@ decl_mct_hbd_fns!(
   (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_16bpc_avx2),
   (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_16bpc_avx2),
   (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_16bpc_avx2),
-  (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2)
+  (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2),
+  (BILINEAR, BILINEAR, rav1e_prep_bilin_16bpc_avx2)
 );
 
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
   default: [None; 16],
-  []
+  [AVX2]
 );
 
 extern {
@@ -490,7 +490,11 @@ cpu_function_lookup_table!(
   [(SSSE3, Some(rav1e_avg_ssse3)), (AVX2, Some(rav1e_avg_avx2))]
 );
 
-cpu_function_lookup_table!(AVG_HBD_FNS: [Option<AvgHBDFn>], default: None, []);
+cpu_function_lookup_table!(
+  AVG_HBD_FNS: [Option<AvgHBDFn>],
+  default: None,
+  [(AVX2, Some(rav1e_avg_16bpc_avx2))]
+);
 
 #[cfg(test)]
 mod test {
