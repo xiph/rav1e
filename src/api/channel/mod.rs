@@ -172,15 +172,13 @@ impl RcFirstPass for Sender<RcData> {
 
 impl RcFirstPass for Option<Sender<RcData>> {
   fn send_pass_data(&mut self, rc_state: &mut RCState) {
-    match self.as_mut() {
-      Some(s) => s.send_pass_data(rc_state),
-      None => {}
+    if let Some(s) = self.as_mut() {
+      s.send_pass_data(rc_state)
     }
   }
   fn send_pass_summary(&mut self, rc_state: &mut RCState) {
-    match self.as_mut() {
-      Some(s) => s.send_pass_summary(rc_state),
-      None => {}
+    if let Some(s) = self.as_mut() {
+      s.send_pass_summary(rc_state)
     }
   }
 }
@@ -218,6 +216,7 @@ impl RcSecondPass for Option<Receiver<RcData>> {
 }
 
 impl Config {
+  #[allow(clippy::type_complexity)]
   fn new_channel_internal<T: Pixel>(
     &self,
   ) -> Result<
