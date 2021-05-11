@@ -88,6 +88,10 @@ impl SceneChangeDetector {
     // Find the distance to the previous keyframe.
     let distance = input_frameno - previous_keyframe;
 
+    if frame_set.len() < 2 {
+      return false;
+    }
+
     // Handle minimum and maximum key frame intervals.
     if distance < self.encoder_config.min_key_frame_interval {
       return false;
