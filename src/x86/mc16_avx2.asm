@@ -3816,4 +3816,191 @@ INIT_YMM avx2
     jl .w128
     RET
 
+cglobal emu_edge_16bpc, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstride, \
+                                   bottomext, rightext
+    ; we assume that the buffer (stride) is larger than width, so we can
+    ; safely overwrite by a few bytes
+
+    ; ref += iclip(y, 0, ih - 1) * PXSTRIDE(ref_stride)
+    xor                r12d, r12d
+    lea                 r10, [ihq-1]
+    cmp                  yq, ihq
+    cmovs               r10, yq
+    test                 yq, yq
+    cmovs               r10, r12
+    imul                r10, sstrideq
+    add                srcq, r10
+
+    ; ref += iclip(x, 0, iw - 1)
+    lea                 r10, [iwq-1]
+    cmp                  xq, iwq
+    cmovs               r10, xq
+    test                 xq, xq
+    cmovs               r10, r12
+    lea                srcq, [srcq+r10*2]
+
+    ; bottom_ext = iclip(y + bh - ih, 0, bh - 1)
+    lea          bottomextq, [yq+bhq]
+    sub          bottomextq, ihq
+    lea                  r3, [bhq-1]
+    cmovs        bottomextq, r12
+
+    DEFINE_ARGS bw, bh, iw, ih, x, topext, dst, dstride, src, sstride, \
+                bottomext, rightext
+
+    ; top_ext = iclip(-y, 0, bh - 1)
+    neg             topextq
+    cmovs           topextq, r12
+    cmp          bottomextq, bhq
+    cmovns       bottomextq, r3
+    cmp             topextq, bhq
+    cmovg           topextq, r3
+
+    ; right_ext = iclip(x + bw - iw, 0, bw - 1)
+    lea           rightextq, [xq+bwq]
+    sub           rightextq, iwq
+    lea                  r2, [bwq-1]
+    cmovs         rightextq, r12
+
+    DEFINE_ARGS bw, bh, iw, ih, leftext, topext, dst, dstride, src, sstride, \
+                bottomext, rightext
+
+    ; left_ext = iclip(-x, 0, bw - 1)
+    neg            leftextq
+    cmovs          leftextq, r12
+    cmp           rightextq, bwq
+    cmovns        rightextq, r2
+    cmp            leftextq, bwq
+    cmovns         leftextq, r2
+
+    DEFINE_ARGS bw, centerh, centerw, dummy, leftext, topext, \
+                dst, dstride, src, sstride, bottomext, rightext
+
+    ; center_h = bh - top_ext - bottom_ext
+    lea                  r3, [bottomextq+topextq]
+    sub            centerhq, r3
+
+    ; blk += top_ext * PXSTRIDE(dst_stride)
+    mov                  r2, topextq
+    imul                 r2, dstrideq
+    add                dstq, r2
+    mov                 r9m, dstq
+
+    ; center_w = bw - left_ext - right_ext
+    mov            centerwq, bwq
+    lea                  r3, [rightextq+leftextq]
+    sub            centerwq, r3
+
+%macro v_loop 3 ; need_left_ext, need_right_ext, suffix
+.v_loop_%3:
+%if %1
+    ; left extension
+    xor                  r3, r3
+    vpbroadcastw         m0, [srcq]
+.left_loop_%3:
+    mova        [dstq+r3*2], m0
+    add                  r3, 16
+    cmp                  r3, leftextq
+    jl .left_loop_%3
+
+    ; body
+    lea                 r12, [dstq+leftextq*2]
+%endif
+    xor                  r3, r3
+.body_loop_%3:
+    movu                 m0, [srcq+r3*2]
+%if %1
+    movu         [r12+r3*2], m0
+%else
+    movu        [dstq+r3*2], m0
+%endif
+    add                  r3, 16
+    cmp                  r3, centerwq
+    jl .body_loop_%3
+
+%if %2
+    ; right extension
+%if %1
+    lea                 r12, [r12+centerwq*2]
+%else
+    lea                 r12, [dstq+centerwq*2]
+%endif
+    xor                  r3, r3
+    vpbroadcastw         m0, [srcq+centerwq*2-2]
+.right_loop_%3:
+    movu         [r12+r3*2], m0
+    add                  r3, 16
+    cmp                  r3, rightextq
+    jl .right_loop_%3
+
+%endif
+    add                dstq, dstrideq
+    add                srcq, sstrideq
+    dec            centerhq
+    jg .v_loop_%3
+%endmacro
+
+    test           leftextq, leftextq
+    jnz .need_left_ext
+    test          rightextq, rightextq
+    jnz .need_right_ext
+    v_loop                0, 0, 0
+    jmp .body_done
+
+.need_left_ext:
+    test          rightextq, rightextq
+    jnz .need_left_right_ext
+    v_loop                1, 0, 1
+    jmp .body_done
+
+.need_left_right_ext:
+    v_loop                1, 1, 2
+    jmp .body_done
+
+.need_right_ext:
+    v_loop                0, 1, 3
+
+.body_done:
+    ; bottom edge extension
+    test         bottomextq, bottomextq
+    jz .top
+    mov                srcq, dstq
+    sub                srcq, dstrideq
+    xor                  r1, r1
+.bottom_x_loop:
+    mova                 m0, [srcq+r1*2]
+    lea                  r3, [dstq+r1*2]
+    mov                  r4, bottomextq
+.bottom_y_loop:
+    mova               [r3], m0
+    add                  r3, dstrideq
+    dec                  r4
+    jg .bottom_y_loop
+    add                  r1, 16
+    cmp                  r1, bwq
+    jl .bottom_x_loop
+
+.top:
+    ; top edge extension
+    test            topextq, topextq
+    jz .end
+    mov                srcq, r9m
+    mov                dstq, dstm
+    xor                  r1, r1
+.top_x_loop:
+    mova                 m0, [srcq+r1*2]
+    lea                  r3, [dstq+r1*2]
+    mov                  r4, topextq
+.top_y_loop:
+    mova               [r3], m0
+    add                  r3, dstrideq
+    dec                  r4
+    jg .top_y_loop
+    add                  r1, 16
+    cmp                  r1, bwq
+    jl .top_x_loop
+
+.end:
+    RET
+
 %endif ; ARCH_X86_64
