@@ -602,40 +602,6 @@ pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
   }
 }
 
-fn tile_log2(blk_size: usize, target: usize) -> usize {
-  let mut k = 0;
-  while (blk_size << k) < target {
-    k += 1;
-  }
-  k
-}
-
-fn check_tile_log2(n: Result<usize, ()>) -> Result<usize, ()> {
-  match n {
-    Ok(n) => {
-      if ((1 << tile_log2(1, n)) - n) == 0 || n == 0 {
-        Ok(n)
-      } else {
-        Err(())
-      }
-    }
-    Err(e) => Err(e),
-  }
-}
-
-fn check_frame_size(n: Result<usize, ()>) -> Result<usize, ()> {
-  match n {
-    Ok(n) => {
-      if n >= 16 && n < u16::max_value().into() {
-        Ok(n)
-      } else {
-        Err(())
-      }
-    }
-    Err(e) => Err(e),
-  }
-}
-
 unsafe fn option_match(
   cfg: *mut Config, key: *const c_char, value: *const c_char,
 ) -> Result<(), ()> {
@@ -644,8 +610,8 @@ unsafe fn option_match(
   let enc = &mut (*cfg).cfg.enc;
 
   match key {
-    "width" => enc.width = check_frame_size(value.parse().map_err(|_| ()))?,
-    "height" => enc.height = check_frame_size(value.parse().map_err(|_| ()))?,
+    "width" => enc.width = value.parse().map_err(|_| ())?,
+    "height" => enc.height = value.parse().map_err(|_| ())?,
     "speed" => {
       enc.speed_settings =
         rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?)
@@ -654,12 +620,8 @@ unsafe fn option_match(
     "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
 
     "tiles" => enc.tiles = value.parse().map_err(|_| ())?,
-    "tile_rows" => {
-      enc.tile_rows = check_tile_log2(value.parse().map_err(|_| ()))?
-    }
-    "tile_cols" => {
-      enc.tile_cols = check_tile_log2(value.parse().map_err(|_| ()))?
-    }
+    "tile_rows" => enc.tile_rows = value.parse().map_err(|_| ())?,
+    "tile_cols" => enc.tile_cols = value.parse().map_err(|_| ())?,
 
     "tune" => enc.tune = value.parse().map_err(|_| ())?,
     "quantizer" => enc.quantizer = value.parse().map_err(|_| ())?,
