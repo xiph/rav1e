@@ -89,6 +89,7 @@ fn build_nasm_files() {
     "src/x86/ipred_sse.asm",
     "src/x86/itx_avx2.asm",
     "src/x86/itx_sse.asm",
+    "src/x86/itx16_avx2.asm",
     "src/x86/looprestoration_avx2.asm",
     "src/x86/looprestoration16_avx2.asm",
     "src/x86/mc_avx2.asm",
