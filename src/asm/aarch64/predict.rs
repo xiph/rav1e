@@ -78,7 +78,7 @@ macro_rules! decl_cfl_pred_fn {
       $(
         fn $f(
           dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-          width: libc::c_int, height: libc::c_int, ac: *const u8,
+          width: libc::c_int, height: libc::c_int, ac: *const i16,
           alpha: libc::c_int,
         );
       )*
@@ -99,7 +99,7 @@ macro_rules! decl_cfl_pred_hbd_fn {
       $(
         fn $f(
           dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,
-          width: libc::c_int, height: libc::c_int, ac: *const u16,
+          width: libc::c_int, height: libc::c_int, ac: *const i16,
           alpha: libc::c_int, bit_depth_max: libc::c_int,
         );
       )*

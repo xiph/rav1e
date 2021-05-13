@@ -87,6 +87,7 @@ fn build_nasm_files() {
   let asm_files = &[
     "src/x86/ipred_avx2.asm",
     "src/x86/ipred_sse.asm",
+    "src/x86/ipred16_avx2.asm",
     "src/x86/itx_avx2.asm",
     "src/x86/itx_sse.asm",
     "src/x86/itx16_avx2.asm",
