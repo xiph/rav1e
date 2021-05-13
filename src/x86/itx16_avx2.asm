@@ -165,7 +165,7 @@ SECTION .text
 %endmacro
 
 INIT_YMM avx2
-cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c
+cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c, eob, bdmax
     mova                xm0, [cq+16*0]
     vinserti128          m0, [cq+16*2], 1
     mova                xm1, [cq+16*1]
@@ -191,7 +191,12 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c
     movhps              xm2, [dstq+strideq*0]
     movq                xm3, [r6  +strideq*0]
     movhps              xm3, [dstq+strideq*1]
-    vpbroadcastd        xm5, [pixel_max]
+%ifidn bdmaxd, bdmaxm
+    movd                xm5, bdmaxd
+    vpbroadcastw        xm5, xm5
+%else   ; win64: load from stack
+    vpbroadcastw        xm5, bdmaxm
+%endif
     paddsw              xm0, xm2
     paddsw              xm1, xm3
     pmaxsw              xm0, xm4
