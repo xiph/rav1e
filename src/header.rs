@@ -991,7 +991,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_cdef<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()> {
-    if fi.sequence.enable_cdef {
+    if fi.sequence.enable_cdef && !fi.allow_intrabc {
       assert!(fi.cdef_damping >= 3);
       assert!(fi.cdef_damping <= 6);
       self.write(2, fi.cdef_damping - 3)?;
