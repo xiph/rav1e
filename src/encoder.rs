@@ -3166,13 +3166,14 @@ fn check_lf_queue<T: Pixel>(
           }
         }
         // write LRF information
-        if fi.sequence.enable_restoration {
+        if !fi.allow_intrabc && fi.sequence.enable_restoration {
+          // TODO: also disallow if lossless
           for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && last_lru_coded[pli] < qe.lru_index[pli]
             {
               last_lru_coded[pli] = qe.lru_index[pli];
-              cw.write_lrf(w, fi, &mut ts.restoration, qe.sbo, pli);
+              cw.write_lrf(w, &mut ts.restoration, qe.sbo, pli);
             }
           }
         }
