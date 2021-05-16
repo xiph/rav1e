@@ -138,6 +138,8 @@ cargo install cargo-c
 cargo cinstall --release
 ```
 
+Please refer to the cargo-c [installation](https://github.com/lu-zero/cargo-c#installation) instructions.
+
 ## Usage
 ### Compressing video
 Input videos must be in [y4m format](https://wiki.multimedia.cx/index.php/YUV4MPEG2). The monochrome color format is not supported.
