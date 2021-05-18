@@ -433,14 +433,12 @@ impl<T: Pixel> ContextInner<T> {
     let mut data_location = PathBuf::new();
     if env::var_os("RAV1E_DATA_PATH").is_some() {
       data_location.push(&env::var_os("RAV1E_DATA_PATH").unwrap());
-      fs::create_dir_all(data_location.clone()).unwrap();
-      data_location
     } else {
       data_location.push(&env::current_dir().unwrap());
       data_location.push(".lookahead_data");
-      fs::create_dir_all(data_location.clone()).unwrap();
-      data_location
     }
+    fs::create_dir_all(&data_location).unwrap();
+    data_location
   }
 
   fn build_frame_properties(
@@ -1001,7 +999,7 @@ impl<T: Pixel> ContextInner<T> {
       let mut unique_indices = ArrayVec::<_, 3>::new();
 
       for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
-        if unique_indices.iter().find(|&&(_, r)| r == rec_index).is_none() {
+        if !unique_indices.iter().any(|&(_, r)| r == rec_index) {
           unique_indices.push((mv_index, rec_index));
         }
       }
