@@ -613,8 +613,10 @@ unsafe fn option_match(
     "width" => enc.width = value.parse().map_err(|_| ())?,
     "height" => enc.height = value.parse().map_err(|_| ())?,
     "speed" => {
-      enc.speed_settings =
-        rav1e::SpeedSettings::from_preset(value.parse().map_err(|_| ())?)
+      enc.speed_settings = rav1e::SpeedSettings::from_preset(
+        value.parse().map_err(|_| ())?,
+        enc.tune,
+      )
     }
 
     "threads" => (*cfg).cfg.threads = value.parse().map_err(|_| ())?,
@@ -623,7 +625,10 @@ unsafe fn option_match(
     "tile_rows" => enc.tile_rows = value.parse().map_err(|_| ())?,
     "tile_cols" => enc.tile_cols = value.parse().map_err(|_| ())?,
 
-    "tune" => enc.tune = value.parse().map_err(|_| ())?,
+    "tune" => {
+      enc.tune = value.parse().map_err(|_| ())?;
+      enc.speed_settings.apply_tune(enc.tune);
+    }
     "quantizer" => enc.quantizer = value.parse().map_err(|_| ())?,
     "min_quantizer" => enc.min_quantizer = value.parse().map_err(|_| ())?,
     "bitrate" => enc.bitrate = value.parse().map_err(|_| ())?,

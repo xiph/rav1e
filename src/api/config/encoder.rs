@@ -116,7 +116,7 @@ pub struct EncoderConfig {
 impl Default for EncoderConfig {
   fn default() -> Self {
     const DEFAULT_SPEED: usize = 6;
-    Self::with_speed_preset(DEFAULT_SPEED)
+    Self::with_speed_preset(DEFAULT_SPEED, Tune::Psychovisual)
   }
 }
 
@@ -127,7 +127,7 @@ impl EncoderConfig {
   /// than 10, it will result in the same settings as 10.
   ///
   /// [`from_preset()`]: struct.SpeedSettings.html#method.from_preset
-  pub fn with_speed_preset(speed: usize) -> Self {
+  pub fn with_speed_preset(speed: usize, tune: Tune) -> Self {
     EncoderConfig {
       width: 640,
       height: 480,
@@ -161,7 +161,7 @@ impl EncoderConfig {
       tile_rows: 0,
       tiles: 0,
       rdo_lookahead_frames: 40,
-      speed_settings: SpeedSettings::from_preset(speed),
+      speed_settings: SpeedSettings::from_preset(speed, tune),
     }
   }
 

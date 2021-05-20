@@ -175,7 +175,7 @@ fn setup_encoder<T: Pixel>(
   still_picture: bool,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
-  let mut enc = EncoderConfig::with_speed_preset(speed);
+  let mut enc = EncoderConfig::with_speed_preset(speed, Tune::Psychovisual);
   enc.quantizer = quantizer;
   enc.min_key_frame_interval = min_keyint;
   enc.max_key_frame_interval = max_keyint;

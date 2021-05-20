@@ -46,7 +46,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     width: 1024,
     height: 1024,
     quantizer: qindex,
-    speed_settings: SpeedSettings::from_preset(10),
+    speed_settings: SpeedSettings::from_preset(10, Tune::Psychovisual),
     ..Default::default()
   });
   let sequence = Arc::new(Sequence::new(&Default::default()));
@@ -132,7 +132,7 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
     width,
     height,
     quantizer: 100,
-    speed_settings: SpeedSettings::from_preset(10),
+    speed_settings: SpeedSettings::from_preset(10, Tune::Psychovisual),
     ..Default::default()
   });
   let sequence = Arc::new(Sequence::new(&Default::default()));
@@ -164,7 +164,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
     width: 1024,
     height: 1024,
     quantizer: 100,
-    speed_settings: SpeedSettings::from_preset(10),
+    speed_settings: SpeedSettings::from_preset(10, Tune::Psychovisual),
     ..Default::default()
   });
   let sequence = Arc::new(Sequence::new(&Default::default()));
