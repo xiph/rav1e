@@ -28,10 +28,22 @@
 
 SECTION_RODATA
 
+; dav1d_obmc_masks[] << 9
+obmc_masks:     dw     0,     0,  9728,     0, 12800,  7168,  2560,     0
+                dw 14336, 11264,  8192,  5632,  3584,  1536,     0,     0
+                dw 15360, 13824, 12288, 10752,  9216,  7680,  6144,  5120
+                dw  4096,  3072,  2048,  1536,     0,     0,     0,     0
+                dw 15872, 14848, 14336, 13312, 12288, 11776, 10752, 10240
+                dw  9728,  8704,  8192,  7168,  6656,  6144,  5632,  4608
+                dw  4096,  3584,  3072,  2560,  2048,  2048,  1536,  1024
+
+blend_shuf:     db 0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  2,  3,  2,  3,  2,  3
+
 pw_2:             times 8 dw 2
 pw_64:            times 8 dw 64
 pw_256:           times 8 dw 256
 pw_27615:         times 8 dw 27615
+pw_m512:          times 8 dw -512
 pd_65538:         times 2 dd 65538
 
 bidir_rnd:        times 4 dw -16400
@@ -56,6 +68,9 @@ BIDIR_JMP_TABLE mask,       ssse3,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_420, ssse3,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_422, ssse3,    4, 8, 16, 32, 64, 128
 BIDIR_JMP_TABLE w_mask_444, ssse3,    4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE blend,      ssse3,    4, 8, 16, 32
+BIDIR_JMP_TABLE blend_v,    ssse3, 2, 4, 8, 16, 32
+BIDIR_JMP_TABLE blend_h,    ssse3, 2, 4, 8, 16, 32, 64, 128
 
 SECTION .text
 
@@ -933,3 +948,392 @@ ALIGN function_align
     mova            [maskq], m2
     add               maskq, 16
     ret
+
+; (a * (64 - m) + b * m + 32) >> 6
+; = (((b - a) * m + 32) >> 6) + a
+; = (((b - a) * (m << 9) + 16384) >> 15) + a
+;   except m << 9 overflows int16_t when m == 64 (which is possible),
+;   but if we negate m it works out (-64 << 9 == -32768).
+; = (((a - b) * (m * -512) + 16384) >> 15) + a
+cglobal blend_16bpc, 3, 7, 8, dst, stride, tmp, w, h, mask, stride3
+%define base r6-blend_ssse3_table
+    LEA                  r6, blend_ssse3_table
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movsxd               wq, [r6+wq*4]
+    movifnidn         maskq, maskmp
+    mova                 m7, [base+pw_m512]
+    add                  wq, r6
+    lea            stride3q, [strideq*3]
+    pxor                 m6, m6
+    jmp                  wq
+.w4:
+    mova                 m5, [maskq]
+    movq                 m0, [dstq+strideq*0]
+    movhps               m0, [dstq+strideq*1]
+    movq                 m1, [dstq+strideq*2]
+    movhps               m1, [dstq+stride3q ]
+    psubw                m2, m0, [tmpq+16*0]
+    psubw                m3, m1, [tmpq+16*1]
+    add               maskq, 16
+    add                tmpq, 32
+    punpcklbw            m4, m5, m6
+    punpckhbw            m5, m6
+    pmullw               m4, m7
+    pmullw               m5, m7
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    movq   [dstq+strideq*0], m0
+    movhps [dstq+strideq*1], m0
+    movq   [dstq+strideq*2], m1
+    movhps [dstq+stride3q ], m1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w4
+    RET
+.w8:
+    mova                 m5, [maskq]
+    mova                 m0, [dstq+strideq*0]
+    mova                 m1, [dstq+strideq*1]
+    psubw                m2, m0, [tmpq+16*0]
+    psubw                m3, m1, [tmpq+16*1]
+    add               maskq, 16
+    add                tmpq, 32
+    punpcklbw            m4, m5, m6
+    punpckhbw            m5, m6
+    pmullw               m4, m7
+    pmullw               m5, m7
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w8
+    RET
+.w16:
+    mova                 m5, [maskq]
+    mova                 m0, [dstq+16*0]
+    mova                 m1, [dstq+16*1]
+    psubw                m2, m0, [tmpq+16*0]
+    psubw                m3, m1, [tmpq+16*1]
+    add               maskq, 16
+    add                tmpq, 32
+    punpcklbw            m4, m5, m6
+    punpckhbw            m5, m6
+    pmullw               m4, m7
+    pmullw               m5, m7
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova        [dstq+16*0], m0
+    mova        [dstq+16*1], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w16
+    RET
+.w32:
+    mova                 m5, [maskq+16*0]
+    mova                 m0, [dstq+16*0]
+    mova                 m1, [dstq+16*1]
+    psubw                m2, m0, [tmpq+16*0]
+    psubw                m3, m1, [tmpq+16*1]
+    punpcklbw            m4, m5, m6
+    punpckhbw            m5, m6
+    pmullw               m4, m7
+    pmullw               m5, m7
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova        [dstq+16*0], m0
+    mova        [dstq+16*1], m1
+    mova                 m5, [maskq+16*1]
+    mova                 m0, [dstq+16*2]
+    mova                 m1, [dstq+16*3]
+    psubw                m2, m0, [tmpq+16*2]
+    psubw                m3, m1, [tmpq+16*3]
+    add               maskq, 32
+    add                tmpq, 64
+    punpcklbw            m4, m5, m6
+    punpckhbw            m5, m6
+    pmullw               m4, m7
+    pmullw               m5, m7
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova        [dstq+16*2], m0
+    mova        [dstq+16*3], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w32
+    RET
+
+cglobal blend_v_16bpc, 3, 6, 6, dst, stride, tmp, w, h
+%define base r5-blend_v_ssse3_table
+    LEA                  r5, blend_v_ssse3_table
+    tzcnt                wd, wm
+    movifnidn            hd, hm
+    movsxd               wq, [r5+wq*4]
+    add                  wq, r5
+    jmp                  wq
+.w2:
+    movd                 m4, [base+obmc_masks+2*2]
+.w2_loop:
+    movd                 m0, [dstq+strideq*0]
+    movd                 m2, [tmpq+4*0]
+    movd                 m1, [dstq+strideq*1]
+    movd                 m3, [tmpq+4*1]
+    add                tmpq, 4*2
+    psubw                m2, m0
+    psubw                m3, m1
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m4
+    paddw                m0, m2
+    paddw                m1, m3
+    movd   [dstq+strideq*0], m0
+    movd   [dstq+strideq*1], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w2_loop
+    RET
+.w4:
+    movddup              m2, [base+obmc_masks+4*2]
+.w4_loop:
+    movq                 m0, [dstq+strideq*0]
+    movhps               m0, [dstq+strideq*1]
+    mova                 m1, [tmpq]
+    add                tmpq, 8*2
+    psubw                m1, m0
+    pmulhrsw             m1, m2
+    paddw                m0, m1
+    movq   [dstq+strideq*0], m0
+    movhps [dstq+strideq*1], m0
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w4_loop
+    RET
+.w8:
+    mova                 m4, [base+obmc_masks+8*2]
+.w8_loop:
+    mova                 m0, [dstq+strideq*0]
+    mova                 m2, [tmpq+16*0]
+    mova                 m1, [dstq+strideq*1]
+    mova                 m3, [tmpq+16*1]
+    add                tmpq, 16*2
+    psubw                m2, m0
+    psubw                m3, m1
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m4
+    paddw                m0, m2
+    paddw                m1, m3
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+.w16:
+    mova                 m4, [base+obmc_masks+16*2]
+    movq                 m5, [base+obmc_masks+16*3]
+.w16_loop:
+    mova                 m0, [dstq+16*0]
+    mova                 m2, [tmpq+16*0]
+    mova                 m1, [dstq+16*1]
+    mova                 m3, [tmpq+16*1]
+    add                tmpq, 16*2
+    psubw                m2, m0
+    psubw                m3, m1
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova        [dstq+16*0], m0
+    mova        [dstq+16*1], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w16_loop
+    RET
+.w32:
+%if WIN64
+    movaps          [rsp+8], m6
+%endif
+    mova                 m4, [base+obmc_masks+16*4]
+    mova                 m5, [base+obmc_masks+16*5]
+    mova                 m6, [base+obmc_masks+16*6]
+.w32_loop:
+    mova                 m0, [dstq+16*0]
+    mova                 m2, [tmpq+16*0]
+    mova                 m1, [dstq+16*1]
+    mova                 m3, [tmpq+16*1]
+    psubw                m2, m0
+    psubw                m3, m1
+    pmulhrsw             m2, m4
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    mova                 m2, [dstq+16*2]
+    paddw                m1, m3
+    mova                 m3, [tmpq+16*2]
+    add                tmpq, 16*4
+    psubw                m3, m2
+    pmulhrsw             m3, m6
+    paddw                m2, m3
+    mova        [dstq+16*0], m0
+    mova        [dstq+16*1], m1
+    mova        [dstq+16*2], m2
+    add                dstq, strideq
+    dec                  hd
+    jg .w32_loop
+%if WIN64
+    movaps               m6, [rsp+8]
+%endif
+    RET
+
+%macro BLEND_H_ROW 2-3 0; dst_off, tmp_off, inc_tmp
+    mova                 m0, [dstq+16*(%1+0)]
+    mova                 m2, [tmpq+16*(%2+0)]
+    mova                 m1, [dstq+16*(%1+1)]
+    mova                 m3, [tmpq+16*(%2+1)]
+%if %3
+    add                tmpq, 16*%3
+%endif
+    psubw                m2, m0
+    psubw                m3, m1
+    pmulhrsw             m2, m5
+    pmulhrsw             m3, m5
+    paddw                m0, m2
+    paddw                m1, m3
+    mova   [dstq+16*(%1+0)], m0
+    mova   [dstq+16*(%1+1)], m1
+%endmacro
+
+cglobal blend_h_16bpc, 3, 7, 6, dst, ds, tmp, w, h, mask
+%define base r6-blend_h_ssse3_table
+    LEA                  r6, blend_h_ssse3_table
+    tzcnt                wd, wm
+    mov                  hd, hm
+    movsxd               wq, [r6+wq*4]
+    movddup              m4, [base+blend_shuf]
+    lea               maskq, [base+obmc_masks+hq*2]
+    lea                  hd, [hq*3]
+    add                  wq, r6
+    shr                  hd, 2 ; h * 3/4
+    lea               maskq, [maskq+hq*2]
+    neg                  hq
+    jmp                  wq
+.w2:
+    movd                 m0, [dstq+dsq*0]
+    movd                 m2, [dstq+dsq*1]
+    movd                 m3, [maskq+hq*2]
+    movq                 m1, [tmpq]
+    add                tmpq, 4*2
+    punpckldq            m0, m2
+    punpcklwd            m3, m3
+    psubw                m1, m0
+    pmulhrsw             m1, m3
+    paddw                m0, m1
+    movd       [dstq+dsq*0], m0
+    psrlq                m0, 32
+    movd       [dstq+dsq*1], m0
+    lea                dstq, [dstq+dsq*2]
+    add                  hq, 2
+    jl .w2
+    RET
+.w4:
+    mova                 m3, [base+blend_shuf]
+.w4_loop:
+    movq                 m0, [dstq+dsq*0]
+    movhps               m0, [dstq+dsq*1]
+    movd                 m2, [maskq+hq*2]
+    mova                 m1, [tmpq]
+    add                tmpq, 8*2
+    psubw                m1, m0
+    pshufb               m2, m3
+    pmulhrsw             m1, m2
+    paddw                m0, m1
+    movq       [dstq+dsq*0], m0
+    movhps     [dstq+dsq*1], m0
+    lea                dstq, [dstq+dsq*2]
+    add                  hq, 2
+    jl .w4_loop
+    RET
+.w8:
+    movddup              m5, [base+blend_shuf+8]
+%if WIN64
+    movaps         [rsp+ 8], m6
+    movaps         [rsp+24], m7
+%endif
+.w8_loop:
+    movd                 m7, [maskq+hq*2]
+    mova                 m0, [dstq+dsq*0]
+    mova                 m2, [tmpq+16*0]
+    mova                 m1, [dstq+dsq*1]
+    mova                 m3, [tmpq+16*1]
+    add                tmpq, 16*2
+    pshufb               m6, m7, m4
+    psubw                m2, m0
+    pshufb               m7, m5
+    psubw                m3, m1
+    pmulhrsw             m2, m6
+    pmulhrsw             m3, m7
+    paddw                m0, m2
+    paddw                m1, m3
+    mova       [dstq+dsq*0], m0
+    mova       [dstq+dsq*1], m1
+    lea                dstq, [dstq+dsq*2]
+    add                  hq, 2
+    jl .w8_loop
+%if WIN64
+    movaps               m6, [rsp+ 8]
+    movaps               m7, [rsp+24]
+%endif
+    RET
+.w16:
+    movd                 m5, [maskq+hq*2]
+    pshufb               m5, m4
+    BLEND_H_ROW           0, 0, 2
+    add                dstq, dsq
+    inc                  hq
+    jl .w16
+    RET
+.w32:
+    movd                 m5, [maskq+hq*2]
+    pshufb               m5, m4
+    BLEND_H_ROW           0, 0
+    BLEND_H_ROW           2, 2, 4
+    add                dstq, dsq
+    inc                  hq
+    jl .w32
+    RET
+.w64:
+    movd                 m5, [maskq+hq*2]
+    pshufb               m5, m4
+    BLEND_H_ROW           0, 0
+    BLEND_H_ROW           2, 2
+    BLEND_H_ROW           4, 4
+    BLEND_H_ROW           6, 6, 8
+    add                dstq, dsq
+    inc                  hq
+    jl .w64
+    RET
+.w128:
+    movd                 m5, [maskq+hq*2]
+    pshufb               m5, m4
+    BLEND_H_ROW           0,  0
+    BLEND_H_ROW           2,  2
+    BLEND_H_ROW           4,  4
+    BLEND_H_ROW           6,  6, 16
+    BLEND_H_ROW           8, -8
+    BLEND_H_ROW          10, -6
+    BLEND_H_ROW          12, -4
+    BLEND_H_ROW          14, -2
+    add                dstq, dsq
+    inc                  hq
+    jl .w128
+    RET
