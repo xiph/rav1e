@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import struct
 import sys
 
@@ -13,6 +15,7 @@ from PIL import Image, ImageDraw
 
 
 def draw_mvs(prefix):
+    prefix = str(prefix).rjust(10, '0')
     with open(prefix + "-mvs.bin", "rb") as f:
         contents = f.read()
 
