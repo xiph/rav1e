@@ -1200,7 +1200,7 @@ impl<T: Pixel> ContextInner<T> {
       let planes =
         if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
 
-      Arc::make_mut(&mut frame_data.fs.rec).pad(
+      Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
         frame_data.fi.width,
         frame_data.fi.height,
         planes,

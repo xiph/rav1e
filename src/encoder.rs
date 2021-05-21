@@ -3028,7 +3028,7 @@ fn encode_tile_group<T: Pixel>(
   if fi.sequence.enable_restoration {
     // Until the loop filters are better pipelined, we'll need to keep
     // around a copy of both the deblocked and cdeffed frame.
-    let deblocked_frame = fs.rec.clone();
+    let deblocked_frame = (*fs.rec).clone();
 
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
@@ -3038,14 +3038,14 @@ fn encode_tile_group<T: Pixel>(
     }
     /* TODO: Don't apply if lossless */
     fs.restoration.lrf_filter_frame(
-      Arc::make_mut(&mut fs.rec),
+      Arc::get_mut(&mut fs.rec).unwrap(),
       &deblocked_frame,
       fi,
     );
   } else {
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
-      let deblocked_frame = fs.rec.clone();
+      let deblocked_frame = (*fs.rec).clone();
       let ts = &mut fs.as_tile_state_mut();
       let rec = &mut ts.rec;
       cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
@@ -3450,7 +3450,7 @@ pub fn encode_show_existing_frame<T: Pixel>(
 
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
-    let fs_rec = Arc::make_mut(&mut fs.rec);
+    let fs_rec = Arc::get_mut(&mut fs.rec).unwrap();
     let planes =
       if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
     for p in 0..planes {
