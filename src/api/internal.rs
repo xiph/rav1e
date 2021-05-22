@@ -1206,7 +1206,6 @@ impl<T: Pixel> ContextInner<T> {
         planes,
       );
 
-      // TODO avoid the clone by having rec Arc.
       let (rec, source) = if frame_data.fi.show_frame {
         (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
       } else {
