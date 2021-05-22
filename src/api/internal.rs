@@ -1138,7 +1138,7 @@ impl<T: Pixel> ContextInner<T> {
         return Err(EncoderStatus::NotReady);
       }
       let mut frame_data =
-        self.frame_data.get(&cur_output_frameno).cloned().unwrap();
+        self.frame_data.remove(&cur_output_frameno).unwrap();
       let fti = frame_data.fi.get_frame_subtype();
       let qps = self.rc_state.select_qi(
         self,
