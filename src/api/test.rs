@@ -1394,7 +1394,7 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
 }
 
 #[test]
-fn output_frameno_no_scene_change_at_max_len_flash() {
+fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   // Test output_frameno configurations when there's a multi-frame flash
   // with length equal to the max flash length
 
@@ -1454,7 +1454,7 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
 }
 
 #[test]
-fn output_frameno_scene_change_past_max_len_flash() {
+fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
   // Test output_frameno configurations when there's a multi-frame flash
   // with length greater than the max flash length
 
@@ -1521,7 +1521,7 @@ fn output_frameno_scene_change_past_max_len_flash() {
 }
 
 #[test]
-fn output_frameno_no_scene_change_at_multiple_flashes() {
+fn output_frameno_scene_change_after_multiple_flashes() {
   // Test output_frameno configurations when there are multiple consecutive flashes
 
   let mut ctx = setup_encoder::<u8>(
