@@ -178,5 +178,4 @@ Find a full list in feature-table in [`Cargo.toml`](Cargo.toml)
 Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
 ## Getting in Touch
-Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
-up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
+Come chat with us on the IRC channel #daala on [Libera.Chat](https://libera.chat/)! You can also use [web browser](https://web.libera.chat/?channel=#daala) to join with a web browser.
