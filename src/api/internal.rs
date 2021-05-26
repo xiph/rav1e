@@ -1138,7 +1138,7 @@ impl<T: Pixel> ContextInner<T> {
         return Err(EncoderStatus::NotReady);
       }
       let mut frame_data =
-        self.frame_data.get(&cur_output_frameno).cloned().unwrap();
+        self.frame_data.remove(&cur_output_frameno).unwrap();
       let fti = frame_data.fi.get_frame_subtype();
       let qps = self.rc_state.select_qi(
         self,
@@ -1200,13 +1200,12 @@ impl<T: Pixel> ContextInner<T> {
       let planes =
         if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
 
-      Arc::make_mut(&mut frame_data.fs.rec).pad(
+      Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
         frame_data.fi.width,
         frame_data.fi.height,
         planes,
       );
 
-      // TODO avoid the clone by having rec Arc.
       let (rec, source) = if frame_data.fi.show_frame {
         (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
       } else {

@@ -1116,7 +1116,7 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
   f: &mut Arc<rav1e::Frame<T>>, plane: c_int, data_slice: &[u8],
   stride: ptrdiff_t, bytewidth: c_int,
 ) {
-  let input = Arc::make_mut(f);
+  let input = Arc::get_mut(f).unwrap();
   input.planes[plane as usize].copy_from_raw_u8(
     data_slice,
     stride as usize,
