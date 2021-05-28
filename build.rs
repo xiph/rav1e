@@ -80,7 +80,7 @@ fn build_nasm_files() {
   config_file.write(b"	%define PIC 1\n").unwrap();
   config_file.write(b" %define STACK_ALIGNMENT 16\n").unwrap();
   config_file.write(b" %define HAVE_AVX512ICL 1\n").unwrap();
-  if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+  if env::var("CARGO_CFG_TARGET_VENDOR").unwrap() == "apple" {
     config_file.write(b" %define PREFIX 1\n").unwrap();
   }
 
@@ -148,7 +148,7 @@ fn build_asm_files() {
 
   let dest_path = Path::new(&out_dir).join("config.h");
   let mut config_file = File::create(&dest_path).unwrap();
-  if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+  if env::var("CARGO_CFG_TARGET_VENDOR").unwrap() == "apple" {
     config_file.write(b" #define PREFIX 1\n").unwrap();
   }
   config_file.write(b" #define PRIVATE_PREFIX rav1e_\n").unwrap();
