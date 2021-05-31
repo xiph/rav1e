@@ -315,8 +315,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     buffer_size: 4096,
   });
 
-  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
-
   run().map_err(|e| {
     error::print_error(&e);
     Box::new(e) as Box<dyn std::error::Error>
@@ -509,6 +507,8 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base.den as usize,
     cli.enc.time_base.num as usize,
   );
+
+  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
   info!(
     "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",
