@@ -246,7 +246,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   gop_output_frameno_start: BTreeMap<u64, u64>,
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
-  keyframe_detector: SceneChangeDetector,
+  keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: Arc<EncoderConfig>,
   seq: Arc<Sequence>,
   pub(crate) rc_state: RCState,
@@ -291,7 +291,6 @@ impl<T: Pixel> ContextInner<T> {
         CpuFeatureLevel::default(),
         lookahead_distance,
         seq.clone(),
-        true,
       ),
       config: Arc::new(*enc),
       seq,
