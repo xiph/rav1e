@@ -39,15 +39,15 @@ impl<T: Pixel> SubGop<T> {
 */
 
 // TODO: Make the detector logic fitting the model
-struct SceneChange {
+struct SceneChange<T: Pixel> {
   frames: usize,
   pyramid_size: usize,
   processed: u64,
   last_keyframe: u64,
-  detector: SceneChangeDetector,
+  detector: SceneChangeDetector<T>,
 }
 
-impl SceneChange {
+impl<T: Pixel> SceneChange<T> {
   fn new(pyramid_size: usize, enc: &EncoderConfig) -> Self {
     let seq = Arc::new(Sequence::new(enc));
 
@@ -56,7 +56,6 @@ impl SceneChange {
       CpuFeatureLevel::default(),
       pyramid_size,
       seq,
-      true,
     );
 
     Self { frames: 0, pyramid_size, processed: 0, last_keyframe: 0, detector }
@@ -64,9 +63,7 @@ impl SceneChange {
 
   // Tell where to split the lookahead
   //
-  fn split<T: Pixel>(
-    &mut self, lookahead: &[Arc<Frame<T>>],
-  ) -> Option<(usize, bool)> {
+  fn split(&mut self, lookahead: &[Arc<Frame<T>>]) -> Option<(usize, bool)> {
     self.processed += 1;
 
     let new_gop = self.detector.analyze_next_frame(
