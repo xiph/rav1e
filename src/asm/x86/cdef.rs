@@ -64,7 +64,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   };
 
   // TODO: handle padding in the fast path
-  if edges != CDEF_HAVE_ALL {
+  if edges != CDEF_HAVE_ALL && matches!(T::type_enum(), PixelType::U16) {
     call_rust(dst);
   } else {
     #[cfg(feature = "check_asm")]
