@@ -65,6 +65,12 @@ put_8tap_h_rnd:   dd 34, 34, 40, 40
 prep_8tap_1d_rnd: times 2 dd     8 - (8192 <<  4)
 prep_8tap_2d_rnd: times 4 dd    32 - (8192 <<  5)
 
+warp8x8_shift:    dd 11, 13
+warp8x8_rnd1:     dd 1024, 1024, 4096, 4096
+warp8x8_rnd2:     times 4 dw 4096
+                  times 4 dw 16384
+warp8x8t_rnd:     times 2 dd 16384 - (8192 << 15)
+
 %macro BIDIR_JMP_TABLE 2-*
     %xdefine %1_%2_table (%%table - 2*%3)
     %xdefine %%base %1_%2_table
@@ -104,6 +110,8 @@ BASE_JMP_TABLE prep, ssse3,    4, 8, 16, 32, 64, 128
 
 cextern mc_subpel_filters
 %define subpel_filters (mangle(private_prefix %+ _mc_subpel_filters)-8)
+
+cextern mc_warp_filter
 
 SECTION .text
 
@@ -2525,6 +2533,392 @@ cglobal prep_8tap_16bpc, 4, 8, 0, tmp, src, ss, w, h, mx, my
     jg .hv_loop0
     RET
 %undef tmp
+
+%if ARCH_X86_64
+; warp8x8t spills one less xmm register than warp8x8 on WIN64, compensate that
+; by allocating 16 bytes more stack space so that stack offsets match up.
+cglobal warp_affine_8x8t_16bpc, 4, 13, 9, 16*(13+WIN64), dst, ds, src, ss, \
+                                                         delta, mx, tmp, \
+                                                         alpha, beta, filter, \
+                                                         my, gamma, cnt
+%else
+cglobal warp_affine_8x8t_16bpc, 0, 7, 8, -16*17, alpha, gamma, src, tmp, \
+                                                 filter, mx, my
+%define m8   [esp+16*13]
+%define m9   [esp+16*14]
+%define cntd dword [esp+4*63]
+%define dstq tmpq
+%define dsq  0
+%if STACK_ALIGNMENT < 16
+%define dstm [esp+4*65]
+%define dsm  [esp+4*66]
+%else
+%define dstm r0m
+%define dsm  r1m
+%endif
+%endif
+%define base filterq-$$
+    mov                 t0d, r7m
+    LEA             filterq, $$
+    shr                 t0d, 11
+%if ARCH_X86_64
+    movddup              m8, [base+warp8x8t_rnd]
+%else
+    movddup              m1, [base+warp8x8t_rnd]
+    mov                  r1, r1m
+    add                  r1, r1
+    mova                 m8, m1
+    mov                 r1m, r1 ; ds *= 2
+%endif
+    call mangle(private_prefix %+ _warp_affine_8x8_16bpc_ssse3).main
+    jmp .start
+.loop:
+%if ARCH_X86_64
+    lea                dstq, [dstq+dsq*4]
+%else
+    add                dstq, dsm
+    mov                dstm, dstq
+%endif
+    call mangle(private_prefix %+ _warp_affine_8x8_16bpc_ssse3).main2
+.start:
+%if ARCH_X86_32
+    mov                dstq, dstm
+%endif
+    paddd                m1, m8
+    paddd                m2, m8
+    psrad                m1, 15
+    psrad                m2, 15
+    packssdw             m1, m2
+    mova       [dstq+dsq*0], m1
+    call mangle(private_prefix %+ _warp_affine_8x8_16bpc_ssse3).main3
+%if ARCH_X86_32
+    mov                dstq, dstm
+    add                dstq, dsm
+%endif
+    paddd                m1, m8
+    paddd                m2, m8
+    psrad                m1, 15
+    psrad                m2, 15
+    packssdw             m1, m2
+    mova       [dstq+dsq*2], m1
+    dec                cntd
+    jg .loop
+    RET
+
+%if ARCH_X86_64
+cglobal warp_affine_8x8_16bpc, 4, 13, 10, 16*13, dst, ds, src, ss, delta, \
+                                                 mx, tmp, alpha, beta, \
+                                                 filter, my, gamma, cnt
+%else
+cglobal warp_affine_8x8_16bpc, 0, 7, 8, -16*17, alpha, gamma, src, tmp, \
+                                                filter, mx, my
+%endif
+    mov                 t0d, r7m
+    LEA             filterq, $$
+    shr                 t0d, 11
+%if ARCH_X86_64
+    movddup              m8, [base+warp8x8_rnd2+t0*8]
+    movd                 m9, r7m ; pixel_max
+    pshufb               m9, [base+pw_256]
+%else
+    movddup              m1, [base+warp8x8_rnd2+t0*8]
+    movd                 m2, r7m ; pixel_max
+    pshufb               m2, [base+pw_256]
+    mova                 m8, m1
+    mova                 m9, m2
+%endif
+    call .main
+    jmp .start
+.loop:
+%if ARCH_X86_64
+    lea                dstq, [dstq+dsq*2]
+%else
+    add                dstq, dsm
+    mov                dstm, dstq
+%endif
+    call .main2
+.start:
+%if ARCH_X86_32
+    mov                dstq, dstm
+%endif
+    psrad                m1, 16
+    psrad                m2, 16
+    packssdw             m1, m2
+    pmaxsw               m1, m6
+    pmulhrsw             m1, m8
+    pminsw               m1, m9
+    mova       [dstq+dsq*0], m1
+    call .main3
+%if ARCH_X86_32
+    mov                dstq, dstm
+    add                dstq, dsm
+%endif
+    psrad                m1, 16
+    psrad                m2, 16
+    packssdw             m1, m2
+    pmaxsw               m1, m6
+    pmulhrsw             m1, m8
+    pminsw               m1, m9
+    mova       [dstq+dsq*1], m1
+    dec                cntd
+    jg .loop
+    RET
+ALIGN function_align
+.main:
+    ; Stack args offset by one (r4m -> r5m etc.) due to call
+%if WIN64
+    mov              deltaq, r5m
+    mov                 mxd, r6m
+%endif
+    movd                 m0, [base+warp8x8_shift+t0*4]
+    movddup              m7, [base+warp8x8_rnd1+t0*8]
+    add             filterq, mc_warp_filter-$$
+%if ARCH_X86_64
+    movsx            alphad, word [deltaq+2*0]
+    movsx             betad, word [deltaq+2*1]
+    movsx            gammad, word [deltaq+2*2]
+    movsx            deltad, word [deltaq+2*3]
+    lea                tmpq, [ssq*3]
+    add                 mxd, 512+(64<<10)
+    sub                srcq, tmpq             ; src -= ss*3
+    imul               tmpd, alphad, -7
+    mov                 myd, r7m
+    add               betad, tmpd             ; beta -= alpha*7
+    imul               tmpd, gammad, -7
+    add                 myd, 512+(64<<10)
+    mov                cntd, 4
+    add              deltad, tmpd             ; delta -= gamma*7
+%else
+%if STACK_ALIGNMENT < 16
+    %assign stack_offset stack_offset - gprsize
+%endif
+    mov                 r3d, r5m              ; abcd
+%if STACK_ALIGNMENT < 16
+    mov                  r0, r1m              ; dst
+    mov                  r1, r2m              ; ds
+    mov  [esp+gprsize+4*65], r0
+    mov  [esp+gprsize+4*66], r1
+%endif
+    movsx            alphad, word [r3+2*0]
+    movsx               r2d, word [r3+2*1]
+    movsx            gammad, word [r3+2*2]
+    movsx               r3d, word [r3+2*3]
+    imul                r5d, alphad, -7
+    add                 r2d, r5d              ; beta -= alpha*7
+    imul                r5d, gammad, -7
+    mov  [esp+gprsize+4*60], r2d
+    add                 r3d, r5d              ; delta -= gamma*7
+    mov  [esp+gprsize+4*61], r3d
+    mov                 r3d, r4m              ; ss
+    mov                srcq, r3m
+    mov                 mxd, r6m
+    mov                 myd, r7m
+    mov dword [esp+gprsize+4*63], 4           ; cnt
+    mov  [esp+gprsize+4*62], r3
+    lea                  r3, [r3*3]
+    add                 mxd, 512+(64<<10)
+    add                 myd, 512+(64<<10)
+    sub                srcq, r3               ; src -= ss*3
+%if STACK_ALIGNMENT < 16
+    %assign stack_offset stack_offset + gprsize
+%endif
+%endif
+    mova      [rsp+gprsize], m0
+    pxor                 m6, m6
+    call .h
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 01
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 1], m1
+    mova [rsp+gprsize+16* 4], m5
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 12
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 7], m1
+    mova [rsp+gprsize+16*10], m5
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 23
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 2], m1
+    mova [rsp+gprsize+16* 5], m5
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 34
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 8], m1
+    mova [rsp+gprsize+16*11], m5
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 45
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 3], m1
+    mova [rsp+gprsize+16* 6], m5
+    mova                 m5, m0
+    call .h
+    punpcklwd            m1, m5, m0           ; 56
+    punpckhwd            m5, m0
+    mova [rsp+gprsize+16* 9], m1
+    mova [rsp+gprsize+16*12], m5
+    mova                 m5, m0
+.main2:
+    call .h
+%macro WARP_V 6 ; 01l, 23l, 45l, 01h, 23h, 45h
+    lea                tmpd, [myq+gammaq]
+    shr                 myd, 10
+    movq                 m4, [filterq+myq*8]  ; a
+    lea                 myd, [tmpq+gammaq]
+    shr                tmpd, 10
+    movq                 m2, [filterq+tmpq*8] ; b
+    lea                tmpd, [myq+gammaq]
+    shr                 myd, 10
+    movq                 m3, [filterq+myq*8]  ; c
+    lea                 myd, [tmpq+gammaq]
+    shr                tmpd, 10
+    movq                 m1, [filterq+tmpq*8] ; d
+    lea                tmpd, [myq+gammaq]
+    shr                 myd, 10
+    punpcklwd            m4, m2
+    punpcklwd            m3, m1
+    punpckldq            m2, m4, m3
+    punpckhdq            m4, m3
+    punpcklbw            m1, m6, m2           ; a0 a1 b0 b1 c0 c1 d0 d1 << 8
+    pmaddwd              m1, [rsp+gprsize+16*%1]
+    punpckhbw            m3, m6, m2           ; a2 a3 b2 b3 c2 c3 d2 d3 << 8
+    mova                 m2, [rsp+gprsize+16*%2]
+    pmaddwd              m3, m2
+    mova [rsp+gprsize+16*%1], m2
+    paddd                m1, m3
+    punpcklbw            m3, m6, m4           ; a4 a5 b4 b5 c4 c5 d4 d5 << 8
+    mova                 m2, [rsp+gprsize+16*%3]
+    pmaddwd              m3, m2
+    mova [rsp+gprsize+16*%2], m2
+    paddd                m1, m3
+    punpcklwd            m3, m5, m0           ; 67
+    punpckhbw            m2, m6, m4           ; a6 a7 b6 b7 c6 c7 d6 d7 << 8
+    pmaddwd              m2, m3
+    mova [rsp+gprsize+16*%3], m3
+    paddd                m1, m2
+    movq                 m4, [filterq+myq*8]  ; e
+    lea                 myd, [tmpq+gammaq]
+    shr                tmpd, 10
+    movq                 m3, [filterq+tmpq*8] ; f
+    lea                tmpd, [myq+gammaq]
+    shr                 myd, 10
+    movq                 m2, [filterq+myq*8]  ; g
+%if ARCH_X86_64
+    lea                 myd, [tmpq+deltaq]    ; my += delta
+%else
+    mov                 myd, [esp+gprsize+4*61]
+    add                 myd, tmpd
+%endif
+    shr                tmpd, 10
+    punpcklwd            m4, m3
+    movq                 m3, [filterq+tmpq*8] ; h
+    punpcklwd            m2, m3
+    punpckldq            m3, m4, m2
+    punpckhdq            m4, m2
+    punpcklbw            m2, m6, m3           ; e0 e1 f0 f1 g0 g1 h0 h1 << 8
+    pmaddwd              m2, [rsp+gprsize+16*%4]
+    punpckhbw            m6, m3               ; e2 e3 f2 f3 g2 g3 h2 h3 << 8
+    mova                 m3, [rsp+gprsize+16*%5]
+    pmaddwd              m6, m3
+    mova [rsp+gprsize+16*%4], m3
+    pxor                 m3, m3
+    paddd                m2, m6
+    punpcklbw            m3, m4               ; e4 e5 f4 f5 g4 g5 h4 h5 << 8
+    mova                 m6, [rsp+gprsize+16*%6]
+    pmaddwd              m3, m6
+    mova [rsp+gprsize+16*%5], m6
+    punpckhwd            m5, m0
+    pxor                 m6, m6
+    paddd                m2, m3
+    punpckhbw            m3, m6, m4           ; e6 e7 f6 f7 g6 g7 h6 h7 << 8
+    pmaddwd              m3, m5
+    mova [rsp+gprsize+16*%6], m5
+    mova                 m5, m0
+    paddd                m2, m3
+%endmacro
+    WARP_V                1,  2,  3,  4,  5,  6
+    ret
+.main3:
+    call .h
+    WARP_V                7,  8,  9, 10, 11, 12
+    ret
+ALIGN function_align
+.h:
+    lea                tmpd, [mxq+alphaq]
+    shr                 mxd, 10
+    movq                 m3, [filterq+mxq*8]
+    punpcklbw            m0, m6, m3
+    movu                 m3, [srcq-6]
+    pmaddwd              m0, m3               ; 0
+    lea                 mxd, [tmpq+alphaq]
+    shr                tmpd, 10
+    movq                 m3, [filterq+tmpq*8]
+    punpcklbw            m2, m6, m3
+    movu                 m3, [srcq-4]
+    pmaddwd              m2, m3               ; 1
+    lea                tmpd, [mxq+alphaq]
+    shr                 mxd, 10
+    movq                 m3, [filterq+mxq*8]
+    phaddd               m0, m2               ; 0 1
+    punpcklbw            m2, m6, m3
+    movu                 m3, [srcq-2]
+    pmaddwd              m2, m3               ; 2
+    lea                 mxd, [tmpq+alphaq]
+    shr                tmpd, 10
+    movq                 m3, [filterq+tmpq*8]
+    punpcklbw            m1, m6, m3
+    movu                 m3, [srcq+0]
+    pmaddwd              m1, m3               ; 3
+    lea                tmpd, [mxq+alphaq]
+    shr                 mxd, 10
+    movq                 m3, [filterq+mxq*8]
+    phaddd               m2, m1               ; 2 3
+    punpcklbw            m1, m6, m3
+    movu                 m3, [srcq+2]
+    pmaddwd              m1, m3               ; 4
+    lea                 mxd, [tmpq+alphaq]
+    shr                tmpd, 10
+    movq                 m3, [filterq+tmpq*8]
+    phaddd               m0, m2               ; 0 1 2 3
+    punpcklbw            m2, m6, m3
+    movu                 m3, [srcq+4]
+    pmaddwd              m2, m3               ; 5
+    lea                tmpd, [mxq+alphaq]
+    shr                 mxd, 10
+    movq                 m3, [filterq+mxq*8]
+    phaddd               m1, m2               ; 4 5
+    punpcklbw            m2, m6, m3
+    movu                 m3, [srcq+6]
+    pmaddwd              m2, m3               ; 6
+%if ARCH_X86_64
+    lea                 mxd, [tmpq+betaq]     ; mx += beta
+%else
+    mov                 mxd, [esp+gprsize*2+4*60]
+    add                 mxd, tmpd
+%endif
+    shr                tmpd, 10
+    movq                 m3, [filterq+tmpq*8]
+    punpcklbw            m4, m6, m3
+    movu                 m3, [srcq+8]
+%if ARCH_X86_64
+    add                srcq, ssq
+%else
+    add                srcq, [esp+gprsize*2+4*62]
+%endif
+    pmaddwd              m3, m4               ; 7
+    phaddd               m2, m3               ; 6 7
+    phaddd               m1, m2               ; 4 5 6 7
+    paddd                m0, m7
+    paddd                m1, m7
+    psrad                m0, [rsp+gprsize*2]
+    psrad                m1, [rsp+gprsize*2]
+    packssdw             m0, m1
+    ret
 
 %macro BIDIR_FN 0
     call .main
