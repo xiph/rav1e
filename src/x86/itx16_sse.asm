@@ -30,16 +30,24 @@
 
 SECTION .text
 
-%macro IWHT4_1D_PACKED 0
+%macro REPX 2-*
+    %xdefine %%f(x) %1
+%rep %0 - 1
+    %rotate 1
+    %%f(%1)
+%endrep
+%endmacro
+
+%macro IWHT4_1D 0
     ; m0 = in0,  m1 = in1,  m2 = in2,  m3 = in3
-    paddd               m0, m1      ; in0 += in1
-    psubd               m4, m2, m3  ; tmp0 = in2 - in3
-    psubd               m5, m0, m4  ; tmp1 = (in0 - tmp0) >> 1
-    psrad               m5, 1
-    psubd               m2, m5, m1  ; in2 = tmp1 - in1
-    psubd               m5, m3      ; in1 = tmp1 - in3
-    psubd               m0, m5      ; in0 -= in1
-    paddd               m4, m2      ; in3 = tmp0 + in2
+    paddd                m0, m1      ; in0 += in1
+    psubd                m4, m2, m3  ; tmp0 = in2 - in3
+    psubd                m5, m0, m4  ; tmp1 = (in0 - tmp0) >> 1
+    psrad                m5, 1
+    psubd                m2, m5, m1  ; in2 = tmp1 - in1
+    psubd                m5, m3      ; in1 = tmp1 - in3
+    psubd                m0, m5      ; in0 -= in1
+    paddd                m4, m2      ; in3 = tmp0 + in2
     ; m0 = out0,  m1 = in1,  m2 = out2,  m3 = in3
     ; m4 = out3,  m5 = out1
 %endmacro
@@ -50,11 +58,8 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 3, 6, dst, stride, c, eob, bdmax
     mova                 m1, [cq+16*1]
     mova                 m2, [cq+16*2]
     mova                 m3, [cq+16*3]
-    psrad                m0, 2
-    psrad                m1, 2
-    psrad                m2, 2
-    psrad                m3, 2
-    IWHT4_1D_PACKED
+    REPX       {psrad x, 2}, m0, m1, m2, m3
+    IWHT4_1D
     punpckldq            m1, m0, m5
     punpckhdq            m3, m0, m5
     punpckldq            m5, m2, m4
@@ -64,7 +69,7 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 3, 6, dst, stride, c, eob, bdmax
     punpcklqdq           m4, m3, m2
     punpckhqdq           m3, m2
     mova                 m2, m4
-    IWHT4_1D_PACKED
+    IWHT4_1D
     packssdw             m0, m4 ; low: out3,  high: out0
     packssdw             m2, m5 ; low: out2,  high: out1
     pxor                 m4, m4
