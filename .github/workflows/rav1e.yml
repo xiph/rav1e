@@ -123,17 +123,33 @@ jobs:
         run: |
           echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
           echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
+      - name: Add libvmaf
+        if: >
+          matrix.conf == '1.51.0-tests' || matrix.conf == 'aom-tests' ||
+          matrix.conf == 'grcov-coveralls'
+        env:
+          LINK: https://www.deb-multimedia.org/pool/main/v/vmaf-dmo
+          LIBVMAF_VERSION: 2.1.1-dmo0~bpo10+3
+          LIBVMAF_SHA256: >-
+            d9c2e708399af37cac52090453aadf8ad4311c3ed40addf02c3158c7f7a705a6
+          LIBVMAF_DEV_SHA256: >-
+            957a21b4a4b3cea4b27ab068fc41e85776d19c69fbede949b6eecd9631aa697f
+        run: |
+          echo "$LINK/libvmaf1_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libvmaf-dev_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
+          echo "$LIBVMAF_SHA256 libvmaf1_${LIBVMAF_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$LIBVMAF_DEV_SHA256 libvmaf-dev_${LIBVMAF_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add aom
         if: >
           matrix.conf == '1.51.0-tests' || matrix.conf == 'aom-tests' ||
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-          AOM_VERSION: 3.1.0-dmo0~bpo10+1
+          AOM_VERSION: 3.1.1-dmo0~bpo10+1
           AOM_DEV_SHA256: >-
-            1a78ad10714c0cd9ed2324007369c20a5d9047d98e7098f932f48edb01056f36
+            940a6419b794edf69c25d54765fe8eee83c8df7a566c49051d7bf1a30d8bf9d8
           AOM_LIB_SHA256: >-
-            a2e1f0a0ab1be6b93a1582d68b869d27e88c1fb8df7fae7bd793ebc0322c76a2
+            d17d988dcef38e5e00d304ee153e31201a547293112c1b8879a167e01b59851c
         run: |
           echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libaom3_${AOM_VERSION}_amd64.deb" >> DEBS
