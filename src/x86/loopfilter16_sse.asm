@@ -824,7 +824,7 @@ SECTION .text
 
     REPX {pand x, m9}, m7, m8, m10, m11, m1, m2
 %if avx_enabled
-    REPX {pandn x, m9}, m13, m3, m4, m5, m6, m14
+    REPX {pandn x, m9, x}, m13, m3, m4, m5, m6, m14
 %else
     pcmpeqw       m0, m0
     pxor          m0, m9
