@@ -2537,10 +2537,15 @@ cglobal prep_8tap_16bpc, 4, 8, 0, tmp, src, ss, w, h, mx, my
 %if ARCH_X86_64
 ; warp8x8t spills one less xmm register than warp8x8 on WIN64, compensate that
 ; by allocating 16 bytes more stack space so that stack offsets match up.
-cglobal warp_affine_8x8t_16bpc, 4, 13, 9, 16*(13+WIN64), dst, ds, src, ss, \
-                                                         delta, mx, tmp, \
-                                                         alpha, beta, filter, \
-                                                         my, gamma, cnt
+%if WIN64 && STACK_ALIGNMENT == 16
+%assign stksz 16*14
+%else
+%assign stksz 16*13
+%endif
+cglobal warp_affine_8x8t_16bpc, 4, 13, 9, stksz, dst, ds, src, ss, delta, \
+                                                 mx, tmp, alpha, beta, \
+                                                 filter, my, gamma, cnt
+%assign stack_size_padded_8x8t stack_size_padded
 %else
 cglobal warp_affine_8x8t_16bpc, 0, 7, 8, -16*17, alpha, gamma, src, tmp, \
                                                  filter, mx, my
@@ -2609,6 +2614,7 @@ cglobal warp_affine_8x8t_16bpc, 0, 7, 8, -16*17, alpha, gamma, src, tmp, \
 cglobal warp_affine_8x8_16bpc, 4, 13, 10, 16*13, dst, ds, src, ss, delta, \
                                                  mx, tmp, alpha, beta, \
                                                  filter, my, gamma, cnt
+ASSERT stack_size_padded == stack_size_padded_8x8t
 %else
 cglobal warp_affine_8x8_16bpc, 0, 7, 8, -16*17, alpha, gamma, src, tmp, \
                                                 filter, mx, my
