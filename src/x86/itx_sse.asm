@@ -282,6 +282,7 @@ ALIGN function_align
 %endmacro
 
 INIT_XMM ssse3
+; itx16 relies on dct_dct being the first function. If you change the order, adjust `itx8_start` in itx16.
 
 INV_TXFM_4X4_FN dct, dct
 INV_TXFM_4X4_FN dct, adst
@@ -337,7 +338,7 @@ cglobal iadst_4x4_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     ITX4_END              0, 1, 2, 3
 
 ALIGN function_align
-.main:
+cglobal_label .main
     punpcklwd            m2, m0, m1                ;unpacked in0 in2
     punpckhwd            m0, m1                    ;unpacked in1 in3
     mova                 m3, m0
