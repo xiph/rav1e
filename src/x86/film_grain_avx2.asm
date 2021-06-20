@@ -1,4 +1,4 @@
-; Copyright © 2019, VideoLAN and dav1d authors
+; Copyright © 2019-2021, VideoLAN and dav1d authors
 ; Copyright © 2019, Two Orioles, LLC
 ; All rights reserved.
 ;
@@ -49,22 +49,22 @@ min: dw 0, 16
 pb_27_17_17_27: db 27, 17, 17, 27
 pw_1: dw 1
 
-%macro JMP_TABLE 1-*
-    %xdefine %1_table %%table
-    %xdefine %%base %1_table
-    %xdefine %%prefix mangle(private_prefix %+ _%1)
+%macro JMP_TABLE 2-*
+    %xdefine %1_8bpc_%2_table %%table
+    %xdefine %%base %1_8bpc_%2_table
+    %xdefine %%prefix mangle(private_prefix %+ _%1_8bpc_%2)
     %%table:
-    %rep %0 - 1
-        dd %%prefix %+ .ar%2 - %%base
+    %rep %0 - 2
+        dd %%prefix %+ .ar%3 - %%base
         %rotate 1
     %endrep
 %endmacro
 
 ALIGN 4
-JMP_TABLE generate_grain_y_avx2, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_420_avx2, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_422_avx2, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_444_avx2, 0, 1, 2, 3
+JMP_TABLE generate_grain_y, avx2, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_420, avx2, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_422, avx2, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_444, avx2, 0, 1, 2, 3
 
 struc FGData
     .seed:                      resd 1
@@ -91,7 +91,7 @@ cextern gaussian_sequence
 SECTION .text
 
 INIT_XMM avx2
-cglobal generate_grain_y, 2, 9, 16, buf, fg_data
+cglobal generate_grain_y_8bpc, 2, 9, 16, buf, fg_data
     lea              r4, [pb_mask]
 %define base r4-pb_mask
     movq            xm1, [base+rnd_next_upperbit_mask]
@@ -132,8 +132,8 @@ cglobal generate_grain_y, 2, 9, 16, buf, fg_data
 
     ; auto-regression code
     movsxd           r2, [fg_dataq+FGData.ar_coeff_lag]
-    movsxd           r2, [base+generate_grain_y_avx2_table+r2*4]
-    lea              r2, [r2+base+generate_grain_y_avx2_table]
+    movsxd           r2, [base+generate_grain_y_8bpc_avx2_table+r2*4]
+    lea              r2, [r2+base+generate_grain_y_8bpc_avx2_table]
     jmp              r2
 
 .ar1:
@@ -420,7 +420,7 @@ cglobal generate_grain_y, 2, 9, 16, buf, fg_data
 
 %macro generate_grain_uv_fn 3 ; ss_name, ss_x, ss_y
 INIT_XMM avx2
-cglobal generate_grain_uv_%1, 4, 10, 16, buf, bufy, fg_data, uv
+cglobal generate_grain_uv_%1_8bpc, 4, 10, 16, buf, bufy, fg_data, uv
     lea              r4, [pb_mask]
 %define base r4-pb_mask
     movq            xm1, [base+rnd_next_upperbit_mask]
@@ -478,8 +478,8 @@ cglobal generate_grain_uv_%1, 4, 10, 16, buf, bufy, fg_data, uv
 
     ; auto-regression code
     movsxd           r5, [fg_dataq+FGData.ar_coeff_lag]
-    movsxd           r5, [base+generate_grain_uv_%1_avx2_table+r5*4]
-    lea              r5, [r5+base+generate_grain_uv_%1_avx2_table]
+    movsxd           r5, [base+generate_grain_uv_%1_8bpc_avx2_table+r5*4]
+    lea              r5, [r5+base+generate_grain_uv_%1_8bpc_avx2_table]
     jmp              r5
 
 .ar0:
@@ -975,7 +975,7 @@ generate_grain_uv_fn 422, 1, 0
 generate_grain_uv_fn 444, 0, 0
 
 INIT_YMM avx2
-cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
+cglobal fgy_32x32xn_8bpc, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     pcmpeqw         m10, m10
     psrld           m10, 24
     mov             r7d, [fg_dataq+FGData.scaling_shift]
@@ -1461,7 +1461,7 @@ cglobal fgy_32x32xn, 6, 13, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     RET
 
 %macro FGUV_FN 3 ; name, ss_hor, ss_ver
-cglobal fguv_32x32xn_i%1, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
+cglobal fguv_32x32xn_i%1_8bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
                                      grain_lut, h, sby, luma, lstride, uv_pl, is_id
     pcmpeqw         m10, m10
     psrld           m10, 24

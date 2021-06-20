@@ -1,4 +1,4 @@
-; Copyright © 2019, VideoLAN and dav1d authors
+; Copyright © 2019-2021, VideoLAN and dav1d authors
 ; Copyright © 2019, Two Orioles, LLC
 ; All rights reserved.
 ;
@@ -48,21 +48,21 @@ pw_1: dw 1
 
 %define pb_27_17_17_27 pb_17_27 - 2
 
-%macro JMP_TABLE 1-*
-    %xdefine %1_table %%table
-    %xdefine %%base %1_table
-    %xdefine %%prefix mangle(private_prefix %+ _%1)
+%macro JMP_TABLE 2-*
+    %xdefine %1_8bpc_%2_table %%table
+    %xdefine %%base %1_8bpc_%2_table
+    %xdefine %%prefix mangle(private_prefix %+ _%1_8bpc_%2)
     %%table:
-    %rep %0 - 1
-        dd %%prefix %+ .ar%2 - %%base
+    %rep %0 - 2
+        dd %%prefix %+ .ar%3 - %%base
         %rotate 1
     %endrep
 %endmacro
 
-JMP_TABLE generate_grain_y_ssse3, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_420_ssse3, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_422_ssse3, 0, 1, 2, 3
-JMP_TABLE generate_grain_uv_444_ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_y, ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_420, ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_422, ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_444, ssse3, 0, 1, 2, 3
 
 struc FGData
     .seed:                      resd 1
@@ -98,7 +98,7 @@ SECTION .text
 %endmacro
 
 INIT_XMM ssse3
-cglobal generate_grain_y, 2, 7 + 2 * ARCH_X86_64, 16, buf, fg_data
+cglobal generate_grain_y_8bpc, 2, 7 + 2 * ARCH_X86_64, 16, buf, fg_data
     LEA              r4, $$
 %define base r4-$$
     movq             m1, [base+rnd_next_upperbit_mask]
@@ -164,8 +164,8 @@ cglobal generate_grain_y, 2, 7 + 2 * ARCH_X86_64, 16, buf, fg_data
 
     ; auto-regression code
     movsxd           r2, [fg_dataq+FGData.ar_coeff_lag]
-    movsxd           r2, [base+generate_grain_y_ssse3_table+r2*4]
-    lea              r2, [r2+base+generate_grain_y_ssse3_table]
+    movsxd           r2, [base+generate_grain_y_8bpc_ssse3_table+r2*4]
+    lea              r2, [r2+base+generate_grain_y_8bpc_ssse3_table]
     jmp              r2
 
 .ar1:
@@ -507,7 +507,7 @@ cglobal generate_grain_y, 2, 7 + 2 * ARCH_X86_64, 16, buf, fg_data
 
 %macro generate_grain_uv_fn 3 ; ss_name, ss_x, ss_y
 INIT_XMM ssse3
-cglobal generate_grain_uv_%1, 1, 7 + 3 * ARCH_X86_64, 16, buf, bufy, fg_data, uv
+cglobal generate_grain_uv_%1_8bpc, 1, 7 + 3 * ARCH_X86_64, 16, buf, bufy, fg_data, uv
     movifnidn        r2, r2mp
     movifnidn        r3, r3mp
     LEA              r4, $$
@@ -606,8 +606,8 @@ cglobal generate_grain_uv_%1, 1, 7 + 3 * ARCH_X86_64, 16, buf, bufy, fg_data, uv
 
     ; auto-regression code
     movsxd           r5, [fg_dataq+FGData.ar_coeff_lag]
-    movsxd           r5, [base+generate_grain_uv_%1_ssse3_table+r5*4]
-    lea              r5, [r5+base+generate_grain_uv_%1_ssse3_table]
+    movsxd           r5, [base+generate_grain_uv_%1_8bpc_ssse3_table+r5*4]
+    lea              r5, [r5+base+generate_grain_uv_%1_8bpc_ssse3_table]
     jmp              r5
 
 .ar0:
@@ -1284,7 +1284,7 @@ INIT_XMM ssse3
 ; fgy_32x32xn(dst, src, stride, fg_data, w, scaling, grain_lut, h, sby)
 %if ARCH_X86_32
 %if STACK_ALIGNMENT < mmsize
-cglobal fgy_32x32xn, 0, 7, 16, 0 - (6 * mmsize + (9 + 3) * gprsize), \
+cglobal fgy_32x32xn_8bpc, 0, 7, 16, 0 - (6 * mmsize + (9 + 3) * gprsize), \
         dst, src, scaling, unused1, fg_data, picptr, unused2
     ; copy stack arguments to new position post-alignment, so that we
     ; don't have to keep the old stack location in a separate register
@@ -1302,7 +1302,7 @@ cglobal fgy_32x32xn, 0, 7, 16, 0 - (6 * mmsize + (9 + 3) * gprsize), \
     mov [rsp+6*mmsize+10*gprsize], r4
     mov [rsp+6*mmsize+11*gprsize], r5
 %else
-cglobal fgy_32x32xn, 0, 7, 16, 6 * mmsize + (3 + 1) * gprsize, \
+cglobal fgy_32x32xn_8bpc, 0, 7, 16, 6 * mmsize + (3 + 1) * gprsize, \
         dst, src, scaling, unused1, fg_data, picptr, unused2
 %endif
     mov            srcq, srcm
@@ -1323,7 +1323,7 @@ cglobal fgy_32x32xn, 0, 7, 16, 6 * mmsize + (3 + 1) * gprsize, \
 %define base r5-pb_mask
     mov             r5m, picptrq
 %else
-cglobal fgy_32x32xn, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
+cglobal fgy_32x32xn_8bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     lea              r7, [pb_mask]
 %define base r7-pb_mask
 %endif
@@ -2079,7 +2079,7 @@ INIT_XMM ssse3
 ;                         sby, luma, lstride, uv_pl, is_id)
 %if STACK_ALIGNMENT < mmsize
 DECLARE_ARG 0, 1, 2, 3, 4, 5, 6, 7, 8
-cglobal fguv_32x32xn_i%1, 0, 7, 8, 0 - (8 * mmsize + (13 + 3) * gprsize), \
+cglobal fguv_32x32xn_i%1_8bpc, 0, 7, 8, 0 - (8 * mmsize + (13 + 3) * gprsize), \
         tmp, src, scaling, h, fg_data, picptr, unused
     mov              r0, r0m
     mov              r1, r2m
@@ -2102,7 +2102,7 @@ cglobal fguv_32x32xn_i%1, 0, 7, 8, 0 - (8 * mmsize + (13 + 3) * gprsize), \
     mov [rsp+8*mmsize+13*gprsize], r2
     mov [rsp+8*mmsize+14*gprsize], r4
 %else
-cglobal fguv_32x32xn_i%1, 0, 7, 8, 8 * mmsize + (4) * gprsize, \
+cglobal fguv_32x32xn_i%1_8bpc, 0, 7, 8, 8 * mmsize + (4) * gprsize, \
         tmp, src, scaling, h, fg_data, picptr, unused
 %endif
     mov            srcq, srcm
@@ -2127,7 +2127,7 @@ cglobal fguv_32x32xn_i%1, 0, 7, 8, 8 * mmsize + (4) * gprsize, \
 %define base r5-pb_mask
     mov             r5m, r5
 %else
-cglobal fguv_32x32xn_i%1, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
+cglobal fguv_32x32xn_i%1_8bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
                                      grain_lut, tmp, sby, luma, lstride, uv_pl, is_id
     lea              r8, [pb_mask]
 %define base r8-pb_mask
