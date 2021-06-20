@@ -1,4 +1,4 @@
-; Copyright © 2018, VideoLAN and dav1d authors
+; Copyright © 2018-2021, VideoLAN and dav1d authors
 ; Copyright © 2018, Two Orioles, LLC
 ; All rights reserved.
 ;
@@ -1457,7 +1457,7 @@ SECTION .text
 %endmacro
 
 INIT_YMM avx2
-cglobal lpf_v_sb_y, 7, 10, 16, 32 * 11, \
+cglobal lpf_v_sb_y_8bpc, 7, 10, 16, 32 * 11, \
                     dst, stride, mask, l, l_stride, lut, \
                     w, stride3, mstride, tmp
     shl    l_strideq, 2
@@ -1495,7 +1495,7 @@ cglobal lpf_v_sb_y, 7, 10, 16, 32 * 11, \
     RET
 
 INIT_YMM avx2
-cglobal lpf_h_sb_y, 7, 10, 16, 32 * 21, \
+cglobal lpf_h_sb_y_8bpc, 7, 10, 16, 32 * 21, \
                     dst, stride, mask, l, l_stride, lut, \
                     h, stride3, l_stride3, tmp
     shl    l_strideq, 2
@@ -1535,7 +1535,7 @@ cglobal lpf_h_sb_y, 7, 10, 16, 32 * 21, \
     RET
 
 INIT_YMM avx2
-cglobal lpf_v_sb_uv, 7, 10, 16, \
+cglobal lpf_v_sb_uv_8bpc, 7, 10, 16, \
                      dst, stride, mask, l, l_stride, lut, \
                      w, stride3, mstride, tmp
     shl    l_strideq, 2
@@ -1566,7 +1566,7 @@ cglobal lpf_v_sb_uv, 7, 10, 16, \
     RET
 
 INIT_YMM avx2
-cglobal lpf_h_sb_uv, 7, 10, 16, \
+cglobal lpf_h_sb_uv_8bpc, 7, 10, 16, \
                      dst, stride, mask, l, l_stride, lut, \
                      h, stride3, l_stride3, tmp
     shl    l_strideq, 2
