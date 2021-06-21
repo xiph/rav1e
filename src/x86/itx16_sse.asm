@@ -108,13 +108,6 @@ SECTION .text
 %define o(x) r6-$$+x ; PIC
 %endif
 
-%macro TRANSPOSE4X4_PACKED 3 ; src/dst[1-2], tmp
-    punpckhwd           m%3, m%1, m%2
-    punpcklwd           m%1, m%2
-    punpckhwd           m%2, m%1, m%3      ; low: out2 ; high: out3
-    punpcklwd           m%1, m%3           ; low: out0 ; high: out1
-%endmacro
-
 %macro IWHT4_1D 0
     ; m0 = in0,  m1 = in1,  m2 = in2,  m3 = in3
     paddd                m0, m1      ; in0 += in1
@@ -383,7 +376,11 @@ INV_TXFM_4X4_FN adst, identity
 
 cglobal iadst_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     call .main
-    TRANSPOSE4X4_PACKED   0, 1, 2
+    ; transpose
+    punpckhwd            m2, m0, m1
+    punpcklwd            m0, m1
+    punpckhwd            m1, m0, m2
+    punpcklwd            m0, m2
     ; m0 = out0 out1
     ; m1 = out2 out3
     ; m5 = pd_2048
@@ -392,7 +389,7 @@ cglobal iadst_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     ; m0 = in0 in1
     ; m1 = in2 in3
 %if ARCH_X86_32
-    lea                 r5, [o(itx8_start)]
+    lea                  r5, [o(itx8_start)]
 %endif
     call m_suffix(iadst_4x4_internal_8bpc, _ssse3).main
 .end:
@@ -521,8 +518,12 @@ cglobal iidentity_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     REPX      {paddd x, m5}, m0, m1, m2, m3
     REPX      {psrad x, 12}, m0, m1, m2, m3
     packssdw             m0, m1
-    packssdw             m1, m2, m3
-    TRANSPOSE4X4_PACKED   0, 1, 2
+    packssdw             m2, m3
+    ; transpose
+    punpckhwd            m3, m0, m2
+    punpcklwd            m0, m2
+    punpckhwd            m1, m0, m3
+    punpcklwd            m0, m3
     ; m0 = out0 out1
     ; m1 = out2 out3
     ; m5 = pd_2048
