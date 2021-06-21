@@ -509,3 +509,86 @@ cglobal ipred_h_16bpc, 3, 6, 4, dst, stride, tl, w, h, stride3
     dec                  hd
     jg .w64
     RET
+
+cglobal ipred_paeth_16bpc, 4, 6, 8, dst, stride, tl, w, h, left
+%define base r5-ipred_paeth_16bpc_ssse3_table
+    movifnidn            hd, hm
+    pshuflw              m4, [tlq], q0000
+    mov               leftq, tlq
+    add                  hd, hd
+    punpcklqdq           m4, m4      ; topleft
+    sub               leftq, hq
+    and                  wd, ~7
+    jnz .w8
+    movddup              m5, [tlq+2] ; top
+    psubw                m6, m5, m4
+    pabsw                m7, m6
+.w4_loop:
+    movd                 m1, [leftq+hq-4]
+    punpcklwd            m1, m1
+    punpckldq            m1, m1      ; left
+%macro PAETH 0
+    paddw                m0, m6, m1
+    psubw                m2, m4, m0  ; tldiff
+    psubw                m0, m5      ; tdiff
+    pabsw                m2, m2
+    pabsw                m0, m0
+    pminsw               m2, m0
+    pcmpeqw              m0, m2
+    pand                 m3, m5, m0
+    pandn                m0, m4
+    por                  m0, m3
+    pcmpgtw              m3, m7, m2
+    pand                 m0, m3
+    pandn                m3, m1
+    por                  m0, m3
+%endmacro
+    PAETH
+    movhps [dstq+strideq*0], m0
+    movq   [dstq+strideq*1], m0
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2*2
+    jg .w4_loop
+    RET
+.w8:
+%if ARCH_X86_32
+    PUSH                 r6
+    %define             r7d  hm
+    %assign regs_used     7
+%elif WIN64
+    movaps              r4m, m8
+    PUSH                 r7
+    %assign regs_used     8
+%endif
+%if ARCH_X86_64
+    movddup              m8, [pb_0_1]
+%endif
+    lea                 tlq, [tlq+wq*2+2]
+    neg                  wq
+    mov                 r7d, hd
+.w8_loop0:
+    movu                 m5, [tlq+wq*2]
+    mov                  r6, dstq
+    add                dstq, 16
+    psubw                m6, m5, m4
+    pabsw                m7, m6
+.w8_loop:
+    movd                 m1, [leftq+hq-2]
+%if ARCH_X86_64
+    pshufb               m1, m8
+%else
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+%endif
+    PAETH
+    mova               [r6], m0
+    add                  r6, strideq
+    sub                  hd, 1*2
+    jg .w8_loop
+    mov                  hd, r7d
+    add                  wq, 8
+    jl .w8_loop0
+%if WIN64
+    movaps               m8, r4m
+%endif
+    RET

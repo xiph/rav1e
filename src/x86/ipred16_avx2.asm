@@ -561,7 +561,6 @@ ALIGN function_align
 .w8:
     vbroadcasti128      m2, [tlq+2]
     movsldup            m6, [base+ipred_hv_shuf]
-    lea                 r3, [strideq*3]
     psubw               m4, m2, m3
     pabsw               m5, m4
 .w8_loop:
