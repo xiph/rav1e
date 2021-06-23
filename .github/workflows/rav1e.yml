@@ -145,11 +145,11 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-          AOM_VERSION: 3.1.1-dmo0~bpo10+1
+          AOM_VERSION: 3.1.1-dmo0~bpo10+2
           AOM_DEV_SHA256: >-
-            940a6419b794edf69c25d54765fe8eee83c8df7a566c49051d7bf1a30d8bf9d8
+            881ec275a01169378e19c1779fec3fb5d4b80e1afe61d8b576a7c66419702a90
           AOM_LIB_SHA256: >-
-            d17d988dcef38e5e00d304ee153e31201a547293112c1b8879a167e01b59851c
+            a2a75cda5eacbddad70c508a7113d0ba572aad29934bb31905773e9adb555413
         run: |
           echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libaom3_${AOM_VERSION}_amd64.deb" >> DEBS
