@@ -49,22 +49,35 @@ wiener_round:  dd 1049600, 1048832
 
 SECTION .text
 
+%macro movif64 2 ; dst, src
+ %if ARCH_X86_64
+    mov             %1, %2
+ %endif
+%endmacro
+
+%macro movif32 2 ; dst, src
+ %if ARCH_X86_32
+    mov             %1, %2
+ %endif
+%endmacro
+
 INIT_XMM ssse3
 %if ARCH_X86_32
 DECLARE_REG_TMP 4, 6
  %if STACK_ALIGNMENT < 16
-  %assign stack_size 13*16+384*12
+  %assign extra_stack 14*16
  %else
-  %assign stack_size 11*16+384*12
+  %assign extra_stack 12*16
  %endif
-cglobal wiener_filter7_16bpc, 5, 7, 8, -stack_size, dst, dst_stride, left, \
-                                                    lpf, lpf_stride, w, flt
+cglobal wiener_filter7_16bpc, 5, 7, 8, -384*12-16-extra_stack, \
+                              dst, dst_stride, left, lpf, lpf_stride, w, flt
  %if STACK_ALIGNMENT < 16
-  %define lpfm        dword [esp+calloff+16*10+0]
-  %define lpf_stridem dword [esp+calloff+16*10+4]
-  %define wm          dword [esp+calloff+16*10+8]
-  %define hd          dword [esp+calloff+16*10+12]
-  %define edgeb        byte [esp+calloff+16*10+16]
+  %define lpfm        dword [esp+calloff+16*12+ 0]
+  %define lpf_stridem dword [esp+calloff+16*12+ 4]
+  %define wm          dword [esp+calloff+16*12+ 8]
+  %define hd          dword [esp+calloff+16*12+12]
+  %define edgeb        byte [esp+calloff+16*12+16]
+  %define edged       dword [esp+calloff+16*12+16]
  %else
   %define hd dword r6m
   %define edgeb byte r8m
@@ -90,6 +103,7 @@ cglobal wiener_filter7_16bpc, 5, 7, 8, -stack_size, dst, dst_stride, left, \
  %define m13 [esp+calloff+16*7]
  %define m14 [esp+calloff+16*8]
  %define m15 [esp+calloff+16*9]
+ %define r10 r5
  %define base t0-wiener_shifts
  %assign calloff 0
  %if STACK_ALIGNMENT < 16
@@ -99,7 +113,7 @@ cglobal wiener_filter7_16bpc, 5, 7, 8, -stack_size, dst, dst_stride, left, \
     mov             r4, [rstk+stack_offset+28]
     mov             hd, r4
     mov             r4, [rstk+stack_offset+36]
-    mov    [esp+16*11], r4 ; edge
+    mov          edged, r4 ; edge
  %endif
 %else
 DECLARE_REG_TMP 4, 9, 7, 11, 12, 13, 14 ; wiener ring buffer pointers
@@ -124,15 +138,14 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     movq            m1, [t0]    ; fx
     movq            m3, [t0+16] ; fy
     LEA             t0, wiener_shifts
-    mov         PICmem, t0
  %else
     LEA             t0, wiener_shifts
     mov           fltq, r7m
     movq            m1, [fltq]
     movq            m3, [fltq+16]
     mov             t1, r9m ; pixel_max
-    mov         PICmem, t0
  %endif
+    mov         PICmem, t0
 %endif
     mova            m6, [base+wiener_shufA]
     mova            m7, [base+wiener_shufB]
@@ -162,6 +175,8 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
  %define lpfm        [rsp+0]
  %define lpf_stridem [rsp+8]
  %define base
+ %define wiener_lshuf7_mem [wiener_lshuf7]
+ %define pd_m262128_mem [pd_m262128]
 %else
     add             wd, wd
     mova            m4, [base+wiener_shufC]
@@ -176,13 +191,10 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     mova           m15, m3
     shr             t1, 11
     add           lpfq, wq
+    mova            m3, [base+pd_m262128]
     movd            m4, [base+wiener_round+t1*4]
     movq            m5, [base+wiener_shifts+t1*8]
- %if STACK_ALIGNMENT < 16
-    lea             t1, [esp+16*12+wq+16]
- %else
-    lea             t1, [esp+16*10+wq+16]
- %endif
+    lea             t1, [esp+extra_stack+wq+16]
     add           dstq, wq
     neg             wq
     pshufd          m4, m4, q0000
@@ -191,10 +203,15 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     mov             wm, wq
     pmullw          m0, m2
     pmullw          m1, m2
+    mova            m2, [base+wiener_lshuf7]
+ %define pd_m262128_mem [esp+calloff+16*10]
+    mova pd_m262128_mem, m3
     mova           m10, m4
     mova           m11, m5
     mova           m12, m0
     mova           m13, m1
+ %define wiener_lshuf7_mem [esp+calloff+16*11]
+    mova wiener_lshuf7_mem, m2
 %endif
     test         edgeb, 4 ; LR_HAVE_TOP
     jz .no_top
@@ -208,25 +225,14 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     mov             t5, t1
     add             t1, 384*2
     call .h_top
-%if ARCH_X86_64
-    lea             r7, [lpfq+lpf_strideq*4]
+    movif32 lpf_strideq, lpf_stridem
+    lea            r10, [lpfq+lpf_strideq*4]
     mov           lpfq, dstq
     mov             t4, t1
     add             t1, 384*2
-    mov    lpf_stridem, lpf_strideq
-    add             r7, lpf_strideq
-    mov           lpfm, r7 ; below
-%else
-    mov            t4m, t1
-    mov             t0, lpf_stridem
-    lea             t1, [lpfq+t0*4]
-    mov           lpfq, dstq
-    add             t1, t0
-    mov           lpfm, t1 ; below
-    mov             t1, t4m
-    mov             t0, PICmem
-    add             t1, 384*2
-%endif
+    movif64 lpf_stridem, lpf_strideq
+    add            r10, lpf_strideq
+    mov           lpfm, r10 ; below
     call .h
     mov             t3, t1
     mov             t2, t1
@@ -259,24 +265,13 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     call .v
     RET
 .no_top:
-%if ARCH_X86_64
-    lea             r7, [lpfq+lpf_strideq*4]
+    movif32 lpf_strideq, lpf_stridem
+    lea            r10, [lpfq+lpf_strideq*4]
     mov           lpfq, dstq
-    mov    lpf_stridem, lpf_strideq
-    lea             r7, [r7+lpf_strideq*2]
-    mov           lpfm, r7
+    movif64 lpf_stridem, lpf_strideq
+    lea            r10, [r10+lpf_strideq*2]
+    mov           lpfm, r10
     call .h
-%else
-    mov            t1m, t1
-    mov             t0, lpf_stridem
-    lea             t1, [lpfq+t0*4]
-    mov           lpfq, dstq
-    lea             t1, [t1+t0*2]
-    mov           lpfm, t1
-    mov             t0, PICmem
-    mov             t1, t1m
-    call .h
-%endif
     mov             t6, t1
     mov             t5, t1
     mov             t4, t1
@@ -305,19 +300,15 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     jnz .main
 .v3:
     call .v
-%if ARCH_X86_32
-    mov             wq, wm
-%endif
+    movif32         wq, wm
 .v2:
     call .v
-%if ARCH_X86_32
-    mov             wq, wm
-%endif
+    movif32         wq, wm
     jmp .v1
 .extend_right:
-%assign stack_offset_tmp stack_offset
 %assign stack_offset stack_offset+8
 %assign calloff 8
+    movif32         t0, PICmem
     pxor            m0, m0
     movd            m1, wd
     mova            m2, [base+pb_0to15]
@@ -334,15 +325,13 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     psubb           m0, m1
     pminub          m0, m2
     pshufb          m5, m0
+    movif32         t0, t0m
     ret
 %assign stack_offset stack_offset-4
 %assign calloff 4
 .h:
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov             wq, wm
-%endif
+    movif64         wq, r5
+    movif32         wq, wm
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .h_extend_left
     movq            m3, [leftq]
@@ -350,13 +339,11 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     add          leftq, 8
     jmp .h_main
 .h_extend_left:
-    mova            m3, [lpfq+wq]            ; avoid accessing memory located
-    pshufb          m3, [base+wiener_lshuf7] ; before the start of the buffer
+    mova            m3, [lpfq+wq]         ; avoid accessing memory located
+    pshufb          m3, wiener_lshuf7_mem ; before the start of the buffer
     jmp .h_main
 .h_top:
-%if ARCH_X86_64
-    mov             wq, r5
-%endif
+    movif64         wq, r5
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .h_extend_left
 .h_loop:
@@ -381,7 +368,7 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     pmaddwd         m3, m13
     pshufb          m2, m5, m7
     paddw           m1, m2
-    mova            m2, [base+pd_m262128] ; (1 << 4) - (1 << 18)
+    mova            m2, pd_m262128_mem ; (1 << 4) - (1 << 18)
     pshufb          m4, m8
     pmaddwd         m1, m12
     pshufb          m5, m9
@@ -398,20 +385,14 @@ cglobal wiener_filter7_16bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf,
     mova       [t1+wq], m0
     add             wq, 16
     jl .h_loop
-%if ARCH_X86_32
-    mov             wq, wm
-%endif
+    movif32         wq, wm
     ret
 ALIGN function_align
 .hv:
     add           lpfq, dst_strideq
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov            t0m, t0
-    mov            t1m, t1
-    mov             t0, PICmem
-%endif
+    movif64         wq, r5
+    movif32        t0m, t0
+    movif32        t1m, t1
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .hv_extend_left
     movq            m3, [leftq]
@@ -420,16 +401,12 @@ ALIGN function_align
     jmp .hv_main
 .hv_extend_left:
     mova            m3, [lpfq+wq]
-    pshufb          m3, [base+wiener_lshuf7]
+    pshufb          m3, wiener_lshuf7_mem
     jmp .hv_main
 .hv_bottom:
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov            t0m, t0
-    mov            t1m, t1
-    mov             t0, PICmem
-%endif
+    movif64         wq, r5
+    movif32        t0m, t0
+    movif32        t1m, t1
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .hv_extend_left
 .hv_loop:
@@ -443,9 +420,8 @@ ALIGN function_align
     jl .hv_have_right
     call .extend_right
 .hv_have_right:
-%if ARCH_X86_32
-    mov             t1, t4m
-%endif
+    movif32         t1, t4m
+    movif32         t0, t2m
     pshufb          m0, m3, m6
     pshufb          m1, m4, m7
     paddw           m0, m1
@@ -457,7 +433,7 @@ ALIGN function_align
     pmaddwd         m3, m13
     pshufb          m2, m5, m7
     paddw           m1, m2
-    mova            m2, [base+pd_m262128]
+    mova            m2, pd_m262128_mem
     pshufb          m4, m8
     pmaddwd         m1, m12
     pshufb          m5, m9
@@ -470,13 +446,12 @@ ALIGN function_align
     paddw           m2, [t2+wq]
     mova            m5, [t3+wq]
 %else
-    mov             t0, t0m
     mova            m2, [t1+wq]
-    mov             t1, t2m
-    paddw           m2, [t1+wq]
+    paddw           m2, [t0+wq]
     mov             t1, t3m
+    mov             t0, t5m
     mova            m5, [t1+wq]
-    mov             t1, t5m
+    mov             t1, t1m
 %endif
     paddd           m0, m3
     paddd           m1, m4
@@ -489,11 +464,11 @@ ALIGN function_align
     psraw           m0, 1
     paddw           m3, m0, [t6+wq]
 %else
-    mova            m4, [t1+wq]
-    mov             t1, t1m
+    mova            m4, [t0+wq]
     paddw           m4, [t1+wq]
-    psraw           m0, 1
+    mov             t0, t0m
     mov             t1, t6m
+    psraw           m0, 1
     paddw           m3, m0, [t1+wq]
 %endif
     mova       [t0+wq], m0
@@ -517,8 +492,8 @@ ALIGN function_align
     pmaxsw          m0, m1
     mova     [dstq+wq], m0
     add             wq, 16
-%if ARCH_X86_64
     jl .hv_loop
+%if ARCH_X86_64
     mov             t6, t5
     mov             t5, t4
     mov             t4, t3
@@ -527,10 +502,6 @@ ALIGN function_align
     mov             t1, t0
     mov             t0, t6
 %else
-    jge .hv_end
-    mov             t0, PICmem
-    jmp .hv_loop
-.hv_end:
     mov             r5, t5m
     mov             t1, t4m
     mov            t6m, r5
@@ -548,9 +519,11 @@ ALIGN function_align
     add           dstq, dst_strideq
     ret
 .v:
-%if ARCH_X86_64
-    mov             wq, r5
+    movif64         wq, r5
+    movif32        t0m, t0
+    movif32        t1m, t1
 .v_loop:
+%if ARCH_X86_64
     mova            m1, [t4+wq]
     paddw           m1, [t2+wq]
     mova            m2, [t3+wq]
@@ -558,19 +531,17 @@ ALIGN function_align
     paddw           m3, m4, [t6+wq]
     paddw           m4, [t5+wq]
 %else
-    mov            t1m, t1
-.v_loop:
-    mov             t1, t4m
-    mova            m1, [t1+wq]
+    mov             t0, t4m
     mov             t1, t2m
+    mova            m1, [t0+wq]
     paddw           m1, [t1+wq]
-    mov             t1, t3m
-    mova            m2, [t1+wq]
+    mov             t0, t3m
     mov             t1, t1m
+    mova            m2, [t0+wq]
     mova            m4, [t1+wq]
-    mov             t1, t6m
-    paddw           m3, m4, [t1+wq]
+    mov             t0, t6m
     mov             t1, t5m
+    paddw           m3, m4, [t0+wq]
     paddw           m4, [t1+wq]
 %endif
     punpcklwd       m0, m1, m2
@@ -601,15 +572,16 @@ ALIGN function_align
     mov             t3, t2
     mov             t2, t1
 %else
-    mov             t1, t5m
-    mov             r5, t4m
-    mov            t6m, t1
-    mov            t5m, r5
-    mov             t1, t3m
+    mov             t0, t5m
+    mov             t1, t4m
+    mov             r5, t3m
+    mov            t6m, t0
+    mov            t5m, t1
+    mov            t4m, r5
     mov             r5, t2m
-    mov            t4m, t1
-    mov            t3m, r5
     mov             t1, t1m
+    mov             t0, t0m
+    mov            t3m, r5
     mov            t2m, t1
 %endif
     add           dstq, dst_strideq
@@ -629,6 +601,7 @@ cglobal wiener_filter5_16bpc, 5, 7, 8, -stack_size, dst, dst_stride, left, \
   %define wm          dword [esp+calloff+16*10+0]
   %define hd          dword [esp+calloff+16*10+4]
   %define edgeb        byte [esp+calloff+16*10+8]
+  %define edged       dword [esp+calloff+16*10+8]
  %else
   %define hd dword r6m
   %define edgeb byte r8m
@@ -659,10 +632,10 @@ cglobal wiener_filter5_16bpc, 5, 7, 8, -stack_size, dst, dst_stride, left, \
     mov             r4, [rstk+stack_offset+28]
     mov             hd, r4
     mov             r4, [rstk+stack_offset+36]
-    mov  [esp+16*10+8], r4 ; edge
+    mov          edged, r4 ; edge
  %endif
 %else
-cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
+cglobal wiener_filter5_16bpc, 5, 14, 16, 384*8+16, dst, dst_stride, left, lpf, \
                                                    lpf_stride, w, edge, flt, h
  %define base
 %endif
@@ -683,15 +656,14 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
     movq            m1, [t0]    ; fx
     movq            m3, [t0+16] ; fy
     LEA             t0, wiener_shifts
-    mov         PICmem, t0
  %else
     LEA             t0, wiener_shifts
     mov           fltq, r7m
     movq            m1, [fltq]
     movq            m3, [fltq+16]
     mov             t1, r9m ; pixel_max
-    mov         PICmem, t0
  %endif
+    mov         PICmem, t0
 %endif
     mova            m5, [base+wiener_shufE]
     mova            m6, [base+wiener_shufB]
@@ -771,24 +743,14 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
     mov             t4, t1
     add             t1, 384*2
     call .h_top
-%if ARCH_X86_64
-    lea             r7, [lpfq+lpf_strideq*4]
+    movif32 lpf_strideq, lpf_stridem
+    lea            r10, [lpfq+lpf_strideq*4]
     mov           lpfq, dstq
     mov             t3, t1
     add             t1, 384*2
-    mov    lpf_stridem, lpf_strideq
-    add             r7, lpf_strideq
-    mov           lpfm, r7 ; below
-%else
-    mov            t3m, t1
-    mov             t0, lpf_stridem
-    lea             t1, [lpfq+t0*4]
-    mov           lpfq, dstq
-    add             t1, t0
-    mov           lpfm, t1 ; below
-    mov             t1, t3m
-    add             t1, 384*2
-%endif
+    movif64 lpf_stridem, lpf_strideq
+    add            r10, lpf_strideq
+    mov           lpfm, r10 ; below
     call .h
     mov             t2, t1
     dec             hd
@@ -813,23 +775,13 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
 .end:
     RET
 .no_top:
-%if ARCH_X86_64
-    lea             r7, [lpfq+lpf_strideq*4]
+    movif32 lpf_strideq, lpf_stridem
+    lea            r10, [lpfq+lpf_strideq*4]
     mov           lpfq, dstq
-    mov    lpf_stridem, lpf_strideq
-    lea             r7, [r7+lpf_strideq*2]
-    mov           lpfm, r7
+    movif64 lpf_stridem, lpf_strideq
+    lea            r10, [r10+lpf_strideq*2]
+    mov           lpfm, r10
     call .h
-%else
-    mov            t1m, t1
-    mov             t0, lpf_stridem
-    lea             t1, [lpfq+t0*4]
-    mov           lpfq, dstq
-    lea             t1, [t1+t0*2]
-    mov           lpfm, t1
-    mov             t1, t1m
-    call .h
-%endif
     mov             t4, t1
     mov             t3, t1
     mov             t2, t1
@@ -868,12 +820,9 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
     call .v
     jmp .end
 .extend_right:
-%assign stack_offset_tmp stack_offset
 %assign stack_offset stack_offset+8
 %assign calloff 8
-%if ARCH_X86_32
-    mov             t0, PICmem
-%endif
+    movif32         t0, PICmem
     pxor            m1, m1
     movd            m2, wd
     mova            m0, [base+pb_2_3]
@@ -890,11 +839,8 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
 %assign stack_offset stack_offset-4
 %assign calloff 4
 .h:
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov             wq, wm
-%endif
+    movif64         wq, r5
+    movif32         wq, wm
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .h_extend_left
     mova            m4, [lpfq+wq]
@@ -908,11 +854,8 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
     pshufb          m3, m15       ; before the start of the buffer
     jmp .h_main
 .h_top:
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov             wq, wm
-%endif
+    movif64         wq, r5
+    movif32         wq, wm
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .h_extend_left
 .h_loop:
@@ -948,19 +891,14 @@ cglobal wiener_filter5_16bpc, 5, 15, 16, 384*8+16, dst, dst_stride, left, lpf, \
     mova       [t1+wq], m0
     add             wq, 16
     jl .h_loop
-%if ARCH_X86_32
-    mov             wq, wm
-%endif
+    movif32         wq, wm
     ret
 ALIGN function_align
 .hv:
     add           lpfq, dst_strideq
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov            t0m, t0
-    mov            t1m, t1
-%endif
+    movif64         wq, r5
+    movif32        t0m, t0
+    movif32        t1m, t1
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .hv_extend_left
     mova            m4, [lpfq+wq]
@@ -974,12 +912,9 @@ ALIGN function_align
     pshufb          m3, m15
     jmp .hv_main
 .hv_bottom:
-%if ARCH_X86_64
-    mov             wq, r5
-%else
-    mov            t0m, t0
-    mov            t1m, t1
-%endif
+    movif64         wq, r5
+    movif32        t0m, t0
+    movif32        t1m, t1
     test         edgeb, 1 ; LR_HAVE_LEFT
     jz .hv_extend_left
 .hv_loop:
@@ -992,10 +927,8 @@ ALIGN function_align
     jl .hv_have_right
     call .extend_right
 .hv_have_right:
-%if ARCH_X86_32
-    mov             t1, t1m
-    mov             t0, t3m
-%endif
+    movif32         t1, t1m
+    movif32         t0, t3m
     pshufb          m0, m3, m5
     pmaddwd         m0, m11
     pshufb          m1, m4, m5
@@ -1076,16 +1009,15 @@ ALIGN function_align
     add           dstq, dst_strideq
     ret
 .v:
-%if ARCH_X86_64
-    mov             wq, r5
+    movif64         wq, r5
+    movif32        t1m, t1
 .v_loop:
+%if ARCH_X86_64
     mova            m0, [t1+wq]
     paddw           m2, m0, [t3+wq]
     mova            m1, [t2+wq]
     mova            m4, [t4+wq]
 %else
-    mov            t1m, t1
-.v_loop:
     mov             t0, t3m
     mova            m0, [t1+wq]
     mov             t1, t2m
