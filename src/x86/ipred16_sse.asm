@@ -47,12 +47,16 @@ pw_2048: times 4 dw 2048
 
 %define ipred_dc_splat_16bpc_ssse3_table (ipred_dc_16bpc_ssse3_table + 10*4)
 %define ipred_dc_128_16bpc_ssse3_table   (ipred_dc_16bpc_ssse3_table + 15*4)
+%define ipred_cfl_splat_16bpc_ssse3_table (ipred_cfl_16bpc_ssse3_table + 8*4)
 
 JMP_TABLE ipred_dc_left_16bpc,    ssse3, h4, h8, h16, h32, h64
 JMP_TABLE ipred_dc_16bpc,         ssse3, h4, h8, h16, h32, h64, w4, w8, w16, w32, w64, \
                                          s4-10*4, s8-10*4, s16-10*4, s32-10*4, s64-10*4, \
                                          s4-15*4, s8-15*4, s16c-15*4, s32c-15*4, s64-15*4
 JMP_TABLE ipred_h_16bpc,          ssse3, w4, w8, w16, w32, w64
+JMP_TABLE ipred_cfl_16bpc,        ssse3, h4, h8, h16, h32, w4, w8, w16, w32, \
+                                         s4-8*4, s8-8*4, s16-8*4, s32-8*4
+JMP_TABLE ipred_cfl_left_16bpc,   ssse3, h4, h8, h16, h32
 JMP_TABLE pal_pred_16bpc,         ssse3, w4, w8, w16, w32, w64
 
 cextern smooth_weights_1d_16bpc
@@ -878,6 +882,311 @@ cglobal ipred_smooth_16bpc, 3, 7, 8, dst, stride, tl, w, h, \
     movaps               m9, r6m
 %endif
     RET
+
+%if UNIX64
+DECLARE_REG_TMP 7
+%else
+DECLARE_REG_TMP 5
+%endif
+
+cglobal ipred_cfl_top_16bpc, 4, 7, 8, dst, stride, tl, w, h, ac
+    LEA                  t0, ipred_cfl_left_16bpc_ssse3_table
+    movd                 m4, wd
+    tzcnt                wd, wd
+    movifnidn            hd, hm
+    add                 tlq, 2
+    movsxd               r6, [t0+wq*4]
+    movd                 m5, wd
+    jmp mangle(private_prefix %+ _ipred_cfl_left_16bpc_ssse3.start)
+
+cglobal ipred_cfl_left_16bpc, 3, 7, 8, dst, stride, tl, w, h, ac, alpha
+    movifnidn            hd, hm
+    LEA                  t0, ipred_cfl_left_16bpc_ssse3_table
+    tzcnt                wd, wm
+    lea                 r6d, [hq*2]
+    movd                 m4, hd
+    sub                 tlq, r6
+    tzcnt               r6d, hd
+    movd                 m5, r6d
+    movsxd               r6, [t0+r6*4]
+.start:
+    movd                 m7, r7m
+    movu                 m0, [tlq]
+    add                  r6, t0
+    add                  t0, ipred_cfl_splat_16bpc_ssse3_table-ipred_cfl_left_16bpc_ssse3_table
+    movsxd               wq, [t0+wq*4]
+    pxor                 m6, m6
+    pshuflw              m7, m7, q0000
+    pcmpeqw              m3, m3
+    add                  wq, t0
+    movifnidn           acq, acmp
+    pavgw                m4, m6
+    punpcklqdq           m7, m7
+    jmp                  r6
+.h32:
+    movu                 m1, [tlq+48]
+    movu                 m2, [tlq+32]
+    paddw                m0, m1
+    paddw                m0, m2
+.h16:
+    movu                 m1, [tlq+16]
+    paddw                m0, m1
+.h8:
+    pshufd               m1, m0, q1032
+    paddw                m0, m1
+.h4:
+    pmaddwd              m0, m3
+    psubd                m4, m0
+    pshuflw              m0, m4, q1032
+    paddd                m0, m4
+    psrld                m0, m5
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+    jmp                  wq
+
+%macro IPRED_CFL 2 ; dst, src
+    pabsw               m%1, m%2
+    pmulhrsw            m%1, m2
+    psignw              m%2, m1
+    psignw              m%1, m%2
+    paddw               m%1, m0
+    pmaxsw              m%1, m6
+    pminsw              m%1, m7
+%endmacro
+
+cglobal ipred_cfl_16bpc, 4, 7, 8, dst, stride, tl, w, h, ac, alpha
+    movifnidn            hd, hm
+    tzcnt               r6d, hd
+    lea                 t0d, [wq+hq]
+    movd                 m4, t0d
+    tzcnt               t0d, t0d
+    movd                 m5, t0d
+    LEA                  t0, ipred_cfl_16bpc_ssse3_table
+    tzcnt                wd, wd
+    movd                 m7, r7m
+    movsxd               r6, [t0+r6*4]
+    movsxd               wq, [t0+wq*4+4*4]
+    psrlw                m4, 1
+    pxor                 m6, m6
+    pshuflw              m7, m7, q0000
+    add                  r6, t0
+    add                  wq, t0
+    movifnidn           acq, acmp
+    pcmpeqw              m3, m3
+    punpcklqdq           m7, m7
+    jmp                  r6
+.h4:
+    movq                 m0, [tlq-8]
+    jmp                  wq
+.w4:
+    movq                 m1, [tlq+2]
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psubd                m4, m0
+    pshufd               m0, m4, q1032
+    paddd                m0, m4
+    pshuflw              m4, m0, q1032
+    paddd                m0, m4
+    cmp                  hd, 4
+    jg .w4_mul
+    psrld                m0, 3
+    jmp .w4_end
+.w4_mul:
+    mov                 r6d, 0xAAAB
+    mov                 r2d, 0x6667
+    cmp                  hd, 16
+    cmove               r6d, r2d
+    movd                 m1, r6d
+    psrld                m0, 2
+    pmulhuw              m0, m1
+    psrlw                m0, 1
+.w4_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s4:
+    movd                 m1, alpham
+    lea                  r6, [strideq*3]
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s4_loop:
+    mova                 m4, [acq+16*0]
+    mova                 m5, [acq+16*1]
+    add                 acq, 16*2
+    IPRED_CFL             3, 4
+    IPRED_CFL             4, 5
+    movq   [dstq+strideq*0], m3
+    movhps [dstq+strideq*1], m3
+    movq   [dstq+strideq*2], m4
+    movhps [dstq+r6       ], m4
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .s4_loop
+    RET
+.h8:
+    mova                 m0, [tlq-16]
+    jmp                  wq
+.w8:
+    movu                 m1, [tlq+2]
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psubd                m4, m0
+    pshufd               m0, m4, q1032
+    paddd                m0, m4
+    pshuflw              m4, m0, q1032
+    paddd                m0, m4
+    psrld                m0, m5
+    cmp                  hd, 8
+    je .w8_end
+    mov                 r6d, 0xAAAB
+    mov                 r2d, 0x6667
+    cmp                  hd, 32
+    cmove               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+    psrlw                m0, 1
+.w8_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s8:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s8_loop:
+    mova                 m4, [acq+16*0]
+    mova                 m5, [acq+16*1]
+    add                 acq, 16*2
+    IPRED_CFL             3, 4
+    IPRED_CFL             4, 5
+    mova   [dstq+strideq*0], m3
+    mova   [dstq+strideq*1], m4
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .s8_loop
+    RET
+.h16:
+    mova                 m0, [tlq-32]
+    paddw                m0, [tlq-16]
+    jmp                  wq
+.w16:
+    movu                 m1, [tlq+ 2]
+    movu                 m2, [tlq+18]
+    paddw                m1, m2
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psubd                m4, m0
+    pshufd               m0, m4, q1032
+    paddd                m0, m4
+    pshuflw              m4, m0, q1032
+    paddd                m0, m4
+    psrld                m0, m5
+    cmp                  hd, 16
+    je .w16_end
+    mov                 r6d, 0xAAAB
+    mov                 r2d, 0x6667
+    test                 hd, 8|32
+    cmovz               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+    psrlw                m0, 1
+.w16_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s16:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s16_loop:
+    mova                 m4, [acq+16*0]
+    mova                 m5, [acq+16*1]
+    add                 acq, 16*2
+    IPRED_CFL             3, 4
+    IPRED_CFL             4, 5
+    mova        [dstq+16*0], m3
+    mova        [dstq+16*1], m4
+    add                dstq, strideq
+    dec                  hd
+    jg .s16_loop
+    RET
+.h32:
+    mova                 m0, [tlq-64]
+    paddw                m0, [tlq-48]
+    paddw                m0, [tlq-32]
+    paddw                m0, [tlq-16]
+    jmp                  wq
+.w32:
+    movu                 m1, [tlq+ 2]
+    movu                 m2, [tlq+18]
+    paddw                m1, m2
+    movu                 m2, [tlq+34]
+    paddw                m1, m2
+    movu                 m2, [tlq+50]
+    paddw                m1, m2
+    paddw                m0, m1
+    pmaddwd              m0, m3
+    psubd                m4, m0
+    pshufd               m0, m4, q1032
+    paddd                m0, m4
+    pshuflw              m4, m0, q1032
+    paddd                m0, m4
+    psrld                m0, m5
+    cmp                  hd, 32
+    je .w32_end
+    mov                 r6d, 0xAAAB
+    mov                 r2d, 0x6667
+    cmp                  hd, 8
+    cmove               r6d, r2d
+    movd                 m1, r6d
+    pmulhuw              m0, m1
+    psrlw                m0, 1
+.w32_end:
+    pshuflw              m0, m0, q0000
+    punpcklqdq           m0, m0
+.s32:
+    movd                 m1, alpham
+    pshuflw              m1, m1, q0000
+    punpcklqdq           m1, m1
+    pabsw                m2, m1
+    psllw                m2, 9
+.s32_loop:
+    mova                 m4, [acq+16*0]
+    mova                 m5, [acq+16*1]
+    IPRED_CFL             3, 4
+    IPRED_CFL             4, 5
+    mova        [dstq+16*0], m3
+    mova        [dstq+16*1], m4
+    mova                 m4, [acq+16*2]
+    mova                 m5, [acq+16*3]
+    add                 acq, 16*4
+    IPRED_CFL             3, 4
+    IPRED_CFL             4, 5
+    mova        [dstq+16*2], m3
+    mova        [dstq+16*3], m4
+    add                dstq, strideq
+    dec                  hd
+    jg .s32_loop
+    RET
+
+cglobal ipred_cfl_128_16bpc, 3, 7, 8, dst, stride, tl, w, h, ac
+    tzcnt                wd, wm
+    LEA                  t0, ipred_cfl_splat_16bpc_ssse3_table
+    mov                 r6d, r7m
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movd                 m7, r7m
+    movsxd               wq, [t0+wq*4]
+    movddup              m0, [t0-ipred_cfl_splat_16bpc_ssse3_table+pw_512+r6*8]
+    pshuflw              m7, m7, q0000
+    pxor                 m6, m6
+    add                  wq, t0
+    movifnidn           acq, acmp
+    punpcklqdq           m7, m7
+    jmp                  wq
 
 cglobal pal_pred_16bpc, 4, 5, 5, dst, stride, pal, idx, w, h
 %define base r2-pal_pred_16bpc_ssse3_table
