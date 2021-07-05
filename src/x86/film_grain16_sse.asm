@@ -26,8 +26,6 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
-%if ARCH_X86_64
-
 SECTION_RODATA 16
 pd_16: times 4 dd 16
 pw_1: times 8 dw 1
@@ -147,40 +145,52 @@ SECTION .text
 
 
 INIT_XMM ssse3
-cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
+%if ARCH_X86_64
+cglobal generate_grain_y_16bpc, 3, 8, 16, buf, fg_data, bdmax
     lea              r4, [pb_mask]
 %define base r4-pb_mask
+%else
+cglobal generate_grain_y_16bpc, 3, 6, 8, buf, fg_data, bdmax
+    LEA              r4, $$
+%define base r4-$$
+%endif
     movq             m1, [base+rnd_next_upperbit_mask]
     movq             m4, [base+mul_bits]
     movq             m7, [base+hmul_bits]
     mov             r3d, [fg_dataq+FGData.grain_scale_shift]
-    lea             r6d, [bdmaxq+1]
-    shr             r6d, 11             ; 0 for 10bpc, 2 for 12bpc
-    sub              r3, r6
-    SPLATW           m8, [base+round+r3*2-2]
+    lea             r5d, [bdmaxq+1]
+    shr             r5d, 11             ; 0 for 10bpc, 2 for 12bpc
+    sub              r3, r5
+    SPLATW           m6, [base+round+r3*2-2]
     mova             m5, [base+pb_mask]
     SPLATW           m0, [fg_dataq+FGData.seed]
     mov              r3, -73*82*2
     sub            bufq, r3
+%if ARCH_X86_64
     lea              r6, [gaussian_sequence]
+%endif
 .loop:
     pand             m2, m0, m1
     psrlw            m3, m2, 10
     por              m2, m3             ; bits 0xf, 0x1e, 0x3c and 0x78 are set
     pmullw           m2, m4             ; bits 0x0f00 are set
-    pshufb           m6, m5, m2         ; set 15th bit for next 4 seeds
-    psllq            m2, m6, 30
-    por              m2, m6
-    psllq            m6, m2, 15
-    por              m2, m6             ; aggregate each bit into next seed's high bit
+    pshufb           m3, m5, m2         ; set 15th bit for next 4 seeds
+    psllq            m2, m3, 30
+    por              m2, m3
+    psllq            m3, m2, 15
+    por              m2, m3             ; aggregate each bit into next seed's high bit
     pmulhuw          m3, m0, m7
     por              m2, m3             ; 4 next output seeds
     pshuflw          m0, m2, q3333
     psrlw            m2, 5
+%if ARCH_X86_64
     vpgatherdw       m3, m2, r6, r5, r7, 4, 2
+%else
+    vpgatherdw       m3, m2, base+gaussian_sequence, r5, r2, 4, 2
+%endif
     paddw            m3, m3             ; otherwise bpc=12 w/ grain_scale_shift=0
                                         ; shifts by 0, which pmulhrsw does not support
-    pmulhrsw         m3, m8
+    pmulhrsw         m3, m6
     movq      [bufq+r3], m3
     add              r3, 4*2
     jl .loop
@@ -195,23 +205,29 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
 %if WIN64
     DEFINE_ARGS shift, fg_data, max, buf, val3, min, cf3, x, val0
     lea            bufq, [r0-2*(82*73-(82*3+79))]
-%elif ARCH_X86_64
-    DEFINE_ARGS buf, fg_data, max, shift, val3, min, cf3, x, val0
-    sub            bufq, 2*(82*73-(82*3+79))
+    PUSH             r8
 %else
-    ; FIXME shift goes into r1 (x86-32 code)
-    ..
+%if ARCH_X86_64
+    DEFINE_ARGS buf, fg_data, max, shift, val3, min, cf3, x, val0
+%else ; x86-32
+    DEFINE_ARGS buf, fg_data, min, val3, x, cf3, val0
+    PUSH             r6
+%define shiftd r1d
 %endif
-    mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
+    sub            bufq, 2*(82*73-(82*3+79))
+%endif
     movsx          cf3d, byte [fg_dataq+FGData.ar_coeffs_y+3]
     movd             m4, [fg_dataq+FGData.ar_coeffs_y]
+    mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
 %if WIN64
     DEFINE_ARGS shift, h, max, buf, val3, min, cf3, x, val0
 %elif ARCH_X86_64
     DEFINE_ARGS buf, h, max, shift, val3, min, cf3, x, val0
-%else
-    ; x86-32 code
-    ..
+%else ; x86-32
+%undef shiftd
+    DEFINE_ARGS buf, shift, min, val3, x, cf3, val0
+%define hd dword r0m
+%define maxd dword minm
 %endif
 %if cpuflag(sse4)
     pmovsxbw         m4, m4
@@ -220,7 +236,7 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     pcmpgtb          m3, m4
     punpcklbw        m4, m3
 %endif
-    pinsrw           m4, [pw_1], 3
+    pinsrw           m4, [base+pw_1], 3
     pshufd           m5, m4, q1111
     pshufd           m4, m4, q0000
     SPLATW           m3, [base+round_vals+shiftq*2-12]    ; rnd
@@ -264,35 +280,80 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     add            bufq, 82*2
     dec              hd
     jg .y_loop_ar1
+%if WIN64
+    POP              r8
+%elif ARCH_X86_32
+    POP              r6
+%undef maxd
+%undef hd
+%endif
 .ar0:
     RET
 
 .ar2:
+%if ARCH_X86_32
+%assign stack_offset_old stack_offset
+    ALLOC_STACK -16*8
+%endif
     DEFINE_ARGS buf, fg_data, bdmax, shift
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
-    SPLATW          m12, [base+round_vals-12+shiftq*2]
+    movd             m0, [base+round_vals-12+shiftq*2]
+    pshuflw          m0, m0, q0000
     movu             m6, [fg_dataq+FGData.ar_coeffs_y+0]    ; cf0-11
-    pxor             m9, m9
-    punpcklwd       m12, m9
-    pcmpgtb          m9, m6
-    punpckhbw       m10, m6, m9
-    punpcklbw        m6, m9
-    pshufd           m9, m6, q3333
-    pshufd           m8, m6, q2222
+    pxor             m2, m2
+    punpcklwd        m0, m2
+    pcmpgtb          m2, m6
+    punpckhbw        m3, m6, m2
+    punpcklbw        m6, m2
+    pshufd           m2, m6, q3333
+    pshufd           m1, m6, q2222
     pshufd           m7, m6, q1111
     pshufd           m6, m6, q0000
-    pshufd          m11, m10, q1111
-    pshufd          m10, m10, q0000
-    sar          bdmaxd, 1
-    SPLATW          m13, bdmaxd                             ; max_grain
-    pcmpeqw         m14, m14
-%if !cpuflag(sse4)
-    pcmpeqw         m15, m15
-    psrldq          m15, 14
-    pslldq          m15, 2
-    pxor            m15, m14
+    pshufd           m4, m3, q1111
+    pshufd           m3, m3, q0000
+%if ARCH_X86_64
+    SWAP              0, 12
+    SWAP              1, 8
+    SWAP              2, 9
+    SWAP              3, 10
+    SWAP              4, 11
+%else
+%define m12 [rsp+0*16]
+%define m8 [rsp+1*16]
+%define m9 [rsp+2*16]
+%define m10 [rsp+3*16]
+%define m11 [rsp+4*16]
+    mova            m12, m0
+    mova             m8, m1
+    mova             m9, m2
+    mova            m10, m3
+    mova            m11, m4
+    mov          bdmaxd, bdmaxm
 %endif
-    pxor            m14, m13                                ; min_grain
+    sar          bdmaxd, 1
+    SPLATW           m0, bdmaxd                             ; max_grain
+    pcmpeqw          m1, m1
+%if !cpuflag(sse4)
+    pcmpeqw          m2, m2
+    psrldq           m2, 14
+    pslldq           m2, 2
+    pxor             m2, m1
+%endif
+    pxor             m1, m0                                 ; min_grain
+%if ARCH_X86_64
+    SWAP              0, 13
+    SWAP              1, 14
+    SWAP              2, 15
+%else
+%define m13 [rsp+5*16]
+%define m14 [rsp+6*16]
+    mova            m13, m0
+    mova            m14, m1
+%if !cpuflag(sse4)
+%define m15 [rsp+7*16]
+    mova            m15, m2
+%endif
+%endif
     sub            bufq, 2*(82*73-(82*3+79))
     DEFINE_ARGS buf, fg_data, h, x
     mov              hd, 70
@@ -362,6 +423,16 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     add            bufq, 82*2
     dec              hd
     jg .y_loop_ar2
+%if ARCH_X86_32
+%undef m8
+%undef m9
+%undef m10
+%undef m11
+%undef m12
+%undef m13
+%undef m14
+%undef m15
+%endif
     RET
 
 .ar3:
@@ -371,20 +442,35 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     and             rsp, ~15
     sub             rsp, 64
     %define         tmp  rsp
-%else
+%elif ARCH_X86_64
     %define         tmp  rsp+stack_offset-72
+%else
+%assign stack_offset stack_offset_old
+    ALLOC_STACK  -16*12
+    %define         tmp  rsp
+    mov          bdmaxd, bdmaxm
 %endif
     sar          bdmaxd, 1
-    SPLATW          m15, bdmaxd                                 ; max_grain
-    pcmpeqw         m14, m14
+    SPLATW           m7, bdmaxd                                 ; max_grain
+    pcmpeqw          m6, m6
 %if !cpuflag(sse4)
-    pcmpeqw         m12, m12
-    psrldq          m12, 14
-    pslldq          m12, 4
-    pxor            m12, m14
+    pcmpeqw          m4, m4
+    psrldq           m4, 14
+    pslldq           m4, 4
+    pxor             m4, m6
 %endif
-    pxor            m14, m15                                   ; min_grain
+    pxor             m6, m7                                    ; min_grain
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
+
+%if ARCH_X86_64
+    SWAP              6, 14
+    SWAP              7, 15
+%else
+%define m14 [rsp+10*16]
+%define m15 [esp+11*16]
+    mova            m14, m6
+    mova            m15, m7
+%endif
 
     ; build cf0-1 until 18-19 in m5-12 and r0/1
     pxor             m1, m1
@@ -394,18 +480,37 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     punpcklbw        m0, m1
 
 %if cpuflag(sse4)
-    pshufd          m12, m2, q3333
+    pshufd           m4, m2, q3333
 %else
-    pshufd          m13, m2, q3333
-    mova       [tmp+48], m13
+    pshufd           m5, m2, q3333
+    mova       [tmp+48], m5
 %endif
-    pshufd          m11, m2, q2222
-    pshufd          m10, m2, q1111
-    pshufd           m9, m2, q0000
-    pshufd           m8, m0, q3333
+    pshufd           m3, m2, q2222
+    pshufd           m1, m2, q0000
+    pshufd           m2, m2, q1111
     pshufd           m7, m0, q2222
     pshufd           m6, m0, q1111
     pshufd           m5, m0, q0000
+    pshufd           m0, m0, q3333
+
+%if ARCH_X86_64
+    SWAP              0, 8
+    SWAP              1, 9
+    SWAP              2, 10
+    SWAP              3, 11
+    SWAP              4, 12
+%else
+%define m8 [rsp+4*16]
+%define m9 [esp+5*16]
+%define m10 [rsp+6*16]
+%define m11 [esp+7*16]
+%define m12 [rsp+8*16]
+    mova             m8, m0
+    mova             m9, m1
+    mova            m10, m2
+    mova            m11, m3
+    mova            m12, m4
+%endif
 
     ; build cf20,round in r2
     ; build cf21-23,round*2 in m13
@@ -417,8 +522,16 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     pshufd           m2, m0, q1111
     mova       [tmp+ 0], m1
     mova       [tmp+16], m2
-    psrldq          m13, m0, 10
-    pinsrw          m13, [base+round_vals+shiftq*2-10], 3
+    psrldq           m3, m0, 10
+    pinsrw           m3, [base+round_vals+shiftq*2-10], 3
+
+%if ARCH_X86_64
+    SWAP              3, 13
+%else
+%define m13 [esp+9*16]
+    mova            m13, m3
+%endif
+
     pinsrw           m0, [base+round_vals+shiftq*2-12], 5
     pshufd           m3, m0, q2222
     mova       [tmp+32], m3
@@ -471,7 +584,7 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     punpckhwd        m4, m1, m3                     ; y=-1,x=[+1/+2,+2/+3,+3/+4,+4/+5]
     punpcklwd        m1, m3                         ; y=-1,x=[-3/-2,-2/-1,-1/+0,+0/+1]
     shufps           m3, m1, m4, q1032              ; y=-1,x=[-1/+0,+0/+1,+1/+2,+2/+3]
-    punpcklwd        m2, [pw_1]
+    punpcklwd        m2, [base+pw_1]
 
 %if cpuflag(sse4)
     pmaddwd          m1, m12
@@ -521,54 +634,83 @@ cglobal generate_grain_y_16bpc, 3, 9, 16, buf, fg_data, bdmax
     jg .y_loop_ar3
 %if WIN64
     mov             rsp, r6
+%elif ARCH_X86_32
+%undef m8
+%undef m9
+%undef m10
+%undef m11
+%undef m12
+%undef m13
+%undef m14
+%undef m15
 %endif
     RET
 
 INIT_XMM ssse3
-cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
+%if ARCH_X86_64
+cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax, x, gaussian_reg, h, pic_reg
 %define base r8-pb_mask
     lea              r8, [pb_mask]
     movifnidn    bdmaxd, bdmaxm
+    lea             r6d, [bdmaxq+1]
+%else
+cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
+%define base r2-$$
+    LEA              r2, $$
+    mov        fg_dataq, r2m
+    mov             r6d, r4m
+    inc             r6d
+%endif
     movq             m1, [base+rnd_next_upperbit_mask]
     movq             m4, [base+mul_bits]
     movq             m7, [base+hmul_bits]
     mov             r5d, [fg_dataq+FGData.grain_scale_shift]
-    lea             r6d, [bdmaxq+1]
     shr             r6d, 11             ; 0 for 10bpc, 2 for 12bpc
     sub              r5, r6
-    SPLATW           m8, [base+round+r5*2-2]
+    SPLATW           m6, [base+round+r5*2-2]
     mova             m5, [base+pb_mask]
     SPLATW           m0, [fg_dataq+FGData.seed]
-    SPLATW           m9, [base+pw_seed_xor+uvq*4]
-    pxor             m0, m9
+%if ARCH_X86_64
+    SPLATW           m2, [base+pw_seed_xor+uvq*4]
+%else
+    mov             r5d, r3m
+    SPLATW           m2, [base+pw_seed_xor+r5*4]
+%endif
+    pxor             m0, m2
+%if ARCH_X86_64
     lea              r6, [gaussian_sequence]
-    mov             r7d, 38
+%endif
+    mov              hd, 38
     add            bufq, 44*2
 .loop_y:
-    mov              r5, -44
+    mov              xq, -44
 .loop_x:
     pand             m2, m0, m1
     psrlw            m3, m2, 10
     por              m2, m3             ; bits 0xf, 0x1e, 0x3c and 0x78 are set
     pmullw           m2, m4             ; bits 0x0f00 are set
-    pshufb           m6, m5, m2         ; set 15th bit for next 4 seeds
-    psllq            m2, m6, 30
-    por              m2, m6
-    psllq            m6, m2, 15
-    por              m2, m6             ; aggregate each bit into next seed's high bit
+    pshufb           m3, m5, m2         ; set 15th bit for next 4 seeds
+    psllq            m2, m3, 30
+    por              m2, m3
+    psllq            m3, m2, 15
+    por              m2, m3             ; aggregate each bit into next seed's high bit
     pmulhuw          m3, m0, m7
     por              m2, m3             ; 4 next output seeds
     pshuflw          m0, m2, q3333
     psrlw            m2, 5
+%if ARCH_X86_64
     vpgatherdw       m3, m2, r6, r9, r10, 4, 2
+%else
+    vpgatherdw       m3, m2, base+gaussian_sequence, r5, r6, 4, 2
+%endif
     paddw            m3, m3             ; otherwise bpc=12 w/ grain_scale_shift=0
                                         ; shifts by 0, which pmulhrsw does not support
-    pmulhrsw         m3, m8
-    movq    [bufq+r5*2], m3
-    add              r5, 4
+    pmulhrsw         m3, m6
+    movq    [bufq+xq*2], m3
+    add              xq, 4
     jl .loop_x
     add            bufq, 82*2
-    dec             r7d
+    dec              hd
     jg .loop_y
 
     ; auto-regression code
@@ -578,25 +720,51 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     jmp              r5
 
 .ar0:
+%if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
+%else
+    DEFINE_ARGS buf, bufy, pic_reg, fg_data, uv, shift
+%assign stack_offset_old stack_offset
+    ALLOC_STACK  -16*2
+    mov           bufyq, r1m
+    mov             uvd, r3m
+%endif
     imul            uvd, 28
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
     movd             m4, [fg_dataq+FGData.ar_coeffs_uv+uvq]
     SPLATW           m3, [base+hmul_bits+shiftq*2-10]
+%if ARCH_X86_64
     sar          bdmaxd, 1
-    SPLATW          m14, bdmaxd                     ; max_gain
+    SPLATW           m1, bdmaxd                     ; max_gain
+%else
+    SPLATW           m1, r4m
+    psraw            m1, 1
+%endif
     pcmpeqw          m7, m7
-    pxor             m7, m14                        ; min_grain
+    pxor             m7, m1                         ; min_grain
+%if ARCH_X86_64
+    SWAP              1, 14
     DEFINE_ARGS buf, bufy, h, x
+%else
+%define m14 [rsp+0*16]
+    mova            m14, m1
+    DEFINE_ARGS buf, bufy, pic_reg, h, x
+%endif
     pxor             m5, m5
     pcmpgtb          m5, m4
     punpcklbw        m4, m5
-    SPLATW           m6, [hmul_bits+4]
+    SPLATW           m6, [base+hmul_bits+4]
     SPLATW           m4, m4
     pxor             m5, m5
 %if !cpuflag(sse4)
-    pcmpeqw         m12, m12
-    pslldq          m12, 12
+    pcmpeqw          m2, m2
+    pslldq           m2, 12
+%if ARCH_X86_64
+    SWAP              2, 12
+%else
+%define m12 [rsp+1*16]
+    mova            m12, m2
+%endif
 %endif
     sub            bufq, 2*(82*38+82-(82*3+41))
     add           bufyq, 2*(3+82*3)
@@ -605,63 +773,84 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     ; first 32 pixels
     xor              xd, xd
 .x_loop_ar0:
-    movu             m8, [bufyq+xq*4]
-    movu             m9, [bufyq+xq*4+82*2]
-    movu            m10, [bufyq+xq*4     +16]
-    movu            m11, [bufyq+xq*4+82*2+16]
-    paddw            m8, m9
-    paddw           m10, m11
-    phaddw           m8, m10
-    pmulhrsw         m8, m6
-    punpckhwd        m9, m8, m5
-    punpcklwd        m8, m5
-    REPX {pmaddwd x, m4}, m8, m9
-    REPX {psrad x, 5}, m8, m9
-    packssdw         m8, m9
-    pmulhrsw         m8, m3
-    movu             m0, [bufq+xq*2]
-    paddw            m8, m0
-    pminsw           m8, m14
-    pmaxsw           m8, m7
+    movu             m0, [bufyq+xq*4]
+    movu             m2, [bufyq+xq*4+82*2]
+    paddw            m0, m2
+    movu             m1, [bufyq+xq*4     +16]
+    movu             m2, [bufyq+xq*4+82*2+16]
+    paddw            m1, m2
+    phaddw           m0, m1
+    pmulhrsw         m0, m6
+    punpckhwd        m1, m0, m5
+    punpcklwd        m0, m5
+    REPX {pmaddwd x, m4}, m0, m1
+    REPX {psrad x, 5}, m0, m1
+    packssdw         m0, m1
+    pmulhrsw         m0, m3
+    movu             m1, [bufq+xq*2]
+    paddw            m0, m1
+    pminsw           m0, m14
+    pmaxsw           m0, m7
     cmp              xd, 32
     je .end
-    movu    [bufq+xq*2], m8
+    movu    [bufq+xq*2], m0
     add              xd, 8
     jmp .x_loop_ar0
 
     ; last 6 pixels
 .end:
 %if cpuflag(sse4)
-    pblendw          m8, m0, 11000000b
+    pblendw          m0, m1, 11000000b
 %else
-    pand             m0, m12
-    pandn            m9, m12, m8
-    por              m8, m0, m9
+    pand             m1, m12
+    pandn            m2, m12, m0
+    por              m0, m1, m2
 %endif
-    movu    [bufq+xq*2], m8
+    movu    [bufq+xq*2], m0
 
     add            bufq, 82*2
     add           bufyq, 82*4
     dec              hd
     jg .y_loop_ar0
+%if ARCH_X86_32
+%undef m12
+%undef m14
+%endif
     RET
 
 .ar1:
+%if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, max, cf3, min, val3, x
+%else
+%assign stack_offset stack_offset_old
+%xdefine rstk rsp
+%assign stack_size_padded 0
+    DEFINE_ARGS buf, shift, pic_reg, fg_data, uv, bufy, cf3
+    mov           bufyq, r1m
+    mov             uvd, r3m
+%endif
     imul            uvd, 28
     movsx          cf3d, byte [fg_dataq+FGData.ar_coeffs_uv+uvq+3]
     movq             m4, [fg_dataq+FGData.ar_coeffs_uv+uvq]
 %if WIN64
     DEFINE_ARGS shift, bufy, h, buf, max, cf3, min, val3, x, val0
     lea            bufq, [r0-2*(82*38+44-(82*3+41))]
-%elif ARCH_X86_64
-    DEFINE_ARGS buf, bufy, h, shift, max, cf3, min, val3, x, val0
-    sub            bufq, 2*(82*38+44-(82*3+41))
 %else
-    ; x86-32 code - move shift into r1 [ecx]
-    ..
+%if ARCH_X86_64
+    DEFINE_ARGS buf, bufy, h, shift, max, cf3, min, val3, x, val0
+%else
+    DEFINE_ARGS buf, shift, pic_reg, fg_data, val0, bufy, cf3
+%define hd dword r1m
+%define mind dword r3m
+%define maxd dword r4m
 %endif
+    sub            bufq, 2*(82*38+44-(82*3+41))
+%endif
+%if ARCH_X86_64
     mov          shiftd, [r2+FGData.ar_coeff_shift]
+%else
+    mov          shiftd, [r3+FGData.ar_coeff_shift]
+%endif
     pxor             m5, m5
     pcmpgtb          m5, m4
     punpcklbw        m4, m5                 ; cf0-4 in words
@@ -672,28 +861,35 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     movd             m3, [base+round_vals+shiftq*2-12]    ; rnd
     pxor             m6, m6
     punpcklwd        m3, m6
-    SPLATW           m6, [hmul_bits+4]
+    SPLATW           m6, [base+hmul_bits+4]
     SPLATD           m3, m3
     add           bufyq, 2*(79+82*3)
     mov              hd, 35
     sar            maxd, 1
+%if ARCH_X86_64
     mov            mind, maxd
     xor            mind, -1
+%else
+    DEFINE_ARGS buf, shift, val3, x, val0, bufy, cf3
+    mov              r2, maxd
+    xor              r2, -1
+    mov            mind, r2
+%endif
 .y_loop_ar1:
     mov              xq, -38
     movsx         val3d, word [bufq+xq*2-2]
 .x_loop_ar1:
     movu             m0, [bufq+xq*2-82*2-2] ; top/left
-    movu             m8, [bufyq+xq*4]
-    movu             m9, [bufyq+xq*4+82*2]
+    movu             m7, [bufyq+xq*4]
+    movu             m1, [bufyq+xq*4+82*2]
+    phaddw           m7, m1
     psrldq           m2, m0, 2              ; top
     psrldq           m1, m0, 4              ; top/right
-    phaddw           m8, m9
-    pshufd           m9, m8, q3232
-    paddw            m8, m9
-    pmulhrsw         m8, m6
     punpcklwd        m0, m2
-    punpcklwd        m1, m8
+    pshufd           m2, m7, q3232
+    paddw            m7, m2
+    pmulhrsw         m7, m6
+    punpcklwd        m1, m7
     pmaddwd          m0, m4
     pmaddwd          m1, m5
     paddd            m0, m1
@@ -723,24 +919,54 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     add           bufyq, 82*4
     dec              hd
     jg .y_loop_ar1
+%if ARCH_X86_32
+%undef maxd
+%undef mind
+%undef hd
+%endif
     RET
 
 .ar2:
+%if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
+%else
+    DEFINE_ARGS buf, bufy, pic_reg, fg_data, uv, shift
+    ALLOC_STACK  -16*8
+    mov           bufyq, r1m
+    mov             uvd, r3m
+%endif
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
     imul            uvd, 28
+%if ARCH_X86_64
     sar          bdmaxd, 1
-    SPLATW          m13, bdmaxd                 ; max_grain
-    pcmpeqw         m14, m14
-%if !cpuflag(sse4)
-    pcmpeqw         m15, m15
-    psrldq          m15, 14
-    pslldq          m15, 2
-    pxor            m15, m14
+    SPLATW           m5, bdmaxd                 ; max_grain
+%else
+    SPLATW           m5, r4m
+    psraw            m5, 1
 %endif
-    pxor            m14, m13                    ; min_grain
+    pcmpeqw          m6, m6
+%if !cpuflag(sse4)
+    pcmpeqw          m7, m7
+    psrldq           m7, 14
+    pslldq           m7, 2
+    pxor             m7, m6
+%endif
+    pxor             m6, m5                    ; min_grain
 %if cpuflag(sse4)
-    SPLATW          m15, [hmul_bits+4]
+    SPLATW           m7, [base+hmul_bits+4]
+%endif
+
+%if ARCH_X86_64
+    SWAP              5, 13
+    SWAP              6, 14
+    SWAP              7, 15
+%else
+%define m13 [rsp+5*16]
+%define m14 [rsp+6*16]
+%define m15 [rsp+7*16]
+    mova            m13, m5
+    mova            m14, m6
+    mova            m15, m7
 %endif
 
     ; coef values
@@ -753,13 +979,36 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
 
     pshufd           m6, m0, q0000
     pshufd           m7, m0, q1111
-    pshufd           m8, m0, q2222
-    pshufd           m9, m0, q3333
-    pshufd          m10, m2, q0000
-    pshufd          m11, m2, q1111
-    pshufd          m12, m2, q2222
+    pshufd           m1, m0, q3333
+    pshufd           m0, m0, q2222
+    pshufd           m3, m2, q1111
+    pshufd           m4, m2, q2222
+    pshufd           m2, m2, q0000
 
+%if ARCH_X86_64
+    SWAP              0, 8
+    SWAP              1, 9
+    SWAP              2, 10
+    SWAP              3, 11
+    SWAP              4, 12
+%else
+%define m8 [rsp+0*16]
+%define m9 [rsp+1*16]
+%define m10 [rsp+2*16]
+%define m11 [rsp+3*16]
+%define m12 [rsp+4*16]
+    mova             m8, m0
+    mova             m9, m1
+    mova            m10, m2
+    mova            m11, m3
+    mova            m12, m4
+%endif
+
+%if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, h, x
+%else
+    DEFINE_ARGS buf, bufy, pic_reg, fg_data, h, x
+%endif
     sub            bufq, 2*(82*38+44-(82*3+41))
     add           bufyq, 2*(79+82*3)
     mov              hd, 35
@@ -801,9 +1050,9 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
 %if cpuflag(sse4)
     pmulhrsw         m1, m15
 %else
-    pmulhrsw         m1, [pw_8192]
+    pmulhrsw         m1, [base+pw_8192]
 %endif
-    punpcklwd        m1, [pw_1]
+    punpcklwd        m1, [base+pw_1]
     pmaddwd          m1, m12
     paddd            m0, m1
 
@@ -845,9 +1094,15 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     add           bufyq, 82*4
     dec              hd
     jg .y_loop_ar2
+%if ARCH_X86_32
+%undef m13
+%undef m14
+%undef m15
+%endif
     RET
 
 .ar3:
+%if ARCH_X86_64
     DEFINE_ARGS buf, bufy, fg_data, uv, bdmax, shift
 %if WIN64
     mov              r6, rsp
@@ -857,24 +1112,53 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
 %else
     %define         tmp  rsp+stack_offset-120
 %endif
+%else
+    DEFINE_ARGS buf, bufy, pic_reg, fg_data, uv, shift
+%assign stack_offset stack_offset_old
+    ALLOC_STACK  -16*14
+    mov           bufyq, r1m
+    mov             uvd, r3m
+    %define         tmp  rsp
+%endif
     mov          shiftd, [fg_dataq+FGData.ar_coeff_shift]
     imul            uvd, 28
-    SPLATW          m12, [base+round_vals-12+shiftq*2]
-    pxor            m13, m13
-    pcmpgtw         m13, m12
-    punpcklwd       m12, m13
+    SPLATW           m4, [base+round_vals-12+shiftq*2]
+    pxor             m5, m5
+    pcmpgtw          m5, m4
+    punpcklwd        m4, m5
+%if ARCH_X86_64
     sar          bdmaxd, 1
-    SPLATW          m14, bdmaxd                 ; max_grain
-    pcmpeqw         m15, m15
-%if !cpuflag(sse4)
-    pcmpeqw         m11, m11
-    psrldq          m11, 14
-    pslldq          m11, 4
-    pxor            m11, m15
+    SPLATW           m6, bdmaxd                 ; max_grain
+%else
+    SPLATW           m6, r4m
+    psraw            m6, 1
 %endif
-    pxor            m15, m14                    ; min_grain
+    pcmpeqw          m7, m7
+%if !cpuflag(sse4)
+    pcmpeqw          m3, m3
+    psrldq           m3, 14
+    pslldq           m3, 4
+    pxor             m3, m7
+%endif
+    pxor             m7, m6                     ; min_grain
 %if cpuflag(sse4)
-    SPLATW          m11, [base+hmul_bits+4]
+    SPLATW           m3, [base+hmul_bits+4]
+%endif
+
+%if ARCH_X86_64
+    SWAP              3, 11
+    SWAP              4, 12
+    SWAP              6, 14
+    SWAP              7, 15
+%else
+%define m11 [rsp+ 9*16]
+%define m12 [rsp+10*16]
+%define m14 [rsp+12*16]
+%define m15 [rsp+13*16]
+    mova            m11, m3
+    mova            m12, m4
+    mova            m14, m6
+    mova            m15, m7
 %endif
 
     ; cf from y=-3,x=-3 until y=-3,x=-2
@@ -883,18 +1167,18 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     pcmpgtb          m1, m0
     punpckhbw        m2, m0, m1
     punpcklbw        m0, m1
-    pshufd           m6, m0, q0000
-    pshufd           m7, m0, q1111
-    pshufd           m8, m0, q2222
-    pshufd           m9, m0, q3333
-    pshufd          m10, m2, q0000
-    pshufd          m13, m2, q1111
-    mova     [tmp+16*0], m6
-    mova     [tmp+16*1], m7
-    mova     [tmp+16*2], m8
-    mova     [tmp+16*3], m9
-    mova     [tmp+16*4], m10
-    mova     [tmp+16*5], m13
+    pshufd           m1, m0, q0000
+    pshufd           m3, m0, q1111
+    pshufd           m4, m0, q2222
+    pshufd           m0, m0, q3333
+    pshufd           m5, m2, q0000
+    pshufd           m6, m2, q1111
+    mova     [tmp+16*0], m1
+    mova     [tmp+16*1], m3
+    mova     [tmp+16*2], m4
+    mova     [tmp+16*3], m0
+    mova     [tmp+16*4], m5
+    mova     [tmp+16*5], m6
     pshufd           m6, m2, q2222
     pshufd           m7, m2, q3333
 
@@ -904,18 +1188,34 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     pcmpgtb          m1, m0
     punpckhbw        m2, m0, m1                 ; luma
     punpcklbw        m0, m1
-    pshufd          m10, m0, q3232
-    psrldq          m13, m0, 10
+    pshufd           m3, m0, q3232
+    psrldq           m5, m0, 10
     ; y=0,x=[-3 to -1] + "1.0" for current pixel
-    pinsrw          m13, [base+round_vals-10+shiftq*2], 3
+    pinsrw           m5, [base+round_vals-10+shiftq*2], 3
     ; y=-1,x=[-1 to +2]
-    pshufd           m8, m0, q0000
-    pshufd           m9, m0, q1111
+    pshufd           m1, m0, q0000
+    pshufd           m0, m0, q1111
     ; y=-1,x=+3 + luma
-    punpcklwd       m10, m2
-    pshufd          m10, m10, q0000
+    punpcklwd        m3, m2
+    pshufd           m3, m3, q0000
 
-    DEFINE_ARGS buf, bufy, fg_data, h, unused, x
+%if ARCH_X86_64
+    SWAP              1, 8
+    SWAP              0, 9
+    SWAP              3, 10
+    SWAP              5, 13
+    DEFINE_ARGS buf, bufy, fg_data, h, x
+%else
+%define m8  [rsp+ 6*16]
+%define m9  [rsp+ 7*16]
+%define m10 [rsp+ 8*16]
+%define m13 [rsp+11*16]
+    mova             m8, m1
+    mova             m9, m0
+    mova            m10, m3
+    mova            m13, m5
+    DEFINE_ARGS buf, bufy, pic_reg, fg_data, h, x
+%endif
     sub            bufq, 2*(82*38+44-(82*3+41))
     add           bufyq, 2*(79+82*3)
     mov              hd, 35
@@ -969,7 +1269,7 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
 %if cpuflag(sse4)
     pmulhrsw         m5, m11
 %else
-    pmulhrsw         m5, [pw_8192]
+    pmulhrsw         m5, [base+pw_8192]
 %endif
     punpckhwd        m4, m1, m3                     ; y=-1,x=[+1/+2,+2/+3,+3/+4,+4/+5]
     punpcklwd        m1, m3                         ; y=-1,x=[-3/-2,-2/-1,-1/+0,+0/+1]
@@ -1020,9 +1320,19 @@ cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax
     jg .y_loop_ar3
 %if WIN64
     mov             rsp, r6
+%elif ARCH_X86_32
+%undef m8
+%undef m9
+%undef m10
+%undef m11
+%undef m12
+%undef m13
+%undef m14
+%undef m15
 %endif
     RET
 
+%if ARCH_X86_64
 INIT_XMM ssse3
 cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
     mov             r7d, [fg_dataq+FGData.scaling_shift]
