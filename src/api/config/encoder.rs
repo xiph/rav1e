@@ -31,6 +31,13 @@ pub struct EncoderConfig {
   pub height: usize,
   /// Sample aspect ratio (for anamorphic video).
   pub sample_aspect_ratio: Rational,
+  /// Maximum width of the frames in pixels (for seq header)
+  /// 0 means to use the width setting instead.
+  /// Used for multiple renditions when switch frames are in use.
+  /// Set all renditions to have identical max_width / max_height.
+  pub max_width: usize,
+  /// Maximum height of the frames in pixels (for seq header)
+  pub max_height: usize,
   /// Video time base.
   pub time_base: Rational,
 
@@ -133,7 +140,8 @@ impl EncoderConfig {
       height: 480,
       sample_aspect_ratio: Rational { num: 1, den: 1 },
       time_base: Rational { num: 1, den: 30 },
-
+      max_width: 0,
+      max_height: 0,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,
@@ -213,7 +221,7 @@ impl EncoderConfig {
     // has the property that the scaled distortion of a 2Nx2N block is always
     // equal to the sum of the scaled distortions of the NxN sub-blocks it's
     // made of, this is a necessary property to be able to do RDO between
-    // multiple partition sizes properly. Unfortunately, when tx domain
+    // multiple partition sizes properly. Unfortunately, when tx domains
     // distortion is used, distortion is only known at the tx block level which
     // might be bigger than 8x8. So temporal RDO is always disabled in that case.
     !self.speed_settings.tx_domain_distortion
