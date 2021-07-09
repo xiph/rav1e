@@ -469,6 +469,8 @@ jobs:
           target: ${{ matrix.target }}
           override: true
           default: true
+      - name: Set compiler & target environment variable
+        run: echo "CC=clang -target ${{ matrix.target }}" >> $GITHUB_ENV
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
@@ -502,7 +504,7 @@ jobs:
       - name: Build
         if: matrix.conf == 'cargo-build'
         run: |
-          cargo build --release
+          cargo build --release --target=${{ matrix.target }}
       - name: Test
         if: matrix.conf == 'cargo-test'
         run: |
