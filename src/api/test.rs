@@ -21,7 +21,7 @@ fn setup_config(
   no_scene_detection: bool, rdo_lookahead_frames: usize,
   min_quantizer: Option<u8>,
 ) -> Config {
-  let mut enc = EncoderConfig::with_speed_preset(speed);
+  let mut enc = EncoderConfig::with_speed_preset(speed, Tune::Psychovisual);
   enc.quantizer = quantizer;
   enc.min_key_frame_interval = min_keyint;
   enc.max_key_frame_interval = max_keyint;

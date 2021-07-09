@@ -150,7 +150,10 @@ fn arbitrary_content_light(
 
 impl Arbitrary for ArbitraryConfig {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
-    let mut enc = EncoderConfig::with_speed_preset(Arbitrary::arbitrary(u)?);
+    let mut enc = EncoderConfig::with_speed_preset(
+      Arbitrary::arbitrary(u)?,
+      *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
+    );
     enc.width = Arbitrary::arbitrary(u)?;
     enc.height = Arbitrary::arbitrary(u)?;
     enc.bit_depth = u.int_in_range(0..=16)?;
@@ -216,8 +219,12 @@ pub struct ArbitraryEncoder {
 
 impl Arbitrary for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
+    let tune = u.choose(&[Tune::Psnr, Tune::Psychovisual])?;
     let enc = EncoderConfig {
-      speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
+      speed_settings: SpeedSettings::from_preset(
+        u.int_in_range(0..=10)?,
+        *tune,
+      ),
       width: u.int_in_range(1..=256)?,
       height: u.int_in_range(1..=256)?,
       still_picture: Arbitrary::arbitrary(u)?,
@@ -255,7 +262,7 @@ impl Arbitrary for ArbitraryEncoder {
       content_light: arbitrary_content_light(u)?,
       enable_timing_info: Arbitrary::arbitrary(u)?,
       switch_frame_interval: u.int_in_range(0..=3)?,
-      tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
+      tune: *tune,
     };
 
     let frame_count =

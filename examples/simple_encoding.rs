@@ -9,6 +9,7 @@
 
 // Encode the same tiny blank frame 30 times
 use rav1e::config::SpeedSettings;
+use rav1e::prelude::Tune;
 use rav1e::*;
 
 fn main() {
@@ -17,7 +18,7 @@ fn main() {
   enc.width = 64;
   enc.height = 96;
 
-  enc.speed_settings = SpeedSettings::from_preset(9);
+  enc.speed_settings = SpeedSettings::from_preset(9, Tune::Psychovisual);
 
   let cfg = Config::new().with_encoder_config(enc);
 

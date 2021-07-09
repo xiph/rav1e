@@ -54,7 +54,7 @@ pub struct CliOptions {
 fn build_speed_long_help() -> String {
   let levels = (0..=10)
     .map(|speed| {
-      let s = SpeedSettings::from_preset(speed);
+      let s = SpeedSettings::from_preset(speed, Tune::default());
       let o = crate::kv::to_string(&s).unwrap().replace(", ", "\n    ");
       format!("{:2} :\n    {}", speed, o)
     })
@@ -591,7 +591,9 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     .parse()
     .unwrap_or_default();
 
-  let mut cfg = EncoderConfig::with_speed_preset(speed);
+  let tune = matches.value_of("TUNE").unwrap().parse().unwrap();
+
+  let mut cfg = EncoderConfig::with_speed_preset(speed, tune);
   cfg.set_key_frame_interval(min_interval, max_interval);
   cfg.switch_frame_interval =
     matches.value_of("SWITCH_FRAME_INTERVAL").unwrap().parse().unwrap();
@@ -700,17 +702,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
 
   // rdo-lookahead-frames
   let maybe_rdo = matches.value_of("RDO_LOOKAHEAD_FRAMES");
-  if maybe_rdo.is_some() {
-    cfg.rdo_lookahead_frames =
-      matches.value_of("RDO_LOOKAHEAD_FRAMES").unwrap().parse().unwrap();
-  } else {
-    cfg.rdo_lookahead_frames = SpeedSettings::rdo_lookahead_frames(speed)
-  }
-
-  cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
-
-  if cfg.tune == Tune::Psychovisual {
-    cfg.speed_settings.tx_domain_distortion = false;
+  if let Some(rdo_frames) = maybe_rdo {
+    cfg.rdo_lookahead_frames = rdo_frames.parse().unwrap();
   }
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();

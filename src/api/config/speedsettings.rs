@@ -12,6 +12,7 @@ use num_derive::*;
 use crate::partition::BlockSize;
 use crate::serialize::{Deserialize, Serialize};
 
+use crate::encoder::Tune;
 use std::fmt;
 
 // NOTE: Add Structures at the end.
@@ -144,13 +145,13 @@ impl SpeedSettings {
   /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
   ///        bottom-up encoding with non-square partitions everywhere, full SGR search,
   ///        full segmentation search.
-  pub fn from_preset(speed: usize) -> Self {
+  pub fn from_preset(speed: usize, tune: Tune) -> Self {
     SpeedSettings {
       partition_range: Self::partition_range_preset(speed),
       multiref: Self::multiref_preset(speed),
       fast_deblock: Self::fast_deblock_preset(speed),
       reduced_tx_set: Self::reduced_tx_set_preset(speed),
-      tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
+      tx_domain_distortion: Self::tx_domain_distortion_preset(tune),
       tx_domain_rate: Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
@@ -167,6 +168,14 @@ impl SpeedSettings {
       enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
       fine_directional_intra: Self::fine_directional_intra_preset(speed),
     }
+  }
+
+  /// Update an existing SpeedSettings to adhere to a given tuning preset.
+  ///
+  /// Currently, enables tx_domain_distortion if tune == Psnr,
+  /// and disables tx_domain_distortion if tune == Psychovisual.
+  pub fn apply_tune(&mut self, tune: Tune) {
+    self.tx_domain_distortion = Self::tx_domain_distortion_preset(tune);
   }
 
   /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
@@ -200,9 +209,10 @@ impl SpeedSettings {
     speed >= 6
   }
 
-  /// TX domain distortion is always faster, with no significant quality change
-  const fn tx_domain_distortion_preset(_speed: usize) -> bool {
-    true
+  /// TX domain distortion is faster, but disables temporal RDO,
+  /// so we want to use it when we are not tuning for Psy quality
+  fn tx_domain_distortion_preset(tune: Tune) -> bool {
+    tune != Tune::Psychovisual
   }
 
   const fn tx_domain_rate_preset(_speed: usize) -> bool {
