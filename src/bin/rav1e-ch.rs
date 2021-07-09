@@ -551,7 +551,7 @@ fn run() -> Result<(), error::CliError> {
 
   let source = Source::new(cli.limit, y4m_dec);
 
-  if video_info.bit_depth == 8 {
+  if video_info.bit_depth == 8 && !cli.high_bitdepth {
     do_encode::<u8, y4m::Decoder<Box<dyn Read + Send>>>(
       cfg,
       cli.verbose,

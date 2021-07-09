@@ -48,6 +48,7 @@ pub struct CliOptions {
   pub pass2file_name: Option<String>,
   pub save_config: Option<String>,
   pub slots: usize,
+  pub high_bitdepth: bool,
 }
 
 #[cfg(feature = "serialize")]
@@ -370,6 +371,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Overwrite output file.")
         .short("y")
     )
+    .arg(
+      Arg::with_name("HIGH_BITDEPTH")
+        .help("Always the 16bit codepaths, even for 8bit input")
+        .long("16bit-codepaths")
+    )
     .subcommand(SubCommand::with_name("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
@@ -521,6 +527,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
     save_config,
     slots,
+    high_bitdepth: matches.is_present("HIGH_BITDEPTH"),
   })
 }
 
