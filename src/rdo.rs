@@ -637,6 +637,25 @@ impl DistortionScale {
   pub fn mul_u64(self, dist: u64) -> u64 {
     (self.0 as u64 * dist + (1 << Self::SHIFT >> 1)) >> Self::SHIFT
   }
+
+  /// Multiply and take binary logarithm
+  /// Result in Q24.
+  #[inline]
+  pub fn mul_blog_q24(self, other: DistortionScale) -> i32 {
+    use crate::rate::{blog64, q57_to_q24};
+    q57_to_q24(blog64(self.0 as i64 * other.0 as i64))
+      - ((Self::SHIFT as i32) << 25)
+  }
+
+  /// Create `DistortionScale` from binary logarithm
+  /// Input in Q24.
+  #[inline]
+  pub fn bexp_q24(blog_q24: i32) -> DistortionScale {
+    use crate::rate::bexp_q24;
+    DistortionScale(
+      bexp_q24(blog_q24 - ((24 - Self::SHIFT as i32) << 24)) as u32
+    )
+  }
 }
 
 // Default value for DistortionScale is a fixed point 1

@@ -229,7 +229,7 @@ pub(crate) fn bexp64(logq57: i64) -> i64 {
 // input: a 64-bit integer in Q0 (no fraction).
 // output: a 64-bit log in Q57.
 // TODO: Mark const once we can use local variables in a const function.
-fn blog64(w: i64) -> i64 {
+pub fn blog64(w: i64) -> i64 {
   let mut w = w;
   if w <= 0 {
     return -1;
@@ -294,12 +294,12 @@ fn blog64(w: i64) -> i64 {
 }
 
 // Converts a Q57 fixed-point fraction to Q24 by rounding.
-const fn q57_to_q24(v: i64) -> i32 {
+pub const fn q57_to_q24(v: i64) -> i32 {
   (((v >> 32) + 1) >> 1) as i32
 }
 
 // Converts a Q24 fixed-point fraction to Q57.
-const fn q24_to_q57(v: i32) -> i64 {
+pub const fn q24_to_q57(v: i32) -> i64 {
   (v as i64) << 33
 }
 
@@ -308,7 +308,7 @@ const fn q24_to_q57(v: i32) -> i64 {
 // log_scale: A binary logarithm in Q24 format.
 // Return: The binary exponential in Q24 format, saturated to 2**47 - 1 if
 //  log_scale was too large.
-fn bexp_q24(log_scale: i32) -> i64 {
+pub fn bexp_q24(log_scale: i32) -> i64 {
   if log_scale < 23 << 24 {
     let ret = bexp64(((log_scale as i64) << 33) + q57(24));
     if ret < (1i64 << 47) - 1 {
