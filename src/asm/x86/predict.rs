@@ -309,7 +309,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
           }
         }
       }
-      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 => {
+      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 && bit_depth > 8 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
         let edge_ptr =
           edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
