@@ -28,6 +28,7 @@
 
 SECTION_RODATA
 
+filter_shuf:   db  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,  4,  5,  2,  3, -1, -1
 pal_pred_shuf: db  0,  2,  4,  6,  8, 10, 12, 14,  1,  3,  5,  7,  9, 11, 13, 15
 
 pb_0_1:  times 4 db 0, 1
@@ -65,6 +66,7 @@ JMP_TABLE pal_pred_16bpc,         ssse3, w4, w8, w16, w32, w64
 
 cextern smooth_weights_1d_16bpc
 cextern smooth_weights_2d_16bpc
+cextern filter_intra_taps
 
 SECTION .text
 
@@ -885,6 +887,149 @@ cglobal ipred_smooth_16bpc, 3, 7, 8, dst, stride, tl, w, h, \
     movaps               m8, r4m
     movaps               m9, r6m
 %endif
+    RET
+
+%if ARCH_X86_64
+cglobal ipred_filter_16bpc, 4, 7, 16, dst, stride, tl, w, h, filter
+%else
+cglobal ipred_filter_16bpc, 4, 7, 8, -16*8, dst, stride, tl, w, h, filter
+%define  m8 [esp+16*0]
+%define  m9 [esp+16*1]
+%define m10 [esp+16*2]
+%define m11 [esp+16*3]
+%define m12 [esp+16*4]
+%define m13 [esp+16*5]
+%define m14 [esp+16*6]
+%define m15 [esp+16*7]
+%endif
+%define base r6-$$
+    movifnidn            hd, hm
+    movd                 m6, r8m     ; bitdepth_max
+%ifidn filterd, filterm
+    movzx           filterd, filterb
+%else
+    movzx           filterd, byte filterm
+%endif
+    LEA                  r6, $$
+    shl             filterd, 6
+    movu                 m0, [tlq-6] ; __ l1 l0 tl t0 t1 t2 t3
+    mova                 m1, [base+filter_intra_taps+filterq+16*0]
+    mova                 m2, [base+filter_intra_taps+filterq+16*1]
+    mova                 m3, [base+filter_intra_taps+filterq+16*2]
+    mova                 m4, [base+filter_intra_taps+filterq+16*3]
+    pxor                 m5, m5
+%if ARCH_X86_64
+    punpcklbw            m8, m5, m1  ; place 8-bit coefficients in the upper
+    punpckhbw            m9, m5, m1  ; half of each 16-bit word to avoid
+    punpcklbw           m10, m5, m2  ; having to perform sign-extension.
+    punpckhbw           m11, m5, m2
+    punpcklbw           m12, m5, m3
+    punpckhbw           m13, m5, m3
+    punpcklbw           m14, m5, m4
+    punpckhbw           m15, m5, m4
+%else
+    punpcklbw            m7, m5, m1
+    mova                 m8, m7
+    punpckhbw            m7, m5, m1
+    mova                 m9, m7
+    punpcklbw            m7, m5, m2
+    mova                m10, m7
+    punpckhbw            m7, m5, m2
+    mova                m11, m7
+    punpcklbw            m7, m5, m3
+    mova                m12, m7
+    punpckhbw            m7, m5, m3
+    mova                m13, m7
+    punpcklbw            m7, m5, m4
+    mova                m14, m7
+    punpckhbw            m7, m5, m4
+    mova                m15, m7
+%endif
+    mova                 m7, [base+filter_shuf]
+    add                  hd, hd
+    mov                  r5, dstq
+    pshuflw              m6, m6, q0000
+    mov                  r6, tlq
+    punpcklqdq           m6, m6
+    sub                 tlq, hq
+.left_loop:
+    pshufb               m0, m7      ; tl t0 t1 t2 t3 l0 l1 __
+    pshufd               m1, m0, q0000
+    pmaddwd              m2, m8, m1
+    pmaddwd              m1, m9
+    pshufd               m4, m0, q1111
+    pmaddwd              m3, m10, m4
+    pmaddwd              m4, m11
+    paddd                m2, m3
+    paddd                m1, m4
+    pshufd               m4, m0, q2222
+    pmaddwd              m3, m12, m4
+    pmaddwd              m4, m13
+    paddd                m2, m3
+    paddd                m1, m4
+    pshufd               m3, m0, q3333
+    pmaddwd              m0, m14, m3
+    pmaddwd              m3, m15
+    paddd                m0, m2
+    paddd                m1, m3
+    psrad                m0, 11     ; x >> 3
+    psrad                m1, 11
+    packssdw             m0, m1
+    pmaxsw               m0, m5
+    pavgw                m0, m5     ; (x + 8) >> 4
+    pminsw               m0, m6
+    movq   [dstq+strideq*0], m0
+    movhps [dstq+strideq*1], m0
+    movlps               m0, [tlq+hq-10]
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2*2
+    jg .left_loop
+    sub                  wd, 4
+    jz .end
+    sub                 tld, r6d     ; -h*2
+    sub                  r6, r5      ; tl-dst
+.right_loop0:
+    add                  r5, 8
+    mov                  hd, tld
+    movu                 m0, [r5+r6] ; tl t0 t1 t2 t3 __ __ __
+    mov                dstq, r5
+.right_loop:
+    pshufd               m2, m0, q0000
+    pmaddwd              m1, m8, m2
+    pmaddwd              m2, m9
+    pshufd               m4, m0, q1111
+    pmaddwd              m3, m10, m4
+    pmaddwd              m4, m11
+    pinsrw               m0, [dstq+strideq*0-2], 5
+    paddd                m1, m3
+    paddd                m2, m4
+    pshufd               m0, m0, q2222
+    movddup              m4, [dstq+strideq*1-8]
+    pmaddwd              m3, m12, m0
+    pmaddwd              m0, m13
+    paddd                m1, m3
+    paddd                m0, m2
+    pshuflw              m2, m4, q3333
+    punpcklwd            m2, m5
+    pmaddwd              m3, m14, m2
+    pmaddwd              m2, m15
+    paddd                m1, m3
+    paddd                m0, m2
+    psrad                m1, 11
+    psrad                m0, 11
+    packssdw             m0, m1
+    pmaxsw               m0, m5
+    pavgw                m0, m5
+    pminsw               m0, m6
+    movhps [dstq+strideq*0], m0
+    movq   [dstq+strideq*1], m0
+    palignr              m0, m4, 14
+    lea                dstq, [dstq+strideq*2]
+    add                  hd, 2*2
+    jl .right_loop
+    sub                  wd, 4
+    jg .right_loop0
+.end:
     RET
 
 %if UNIX64
