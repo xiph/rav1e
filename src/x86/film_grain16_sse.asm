@@ -1332,60 +1332,155 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %endif
     RET
 
-%if ARCH_X86_64
+%macro SCRATCH 3
+%if ARCH_X86_32
+    mova [rsp+%3*mmsize], m%1
+%define m%2 [rsp+%3*mmsize]
+%else
+    SWAP             %1, %2
+%endif
+%endmacro
+
 INIT_XMM ssse3
+%if ARCH_X86_32
+%if STACK_ALIGNMENT < mmsize
+cglobal fgy_32x32xn_16bpc, 0, 7, 8, 0-(8 * mmsize + 12 * gprsize), \
+        dst, src, scaling, unused1, fg_data, picptr, unused2
+    ; copy stack arguments to new position post-alignment, so that we
+    ; don't have to keep the old stack location in a separate register
+    mov              r0, r0m
+    mov              r1, r2m
+    mov              r2, r4m
+    mov              r3, r6m
+    mov              r4, r7m
+    mov              r5, r8m
+
+%define r0m [rsp+8*mmsize+ 3*gprsize]
+%define r2m [rsp+8*mmsize+ 5*gprsize]
+%define r4m [rsp+8*mmsize+ 7*gprsize]
+%define r6m [rsp+8*mmsize+ 9*gprsize]
+%define r7m [rsp+8*mmsize+10*gprsize]
+%define r8m [rsp+8*mmsize+11*gprsize]
+
+    mov             r0m, r0
+    mov             r2m, r1
+    mov             r4m, r2
+    mov             r6m, r3
+    mov             r7m, r4
+    mov             r8m, r5
+%else
+cglobal fgy_32x32xn_16bpc, 0, 7, 8, 8 * mmsize + 4 * gprsize, \
+        dst, src, scaling, unused1, fg_data, picptr, unused2
+%endif
+    mov            srcq, srcm
+    mov        scalingq, r5m
+    mov        fg_dataq, r3m
+%if STACK_ALIGNMENT < mmsize
+    mov              r6, r9m
+
+%define r9m [rsp+8*mmsize+ 4*gprsize]
+%define r3m [rsp+8*mmsize+ 6*gprsize]
+%define r5m [rsp+8*mmsize+ 8*gprsize]
+
+    mov             r9m, r6
+%endif
+    LEA              r5, $$
+%define base r5-$$
+    mov             r5m, picptrq
+%else
 cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, grain_lut
-    mov             r7d, [fg_dataq+FGData.scaling_shift]
     lea              r8, [pb_mask]
 %define base r8-pb_mask
-    SPLATW          m11, [base+mul_bits+r7*2-14]
+%endif
+    mov             r6d, [fg_dataq+FGData.scaling_shift]
+    SPLATW           m3, [base+mul_bits+r6*2-14]
     mov             r6d, [fg_dataq+FGData.clip_to_restricted_range]
-    mov             r9d, r9m        ; bdmax
-    sar             r9d, 11         ; is_12bpc
-    inc             r9d
-    mov            r10d, r6d
-    imul           r10d, r9d
-    dec             r9d
-    SPLATW          m13, [base+min+r10*2]
-    lea             r9d, [r9d*3]
-    lea             r9d, [r6d*2+r9d]
-    SPLATW          m12, [base+max+r9*2]
-    SPLATW          m10, r9m
+%if ARCH_X86_32
+    DECLARE_REG_TMP   0, 3
+%else
+    DECLARE_REG_TMP   9, 10
+%endif
+    mov             t0d, r9m        ; bdmax
+    sar             t0d, 11         ; is_12bpc
+    inc             t0d
+    mov             t1d, r6d
+    imul            t1d, t0d
+    dec             t0d
+    SPLATW           m5, [base+min+t1*2]
+    lea             t0d, [t0d*3]
+    lea             t0d, [r6d*2+t0d]
+    SPLATW           m4, [base+max+t0*2]
+    SPLATW           m2, r9m
 
-    pcmpeqw          m9, m9
-    psraw            m7, m10, 1             ; max_grain
-    pxor             m9, m7                 ; min_grain
+    pcmpeqw          m1, m1
+    psraw            m7, m2, 1              ; max_grain
+    pxor             m1, m7                 ; min_grain
+    SPLATD           m6, [base+pd_16]
+
+    SCRATCH           1,  9, 0
+    SCRATCH           2, 10, 1
+    SCRATCH           3, 11, 2
+    SCRATCH           4, 12, 3
+    SCRATCH           5, 13, 4
+    SCRATCH           6, 14, 5
+    SCRATCH           7, 15, 6
+
 %if !cpuflag(sse4)
     pcmpeqw          m6, m6
     pslldq           m6, 4
 %endif
-    SPLATD          m14, [pd_16]
 
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, sby, fg_data, picptr, unused2
+    DECLARE_REG_TMP   0
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, unused1, \
                 sby, see
+    DECLARE_REG_TMP   7
+%endif
 
-    movifnidn      sbyd, sbym
+    mov            sbyd, r8m
+    movzx           t0d, byte [fg_dataq+FGData.overlap_flag]
+    test            t0d, t0d
+    jz .no_vertical_overlap
     test           sbyd, sbyd
-    setnz           r7b
-    test            r7b, byte [fg_dataq+FGData.overlap_flag]
     jnz .vertical_overlap
-    mov      dword sbym, 0
+.no_vertical_overlap:
+    mov       dword r8m, t0d
 
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, see, fg_data, picptr, unused
+    imul           seed, (173 << 24) | 37
+%else
     imul           seed, sbyd, (173 << 24) | 37
+%endif
     add            seed, (105 << 24) | 178
     rol            seed, 8
     movzx          seed, seew
     xor            seed, [fg_dataq+FGData.seed]
 
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, see, w, picptr, src_bak
+
+    mov             r3m, seed
+    mov              wq, r4m
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 unused1, unused2, see, src_bak
+%endif
 
     lea        src_bakq, [srcq+wq*2]
     mov            r9mp, src_bakq
     neg              wq
-    sub            dstq, srcq
+    sub           dstmp, srcq
+%if ARCH_X86_32
+    mov             r4m, wq
+%endif
 
 .loop_x:
+%if ARCH_X86_32
+    mov            seed, r3m
+%endif
     mov             r6d, seed
     or             seed, 0xEFF4
     shr             r6d, 1
@@ -1393,22 +1488,34 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     lea            seed, [r6+0x8000]
     cmovp          seed, r6d                ; updated seed
 
+%if ARCH_X86_32
+    mov             r3m, seed
+
+    DEFINE_ARGS dst, src, scaling, offy, unused1, unused2, offx
+
+    mov           offxd, offyd
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 offx, offy, see, src_bak
 
     mov           offyd, seed
     mov           offxd, seed
+%endif
     ror           offyd, 8
     shr           offxd, 12
     and           offyd, 0xf
     imul          offyd, 164
     lea           offyq, [offyq+offxq*2+747] ; offy*stride+offx
 
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, offxy, h, picptr, grain_lut
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 h, offxy, see, src_bak
+%endif
 
 .loop_x_odd:
-    movzx            hd, word hm
+    movzx            hd, word r7m
     mov      grain_lutq, grain_lutmp
 .loop_y:
     ; src
@@ -1416,8 +1523,13 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pand             m1, m10, [srcq+16]          ; m0-1: src as word
 
     ; scaling[src]
+%if ARCH_X86_32
+    vpgatherdw       m2, m0, scalingq-1, r0, r5, 8, 1, m4
+    vpgatherdw       m3, m1, scalingq-1, r0, r5, 8, 1, m4
+%else
     vpgatherdw       m2, m0, scalingq-1, r11, r13, 8, 1, m4
     vpgatherdw       m3, m1, scalingq-1, r11, r13, 8, 1, m4
+%endif
     REPX   {psrlw x, 8}, m2, m3
 
     ; grain = grain_lut[offy+y][offx+x]
@@ -1436,38 +1548,67 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pmaxsw           m1, m13
     pminsw           m0, m12
     pminsw           m1, m12
+    movifnidn      dstq, dstmp
     mova [dstq+srcq+ 0], m0
     mova [dstq+srcq+16], m1
 
-    add            srcq, strideq
+    add            srcq, r2mp               ; src += stride
     add      grain_lutq, 82*2
     dec              hd
     jg .loop_y
 
+%if ARCH_X86_32
+    add            r4mp, 16
+%else
     add              wq, 16
+%endif
     jge .end
+%if ARCH_X86_32
+    mov            srcq, r9mp
+    add            srcq, r4mp
+    add            srcq, r4mp
+%else
     mov        src_bakq, r9mp
     lea            srcq, [src_bakq+wq*2]
-    btc        dword hm, 16
+%endif
+    btc       dword r8m, 2
     jc .next_blk
     add          offxyd, 16
-    cmp       dword r8m, 0
-    je .loop_x_odd
-    SPLATD          m15, [pw_27_17_17_27]
+    test      dword r8m, 2
+    jz .loop_x_odd
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27]
+    add dword [rsp+8*mmsize+1*gprsize], 16
+%else
+    SPLATD           m7, [pw_27_17_17_27]
     add            r12d, 16                 ; top_offxy += 16
+%endif
     jmp .loop_x_odd_v_overlap
 
 .next_blk:
-    cmp byte [fg_dataq+FGData.overlap_flag], 0
-    je .loop_x
+    test      dword r8m, 1
+    jz .loop_x
 
     ; r8m = sbym
-    movq            m15, [pw_27_17_17_27]
-    cmp       dword r8m, 0
-    jne .loop_x_hv_overlap
+%if ARCH_X86_32
+    mov              r5, r5m
+    movq             m7, [base+pw_27_17_17_27]
+%else
+    movq             m7, [pw_27_17_17_27]
+%endif
+    test      dword r8m, 2
+    jnz .loop_x_hv_overlap
 
     ; horizontal overlap (without vertical overlap)
 .loop_x_h_overlap:
+%if ARCH_X86_32
+    add          offxyd, 16
+    mov [rsp+8*mmsize+0*gprsize], offxyd
+    DEFINE_ARGS dst, src, scaling, see, w, picptr, src_bak
+    mov            seed, r3m
+%endif
+
     mov             r6d, seed
     or             seed, 0xEFF4
     shr             r6d, 1
@@ -1475,29 +1616,47 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     lea            seed, [r6+0x8000]
     cmovp          seed, r6d                ; updated seed
 
+%if ARCH_X86_32
+    mov             r3m, seed
+
+    DEFINE_ARGS dst, src, scaling, offy, h, picptr, offx
+
+    mov           offxd, offyd
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 offx, offy, see, src_bak, left_offxy
 
     lea     left_offxyd, [offyd+16]         ; previous column's offy*stride+offx
+
     mov           offyd, seed
     mov           offxd, seed
+%endif
     ror           offyd, 8
     shr           offxd, 12
     and           offyd, 0xf
     imul          offyd, 164
     lea           offyq, [offyq+offxq*2+747] ; offy*stride+offx
 
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, offxy, h, picptr, grain_lut
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 h, offxy, see, src_bak, left_offxy
+%endif
 
-    movzx            hd, word hm
+    mov              hd, dword r7m
     mov      grain_lutq, grain_lutmp
 .loop_y_h_overlap:
     ; grain = grain_lut[offy+y][offx+x]
     movu             m4, [grain_lutq+offxyq*2]
+%if ARCH_X86_32
+    mov              r5, [rsp+8*mmsize+0*gprsize]
+    movd             m5, [grain_lutq+r5*2]
+%else
     movd             m5, [grain_lutq+left_offxyq*2]
+%endif
     punpcklwd        m5, m4
-    pmaddwd          m5, m15
+    pmaddwd          m5, m7
     paddd            m5, m14
     psrad            m5, 5
     packssdw         m5, m5
@@ -1508,7 +1667,7 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pandn            m0, m6, m5
     por              m4, m0
 %endif
-    pminsw           m4, m7
+    pminsw           m4, m15
     pmaxsw           m4, m9
 
     ; src
@@ -1516,8 +1675,13 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pand             m1, m10, [srcq+16]          ; m0-1: src as word
 
     ; scaling[src]
+%if ARCH_X86_32
+    vpgatherdw       m2, m0, scalingq-1, r0, r5, 8, 1, m5
+    vpgatherdw       m3, m1, scalingq-1, r0, r5, 8, 1, m5
+%else
     vpgatherdw       m2, m0, scalingq-1, r13, r14, 8, 1, m5
     vpgatherdw       m3, m1, scalingq-1, r13, r14, 8, 1, m5
+%endif
     REPX   {psrlw x, 8}, m2, m3
 
     ; noise = round2(scaling[src] * grain, scaling_shift)
@@ -1533,76 +1697,131 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pmaxsw           m1, m13
     pminsw           m0, m12
     pminsw           m1, m12
+    movifnidn      dstq, dstmp
     mova [dstq+srcq+ 0], m0
     mova [dstq+srcq+16], m1
 
-    add            srcq, strideq
+    add            srcq, r2mp
     add      grain_lutq, 82*2
     dec              hd
     jg .loop_y_h_overlap
 
+%if ARCH_X86_32
+    add            r4mp, 16
+%else
     add              wq, 16
+%endif
     jge .end
+%if ARCH_X86_32
+    mov            srcq, r9mp
+    add            srcq, r4mp
+    add            srcq, r4mp
+%else
     mov        src_bakq, r9mp
     lea            srcq, [src_bakq+wq*2]
-    or         dword hm, 0x10000
+%endif
+    or        dword r8m, 4
     add          offxyd, 16
 
     ; r8m = sbym
-    cmp       dword r8m, 0
-    je .loop_x_odd
-    SPLATD          m15, [pw_27_17_17_27]
+    test      dword r8m, 2
+    jz .loop_x_odd
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27]
+    add dword [rsp+8*mmsize+1*gprsize], 16
+%else
+    SPLATD           m7, [pw_27_17_17_27]
     add            r12d, 16                 ; top_offxy += 16
+%endif
     jmp .loop_x_odd_v_overlap
 
 .end:
     RET
 
 .vertical_overlap:
+    or              t0d, 2
+    mov             r8m, t0d
+
+%if ARCH_X86_32
+    DEFINE_ARGS dst, src, scaling, sby, fg_data, picptr, unused
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, unused1, \
                 sby, see
+%endif
 
     movzx          sbyd, sbyb
+%if ARCH_X86_32
+    imul             r4, [fg_dataq+FGData.seed], 0x00010001
+    DEFINE_ARGS dst, src, scaling, sby, see, picptr, unused
+%else
     imul           seed, [fg_dataq+FGData.seed], 0x00010001
-    imul            r7d, sbyd, 173 * 0x00010001
+%endif
+    imul            t0d, sbyd, 173 * 0x00010001
     imul           sbyd, 37 * 0x01000100
-    add             r7d, (105 << 16) | 188
+    add             t0d, (105 << 16) | 188
     add            sbyd, (178 << 24) | (141 << 8)
-    and             r7d, 0x00ff00ff
+    and             t0d, 0x00ff00ff
     and            sbyd, 0xff00ff00
-    xor            seed, r7d
+    xor            seed, t0d
+%if ARCH_X86_32
+    xor            sbyd, seed
+
+    DEFINE_ARGS dst, src, scaling, see, w, picptr, src_bak
+
+    mov             r3m, seed
+    mov              wq, r4m
+%else
     xor            seed, sbyd               ; (cur_seed << 16) | top_seed
 
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 unused1, unused2, see, src_bak
+%endif
 
     lea        src_bakq, [srcq+wq*2]
     mov            r9mp, src_bakq
     neg              wq
-    sub            dstq, srcq
+    sub           dstmp, srcq
+%if ARCH_X86_32
+    mov             r4m, wq
+%endif
 
 .loop_x_v_overlap:
-    SPLATD          m15, [pw_27_17_17_27]
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27]
+    mov            seed, r3m
+%else
+    SPLATD           m7, [pw_27_17_17_27]
+%endif
 
     ; we assume from the block above that bits 8-15 of r7d are zero'ed
     mov             r6d, seed
     or             seed, 0xeff4eff4
     test           seeb, seeh
-    setp            r7b                     ; parity of top_seed
+    setp            t0b                     ; parity of top_seed
     shr            seed, 16
-    shl             r7d, 16
+    shl             t0d, 16
     test           seeb, seeh
-    setp            r7b                     ; parity of cur_seed
+    setp            t0b                     ; parity of cur_seed
     or              r6d, 0x00010001
-    xor             r7d, r6d
-    mov            seed, r7d
+    xor             t0d, r6d
+    mov            seed, t0d
     ror            seed, 1                  ; updated (cur_seed << 16) | top_seed
 
+%if ARCH_X86_32
+    mov             r3m, seed
+
+    DEFINE_ARGS dst, src, scaling, offy, unused1, unused2, offx
+
+    mov           offxd, offyd
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 offx, offy, see, src_bak, unused, top_offxy
 
     mov           offyd, seed
     mov           offxd, seed
+%endif
     ror           offyd, 8
     ror           offxd, 12
     and           offyd, 0xf000f
@@ -1611,36 +1830,54 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     ; offxy=offy*stride+offx, (cur_offxy << 16) | top_offxy
     lea           offyq, [offyq+offxq*2+0x10001*747+32*82]
 
+%if ARCH_X86_32
+    DEFINE_ARGS top_offxy, src, scaling, offxy, h, picptr, grain_lut
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 h, offxy, see, src_bak, unused, top_offxy
+%endif
 
     movzx    top_offxyd, offxyw
+%if ARCH_X86_32
+    mov [rsp+8*mmsize+1*gprsize], top_offxyd
+
+    DEFINE_ARGS dst, src, scaling, offxy, h, picptr, grain_lut
+%endif
     shr          offxyd, 16
 
 .loop_x_odd_v_overlap:
-    movzx            hd, word hm
+    mov              hd, dword r7m
     mov      grain_lutq, grain_lutmp
 .loop_y_v_overlap:
     ; grain = grain_lut[offy+y][offx+x]
     movu             m3, [grain_lutq+offxyq*2]
+%if ARCH_X86_32
+    mov              r5, [rsp+8*mmsize+1*gprsize]
+    movu             m2, [grain_lutq+r5*2]
+%else
     movu             m2, [grain_lutq+top_offxyq*2]
+%endif
     punpckhwd        m4, m2, m3
     punpcklwd        m2, m3
-    REPX {pmaddwd x, m15}, m4, m2
+    REPX {pmaddwd x, m7}, m4, m2
     REPX {paddd   x, m14}, m4, m2
     REPX {psrad   x, 5}, m4, m2
     packssdw         m2, m4
-    pminsw           m2, m7
+    pminsw           m2, m15
     pmaxsw           m2, m9
     movu             m4, [grain_lutq+offxyq*2+16]
+%if ARCH_X86_32
+    movu             m3, [grain_lutq+r5*2+16]
+%else
     movu             m3, [grain_lutq+top_offxyq*2+16]
+%endif
     punpckhwd        m5, m3, m4
     punpcklwd        m3, m4
-    REPX {pmaddwd x, m15}, m5, m3
+    REPX {pmaddwd x, m7}, m5, m3
     REPX {paddd   x, m14}, m5, m3
     REPX {psrad   x, 5}, m5, m3
     packssdw         m3, m5
-    pminsw           m3, m7
+    pminsw           m3, m15
     pmaxsw           m3, m9
 
     ; src
@@ -1649,11 +1886,19 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
 
     ; scaling[src]
     ; noise = round2(scaling[src] * grain, scaling_shift)
+%if ARCH_X86_32
+    vpgatherdw       m4, m0, scalingq-1, r0, r5, 8, 1, m5
+%else
     vpgatherdw       m4, m0, scalingq-1, r11, r13, 8, 1, m5
+%endif
     psrlw            m4, 8
     pmullw           m4, m11
     pmulhrsw         m4, m2
+%if ARCH_X86_32
+    vpgatherdw       m5, m1, scalingq-1, r0, r5, 8, 1, m2
+%else
     vpgatherdw       m5, m1, scalingq-1, r11, r13, 8, 1, m2
+%endif
     psrlw            m5, 8
     pmullw           m5, m11
     pmulhrsw         m5, m3
@@ -1665,11 +1910,17 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pmaxsw           m1, m13
     pminsw           m0, m12
     pminsw           m1, m12
+    movifnidn      dstq, dstmp
     mova [dstq+srcq+ 0], m0
     mova [dstq+srcq+16], m1
 
-    SPLATD          m15, [pw_27_17_17_27+4] ; swap weights for second v-overlap line
-    add            srcq, strideq
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27+4]
+%else
+    SPLATD           m7, [pw_27_17_17_27+4] ; swap weights for second v-overlap line
+%endif
+    add            srcq, r2mp
     add      grain_lutq, 82*2
     dec              hw
     jz .end_y_v_overlap
@@ -1681,15 +1932,31 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     jmp .loop_y
 
 .end_y_v_overlap:
+%if ARCH_X86_32
+    add            r4mp, 16
+%else
     add              wq, 16
+%endif
     jge .end_hv
+%if ARCH_X86_32
+    mov            srcq, r9mp
+    add            srcq, r4mp
+    add            srcq, r4mp
+%else
     mov        src_bakq, r9mp
     lea            srcq, [src_bakq+wq*2]
-    btc        dword hm, 16
+%endif
+    btc       dword r8m, 2
     jc .next_blk_v
-    SPLATD          m15, [pw_27_17_17_27]
-    add          offxyd, 16
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27]
+    add dword [rsp+8*mmsize+1*gprsize], 16
+%else
+    SPLATD           m7, [pw_27_17_17_27]
     add      top_offxyd, 16
+%endif
+    add          offxyd, 16
     jmp .loop_x_odd_v_overlap
 
 .next_blk_v:
@@ -1697,24 +1964,55 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     ; back to .loop_x_v_overlap, and instead always fall-through to
     ; h+v overlap
 
-    movq            m15, [pw_27_17_17_27]
+%if ARCH_X86_32
+    mov              r5, r5m
+    movq             m7, [base+pw_27_17_17_27]
+%else
+    movq             m7, [pw_27_17_17_27]
+%endif
+
 .loop_x_hv_overlap:
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m0, [base+pw_27_17_17_27]
+    mova [rsp+7*mmsize], m0
+%define m8 [rsp+7*mmsize]
+
+    DEFINE_ARGS dst, src, scaling, see, w, picptr, src_bak
+
+    mov              r0, [rsp+8*mmsize+1*gprsize]
+    add              r3, 16
+    add              r0, 16
+    mov [rsp+8*mmsize+0*gprsize], r3 ; left_offxy
+    mov [rsp+8*mmsize+2*gprsize], r0 ; topleft_offxy
+
+    mov            seed, r3m
+    xor              r0, r0
+%else
     SPLATD           m8, [pw_27_17_17_27]
 
     ; we assume from the block above that bits 8-15 of r7d are zero'ed
+%endif
     mov             r6d, seed
     or             seed, 0xeff4eff4
     test           seeb, seeh
-    setp            r7b                     ; parity of top_seed
+    setp            t0b                     ; parity of top_seed
     shr            seed, 16
-    shl             r7d, 16
+    shl             t0d, 16
     test           seeb, seeh
-    setp            r7b                     ; parity of cur_seed
+    setp            t0b                     ; parity of cur_seed
     or              r6d, 0x00010001
-    xor             r7d, r6d
-    mov            seed, r7d
+    xor             t0d, r6d
+    mov            seed, t0d
     ror            seed, 1                  ; updated (cur_seed << 16) | top_seed
 
+%if ARCH_X86_32
+    mov             r3m, seed
+
+    DEFINE_ARGS  dst, src, scaling, offy, w, picptr, offx
+
+    mov           offxd, offyd
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 offx, offy, see, src_bak, left_offxy, top_offxy, topleft_offxy
 
@@ -1722,6 +2020,7 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     lea     left_offxyq, [offyq+16]
     mov           offyd, seed
     mov           offxd, seed
+%endif
     ror           offyd, 8
     ror           offxd, 12
     and           offyd, 0xf000f
@@ -1730,28 +2029,46 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     ; offxy=offy*stride+offx, (cur_offxy << 16) | top_offxy
     lea           offyq, [offyq+offxq*2+0x10001*747+32*82]
 
+%if ARCH_X86_32
+    DEFINE_ARGS top_offxy, src, scaling, offxy, w, picptr, grain_lut
+%else
     DEFINE_ARGS dst, src, stride, fg_data, w, scaling, grain_lut, \
                 h, offxy, see, src_bak, left_offxy, top_offxy, topleft_offxy
+%endif
 
     movzx    top_offxyd, offxyw
+%if ARCH_X86_32
+    mov [rsp+8*mmsize+1*gprsize], top_offxyd
+
+    DEFINE_ARGS dst, src, scaling, offxy, h, picptr, grain_lut
+%endif
     shr          offxyd, 16
 
-    movzx            hd, word hm
+    movzx            hd, word r7m
     mov      grain_lutq, grain_lutmp
 .loop_y_hv_overlap:
     ; grain = grain_lut[offy+y][offx+x]
     movu             m3, [grain_lutq+offxyq*2]
+%if ARCH_X86_32
+    mov              r0, [rsp+8*mmsize+1*gprsize] ; top_offxy
+    mov              r5, [rsp+8*mmsize+0*gprsize] ; left_offxy
+    movu             m5, [grain_lutq+r0*2]
+    movd             m4, [grain_lutq+r5*2]
+    mov              r5, [rsp+8*mmsize+2*gprsize] ; topleft_offxy
+    movd             m2, [grain_lutq+r5*2]
+%else
     movu             m5, [grain_lutq+top_offxyq*2]
     movd             m4, [grain_lutq+left_offxyq*2]
     movd             m2, [grain_lutq+topleft_offxyq*2]
+%endif
     ; do h interpolation first (so top | top/left -> top, left | cur -> cur)
     punpcklwd        m4, m3
     punpcklwd        m2, m5
-    REPX {pmaddwd x, m15}, m4, m2
+    REPX {pmaddwd x, m7}, m4, m2
     REPX {paddd   x, m14}, m4, m2
     REPX {psrad   x, 5}, m4, m2
     REPX {packssdw x, x}, m4, m2
-    REPX {pminsw x, m7}, m4, m2
+    REPX {pminsw x, m15}, m4, m2
     REPX {pmaxsw x, m9}, m4, m2
 %if cpuflag(sse4)
     pblendw          m3, m4, 00000011b
@@ -1766,7 +2083,11 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
 %endif
     ; followed by v interpolation (top | cur -> cur)
     movu             m0, [grain_lutq+offxyq*2+16]
+%if ARCH_X86_32
+    movu             m1, [grain_lutq+r0*2+16]
+%else
     movu             m1, [grain_lutq+top_offxyq*2+16]
+%endif
     punpcklwd        m2, m5, m3
     punpckhwd        m5, m3
     punpcklwd        m3, m1, m0
@@ -1776,7 +2097,7 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     REPX {psrad   x, 5}, m2, m5, m3, m1
     packssdw         m2, m5
     packssdw         m3, m1
-    REPX {pminsw x, m7}, m2, m3
+    REPX {pminsw x, m15}, m2, m3
     REPX {pmaxsw x, m9}, m2, m3
 
     ; src
@@ -1785,11 +2106,19 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
 
     ; scaling[src]
     ; noise = round2(scaling[src] * grain, scaling_shift)
+%if ARCH_X86_32
+    vpgatherdw       m4, m0, scalingq-1, r0, r5, 8, 1, m5
+%else
     vpgatherdw       m4, m0, scalingq-1, r14, r10, 8, 1, m5
+%endif
     psrlw            m4, 8
     pmullw           m4, m11
     pmulhrsw         m2, m4
+%if ARCH_X86_32
+    vpgatherdw       m5, m1, scalingq-1, r0, r5, 8, 1, m4
+%else
     vpgatherdw       m5, m1, scalingq-1, r14, r10, 8, 1, m4
+%endif
     psrlw            m5, 8
     pmullw           m5, m11
     pmulhrsw         m3, m5
@@ -1801,11 +2130,18 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     pmaxsw           m1, m13
     pminsw           m0, m12
     pminsw           m1, m12
+    movifnidn      dstq, dstmp
     mova [dstq+srcq+ 0], m0
     mova [dstq+srcq+16], m1
 
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m0, [base+pw_27_17_17_27+4]
+    mova             m8, m0
+%else
     SPLATD           m8, [pw_27_17_17_27+4] ; swap weights for second v-overlap line
-    add            srcq, strideq
+%endif
+    add            srcq, r2mp
     add      grain_lutq, 82*2
     dec              hw
     jz .end_y_hv_overlap
@@ -1817,19 +2153,37 @@ cglobal fgy_32x32xn_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, gra
     jmp .loop_y_h_overlap
 
 .end_y_hv_overlap:
-    or         dword hm, 0x10000
+    or        dword r8m, 4
+%if ARCH_X86_32
+    add            r4mp, 16
+%else
     add              wq, 16
+%endif
     jge .end_hv
-    SPLATD          m15, [pw_27_17_17_27]
+%if ARCH_X86_32
+    mov              r5, r5m
+    SPLATD           m7, [base+pw_27_17_17_27]
+    add          offxyd, 16
+    add dword [rsp+8*mmsize+1*gprsize], 16 ; top_offxy += 16
+    mov            srcq, r9mp
+    add            srcq, r4mp
+    add            srcq, r4mp
+%else
+    SPLATD           m7, [pw_27_17_17_27]
     add          offxyd, 16
     add      top_offxyd, 16
     mov        src_bakq, r9mp
     lea            srcq, [src_bakq+wq*2]
+%endif
     jmp .loop_x_odd_v_overlap
 
 .end_hv:
     RET
+%if ARCH_X86_32
+    DECLARE_ARG 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+%endif
 
+%if ARCH_X86_64
 cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scaling, \
                                       grain_lut, h, sby, luma, lstride, uv_pl, is_id
 %define base r8-pb_mask
