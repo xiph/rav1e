@@ -119,7 +119,7 @@ pub fn put_8tap<T: Pixel>(
         None => call_rust(dst),
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if bit_depth > 8 => {
       match PUT_HBD_FNS[cpu.as_index()][get_2d_mode_idx(mode_x, mode_y)] {
         Some(func) => unsafe {
           (func)(
@@ -137,6 +137,7 @@ pub fn put_8tap<T: Pixel>(
         None => call_rust(dst),
       }
     }
+    _ => call_rust(dst),
   }
   #[cfg(feature = "check_asm")]
   {
@@ -186,7 +187,7 @@ pub fn prep_8tap<T: Pixel>(
         None => call_rust(tmp),
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if bit_depth > 8 => {
       match PREP_HBD_FNS[cpu.as_index()][get_2d_mode_idx(mode_x, mode_y)] {
         Some(func) => unsafe {
           (func)(
@@ -203,6 +204,7 @@ pub fn prep_8tap<T: Pixel>(
         None => call_rust(tmp),
       }
     }
+    _ => call_rust(tmp),
   }
   #[cfg(feature = "check_asm")]
   {
@@ -237,7 +239,7 @@ pub fn mc_avg<T: Pixel>(
       },
       None => call_rust(dst),
     },
-    PixelType::U16 => match AVG_HBD_FNS[cpu.as_index()] {
+    PixelType::U16 if bit_depth > 8 => match AVG_HBD_FNS[cpu.as_index()] {
       Some(func) => unsafe {
         (func)(
           dst.data_ptr_mut() as *mut _,
@@ -251,6 +253,7 @@ pub fn mc_avg<T: Pixel>(
       },
       None => call_rust(dst),
     },
+    _ => call_rust(dst),
   }
   #[cfg(feature = "check_asm")]
   {
