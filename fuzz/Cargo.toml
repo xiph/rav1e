@@ -29,6 +29,11 @@ path = "fuzz_targets/encode_decode.rs"
 required-features = ["rav1e/decode_test_dav1d"]
 
 [[bin]]
+name = "encode_decode_hbd"
+path = "fuzz_targets/encode_decode_hbd.rs"
+required-features = ["rav1e/decode_test_dav1d"]
+
+[[bin]]
 name = "encode"
 path = "fuzz_targets/encode.rs"
 
