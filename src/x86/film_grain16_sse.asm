@@ -29,6 +29,7 @@
 SECTION_RODATA 16
 pd_16: times 4 dd 16
 pw_1: times 8 dw 1
+pw_16384: times 8 dw 16384
 pw_8192: times 8 dw 8192
 pw_23_22: times 4 dw 23, 22
 pb_mask: db 0, 0x80, 0x80, 0, 0x80, 0, 0, 0x80, 0x80, 0, 0, 0x80, 0, 0x80, 0x80, 0
@@ -60,6 +61,8 @@ pw_16: times 2 dw 16
 
 JMP_TABLE generate_grain_y_16bpc_ssse3, 0, 1, 2, 3
 JMP_TABLE generate_grain_uv_420_16bpc_ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_422_16bpc_ssse3, 0, 1, 2, 3
+JMP_TABLE generate_grain_uv_444_16bpc_ssse3, 0, 1, 2, 3
 
 struc FGData
     .seed:                      resd 1
@@ -646,15 +649,16 @@ cglobal generate_grain_y_16bpc, 3, 6, 8, buf, fg_data, bdmax
 %endif
     RET
 
+%macro generate_grain_uv_fn 3 ; ss_name, ss_x, ss_y
 INIT_XMM ssse3
 %if ARCH_X86_64
-cglobal generate_grain_uv_420_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax, x, gaussian_reg, h, pic_reg
+cglobal generate_grain_uv_%1_16bpc, 4, 11, 16, buf, bufy, fg_data, uv, bdmax, x, gaussian_reg, h, pic_reg
 %define base r8-pb_mask
     lea              r8, [pb_mask]
     movifnidn    bdmaxd, bdmaxm
     lea             r6d, [bdmaxq+1]
 %else
-cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
+cglobal generate_grain_uv_%1_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %define base r2-$$
     LEA              r2, $$
     mov        fg_dataq, r2m
@@ -680,10 +684,15 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %if ARCH_X86_64
     lea              r6, [gaussian_sequence]
 %endif
-    mov              hd, 38
+%if %2
+    mov              hd, 73-35*%3
     add            bufq, 44*2
 .loop_y:
     mov              xq, -44
+%else
+    mov              xq, -82*73
+    add            bufq, 82*73*2
+%endif
 .loop_x:
     pand             m2, m0, m1
     psrlw            m3, m2, 10
@@ -709,14 +718,16 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     movq    [bufq+xq*2], m3
     add              xq, 4
     jl .loop_x
+%if %2
     add            bufq, 82*2
     dec              hd
     jg .loop_y
+%endif
 
     ; auto-regression code
     movsxd           r5, [fg_dataq+FGData.ar_coeff_lag]
-    movsxd           r5, [base+generate_grain_uv_420_16bpc_ssse3_table+r5*4]
-    lea              r5, [r5+base+generate_grain_uv_420_16bpc_ssse3_table]
+    movsxd           r5, [base+generate_grain_uv_%1_16bpc_ssse3_table+r5*4]
+    lea              r5, [r5+base+generate_grain_uv_%1_16bpc_ssse3_table]
     jmp              r5
 
 .ar0:
@@ -753,9 +764,12 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     pxor             m5, m5
     pcmpgtb          m5, m4
     punpcklbw        m4, m5
-    SPLATW           m6, [base+hmul_bits+4]
+%if %2
+    SPLATW           m6, [base+hmul_bits+2+%3*2]
+%endif
     SPLATW           m4, m4
     pxor             m5, m5
+%if %2
 %if !cpuflag(sse4)
     pcmpeqw          m2, m2
     pslldq           m2, 12
@@ -766,21 +780,32 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     mova            m12, m2
 %endif
 %endif
-    sub            bufq, 2*(82*38+82-(82*3+41))
+%endif
+%if %2
+    sub            bufq, 2*(82*(73-35*%3)+82-(82*3+41))
+%else
+    sub            bufq, 2*(82*70-3)
+%endif
     add           bufyq, 2*(3+82*3)
-    mov              hd, 35
+    mov              hd, 70-35*%3
 .y_loop_ar0:
     ; first 32 pixels
     xor              xd, xd
 .x_loop_ar0:
-    movu             m0, [bufyq+xq*4]
+    movu             m0, [bufyq+xq*(2<<%2)]
+%if %2
+%if %3
     movu             m2, [bufyq+xq*4+82*2]
     paddw            m0, m2
+%endif
     movu             m1, [bufyq+xq*4     +16]
+%if %3
     movu             m2, [bufyq+xq*4+82*2+16]
     paddw            m1, m2
+%endif
     phaddw           m0, m1
     pmulhrsw         m0, m6
+%endif
     punpckhwd        m1, m0, m5
     punpcklwd        m0, m5
     REPX {pmaddwd x, m4}, m0, m1
@@ -791,14 +816,15 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     paddw            m0, m1
     pminsw           m0, m14
     pmaxsw           m0, m7
-    cmp              xd, 32
+    cmp              xd, 72-40*%2
     je .end
     movu    [bufq+xq*2], m0
     add              xd, 8
     jmp .x_loop_ar0
 
-    ; last 6 pixels
+    ; last 6/4 pixels
 .end:
+%if %2
 %if cpuflag(sse4)
     pblendw          m0, m1, 11000000b
 %else
@@ -807,9 +833,12 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     por              m0, m1, m2
 %endif
     movu    [bufq+xq*2], m0
+%else
+    movq    [bufq+xq*2], m0
+%endif
 
     add            bufq, 82*2
-    add           bufyq, 82*4
+    add           bufyq, 82*(2<<%3)
     dec              hd
     jg .y_loop_ar0
 %if ARCH_X86_32
@@ -834,7 +863,11 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     movq             m4, [fg_dataq+FGData.ar_coeffs_uv+uvq]
 %if WIN64
     DEFINE_ARGS shift, bufy, h, buf, max, cf3, min, val3, x, val0
-    lea            bufq, [r0-2*(82*38+44-(82*3+41))]
+%if %2
+    lea            bufq, [r0-2*(82*(73-35*%3)+44-(82*3+41))]
+%else
+    lea            bufq, [r0-2*(82*69+3)]
+%endif
 %else
 %if ARCH_X86_64
     DEFINE_ARGS buf, bufy, h, shift, max, cf3, min, val3, x, val0
@@ -844,7 +877,11 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %define mind dword r3m
 %define maxd dword r4m
 %endif
-    sub            bufq, 2*(82*38+44-(82*3+41))
+%if %2
+    sub            bufq, 2*(82*(73-35*%3)+44-(82*3+41))
+%else
+    sub            bufq, 2*(82*69+3)
+%endif
 %endif
 %if ARCH_X86_64
     mov          shiftd, [r2+FGData.ar_coeff_shift]
@@ -861,10 +898,12 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     movd             m3, [base+round_vals+shiftq*2-12]    ; rnd
     pxor             m6, m6
     punpcklwd        m3, m6
-    SPLATW           m6, [base+hmul_bits+4]
+%if %2
+    SPLATW           m6, [base+hmul_bits+2+%3*2]
+%endif
     SPLATD           m3, m3
     add           bufyq, 2*(79+82*3)
-    mov              hd, 35
+    mov              hd, 70-35*%3
     sar            maxd, 1
 %if ARCH_X86_64
     mov            mind, maxd
@@ -876,19 +915,31 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     mov            mind, r2
 %endif
 .y_loop_ar1:
-    mov              xq, -38
+    mov              xq, -(76>>%2)
     movsx         val3d, word [bufq+xq*2-2]
 .x_loop_ar1:
     movu             m0, [bufq+xq*2-82*2-2] ; top/left
+%if %2
     movu             m7, [bufyq+xq*4]
+%if %3
     movu             m1, [bufyq+xq*4+82*2]
     phaddw           m7, m1
+%else
+    phaddw           m7, m7
+%endif
+%else
+    movq             m7, [bufyq+xq*2]
+%endif
     psrldq           m2, m0, 2              ; top
     psrldq           m1, m0, 4              ; top/right
     punpcklwd        m0, m2
+%if %2
+%if %3
     pshufd           m2, m7, q3232
     paddw            m7, m2
+%endif
     pmulhrsw         m7, m6
+%endif
     punpcklwd        m1, m7
     pmaddwd          m0, m4
     pmaddwd          m1, m5
@@ -916,7 +967,7 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 
 .x_loop_ar1_end:
     add            bufq, 82*2
-    add           bufyq, 82*4
+    add           bufyq, 82*2<<%3
     dec              hd
     jg .y_loop_ar1
 %if ARCH_X86_32
@@ -952,8 +1003,8 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     pxor             m7, m6
 %endif
     pxor             m6, m5                    ; min_grain
-%if cpuflag(sse4)
-    SPLATW           m7, [base+hmul_bits+4]
+%if %2 && cpuflag(sse4)
+    SPLATW           m7, [base+hmul_bits+2+%3*2]
 %endif
 
 %if ARCH_X86_64
@@ -1009,11 +1060,15 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %else
     DEFINE_ARGS buf, bufy, pic_reg, fg_data, h, x
 %endif
-    sub            bufq, 2*(82*38+44-(82*3+41))
+%if %2
+    sub            bufq, 2*(82*(73-35*%3)+44-(82*3+41))
+%else
+    sub            bufq, 2*(82*69+3)
+%endif
     add           bufyq, 2*(79+82*3)
-    mov              hd, 35
+    mov              hd, 70-35*%3
 .y_loop_ar2:
-    mov              xq, -38
+    mov              xq, -(76>>%2)
 
 .x_loop_ar2:
     movu             m0, [bufq+xq*2-82*4-4]     ; y=-2,x=[-2,+5]
@@ -1042,15 +1097,25 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     paddd            m0, m3
 
     ; luma component & rounding
+%if %2
     movu             m1, [bufyq+xq*4]
+%if %3
     movu             m2, [bufyq+xq*4+82*2]
     phaddw           m1, m2
     pshufd           m2, m1, q3232
     paddw            m1, m2
+%else
+    phaddw           m1, m1
+%endif
 %if cpuflag(sse4)
     pmulhrsw         m1, m15
-%else
+%elif %3
     pmulhrsw         m1, [base+pw_8192]
+%else
+    pmulhrsw         m1, [base+pw_16384]
+%endif
+%else
+    movq             m1, [bufyq+xq*2]
 %endif
     punpcklwd        m1, [base+pw_1]
     pmaddwd          m1, m12
@@ -1091,7 +1156,7 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 
 .x_loop_ar2_end:
     add            bufq, 82*2
-    add           bufyq, 82*4
+    add           bufyq, 82*2<<%3
     dec              hd
     jg .y_loop_ar2
 %if ARCH_X86_32
@@ -1141,8 +1206,8 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     pxor             m3, m7
 %endif
     pxor             m7, m6                     ; min_grain
-%if cpuflag(sse4)
-    SPLATW           m3, [base+hmul_bits+4]
+%if %2 && cpuflag(sse4)
+    SPLATW           m3, [base+hmul_bits+2+%3*2]
 %endif
 
 %if ARCH_X86_64
@@ -1216,11 +1281,15 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     mova            m13, m5
     DEFINE_ARGS buf, bufy, pic_reg, fg_data, h, x
 %endif
-    sub            bufq, 2*(82*38+44-(82*3+41))
+%if %2
+    sub            bufq, 2*(82*(73-35*%3)+44-(82*3+41))
+%else
+    sub            bufq, 2*(82*69+3)
+%endif
     add           bufyq, 2*(79+82*3)
-    mov              hd, 35
+    mov              hd, 70-35*%3
 .y_loop_ar3:
-    mov              xq, -38
+    mov              xq, -(76>>%2)
 
 .x_loop_ar3:
     ; first line
@@ -1259,17 +1328,31 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
     ; third line [m0 is busy] & luma + round
     movu             m1, [bufq+xq*2-82*2-6+ 0]      ; y=-1,x=[-3,+4]
     movd             m2, [bufq+xq*2-82*2-6+16]      ; y=-1,x=[+5,+6]
+%if %2
     movu             m5, [bufyq+xq*4]
+%if %3
     movu             m4, [bufyq+xq*4+82*2]
     phaddw           m5, m4
+%else
+    phaddw           m5, m5
+%endif
+%else
+    movq             m5, [bufyq+xq*2]
+%endif
     palignr          m3, m2, m1, 2                  ; y=-1,x=[-2,+5]
     palignr          m2, m2, m1, 12                 ; y=-1,x=[+3,+6]
+%if %3
     pshufd           m4, m5, q3232
     paddw            m5, m4
+%endif
+%if %2
 %if cpuflag(sse4)
     pmulhrsw         m5, m11
-%else
+%elif %3
     pmulhrsw         m5, [base+pw_8192]
+%else
+    pmulhrsw         m5, [base+pw_16384]
+%endif
 %endif
     punpckhwd        m4, m1, m3                     ; y=-1,x=[+1/+2,+2/+3,+3/+4,+4/+5]
     punpcklwd        m1, m3                         ; y=-1,x=[-3/-2,-2/-1,-1/+0,+0/+1]
@@ -1315,7 +1398,7 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 
 .x_loop_ar3_end:
     add            bufq, 82*2
-    add           bufyq, 82*4
+    add           bufyq, 82*2<<%3
     dec              hd
     jg .y_loop_ar3
 %if WIN64
@@ -1331,6 +1414,11 @@ cglobal generate_grain_uv_420_16bpc, 1, 7, 8, buf, x, pic_reg, fg_data, h
 %undef m15
 %endif
     RET
+%endmacro
+
+generate_grain_uv_fn 420, 1, 1
+generate_grain_uv_fn 422, 1, 0
+generate_grain_uv_fn 444, 0, 0
 
 %macro SCRATCH 3
 %if ARCH_X86_32
