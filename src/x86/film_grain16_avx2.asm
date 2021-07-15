@@ -29,8 +29,6 @@
 %if ARCH_X86_64
 
 SECTION_RODATA 32
-pw_1024: times 16 dw 1024
-pw_23_22: times 8 dw 23, 22
 pb_mask: db 0, 0x80, 0x80, 0, 0x80, 0, 0, 0x80, 0x80, 0, 0, 0x80, 0, 0x80, 0x80, 0
 rnd_next_upperbit_mask: dw 0x100B, 0x2016, 0x402C, 0x8058
 pw_seed_xor: times 2 dw 0xb524
@@ -48,6 +46,7 @@ pw_27_17_17_27: dw 27, 17, 17, 27
 ; these two should be next to each other
 pw_4: times 2 dw 4
 pw_16: times 2 dw 16
+pw_23_22: dw 23, 22, 0, 32
 
 %macro JMP_TABLE 1-*
     %xdefine %1_table %%table
@@ -1480,8 +1479,8 @@ cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scalin
     vpbroadcastd     m9, [base+pw_4+r9*4]
     pmullw          m15, m9
 %else
-    vpbroadcastd    m14, [pw_1024]
-    vpbroadcastd    m15, [pw_23_22]
+    vpbroadcastd    m14, [pd_16]
+    vpbroadcastq    m15, [pw_23_22]
 %endif
 
     movifnidn      sbyd, sbym
@@ -1689,16 +1688,18 @@ cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scalin
     movu             m9, [grain_lutq+offxyq*2]
     movu             m3, [grain_lutq+offxyq*2+82*2]
     movd            xm5, [grain_lutq+left_offxyq*2+ 0]
-    pinsrw          xm5, [grain_lutq+left_offxyq*2+82*2], 1 ; {left0, left1}
-    punpcklwd       xm7, xm9, xm3           ; {cur0, cur1}
+    pinsrw          xm5, [grain_lutq+left_offxyq*2+82*2], 2 ; {left0, left1}
+    punpckldq       xm7, xm9, xm3           ; {cur0, cur1}
     punpcklwd       xm5, xm7                ; {left0, cur0, left1, cur1}
 %if %1
-    pmaddwd         xm5, [pw_23_22]
-%else
-    pmaddwd         xm5, xm15
-%endif
+    vpbroadcastq    xm8, [pw_23_22]
+    pmaddwd         xm5, xm8
     vpbroadcastd    xm8, [pd_16]
     paddd           xm5, xm8
+%else
+    pmaddwd         xm5, xm15
+    paddd           xm5, xm14
+%endif
     psrad           xm5, 5
     packssdw        xm5, xm5
     pcmpeqw         xm8, xm8
@@ -1706,11 +1707,9 @@ cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scalin
     pxor            xm8, xm7
     pmaxsw          xm5, xm8
     pminsw          xm5, xm7
-    vpblendw        xm7, xm5, xm9, 11111110b
-    psrldq          xm5, 2
-    vpblendw        xm5, xm3, 11111110b
-    vpblendd         m9, m7, 00001111b
-    vpblendd         m3, m5, 00001111b
+    vpblendd         m9, m9, m5, 00000001b
+    psrldq          xm5, 4
+    vpblendd         m3, m3, m5, 00000001b
 
     ; scaling[luma_src]
     punpckhwd        m5, m4, m2
@@ -1875,13 +1874,14 @@ cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scalin
     movu             m5, [grain_lutq+top_offxyq*2]
     punpckhwd        m7, m5, m9
     punpcklwd        m5, m9                 ; {top/cur interleaved}
+    vpbroadcastd     m3, [pw_23_22]
+    REPX {pmaddwd x, m3}, m7, m5
 %if %1
-    REPX {pmaddwd x, [pw_23_22]}, m7, m5
-%else
-    REPX {pmaddwd x, m15}, m7, m5
-%endif
     vpbroadcastd     m3, [pd_16]
     REPX  {paddd x, m3}, m7, m5
+%else
+    REPX {paddd x, m14}, m7, m5
+%endif
     REPX   {psrad x, 5}, m7, m5
     packssdw         m9, m5, m7
     pcmpeqw          m7, m7
@@ -1989,48 +1989,51 @@ cglobal fguv_32x32xn_i420_16bpc, 6, 15, 16, dst, src, stride, fg_data, w, scalin
 %%loop_y_hv_overlap:
     ; grain = grain_lut[offy+y][offx+x]
     movd            xm5, [grain_lutq+left_offxyq*2]
-    pinsrw          xm5, [grain_lutq+left_offxyq*2+82*2], 1
-    pinsrw          xm5, [grain_lutq+topleft_offxyq*2], 2   ; { left0, left1, top/left }
+    pinsrw          xm5, [grain_lutq+left_offxyq*2+82*2], 2
+    vinserti128      m5, [grain_lutq+topleft_offxyq*2], 1   ; { left0, left1, top/left }
     movu             m9, [grain_lutq+offxyq*2]
     movu             m3, [grain_lutq+offxyq*2+82*2]
     movu             m8, [grain_lutq+top_offxyq*2]
-    punpcklwd       xm7, xm9, xm3           ; { cur0, cur1 }
-    punpckldq       xm7, xm8                ; { cur0, cur1, top0 }
-    punpcklwd       xm5, xm7                ; { cur/left } interleaved
-    pmaddwd         xm5, [pw_23_22]
-    vpbroadcastd    xm0, [pd_16]
-    paddd           xm5, xm0
-    psrad           xm5, 5
-    packssdw        xm5, xm5
-    pcmpeqw         xm0, xm0
-    psraw           xm7, xm10, 1
-    pxor            xm0, xm7
+    punpckldq       xm7, xm9, xm3           ; { cur0, cur1 }
+    vinserti128      m7, xm8, 1             ; { cur0, cur1, top0 }
+    punpcklwd        m5, m7                 ; { cur/left } interleaved
+%if %1
+    vpbroadcastq     m0, [pw_23_22]
+    pmaddwd          m5, m0
+    vpbroadcastd     m0, [pd_16]
+    paddd            m5, m0
+%else
+    pmaddwd          m5, m15
+    paddd            m5, m14
+%endif
+    psrad            m5, 5
+    vextracti128    xm0, m5, 1
+    packssdw        xm5, xm0
+    pcmpeqw          m0, m0
+    psraw            m7, m10, 1
+    pxor             m0, m7
     pminsw          xm5, xm7
     pmaxsw          xm5, xm0
-    pcmpeqw         xm7, xm7
-    psrldq          xm7, 14                 ; 0xffff, 0.....
-    vpblendvb        m9, m5, m7             ; line 0
-    psrldq          xm5, 2
-    vpblendvb        m3, m5, m7             ; line 1
-    psrldq          xm5, 2
-    vpblendvb        m5, m8, m5, m7         ; top line
+    vpblendd         m9, m9, m5, 00000001b
+    psrldq          xm5, 4
+    vpblendd         m3, m3, m5, 00000001b
+    psrldq          xm5, 4
+    vpblendd         m5, m8, m5, 00000001b
 
-    punpckhwd        m7, m5, m9
+    punpckhwd        m8, m5, m9
     punpcklwd        m5, m9                 ; {top/cur interleaved}
+    vpbroadcastd     m9, [pw_23_22]
+    REPX {pmaddwd x, m9}, m8, m5
 %if %1
-    REPX {pmaddwd x, [pw_23_22]}, m7, m5
-%else
-    REPX {pmaddwd x, m15}, m7, m5
-%endif
     vpbroadcastd     m9, [pd_16]
-    REPX  {paddd x, m9}, m5, m7
-    REPX   {psrad x, 5}, m5, m7
-    packssdw         m9, m5, m7
-    pcmpeqw          m5, m5
-    psraw            m7, m10, 1
-    pxor             m5, m7
-    pmaxsw           m9, m5
+    REPX  {paddd x, m9}, m5, m8
+%else
+    REPX {paddd x, m14}, m5, m8
+%endif
+    REPX   {psrad x, 5}, m5, m8
+    packssdw         m9, m5, m8
     pminsw           m9, m7
+    pmaxsw           m9, m0
 
     ; src
     mova             m0, [srcq]
