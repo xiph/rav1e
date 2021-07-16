@@ -170,7 +170,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
     let angle = angle as libc::c_int;
 
     match T::type_enum() {
-      PixelType::U8 => {
+      PixelType::U8 if cpu >= CpuFeatureLevel::SSSE3 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
         let edge_ptr =
           edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
@@ -309,7 +309,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
           }
         }
       }
-      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 => {
+      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 && bit_depth > 8 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
         let edge_ptr =
           edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
