@@ -590,7 +590,7 @@ cglobal idct_4x8_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp m(iadst_4x8_internal_8bpc).end2
 
 ALIGN function_align
-.main:
+cglobal_label .main
     IDCT8_1D_PACKED
     ret
 
@@ -641,7 +641,7 @@ cglobal iadst_4x8_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     RET
 
 ALIGN function_align
-.main:
+cglobal_label .main
     mova                 m6, [o(pd_2048)]
     punpckhwd            m4, m3, m0                ;unpacked in7 in0
     punpckhwd            m5, m2, m1                ;unpacked in5 in2
