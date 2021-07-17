@@ -239,6 +239,8 @@ cglobal inv_txfm_add_%1_%2_%4_16bpc, 4, 7, 8, dst, stride, c, eob, tx2
     %define %%p1 m(i%1_%4_internal_16bpc)
 %if ARCH_X86_32
     LEA                  r6, $$
+%endif
+%if has_epilogue
 %ifidn %1_%2, dct_dct
     test               eobd, eobd
     jz %%end
@@ -250,7 +252,7 @@ cglobal inv_txfm_add_%1_%2_%4_16bpc, 4, 7, 8, dst, stride, c, eob, tx2
 %else
     ; Jump to the 1st txfm function if we're not taking the fast path, which
     ; in turn performs an indirect jump to the 2nd txfm function.
-    lea tx2q, [o(m(i%2_%4_internal_16bpc).pass2)]
+    lea                tx2q, [o(m(i%2_%4_internal_16bpc).pass2)]
 %ifidn %1_%2, dct_dct
     test               eobd, eobd
     jnz %%p1
@@ -280,7 +282,7 @@ ALIGN function_align
     pshuflw              m0, m0, q0000
     punpcklqdq           m0, m0
     mova                 m1, m0
-    jmp m(iadst_4x4_internal_16bpc).end
+    TAIL_CALL m(iadst_4x4_internal_16bpc).end
 %endif
 %endmacro
 
@@ -306,7 +308,7 @@ INV_TXFM_4X4_FN dct, identity
 INV_TXFM_4X4_FN dct, adst
 INV_TXFM_4X4_FN dct, flipadst
 
-cglobal idct_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
+cglobal idct_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m0, [cq+16*0]
     mova                 m1, [cq+16*1]
     mova                 m2, [cq+16*2]
@@ -374,7 +376,7 @@ INV_TXFM_4X4_FN adst, adst
 INV_TXFM_4X4_FN adst, flipadst
 INV_TXFM_4X4_FN adst, identity
 
-cglobal iadst_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
+cglobal iadst_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call .main
     ; transpose
     punpckhwd            m2, m0, m1
@@ -459,7 +461,7 @@ INV_TXFM_4X4_FN flipadst, adst
 INV_TXFM_4X4_FN flipadst, flipadst
 INV_TXFM_4X4_FN flipadst, identity
 
-cglobal iflipadst_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
+cglobal iflipadst_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call m(iadst_4x4_internal_16bpc).main
     ; transpose
     punpcklwd            m2, m1, m0
@@ -508,7 +510,7 @@ INV_TXFM_4X4_FN identity, adst
 INV_TXFM_4X4_FN identity, flipadst
 INV_TXFM_4X4_FN identity, identity
 
-cglobal iidentity_4x4_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
+cglobal iidentity_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m3, [o(pd_5793)]
     pmulld               m0, m3, [cq+16*0]
     pmulld               m1, m3, [cq+16*1]
