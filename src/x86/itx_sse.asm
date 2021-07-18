@@ -1869,7 +1869,7 @@ cglobal idct_16x4_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp                 tx2q
 
 ALIGN function_align
-.main:
+cglobal_label .main
     punpckhqdq            m7, m0, m1                 ;low:in1  high:in3
     punpcklqdq            m0, m1
     punpcklqdq            m1, m2, m3
@@ -1947,7 +1947,7 @@ cglobal iadst_16x4_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     jmp   m(idct_16x4_internal_8bpc).pass2_end
 
 ALIGN function_align
-.main:
+cglobal_label .main
     mova       [coeffq+16*6], m0
     pshufd                m0, m1, q1032
     pshufd                m2, m2, q1032
@@ -2070,7 +2070,7 @@ ALIGN function_align
     mova                  m3, [coeffq+16*5]
     ret
 ALIGN function_align
-.main_pass2_end:
+cglobal_label .main_pass2_end
     mova                  m7, [o(pw_2896x8)]
     punpckhqdq            m6, m2, m1                 ;low:t11   high:t15a
     punpcklqdq            m2, m1                     ;low:t10   high:t14a
