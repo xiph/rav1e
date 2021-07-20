@@ -264,6 +264,9 @@ cglobal inv_txfm_add_%1_%2_%4_16bpc, 4, 7, %5, dst, stride, c, eob, tx2
     jz %%end
 %endif
     lea                tx2q, [o(m(i%2_%4_internal_16bpc).pass2)]
+%if %3
+    add                eobd, %3
+%endif
     call %%p1
     RET
 %%end:
@@ -590,8 +593,8 @@ cglobal iidentity_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     movhps [r5  +strideq*1], m1
     RET
 
-%macro INV_TXFM_4X8_FN 2 ; type1, type2
-    INV_TXFM_FN          %1, %2, 0, 4x8
+%macro INV_TXFM_4X8_FN 2-3 0 ; type1, type2
+    INV_TXFM_FN          %1, %2, %3, 4x8
 %ifidn %1_%2, dct_dct
     imul                r5d, [cq], 2896
     mov                [cq], eobd ; 0
@@ -631,29 +634,39 @@ cglobal iidentity_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endmacro
 
 INV_TXFM_4X8_FN dct, dct
-INV_TXFM_4X8_FN dct, identity
+INV_TXFM_4X8_FN dct, identity, 9
 INV_TXFM_4X8_FN dct, adst
 INV_TXFM_4X8_FN dct, flipadst
 
 cglobal idct_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%undef cmp
     mova                 m5, [o(pd_2048)]
-    mov                 r3d, 16
+%if ARCH_X86_64
+    xor                 r5d, r5d
+    cmp                eobd, 13
+    setge               r5b
+%else
+    mov                 r5d, 1
+    cmp                eobd, 13
+    sbb                 r5d, 0
+%endif
+    shl                 r5d, 4
 .loop_pass1:
     mova                 m3, [o(pd_2896)]
-    pmulld               m0, m3, [cq+32*0+r3]
-    pmulld               m1, m3, [cq+32*1+r3]
-    pmulld               m2, m3, [cq+32*2+r3]
-    pmulld               m3, [cq+32*3+r3]
+    pmulld               m0, m3, [cq+32*0+r5]
+    pmulld               m1, m3, [cq+32*1+r5]
+    pmulld               m2, m3, [cq+32*2+r5]
+    pmulld               m3, [cq+32*3+r5]
     REPX      {paddd x, m5}, m0, m1, m2, m3
     REPX      {psrad x, 12}, m0, m1, m2, m3
     call m(idct_4x4_internal_16bpc).pass1_main
     packssdw             m0, m1     ; out0 out1
     packssdw             m4, m2     ; out2 out3
-    test                r3d, r3d
+    test                r5d, r5d
     jz .end_pass1
     mova       [cq+32*0+16], m0
     mova       [cq+32*1+16], m4
-    xor                 r3d, r3d
+    xor                 r5d, r5d
     jmp .loop_pass1
 .end_pass1:
     punpckhwd            m2, m0, m4
@@ -711,7 +724,7 @@ cglobal idct_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 INV_TXFM_4X8_FN adst, dct
 INV_TXFM_4X8_FN adst, adst
 INV_TXFM_4X8_FN adst, flipadst
-INV_TXFM_4X8_FN adst, identity
+INV_TXFM_4X8_FN adst, identity, 9
 
 cglobal iadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call .pass1_main
@@ -728,7 +741,17 @@ cglobal iadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; m0-3 = packed & transposed output
     jmp                tx2q
 .pass1_main:
-    mov                 r5d, 16
+%undef cmp
+%if ARCH_X86_64
+    xor                 r5d, r5d
+    cmp                eobd, 13
+    setge               r5b
+%else
+    mov                 r5d, 1
+    cmp                eobd, 13
+    sbb                 r5d, 0
+%endif
+    shl                 r5d, 4
     lea                  r3, [cq+32*1+16]
 .loop_pass1:
     mova                 m0, [o(pd_2048)]
@@ -764,7 +787,7 @@ cglobal iadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 INV_TXFM_4X8_FN flipadst, dct
 INV_TXFM_4X8_FN flipadst, adst
 INV_TXFM_4X8_FN flipadst, flipadst
-INV_TXFM_4X8_FN flipadst, identity
+INV_TXFM_4X8_FN flipadst, identity, 9
 
 cglobal iflipadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call m(iadst_4x8_internal_16bpc).pass1_main
@@ -799,18 +822,30 @@ cglobal iflipadst_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 INV_TXFM_4X8_FN identity, dct
 INV_TXFM_4X8_FN identity, adst
 INV_TXFM_4X8_FN identity, flipadst
-INV_TXFM_4X8_FN identity, identity
+INV_TXFM_4X8_FN identity, identity, 3
 
 cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%undef cmp
     mova                 m5, [o(pd_2048)]
     mova                 m4, [o(pd_2896)]
     mova                 m6, [o(pd_5793)]
-    mov                 r3d, 16
+    ; clear m7 in case we skip the bottom square
+    pxor                 m7, m7
+%if ARCH_X86_64
+    xor                 r5d, r5d
+    cmp                eobd, 16
+    setge               r5b
+%else
+    mov                 r5d, 1
+    cmp                eobd, 16
+    sbb                 r5d, 0
+%endif
+    shl                 r5d, 4
 .loop_pass1:
-    pmulld               m0, m4, [cq+32*0+r3]
-    pmulld               m1, m4, [cq+32*1+r3]
-    pmulld               m2, m4, [cq+32*2+r3]
-    pmulld               m3, m4, [cq+32*3+r3]
+    pmulld               m0, m4, [cq+32*0+r5]
+    pmulld               m1, m4, [cq+32*1+r5]
+    pmulld               m2, m4, [cq+32*2+r5]
+    pmulld               m3, m4, [cq+32*3+r5]
     REPX      {paddd x, m5}, m0, m1, m2, m3
     REPX      {psrad x, 12}, m0, m1, m2, m3
     REPX     {pmulld x, m6}, m0, m1, m2, m3
@@ -818,11 +853,11 @@ cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     REPX      {psrad x, 12}, m0, m1, m2, m3
     packssdw             m0, m1
     packssdw             m2, m3
-    test                r3d, r3d
+    test                r5d, r5d
     jz .end_pass1
     mova       [cq+32*0+16], m0
     mova                 m7, m2
-    xor                 r3d, r3d
+    xor                 r5d, r5d
     jmp .loop_pass1
 .end_pass1:
     punpckhwd            m4, m0, m2
