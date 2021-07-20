@@ -103,6 +103,10 @@ cextern iadst_16x4_internal_8bpc_ssse3.main_pass2_end
 cextern idct_8x4_internal_8bpc_ssse3.main
 cextern iadst_8x4_internal_8bpc_ssse3.main
 
+tbl_4x16_2d: db 0, 13, 29, 45
+tbl_4x16_h: db 0, 16, 32, 48
+tbl_4x16_v: db 0, 4, 8, 12
+
 SECTION .text
 
 %macro REPX 2-*
@@ -264,8 +268,12 @@ cglobal inv_txfm_add_%1_%2_%4_16bpc, 4, 7, %5, dst, stride, c, eob, tx2
     jz %%end
 %endif
     lea                tx2q, [o(m(i%2_%4_internal_16bpc).pass2)]
+%ifnum %3
 %if %3
     add                eobd, %3
+%endif
+%else
+    lea                  r5, [o(%3)]
 %endif
     call %%p1
     RET
@@ -274,13 +282,17 @@ cglobal inv_txfm_add_%1_%2_%4_16bpc, 4, 7, %5, dst, stride, c, eob, tx2
     ; Jump to the 1st txfm function if we're not taking the fast path, which
     ; in turn performs an indirect jump to the 2nd txfm function.
     lea                tx2q, [o(m(i%2_%4_internal_16bpc).pass2)]
+%ifnum %3
+%if %3
+    add                eobd, %3
+%endif
+%else
+    lea                  r5, [o(%3)]
+%endif
 %ifidn %1_%2, dct_dct
     test               eobd, eobd
     jnz %%p1
 %else
-%if %3
-    add                eobd, %3
-%endif
     ; jump to the 1st txfm function unless it's located directly after this
     times ((%%end - %%p1) >> 31) & 1 jmp %%p1
 ALIGN function_align
@@ -875,8 +887,8 @@ cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m4, [o(pw_4096)]
     jmp m(idct_4x8_internal_16bpc).end
 
-%macro INV_TXFM_4X16_FN 2 ; type1, type2
-    INV_TXFM_FN          %1, %2, 0, 4x16
+%macro INV_TXFM_4X16_FN 2-3 2d ; type1, type2
+    INV_TXFM_FN          %1, %2, tbl_4x16_%3, 4x16
 %ifidn %1_%2, dct_dct
     imul                r5d, [cq], 2896
     mov                [cq], eobd ; 0
@@ -888,18 +900,32 @@ cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endmacro
 
 INV_TXFM_4X16_FN dct, dct
-INV_TXFM_4X16_FN dct, identity
+INV_TXFM_4X16_FN dct, identity, v
 INV_TXFM_4X16_FN dct, adst
 INV_TXFM_4X16_FN dct, flipadst
 
 cglobal idct_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%undef cmp
+%if ARCH_X86_32
+    mov                 r5m, r6d
+%endif
+    mov                 r6d, 4
+.zero_loop:
+    dec                 r6d
+    cmp                eobb, byte [r5+r6]
+    jl .zero_loop
+    mov                 r5d, r6d
+    shl                 r5d, 4
+%if ARCH_X86_32
+    ; restore pic-ptr
+    mov                  r6, r5m
+%endif
     mova                 m5, [o(pd_2048)]
-    mov                 r3d, 48
 .loop_pass1:
-    mova                 m0, [cq+64*0+r3]
-    mova                 m1, [cq+64*1+r3]
-    mova                 m2, [cq+64*2+r3]
-    mova                 m3, [cq+64*3+r3]
+    mova                 m0, [cq+64*0+r5]
+    mova                 m1, [cq+64*1+r5]
+    mova                 m2, [cq+64*2+r5]
+    mova                 m3, [cq+64*3+r5]
     call m(idct_4x4_internal_16bpc).pass1_main
     pcmpeqd              m3, m3
     REPX      {psubd x, m3}, m0, m1, m4, m2
@@ -910,11 +936,11 @@ cglobal idct_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     punpcklwd            m0, m4
     punpckhwd            m1, m0, m2
     punpcklwd            m0, m2
-    test                r3d, r3d
+    test                r5d, r5d
     jz .end_pass1
-    mova       [cq+64*0+r3], m0
-    mova       [cq+64*1+r3], m1
-    sub                 r3d, 16
+    mova       [cq+64*0+r5], m0
+    mova       [cq+64*1+r5], m1
+    sub                 r5d, 16
     jmp .loop_pass1
 .end_pass1:
     mova                 m2, [cq+64*0+16]
@@ -985,10 +1011,24 @@ cglobal idct_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 INV_TXFM_4X16_FN adst, dct
 INV_TXFM_4X16_FN adst, adst
 INV_TXFM_4X16_FN adst, flipadst
-INV_TXFM_4X16_FN adst, identity
+INV_TXFM_4X16_FN adst, identity, v
 
 cglobal iadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
-    mov                 r5d, 48
+%undef cmp
+%if ARCH_X86_32
+    mov                 r5m, r6d
+%endif
+    mov                 r6d, 4
+.zero_loop:
+    dec                 r6d
+    cmp                eobb, byte [r6+r5]
+    jl .zero_loop
+    mov                 r5d, r6d
+    shl                 r5d, 4
+%if ARCH_X86_32
+    ; restore pic-ptr
+    mov                  r6, r5m
+%endif
 .loop_pass1:
     mova                 m5, [cq+64*0+r5]
     lea                  r3, [cq+64*1+r5]
@@ -1044,10 +1084,24 @@ cglobal iadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 INV_TXFM_4X16_FN flipadst, dct
 INV_TXFM_4X16_FN flipadst, adst
 INV_TXFM_4X16_FN flipadst, flipadst
-INV_TXFM_4X16_FN flipadst, identity
+INV_TXFM_4X16_FN flipadst, identity, v
 
 cglobal iflipadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
-    mov                 r5d, 48
+%undef cmp
+%if ARCH_X86_32
+    mov                 r5m, r6d
+%endif
+    mov                 r6d, 4
+.zero_loop:
+    dec                 r6d
+    cmp                eobb, byte [r5+r6]
+    jl .zero_loop
+    mov                 r5d, r6d
+    shl                 r5d, 4
+%if ARCH_X86_32
+    ; restore pic-ptr
+    mov                  r6, r5m
+%endif
 .loop_pass1:
     mova                 m5, [cq+64*0+r5]
     lea                  r3, [cq+64*1+r5]
@@ -1100,20 +1154,34 @@ cglobal iflipadst_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     punpckhqdq           m2, m7, m5
     jmp m(idct_4x16_internal_16bpc).end
 
-INV_TXFM_4X16_FN identity, dct
-INV_TXFM_4X16_FN identity, adst
-INV_TXFM_4X16_FN identity, flipadst
+INV_TXFM_4X16_FN identity, dct, h
+INV_TXFM_4X16_FN identity, adst, h
+INV_TXFM_4X16_FN identity, flipadst, h
 INV_TXFM_4X16_FN identity, identity
 
 cglobal iidentity_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%undef cmp
+%if ARCH_X86_32
+    mov                 r5m, r6d
+%endif
+    mov                 r6d, 4
+.zero_loop:
+    dec                 r6d
+    cmp                eobb, byte [r5+r6]
+    jl .zero_loop
+    mov                 r5d, r6d
+    shl                 r5d, 4
+%if ARCH_X86_32
+    ; restore pic-ptr
+    mov                  r6, r5m
+%endif
     mova                 m5, [o(pd_6144)]
     mova                 m4, [o(pd_5793)]
-    mov                 r3d, 48
 .loop_pass1:
-    pmulld               m0, m4, [cq+64*0+r3]
-    pmulld               m1, m4, [cq+64*1+r3]
-    pmulld               m2, m4, [cq+64*2+r3]
-    pmulld               m3, m4, [cq+64*3+r3]
+    pmulld               m0, m4, [cq+64*0+r5]
+    pmulld               m1, m4, [cq+64*1+r5]
+    pmulld               m2, m4, [cq+64*2+r5]
+    pmulld               m3, m4, [cq+64*3+r5]
     REPX      {paddd x, m5}, m0, m1, m2, m3
     REPX      {psrad x, 13}, m0, m1, m2, m3
     packssdw             m0, m1
@@ -1122,11 +1190,11 @@ cglobal iidentity_4x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     punpcklwd            m0, m2
     punpckhwd            m1, m0, m3
     punpcklwd            m0, m3
-    test                r3d, r3d
+    test                r5d, r5d
     jz m(idct_4x16_internal_16bpc).end_pass1
-    mova       [cq+64*0+r3], m0
-    mova       [cq+64*1+r3], m1
-    sub                 r3d, 16
+    mova       [cq+64*0+r5], m0
+    mova       [cq+64*1+r5], m1
+    sub                 r5d, 16
     jmp .loop_pass1
 .pass2:
     mova          [cq+16*4], m0
