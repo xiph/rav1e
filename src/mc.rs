@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -23,6 +23,7 @@ use crate::tiling::*;
 use crate::util::*;
 
 use simd_helpers::cold_for_target_arch;
+use std::ops;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MotionVector {
@@ -46,6 +47,42 @@ impl MotionVector {
     use crate::context::{MV_LOW, MV_UPP};
     ((MV_LOW as i16) < self.row && self.row < (MV_UPP as i16))
       && ((MV_LOW as i16) < self.col && self.col < (MV_UPP as i16))
+  }
+}
+
+impl ops::Mul<i16> for MotionVector {
+  type Output = MotionVector;
+
+  #[inline]
+  fn mul(self, rhs: i16) -> MotionVector {
+    MotionVector { row: self.row * rhs, col: self.col * rhs }
+  }
+}
+
+impl ops::Mul<u16> for MotionVector {
+  type Output = MotionVector;
+
+  #[inline]
+  fn mul(self, rhs: u16) -> MotionVector {
+    MotionVector { row: self.row * rhs as i16, col: self.col * rhs as i16 }
+  }
+}
+
+impl ops::Shl<u8> for MotionVector {
+  type Output = MotionVector;
+
+  #[inline]
+  fn shl(self, rhs: u8) -> MotionVector {
+    MotionVector { row: self.row << rhs, col: self.col << rhs }
+  }
+}
+
+impl ops::Add<MotionVector> for MotionVector {
+  type Output = MotionVector;
+
+  #[inline]
+  fn add(self, rhs: MotionVector) -> MotionVector {
+    MotionVector { row: self.row + rhs.row, col: self.col + rhs.col }
   }
 }
 

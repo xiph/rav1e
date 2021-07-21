@@ -84,6 +84,10 @@ pub struct SpeedSettings {
   /// Use fine directional intra prediction
   pub fine_directional_intra: bool,
 
+  /// Enable full search in some parts of motion estimation. Allowing full
+  /// search is slower.
+  pub me_allow_full_search: bool,
+
   // NOTE: put enums and basic type fields above
   /// Range of partition sizes that can be used. Larger ranges are slower.
   ///
@@ -119,6 +123,7 @@ impl Default for SpeedSettings {
       segmentation: SegmentationLevel::Full,
       enable_inter_tx_split: false,
       fine_directional_intra: false,
+      me_allow_full_search: false,
     }
   }
 }
@@ -166,6 +171,7 @@ impl SpeedSettings {
       segmentation: Self::segmentation_preset(speed),
       enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
       fine_directional_intra: Self::fine_directional_intra_preset(speed),
+      me_allow_full_search: Self::me_allow_full_search_preset(speed),
     }
   }
 
@@ -293,6 +299,10 @@ impl SpeedSettings {
 
   fn fine_directional_intra_preset(_speed: usize) -> bool {
     true
+  }
+
+  const fn me_allow_full_search_preset(speed: usize) -> bool {
+    speed <= 5
   }
 }
 
