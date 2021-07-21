@@ -1128,7 +1128,7 @@ cglobal idct_8x8_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     REPX      {pmulhrsw x, m7}, m1, m3, m5
     pmulhrsw                m7, [rsp+gprsize+16*0]
 
-.pass1_end3:
+cglobal_label .pass1_end3
     punpcklwd               m6, m1, m5             ;10 50 11 51 12 52 13 53
     punpckhwd               m1, m5                 ;14 54 15 55 16 56 17 57
     punpckhwd               m5, m0, m4             ;04 44 05 45 06 46 07 47
@@ -1190,7 +1190,7 @@ cglobal idct_8x8_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
     ret
 
 ALIGN function_align
-.main:
+cglobal_label .main
     mova  [rsp+gprsize*2+16*0], m7
     mova  [rsp+gprsize*2+16*1], m3
     mova  [rsp+gprsize*2+16*2], m1
@@ -1259,7 +1259,7 @@ ALIGN function_align
     jmp m(idct_8x8_internal_8bpc).end2
 
 ALIGN function_align
-.main:
+cglobal_label .main
     mova  [rsp+gprsize*2+16*0], m7
     mova  [rsp+gprsize*2+16*1], m3
     mova  [rsp+gprsize*2+16*2], m4
@@ -1344,7 +1344,7 @@ ALIGN function_align
     mova                    m6, [rsp+gprsize*2+16*2]
     ret
 ALIGN function_align
-.main_pass2_end:
+cglobal_label .main_pass2_end
     paddsw                  m7, m4, m3                    ;t2 + t3
     psubsw                  m4, m3                        ;t2 - t3
     paddsw                  m3, m5, m2                    ;t6 + t7
