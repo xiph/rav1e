@@ -53,6 +53,7 @@ rav1e currently requires Rust 1.51.0 or later to build.
 
 ### Dependency: NASM
 Some `x86_64`-specific optimizations require [NASM](https://nasm.us/) `2.14.02` or newer and are enabled by default.
+`strip` will be used if available to remove the local symbols from the asm objects.
 
 The CI is testing against `nasm 2.15.05`, so bugs for other versions might happen. If you find one please open an issue!
 

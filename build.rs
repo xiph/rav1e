@@ -57,6 +57,10 @@ fn hash_changed(
     }
   }
 
+  let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
+
+  hasher.write(strip.as_bytes());
+
   let hash = hasher.finish().to_be_bytes();
 
   let hash_path = Path::new(&out_dir).join("asm.hash");
@@ -134,6 +138,20 @@ fn build_nasm_files() {
       cc.object(o);
     }
     cc.compile("rav1easm");
+
+    // Strip local symbols from the asm library since they
+    // confuse the debugger.
+    fn strip<P: AsRef<Path>>(obj: P) {
+      let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
+
+      let mut cmd = std::process::Command::new(strip);
+
+      cmd.arg("-x").arg(obj.as_ref());
+
+      let _ = cmd.output();
+    }
+
+    strip(Path::new(&out_dir).join("librav1easm.a"));
 
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
