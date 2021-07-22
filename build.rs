@@ -40,7 +40,11 @@ fn hash_changed(
 
   let mut hasher = DefaultHasher::new();
 
-  let paths = files.iter().map(Path::new).chain(std::iter::once(config));
+  let paths = files
+    .iter()
+    .map(Path::new)
+    .chain(std::iter::once(config))
+    .chain(std::iter::once(Path::new("build.rs")));
 
   for path in paths {
     if let Ok(mut f) = std::fs::File::open(path) {
