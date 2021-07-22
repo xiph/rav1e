@@ -127,6 +127,9 @@ libfuzzer-sys = "0.3"
 rand = "0.8"
 rand_chacha = "0.3"
 
+[target.'cfg(any(decode_test, decode_test_dav1d))'.dependencies]
+system-deps = "~3.1.2"
+
 [[bin]]
 name = "rav1e"
 required-features = ["binaries"]
