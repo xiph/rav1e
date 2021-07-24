@@ -82,6 +82,7 @@ pd_3803:         times 4 dd  3803
 pw_4096:         times 8 dw  4096
 pd_5793:         times 4 dd  5793
 pd_6144:         times 4 dd  6144
+pd_11586:        times 4 dd 11586
 pw_1697x8:       times 8 dw  1697*8
 pw_2896x8:       times 8 dw  2896*8
 pw_1697x16:      times 8 dw  1697*16
@@ -2343,3 +2344,1009 @@ cglobal iidentity_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %undef mulb
 %undef mlim
 %undef mzero
+
+%macro INV_TXFM_16X4_FN 2 ; type1, type2
+%if ARCH_X86_64
+    INV_TXFM_FN          %1, %2, 0, 16x4, 16, 0-8*16
+%else
+    INV_TXFM_FN          %1, %2, 0, 16x4, 8, 0-12*16
+%endif
+%ifidn %1_%2, dct_dct
+    imul                r5d, [cq], 2896
+    mov                [cq], eobd ; 0
+    add                 r5d, 6144
+    sar                 r5d, 13
+    imul                r5d, 2896
+    add                 r5d, 34816
+    mov                 r3d, 4
+    movd                 m0, r5d
+    pshuflw              m0, m0, q1111
+    punpcklqdq           m0, m0
+    mova                 m3, [o(pixel_10bpc_max)]
+    pxor                 m4, m4
+.loop:
+    mova                 m1, [dstq+ 0]
+    mova                 m2, [dstq+16]
+    REPX     {paddw  x, m0}, m1, m2
+    REPX     {pminsw x, m3}, m1, m2
+    REPX     {pmaxsw x, m4}, m1, m2
+    mova          [dstq+ 0], m1
+    mova          [dstq+16], m2
+    add                dstq, strideq
+    dec                 r3d
+    jg .loop
+    RET
+%endif
+%endmacro
+
+INV_TXFM_16X4_FN dct, dct
+INV_TXFM_16X4_FN dct, identity
+INV_TXFM_16X4_FN dct, adst
+INV_TXFM_16X4_FN dct, flipadst
+
+cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%if ARCH_X86_32
+    ; setup stack pointer
+    lea                  r3, [rsp+gprsize]
+%endif
+    mova                 m0, [cq+ 1*16]
+    mova                 m1, [cq+ 3*16]
+    mova                 m2, [cq+ 5*16]
+    mova                 m3, [cq+ 7*16]
+    mova                 m4, [cq+ 9*16]
+    mova                 m5, [cq+11*16]
+    mova                 m6, [cq+13*16]
+    mova                 m7, [cq+15*16]
+    call .main_oddhalf
+    ; t8-15 is in m0-7
+    mova         [cq+ 1*16], m0
+    mova         [cq+ 3*16], m1
+    mova         [cq+ 5*16], m2
+    mova         [cq+ 7*16], m3
+    mova         [cq+ 9*16], m4
+    mova         [cq+11*16], m5
+    mova         [cq+13*16], m6
+    mova         [cq+15*16], m7
+
+    mova                 m0, [cq+ 0*16]
+    mova                 m1, [cq+ 2*16]
+    mova                 m2, [cq+ 4*16]
+    mova                 m3, [cq+ 6*16]
+    mova                 m4, [cq+ 8*16]
+    mova                 m5, [cq+10*16]
+    mova                 m6, [cq+12*16]
+    mova                 m7, [cq+14*16]
+    call m(idct_8x4_internal_16bpc).main_pass1
+    call m(idct_8x4_internal_16bpc).round
+    ; t0-7 is in m0-7
+
+%if ARCH_X86_64
+    pcmpeqd              m8, m8
+    REPX      {psubd x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
+    mova                 m8, [cq+ 3*16]
+    mova                 m9, [cq+ 5*16]
+    mova                m10, [cq+ 7*16]
+    mova                m11, [cq+ 9*16]
+    mova                m12, [cq+11*16]
+    mova                m13, [cq+13*16]
+    mova                m14, [cq+15*16]
+    psubd               m15, m0, m14       ; out15
+    paddd                m0, m14           ; out0
+    psubd               m14, m1, m13       ; out14
+    paddd                m1, m13           ; out1
+    psubd               m13, m2, m12       ; out13
+    paddd                m2, m12           ; out2
+    psubd               m12, m3, m11       ; out12
+    paddd                m3, m11           ; out3
+    psubd               m11, m4, m10       ; out11
+    paddd                m4, m10           ; out4
+    psubd               m10, m5, m9        ; out10
+    paddd                m5, m9            ; out5
+    psubd                m9, m6, m8        ; out9
+    paddd                m6, m8            ; out6
+    psubd                m8, m7, [cq+1*16] ; out8
+    paddd                m7, [cq+1*16]     ; out7
+    REPX       {psrad x, 1}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
+                             m8,  m9,  m10, m11, m12, m13, m14, m15
+    ; and out0-15 is now in m0-15
+
+.pack_transpose:
+    ; transpose in two parts
+    packssdw             m0, m1
+    packssdw             m2, m3
+    packssdw             m4, m5
+    packssdw             m6, m7
+    packssdw             m8, m9
+    packssdw            m10, m11
+    packssdw            m12, m13
+    packssdw            m14, m15
+.transpose:
+    punpckhwd            m3, m0, m2
+    punpcklwd            m0, m2
+    punpckhwd            m5, m4, m6
+    punpcklwd            m4, m6
+
+    punpckhwd            m2, m0, m3
+    punpcklwd            m0, m3
+    punpckhwd            m6, m4, m5
+    punpcklwd            m4, m5
+
+    punpckhqdq           m1, m0, m4
+    punpcklqdq           m0, m4
+    punpckhqdq           m3, m2, m6
+    punpcklqdq           m2, m6
+
+    punpckhwd           m11, m8, m10
+    punpcklwd            m8, m10
+    punpckhwd           m13, m12, m14
+    punpcklwd           m12, m14
+
+    punpckhwd           m10, m8, m11
+    punpcklwd            m8, m11
+    punpckhwd           m14, m12, m13
+    punpcklwd           m12, m13
+
+    punpckhqdq           m9, m8, m12
+    punpcklqdq           m8, m12
+    punpckhqdq          m11, m10, m14
+    punpcklqdq          m10, m14
+
+    jmp                tx2q
+%else
+    mova         [cq+ 0*16], m0
+    pcmpeqd              m0, m0
+    REPX      {psubd x, m0}, m1, m2, m3, m4, m5, m6, m7
+    mova         [cq+ 2*16], m1
+    mova         [cq+ 4*16], m2
+    mova                 m1, [cq+ 0*16]
+    psubd                m1, m0
+    mova         [cq+ 0*16], m1
+    mova                 m1, [cq+ 1*16]
+    mova                 m2, [cq+ 3*16]
+    psubd                m0, m7, m1
+    paddd                m7, m1
+    psubd                m1, m6, m2
+    paddd                m6, m2
+    REPX       {psrad x, 1}, m0, m1, m6, m7
+    packssdw             m0, m1     ; out8-9
+    packssdw             m6, m7     ; out6-7
+    mova         [cq+14*16], m6
+    mova                 m1, [cq+ 5*16]
+    mova                 m7, [cq+ 7*16]
+    psubd                m2, m5, m1
+    paddd                m5, m1
+    psubd                m1, m4, m7
+    paddd                m4, m7
+    REPX       {psrad x, 1}, m2, m1, m4, m5
+    packssdw             m2, m1     ; out10-11
+    packssdw             m4, m5     ; out4-5
+    mova         [cq+10*16], m4
+    mova                 m1, [cq+ 4*16]
+    mova                 m6, [cq+ 9*16]
+    mova                 m7, [cq+11*16]
+    psubd                m4, m3, m6
+    paddd                m3, m6
+    psubd                m6, m1, m7
+    paddd                m1, m7
+    REPX       {psrad x, 1}, m4, m6, m1, m3
+    packssdw             m4, m6     ; out12-13
+    packssdw             m1, m3     ; out2-3
+    mova         [cq+ 6*16], m1
+    mova                 m1, [cq+ 0*16]
+    mova                 m3, [cq+ 2*16]
+    mova                 m5, [cq+13*16]
+    mova                 m7, [cq+15*16]
+    psubd                m6, m3, m5
+    paddd                m3, m5
+    psubd                m5, m1, m7
+    paddd                m1, m7
+    REPX       {psrad x, 1}, m6, m5, m1, m3
+    packssdw             m6, m5     ; out14-15
+    packssdw             m1, m3     ; out0-1
+    mova         [cq+ 2*16], m1
+    push               tx2q
+    lea                tx2q, [o(.pass1a)]
+    jmp m(idct_8x4_internal_16bpc).transpose
+.pass1a:
+    pop                tx2q
+    mova [rsp+gprsize+0*16], m0
+    mova [rsp+gprsize+1*16], m1
+    mova [rsp+gprsize+2*16], m2
+    mova [rsp+gprsize+3*16], m3
+    mova                 m0, [cq+ 2*16]
+    mova                 m2, [cq+ 6*16]
+    mova                 m4, [cq+10*16]
+    mova                 m6, [cq+14*16]
+    jmp m(idct_8x4_internal_16bpc).transpose
+%endif
+.main_oddhalf:
+%if ARCH_X86_64
+    mova                m11, [o(pd_2048)]
+    mova                m12, [o(clip_min)]
+    mova                m13, [o(clip_max)]
+
+    ITX_MULSUB_2D         0, 7, 8, 9, 10, 11,  401, 4076 ; t8a,  t15a
+    ITX_MULSUB_2D         6, 1, 8, 9, 10, 11, 3920, 1189 ; t11a, t12a
+    ITX_MULSUB_2D         2, 5, 8, 9, 10, 11, 1931, 3612 ; t10a, t13a
+    ITX_MULSUB_2D         4, 3, 8, 9, 10, 11, 3166, 2598 ; t9a,  t14a
+    psubd                m8, m0, m4 ; t9
+    paddd                m0, m4     ; t8
+    psubd                m4, m6, m2 ; t10
+    paddd                m2, m6     ; t11
+    psubd                m6, m1, m5 ; t13
+    paddd                m5, m1     ; t12
+    psubd                m1, m7, m3 ; t14
+    paddd                m7, m3     ; t15
+    REPX    {pmaxsd x, m12}, m8, m1, m4, m6, m0, m2, m5, m7
+    REPX    {pminsd x, m13}, m8, m1, m4, m6, m0, m2, m5, m7
+    mova                m15, [o(pd_3784)]
+    mova                m10, [o(pd_1567)]
+    ITX_MULSUB_2D         1, 8, 3, 9, _, 11, 10, 15
+    ITX_MULSUB_2D         6, 4, 3, 9, _, 11, 10, 15, 4
+    psubd                m3, m1, m4 ; t10
+    paddd                m1, m4     ; t9
+    psubd                m4, m0, m2 ; t11a
+    paddd                m0, m2     ; t8a
+    psubd                m2, m8, m6 ; t13
+    paddd                m6, m8     ; t14
+    psubd                m8, m7, m5 ; t12a
+    paddd                m7, m5     ; t15a
+    REPX    {pmaxsd x, m12}, m2, m8, m3, m4, m0, m1, m6, m7
+    REPX    {pminsd x, m13}, m2, m8, m3, m4, m0, m1, m6, m7
+    mova                m14, [o(pd_2896)]
+    REPX    {pmulld x, m14}, m2, m8, m3, m4
+    paddd                m2, m11
+    paddd                m8, m11
+    paddd                m5, m2, m3 ; t13a
+    psubd                m2, m3     ; t10a
+    psubd                m3, m8, m4 ; t11
+    paddd                m4, m8     ; t12
+    REPX      {psrad x, 12}, m5, m2, m3, m4
+%else
+    mova          [r3+0*16], m2
+    mova          [r3+1*16], m3
+    mova          [r3+2*16], m4
+    mova          [r3+3*16], m5
+    mova                 m4, [o(pd_2048)]
+
+    ITX_MULSUB_2D         0, 7, 2, 3, 5, 4,  401, 4076 ; t8a,  t15a
+    ITX_MULSUB_2D         6, 1, 2, 3, 5, 4, 3920, 1189 ; t11a, t12a
+
+    mova                 m2, [r3+0*16]
+    mova                 m3, [r3+1*16]
+    mova          [r3+0*16], m0
+    mova          [r3+1*16], m1
+    mova                 m1, [r3+2*16]
+    mova                 m5, [r3+3*16]
+    mova          [r3+2*16], m6
+    mova          [r3+3*16], m7
+
+    ITX_MULSUB_2D         2, 5, 0, 6, 7, 4, 1931, 3612 ; t10a, t13a
+    ITX_MULSUB_2D         1, 3, 0, 6, 7, 4, 3166, 2598 ; t9a,  t14a
+
+    mova                 m0, [r3+0*16]
+    psubd                m4, m0, m1 ; t9
+    paddd                m0, m1     ; t8
+    mova          [r3+0*16], m4
+    mova                 m6, [r3+2*16]
+    psubd                m4, m6, m2 ; t10
+    paddd                m2, m6     ; t11
+    mova                 m1, [r3+1*16]
+    psubd                m6, m1, m5 ; t13
+    paddd                m5, m1     ; t12
+    mova                 m7, [r3+3*16]
+    psubd                m1, m7, m3 ; t14
+    paddd                m7, m3     ; t15
+    mova                 m3, [o(clip_min)]
+    REPX     {pmaxsd x, m3}, m1, m4, m6, m0, m2, m5, m7
+    pmaxsd               m3, [r3+0*16]
+    mova          [r3+0*16], m3
+    mova                 m3, [o(clip_max)]
+    REPX     {pminsd x, m3}, m1, m4, m6, m0, m2, m5, m7
+    pminsd               m3, [r3+0*16]
+    mova          [r3+0*16], m0
+    mova          [r3+1*16], m2
+    mova          [r3+2*16], m5
+    mova          [r3+3*16], m7
+    mova                m7, [o(pd_2048)]
+    ITX_MULSUB_2D         1, 3, 0, 2, 5, 7, 1567, 3784
+    ITX_MULSUB_2D         6, 4, 0, 2, _, 7,    5, 3784, 4
+    mova                 m0, [r3+0*16]
+    mova                 m2, [r3+1*16]
+    psubd                m5, m1, m4 ; t10
+    mova          [r3+1*16], m5
+    paddd                m1, m4     ; t9
+    psubd                m4, m0, m2 ; t11a
+    paddd                m0, m2     ; t8a
+    mova                 m5, [r3+2*16]
+    mova                 m7, [r3+3*16]
+    psubd                m2, m3, m6 ; t13
+    paddd                m6, m3     ; t14
+    paddd                m3, m7, m5 ; t15a
+    psubd                m7, m5     ; t12a
+    mova          [r3+0*16], m3
+    mova                 m3, [r3+1*16]
+    mova                 m5, [o(clip_min)]
+    REPX     {pmaxsd x, m5}, m2, m7, m3, m4, m0, m1, m6
+    pmaxsd               m5, [r3+0*16]
+    mova          [r3+0*16], m5
+    mova                 m5, [o(clip_max)]
+    REPX     {pminsd x, m5}, m2, m7, m3, m4, m0, m1, m6
+    pminsd               m5, [r3+0*16]
+    mova          [r3+0*16], m5
+    mova                 m5, [o(pd_2896)]
+    REPX     {pmulld x, m5}, m2, m7, m3, m4
+    mova                 m5, [o(pd_2048)]
+    REPX     {paddd  x, m5}, m2, m7
+    paddd                m5, m2, m3 ; t13a
+    psubd                m2, m3     ; t10a
+    psubd                m3, m7, m4 ; t11
+    paddd                m4, m7     ; t12
+    REPX      {psrad x, 12}, m5, m2, m3, m4
+    mova                 m7, [r3+0*16]
+%endif
+    ret
+
+.pass2:
+    lea                  r4, [o(m_suffix(idct_8x4_internal_8bpc, _ssse3).main)]
+.pass2_loop:
+%if ARCH_X86_32
+    lea                  r5, [o(itx8_start)]
+%endif
+
+    lea                  r3, [strideq*3]
+%if ARCH_X86_64
+    mova                m13, [o(pw_2048)]
+    pxor                m14, m14
+    mova                m12, [o(pixel_10bpc_max)]
+%define mzero m14
+%define mmul m13
+%define mlim m12
+%else
+    pxor                 m4, m4
+%define mzero m4
+%define mlim m5
+%define mmul m6
+%endif
+    REPX {mova [cq+x*16], mzero}, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    call                 r4
+    call .write_8x4
+%if ARCH_X86_64
+    mova                 m0, m8
+    mova                 m1, m9
+    mova                 m2, m10
+    mova                 m3, m11
+%else
+    mova                 m0, [rsp+gprsize+0*16]
+    mova                 m1, [rsp+gprsize+1*16]
+    mova                 m2, [rsp+gprsize+2*16]
+    mova                 m3, [rsp+gprsize+3*16]
+%endif
+    add                dstq, 16
+    call                 r4
+    call .write_8x4
+    RET
+
+.write_8x4:
+    ; two loop iters of idct4_1d 8bit code [m0-3, and m4-7]
+%if ARCH_X86_32
+    mova                 m6, [o(pw_2048)]
+    pxor                 m4, m4
+    mova                 m5, [o(pixel_10bpc_max)]
+%endif
+    REPX {pmulhrsw x, mmul}, m0, m1, m2, m3
+    paddw                m0, [dstq+strideq*0]
+    paddw                m1, [dstq+strideq*1]
+    paddw                m2, [dstq+strideq*2]
+    paddw                m3, [dstq+r3]
+    REPX  {pminsw x, mlim }, m0, m1, m2, m3
+    REPX  {pmaxsw x, mzero}, m0, m1, m2, m3
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    mova   [dstq+strideq*2], m2
+    mova   [dstq+r3       ], m3
+    ret
+%undef mzero
+%undef mlim
+%undef mmul
+
+INV_TXFM_16X4_FN adst, dct
+INV_TXFM_16X4_FN adst, adst
+INV_TXFM_16X4_FN adst, flipadst
+INV_TXFM_16X4_FN adst, identity
+
+cglobal iadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+    ; setup stack pointer
+    lea                  r3, [rsp+4*16+gprsize]
+    call .main
+%if ARCH_X86_64
+    jmp m(idct_16x4_internal_16bpc).pack_transpose
+%else
+    push               tx2q
+    lea                tx2q, [o(.pass1a)]
+    jmp m(idct_8x4_internal_16bpc).transpose
+.pass1a:
+    pop                tx2q
+    mova [rsp+gprsize+0*16], m0
+    mova [rsp+gprsize+1*16], m1
+    mova [rsp+gprsize+2*16], m2
+    mova [rsp+gprsize+3*16], m3
+    call .shift_part2
+    jmp m(idct_8x4_internal_16bpc).transpose
+%endif
+
+.main:
+%if ARCH_X86_64
+    mova                m12, [o(pd_2048)]
+    mova                m13, [o(clip_min)]
+    mova                m14, [o(clip_max)]
+    mova                m15, [o(pd_2896)]
+%endif
+    mova                 m0, [cq+ 2*16]
+    mova                 m1, [cq+13*16]
+    mova                 m2, [cq+ 6*16]
+    mova                 m3, [cq+ 9*16]
+    mova                 m4, [cq+10*16]
+    mova                 m5, [cq+ 5*16]
+    mova                 m6, [cq+14*16]
+    mova                 m7, [cq+ 1*16]
+    call .main_part1
+    mova                 m0, [cq+ 0*16]
+    mova                 m1, [cq+15*16]
+    mova                 m2, [cq+ 4*16]
+    mova                 m3, [cq+11*16]
+    mova                 m4, [cq+ 8*16]
+    mova                 m5, [cq+ 7*16]
+    mova                 m6, [cq+12*16]
+    mova                 m7, [cq+ 3*16]
+    call .main_part2
+%if ARCH_X86_64
+    mova                m14, [o(pd_6144)]
+    psrld               m15, 11       ; pd_1
+    pcmpeqd              m8, m8       ; -1
+    psubd               m13, m14, m15 ; pd_6143
+    REPX     {paddd x, m15}, m0, m2
+    REPX     {paddd x, m14}, m4, m6
+    REPX     {pxor  x, m8 }, m1, m3, m5, m7
+    REPX     {psrad x, 1  }, m1, m3
+    REPX     {paddd x, m14}, m5, m7
+    REPX     {psubd x, m8 }, m1, m3
+    paddd                m8, m14, m9
+    psubd                m9, m13, m10
+    paddd               m10, m14, m11
+    psubd               m11, m13, m12
+    paddd               m12, m15, [r3-16*1]
+    psubd               m13, m15, [r3-16*2]
+    paddd               m14, m15, [r3-16*3]
+    psubd               m15,      [r3-16*4]
+    REPX      {psrad x, 1 }, m0,  m2,  m12, m13, m14, m15
+    REPX      {psrad x, 13}, m4,  m5,  m6,  m7,  m8,  m9,  m10, m11
+%else
+    mova                 m4, [o(pd_6144)]
+    pcmpeqd              m7, m7
+    REPX      {pxor  x, m7}, m1, m3
+    REPX      {paddd x, m4}, m0, m1, m2, m3
+    REPX      {psrad x, 13}, m0, m1, m2, m3
+    packssdw             m0, m1
+    packssdw             m2, m3
+    mova                 m4, [r3-4*16]
+    mova                 m5, [r3-3*16]
+    mova                 m6, [r3-2*16]
+    mova                 m1, [r3-1*16]
+    REPX      {psubd x, m7}, m4, m6
+    REPX      {pxor  x, m7}, m5, m1
+    REPX      {psrad x, 1 }, m4, m5, m6, m1
+    REPX      {psubd x, m7}, m5, m1
+    packssdw             m4, m5
+    packssdw             m6, m1
+    ret
+.shift_part2:
+    mova                 m4, [r3+4*16]
+    mova                 m5, [r3+5*16]
+    mova                 m6, [r3+6*16]
+    mova                 m7, [r3+7*16]
+    mova                 m0, [o(pd_6144)]
+    pcmpeqd              m3, m3
+    REPX      {pxor  x, m3}, m5, m7
+    REPX      {paddd x, m0}, m4, m5, m6, m7
+    REPX      {psrad x, 13}, m4, m5, m6, m7
+    packssdw             m4, m5
+    packssdw             m6, m7
+    mova                 m0, [r3+0*16]
+    mova                 m1, [r3+1*16]
+    mova                 m2, [r3+2*16]
+    mova                 m7, [r3+3*16]
+    REPX      {pxor  x, m3}, m1, m7
+    REPX      {psubd x, m3}, m0, m2
+    REPX      {psrad x, 1 }, m0, m1, m2, m7
+    REPX      {psubd x, m3}, m1, m7
+    packssdw             m0, m1
+    packssdw             m2, m7
+%endif
+    ret
+
+.main_part2:
+%if ARCH_X86_64
+    ITX_MULSUB_2D         1, 0, 8, 9, 10, 12,  201, 4091
+    ITX_MULSUB_2D         3, 2, 8, 9, 10, 12, 1751, 3703
+    ITX_MULSUB_2D         5, 4, 8, 9, 10, 12, 3035, 2751
+    ITX_MULSUB_2D         7, 6, 8, 9, 10, 12, 3857, 1380
+    psubd                m8, m0, m4 ; t8a
+    paddd                m0, m4     ; t0a
+    psubd                m4, m1, m5 ; t9a
+    paddd                m1, m5     ; t1a
+    psubd                m5, m2, m6 ; t12a
+    paddd                m2, m6     ; t4a
+    psubd                m6, m3, m7 ; t13a
+    paddd                m7, m3     ; t5a
+    REPX    {pmaxsd x, m13}, m8, m4, m5, m6, m0, m1, m2, m7
+    REPX    {pminsd x, m14}, m8, m4, m5, m6, m0, m1, m2, m7
+    mova                m11, [o(pd_4017)]
+    mova                m10, [o(pd_799)]
+    ITX_MULSUB_2D         8, 4, 3, 9, _, 12, 10, 11
+    ITX_MULSUB_2D         6, 5, 3, 9, _, 12, 11, 10
+    psubd                m3, m0, m2 ; t4
+    paddd                m0, m2     ; t0
+    psubd                m2, m1, m7 ; t5
+    paddd                m1, m7     ; t1
+    psubd                m7, m4, m6 ; t12a
+    paddd                m4, m6     ; t8a
+    psubd                m6, m8, m5 ; t13a
+    paddd                m5, m8     ; t9a
+    REPX    {pmaxsd x, m13}, m3, m2, m7, m6, m0, m1, m4, m5
+    REPX    {pminsd x, m14}, m3, m2, m7, m6, m0, m1, m4, m5
+    mova                m11, [o(pd_3784)]
+    mova                m10, [o(pd_1567)]
+    ITX_MULSUB_2D         3, 2, 8, 9, _, 12, 10, 11
+    ITX_MULSUB_2D         7, 6, 8, 9, _, 12, 10, 11
+    mova                m10, [r3-16*4]      ;  t2
+    mova                 m8, [r3-16*3]      ;  t3
+    psubd                m9, m0, m10        ;  t2a
+    paddd                m0, m10            ;  out0
+    psubd               m10, m1, m8         ;  t3a
+    paddd                m1, m8             ; -out15
+    mova          [r3-16*4], m1
+    mova                m11, [r3-16*1]      ;  t7a
+    mova                 m1, [r3-16*2]      ;  t6a
+    psubd                m8, m3, m11        ;  t7
+    paddd               m11, m3             ;  out12
+    paddd                m3, m2, m1         ; -out3
+    psubd                m2, m1             ;  t6
+    mova          [r3-16*1], m11
+    mova          [r3-16*3], m2
+    mova                 m1, [r3+16*3]      ;  t15
+    mova                 m2, [r3+16*2]      ;  t14
+    paddd               m12, m7, m1         ; -out13
+    psubd                m7, m1             ;  t15a
+    psubd               m11, m6, m2         ;  t14a
+    paddd                m2, m6             ;  out2
+    mova          [r3-16*2], m12
+    mova                 m1, [r3+16*0]      ;  t10a
+    mova                m12, [r3+16*1]      ;  t11a
+    psubd                m6, m4, m1         ;  t10
+    paddd                m1, m4             ; -out1
+    psubd                m4, m5, m12        ;  t11
+    paddd                m5, m12            ;  out14
+    mova                m12, [r3-16*3]      ;  t6
+    mova          [r3-16*3], m5
+    REPX    {pmaxsd x, m13}, m11, m7, m9, m10, m6, m4, m12, m8
+    REPX    {pminsd x, m14}, m11, m7, m9, m10, m6, m4, m12, m8
+    REPX    {pmulld x, m15}, m11, m7, m9, m10, m6, m4, m12, m8
+    paddd                m5, m11, m7        ; -out5  (unshifted)
+    psubd               m11, m7             ;  out10 (unshifted)
+    paddd                m7, m9, m10        ; -out7  (unshifted)
+    psubd                m9, m10            ;  out8  (unshifted)
+    psubd               m10, m6, m4         ; -out9  (unshifted)
+    paddd                m6, m4             ;  out6  (unshifted)
+    paddd                m4, m12, m8        ;  out4  (unshifted)
+    psubd               m12, m8             ; -out11 (unshifted)
+%else
+    mova          [r3+4*16], m0
+    mova          [r3+5*16], m1
+    mova          [r3+6*16], m2
+    mova          [r3+7*16], m3
+    mova                 m3, [o(pd_2048)]
+    ITX_MULSUB_2D         5, 4, 0, 1, 2, 3, 3035, 2751
+    ITX_MULSUB_2D         7, 6, 0, 1, 2, 3, 3857, 1380
+    mova                 m0, [r3+4*16]
+    mova                 m1, [r3+5*16]
+    mova                 m2, [r3+6*16]
+    mova          [r3+4*16], m4
+    mova          [r3+5*16], m5
+    mova          [r3+6*16], m6
+    mova                 m6, [r3+7*16]
+    mova          [r3+7*16], m7
+    ITX_MULSUB_2D         1, 0, 4, 5, 7, 3,  201, 4091
+    ITX_MULSUB_2D         6, 2, 4, 5, 7, 3, 1751, 3703
+    mova                 m4, [r3+4*16]
+    mova                 m5, [r3+5*16]
+    psubd                m3, m0, m4 ; t8a
+    paddd                m0, m4     ; t0a
+    mova          [r3+4*16], m3
+    psubd                m4, m1, m5 ; t9a
+    paddd                m1, m5     ; t1a
+    mova                 m3, [r3+6*16]
+    psubd                m5, m2, m3 ; t12a
+    paddd                m2, m3     ; t4a
+    mova                 m3, [r3+7*16]
+    paddd                m7, m3, m6 ; t5a
+    psubd                m6, m3     ; t13a
+    mova                 m3, [o(clip_min)]
+    REPX     {pmaxsd x, m3}, m4, m5, m6, m0, m1, m2, m7
+    pmaxsd               m3, [r3+4*16]
+    mova          [r3+4*16], m3
+    mova                 m3, [o(clip_max)]
+    REPX     {pminsd x, m3}, m4, m5, m6, m0, m1, m2, m7
+    pminsd               m3, [r3+4*16]
+    mova          [r3+4*16], m3
+    psubd                m3, m0, m2 ; t4
+    paddd                m0, m2     ; t0
+    psubd                m2, m1, m7 ; t5
+    paddd                m1, m7     ; t1
+    mova                 m7, [o(pd_2048)]
+    mova          [r3+5*16], m1
+    mova          [r3+6*16], m2
+    mova          [r3+7*16], m3
+    mova                 m3, [r3+4*16]
+    mova          [r3+4*16], m0
+    ITX_MULSUB_2D         3, 4, 0, 1, 2, 7,  799, 4017
+    ITX_MULSUB_2D         6, 5, 0, 1, 2, 7, 4017,    2
+    psubd                m7, m4, m6 ; t12a
+    paddd                m4, m6     ; t8a
+    psubd                m6, m3, m5 ; t13a
+    paddd                m5, m3     ; t9a
+    mova                 m0, [r3+4*16]
+    mova                 m1, [r3+5*16]
+    mova                 m2, [r3+6*16]
+    mova                 m3, [o(clip_min)]
+    REPX     {pmaxsd x, m3}, m2, m7, m6, m0, m1, m4, m5
+    pmaxsd               m3, [r3+7*16]
+    mova          [r3+4*16], m3
+    mova                 m3, [o(clip_max)]
+    REPX     {pminsd x, m3}, m2, m7, m6, m0, m1, m4, m5
+    pminsd               m3, [r3+4*16]
+    mova          [r3+4*16], m0
+    mova          [r3+5*16], m1
+    mova          [r3+6*16], m4
+    mova          [r3+7*16], m5
+    mova                 m0, [o(pd_2048)]
+    ITX_MULSUB_2D         3, 2, 1, 4, 5, 0, 1567, 3784
+    ITX_MULSUB_2D         7, 6, 1, 4, 5, 0,    5, 3784
+    mova                 m0, [r3+3*16]      ;  t7a
+    mova                 m4, [r3+2*16]      ;  t6a
+    psubd                m1, m3, m0         ;  t7
+    paddd                m0, m3             ;  out12
+    paddd                m3, m2, m4         ; -out3
+    psubd                m2, m4             ;  t6
+    mova          [r3+3*16], m3
+    mova                 m3, [r3-1*16]      ;  t15
+    mova                 m4, [r3-2*16]      ;  t14
+    paddd                m5, m7, m3         ; -out13
+    psubd                m7, m3             ;  t15a
+    psubd                m3, m6, m4         ;  t14a
+    paddd                m4, m6             ;  out2
+    mova          [r3+2*16], m4
+    mova                 m6, [r3-4*16]      ;  t10a
+    mova                 m4, [r3-3*16]      ;  t11a
+    mova          [r3-4*16], m0
+    mova          [r3-3*16], m5
+    mova                 m5, [r3+7*16]
+    psubd                m0, m5, m4         ;  t11
+    paddd                m5, m4             ;  out14
+    mova          [r3-2*16], m5
+    mova                 m4, [r3+6*16]
+    psubd                m5, m4, m6         ;  t10
+    paddd                m4, m6             ; -out1
+    mova                 m6, [r3+1*16]      ;  t3
+    mova          [r3+1*16], m4
+    mova          [r3+6*16], m1
+    mova                 m1, [r3+5*16]
+    psubd                m4, m1, m6         ;  t3a
+    paddd                m1, m6             ; -out15
+    mova          [r3-1*16], m1
+    mova                 m1, [r3+0*16]      ;  t2
+    mova                 m6, [r3+4*16]
+    psubd                m6, m1             ;  t2a
+    paddd                m1, [r3+4*16]      ;  out0
+    mova          [r3+0*16], m1
+    mova                 m1, [o(clip_min)]
+    REPX     {pmaxsd x, m1}, m0, m2, m3, m4, m5, m6, m7
+    pmaxsd               m1, [r3+6*16]
+    mova          [r3+6*16], m1
+    mova                 m1, [o(clip_max)]
+    REPX     {pminsd x, m1}, m0, m2, m3, m4, m5, m6, m7
+    pminsd               m1, [r3+6*16]
+    mova          [r3+6*16], m1
+    mova                 m1, [o(pd_2896)]
+    REPX     {pmulld x, m1}, m0, m2, m3, m4, m5, m6, m7
+    pmulld               m1, [r3+6*16]
+    mova          [r3+7*16], m3
+    psubd                m3, m2, m1         ; -out11 (unshifted)
+    paddd                m2, m1             ;  out4  (unshifted)
+    psubd                m1, m5, m0         ; -out9  (unshifted)
+    paddd                m5, m0             ;  out6  (unshifted)
+    psubd                m0, m6, m4         ;  out8  (unshifted)
+    paddd                m6, m4             ; -out7  (unshifted)
+    mova                 m4, [r3+7*16]
+    mova          [r3+4*16], m2
+    mova          [r3+6*16], m5
+    mova          [r3+7*16], m6
+    psubd                m2, m4, m7         ;  out10 (unshifted)
+    paddd                m4, m7             ; -out5  (unshifted)
+    mova          [r3+5*16], m4
+    ; m0-3 contain out8-11 (unshifted), r4-7 contain out4-7 (unshifted)
+    ; r[-4,3] contain out0-3 and out12-15
+%endif
+    ret
+.main_part1:
+%if ARCH_X86_64
+    ITX_MULSUB_2D         1, 0, 8, 9, 10, 12,  995, 3973
+    ITX_MULSUB_2D         3, 2, 8, 9, 10, 12, 2440, 3290
+    ITX_MULSUB_2D         5, 4, 8, 9, 10, 12, 3513, 2106
+    ITX_MULSUB_2D         7, 6, 8, 9, 10, 12, 4052,  601
+    psubd                m8, m0, m4 ; t10a
+    paddd                m0, m4     ; t2a
+    psubd                m4, m1, m5 ; t11a
+    paddd                m1, m5     ; t3a
+    psubd                m5, m2, m6 ; t14a
+    paddd                m2, m6     ; t6a
+    psubd                m6, m3, m7 ; t15a
+    paddd                m7, m3     ; t7a
+    REPX    {pmaxsd x, m13}, m8, m4, m5, m6, m0, m1, m2, m7
+    REPX    {pminsd x, m14}, m8, m4, m5, m6, m0, m1, m2, m7
+    mova                m11, [o(pd_2276)]
+    mova                m10, [o(pd_3406)]
+    ITX_MULSUB_2D         8, 4, 3, 9, _, 12, 10, 11
+    ITX_MULSUB_2D         6, 5, 3, 9, _, 12, 11, 10
+    psubd                m3, m0, m2 ; t6
+    paddd                m0, m2     ; t2
+    psubd                m2, m1, m7 ; t7
+    paddd                m1, m7     ; t3
+    psubd                m7, m4, m6 ; t14a
+    paddd                m4, m6     ; t10a
+    psubd                m6, m8, m5 ; t15a
+    paddd                m5, m8     ; t11a
+    REPX    {pmaxsd x, m13}, m3, m2, m7, m6, m0, m1, m4, m5
+    REPX    {pminsd x, m14}, m3, m2, m7, m6, m0, m1, m4, m5
+    mova                m11, [o(pd_1567)]
+    mova                m10, [o(pd_3784)]
+    ITX_MULSUB_2D         2, 3, 8, 9, _, 12, 10, 11
+    ITX_MULSUB_2D         6, 7, 8, 9, _, 12, 10, 11
+    mova          [r3-16*4], m0
+    mova          [r3-16*3], m1
+    mova          [r3+16*0], m4
+    mova          [r3+16*1], m5
+    mova          [r3-16*2], m2
+    mova          [r3-16*1], m3
+    mova          [r3+16*2], m6
+    mova          [r3+16*3], m7
+%else
+    mova          [r3+0*16], m0
+    mova          [r3+1*16], m1
+    mova          [r3+2*16], m2
+    mova          [r3+3*16], m3
+    mova                 m3, [o(pd_2048)]
+    ITX_MULSUB_2D         5, 4, 0, 1, 2, 3, 3513, 2106
+    ITX_MULSUB_2D         7, 6, 0, 1, 2, 3, 4052,  601
+    mova          [r3-4*16], m4
+    mova          [r3-3*16], m5
+    mova          [r3-2*16], m6
+    mova          [r3-1*16], m7
+    mova                 m0, [r3+0*16]
+    mova                 m1, [r3+1*16]
+    mova                 m2, [r3+2*16]
+    mova                 m7, [r3+3*16]
+    ITX_MULSUB_2D         1, 0, 4, 5, 6, 3,  995, 3973
+    ITX_MULSUB_2D         7, 2, 4, 5, 6, 3, 2440, 3290
+    mova                 m4, [r3-4*16]
+    mova                 m5, [r3-3*16]
+    psubd                m6, m0, m4 ; t10a
+    paddd                m0, m4     ; t2a
+    mova          [r3+0*16], m6
+    mova                 m6, [r3-2*16]
+    mova                 m3, [r3-1*16]
+    psubd                m4, m1, m5 ; t11a
+    paddd                m1, m5     ; t3a
+    psubd                m5, m2, m6 ; t14a
+    paddd                m2, m6     ; t6a
+    psubd                m6, m7, m3 ; t15a
+    paddd                m7, m3     ; t7a
+    mova                 m3, [o(clip_min)]
+    REPX     {pmaxsd x, m3}, m4, m5, m6, m0, m1, m2, m7
+    pmaxsd               m3, [r3+0*16]
+    mova          [r3+0*16], m3
+    mova                 m3, [o(clip_max)]
+    REPX     {pminsd x, m3}, m4, m5, m6, m0, m1, m2, m7
+    pminsd               m3, [r3+0*16]
+    mova          [r3+0*16], m3
+    psubd                m3, m0, m2 ; t6
+    paddd                m0, m2     ; t2
+    psubd                m2, m1, m7 ; t7
+    paddd                m1, m7     ; t3
+    mova          [r3+1*16], m1
+    mova          [r3+2*16], m3
+    mova          [r3+3*16], m2
+    mova                 m1, [r3+0*16]
+    mova          [r3+0*16], m0
+    mova                 m3, [o(pd_2048)]
+    ITX_MULSUB_2D         1, 4, 0, 7, 2, 3, 3406, 2276
+    ITX_MULSUB_2D         6, 5, 0, 7, 2, 3, 2276,    2
+    psubd                m7, m4, m6 ; t14a
+    paddd                m4, m6     ; t10a
+    psubd                m6, m1, m5 ; t15a
+    paddd                m5, m1     ; t11a
+    mova                 m1, [r3+1*16]
+    mova                 m3, [r3+2*16]
+    mova                 m2, [r3+3*16]
+    mova                 m0, [o(clip_min)]
+    REPX     {pmaxsd x, m0}, m3, m2, m7, m6, m1, m4, m5
+    pmaxsd               m0, [r3+0*16]
+    mova          [r3+0*16], m0
+    mova                 m0, [o(clip_max)]
+    REPX     {pminsd x, m0}, m3, m2, m7, m6, m1, m4, m5
+    pminsd               m0, [r3+0*16]
+    mova          [r3+0*16], m0
+    mova          [r3+1*16], m1
+    mova          [r3-4*16], m4
+    mova          [r3-3*16], m5
+    mova                 m0, [o(pd_2048)]
+    ITX_MULSUB_2D         2, 3, 1, 4, 5, 0, 3784, 1567
+    ITX_MULSUB_2D         6, 7, 1, 4, 5, 0,    5, 1567
+    mova          [r3+2*16], m2
+    mova          [r3+3*16], m3
+    mova          [r3-2*16], m6
+    mova          [r3-1*16], m7
+%endif
+    ret
+
+.pass2:
+    lea                  r4, [o(m_suffix(iadst_8x4_internal_8bpc, _ssse3).main)]
+    jmp m(idct_16x4_internal_16bpc).pass2_loop
+
+INV_TXFM_16X4_FN flipadst, dct
+INV_TXFM_16X4_FN flipadst, adst
+INV_TXFM_16X4_FN flipadst, flipadst
+INV_TXFM_16X4_FN flipadst, identity
+
+cglobal iflipadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+    lea                  r3, [rsp+4*16+gprsize]
+    call m(iadst_16x4_internal_16bpc).main
+%if ARCH_X86_64
+    packssdw             m1, m0
+    packssdw             m3, m2
+    packssdw             m5, m4
+    packssdw             m7, m6
+    packssdw             m9, m8
+    packssdw            m11, m10
+    packssdw            m13, m12
+    packssdw            m15, m14
+    mova                 m0, m15
+    mova                 m2, m13
+    mova                 m4, m11
+    mova                 m6, m9
+    mova                 m8, m7
+    mova                m10, m5
+    mova                m12, m3
+    mova                m14, m1
+    jmp m(idct_16x4_internal_16bpc).transpose
+%else
+    mova [rsp+gprsize+0*16], m0
+    mova [rsp+gprsize+1*16], m2
+    mova [rsp+gprsize+2*16], m6
+    mova [rsp+gprsize+3*16], m4
+    call m(iadst_16x4_internal_16bpc).shift_part2
+    mova                 m7, m6
+    mova                 m5, m4
+    pshufd               m6, m0, q1032
+    pshufd               m4, m2, q1032
+    pshufd               m2, m5, q1032
+    pshufd               m0, m7, q1032
+    push               tx2q
+    lea                tx2q, [o(.pass1a)]
+    jmp m(idct_8x4_internal_16bpc).transpose
+.pass1a:
+    pop                tx2q
+    pshufd               m6, [rsp+gprsize+0*16], q1032
+    pshufd               m4, [rsp+gprsize+1*16], q1032
+    mova [rsp+gprsize+0*16], m0
+    mova [rsp+gprsize+1*16], m1
+    pshufd               m0, [rsp+gprsize+2*16], q1032
+    mova [rsp+gprsize+2*16], m2
+    pshufd               m2, [rsp+gprsize+3*16], q1032
+    mova [rsp+gprsize+3*16], m3
+    jmp m(idct_8x4_internal_16bpc).transpose
+%endif
+
+.pass2:
+    lea                  r3, [strideq*3]
+    lea                dstq, [dstq+r3]
+    neg             strideq
+    lea                  r4, [o(m_suffix(iadst_8x4_internal_8bpc, _ssse3).main)]
+    jmp m(idct_16x4_internal_16bpc).pass2_loop
+
+INV_TXFM_16X4_FN identity, dct
+INV_TXFM_16X4_FN identity, adst
+INV_TXFM_16X4_FN identity, flipadst
+INV_TXFM_16X4_FN identity, identity
+
+cglobal iidentity_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
+%if ARCH_X86_64
+    mova                m15, [o(pd_11586)]
+    pmulld               m0, m15, [cq+ 0*16]
+    pmulld               m1, m15, [cq+ 1*16]
+    pmulld               m2, m15, [cq+ 2*16]
+    pmulld               m3, m15, [cq+ 3*16]
+    pmulld               m4, m15, [cq+ 4*16]
+    pmulld               m5, m15, [cq+ 5*16]
+    pmulld               m6, m15, [cq+ 6*16]
+    pmulld               m7, m15, [cq+ 7*16]
+    pmulld               m8, m15, [cq+ 8*16]
+    pmulld               m9, m15, [cq+ 9*16]
+    pmulld              m10, m15, [cq+10*16]
+    pmulld              m11, m15, [cq+11*16]
+    pmulld              m12, m15, [cq+12*16]
+    pmulld              m13, m15, [cq+13*16]
+    pmulld              m14, m15, [cq+14*16]
+    pmulld              m15, [cq+15*16]
+    mova         [cq+ 0*16], m15
+    mova                m15, [o(pd_6144)]
+    REPX     {paddd x, m15}, m0, m1, m2, m3, m4, m5, m6, m7, \
+                         m8, m9, m10, m11, m12, m13, m14
+    paddd               m15, [cq+ 0*16]
+    REPX     {psrad x, 13 }, m0, m1, m2, m3, m4, m5, m6, m7, \
+                         m8, m9, m10, m11, m12, m13, m14, m15
+    jmp m(idct_16x4_internal_16bpc).pack_transpose
+%else
+    add                  cq, 8*16
+    push               tx2q
+    lea                tx2q, [o(.pass1a)]
+.loop_pass1:
+    mova                 m7, [o(pd_11586)]
+    pmulld               m0, m7, [cq+0*16]
+    pmulld               m1, m7, [cq+1*16]
+    pmulld               m2, m7, [cq+2*16]
+    pmulld               m3, m7, [cq+3*16]
+    pmulld               m4, m7, [cq+4*16]
+    pmulld               m5, m7, [cq+5*16]
+    pmulld               m6, m7, [cq+6*16]
+    pmulld               m7, [cq+7*16]
+    mova          [cq+7*16], m7
+    mova                 m7, [o(pd_6144)]
+    REPX      {paddd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    paddd                m7, [cq+7*16]
+    REPX      {psrad x, 13}, m0, m1, m2, m3, m4, m5, m6, m7
+    jmp m(idct_8x4_internal_16bpc).pack_transpose
+.pass1a:
+    pop                tx2q
+    mova [rsp+gprsize+0*16], m0
+    mova [rsp+gprsize+1*16], m1
+    mova [rsp+gprsize+2*16], m2
+    mova [rsp+gprsize+3*16], m3
+    sub                  cq, 8*16
+    jmp .loop_pass1
+%endif
+
+.pass2:
+%if ARCH_X86_64
+    mova                m15, [o(pw_1697x8)]
+%endif
+    lea                  r4, [o(.main)]
+    jmp m(idct_16x4_internal_16bpc).pass2_loop
+.main:
+%if ARCH_X86_64
+    pmulhrsw             m4, m0, m15
+    pmulhrsw             m5, m1, m15
+    pmulhrsw             m6, m2, m15
+    pmulhrsw             m7, m3, m15
+%else
+    mova                 m7, [o(pw_1697x8)]
+    pmulhrsw             m4, m0, m7
+    pmulhrsw             m5, m1, m7
+    pmulhrsw             m6, m2, m7
+    pmulhrsw             m7, m3
+%endif
+    paddsw               m0, m4
+    paddsw               m1, m5
+    paddsw               m2, m6
+    paddsw               m3, m7
+    ret
