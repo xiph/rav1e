@@ -56,14 +56,12 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // conversion, but the deltas needed to be scaled down. The deltas for keyframes
     // in YUV were about 1/3 to 1/2 of what they were in HSV, but non-keyframes were
     // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
-    // the double digits in HSV. Therefore, 12 was chosen as a reasonable default threshold.
-    // This may be adjusted later.
+    // the double digits in HSV. 
     //
     // This threshold is only used for the fast scenecut implementation.
     //
-    // Testing shown that default threshold of 12 overallocates keyframes by almost double,
-    // compared to other scene change implementations
-    const BASE_THRESHOLD: usize = 12;
+    // Experiments have shown that this threshold is optimal.
+    const BASE_THRESHOLD: usize = 18;
     let bit_depth = encoder_config.bit_depth;
     let fast_mode = encoder_config.speed_settings.fast_scene_detection
       || encoder_config.low_latency;
@@ -239,6 +237,14 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let mut cloned_deque = self.score_deque.to_vec();
     cloned_deque.remove(self.deque_offset);
 
+
+    // Subtract the previous metric value from the current one
+    // It makes the peaks in the metric more distinctive
+    if !self.fast_mode && self.deque_offset > 0 {
+      let previous_scene_score = self.score_deque[self.deque_offset-1].0;
+      self.score_deque[self.deque_offset].0 -= previous_scene_score;
+    }
+
     let scene_score = self.score_deque[self.deque_offset].0;
     let scene_threshold = self.score_deque[self.deque_offset].1;
 
@@ -367,7 +373,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
           * (distance_from_keyframe - min_keyint) as f64
           / (max_keyint - min_keyint) as f64
     };
-    let threshold = intra_cost * (1.0 - bias);
+    let threshold = intra_cost * (1.0 - bias) / 2.2;
 
     ScenecutResult { intra_cost, inter_cost, threshold }
   }
