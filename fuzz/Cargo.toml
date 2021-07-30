@@ -5,6 +5,9 @@ version = "0.0.1"
 authors = ["Automatically generated"]
 publish = false
 
+[features]
+check_asm = ["rav1e/check_asm"]
+
 [package.metadata]
 cargo-fuzz = true
 
@@ -23,6 +26,11 @@ members = ["."]
 [[bin]]
 name = "encode_decode"
 path = "fuzz_targets/encode_decode.rs"
+required-features = ["rav1e/decode_test_dav1d"]
+
+[[bin]]
+name = "encode_decode_hbd"
+path = "fuzz_targets/encode_decode_hbd.rs"
 required-features = ["rav1e/decode_test_dav1d"]
 
 [[bin]]

@@ -220,7 +220,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
         call_rust(var)
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if coeff_shift > 0 => {
       if let Some(func) = CDEF_DIR_HBD_FNS[cpu.as_index()] {
         unsafe {
           (func)(
@@ -234,6 +234,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
         call_rust(var)
       }
     }
+    _ => call_rust(var),
   };
 
   #[cfg(feature = "check_asm")]

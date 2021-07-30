@@ -1209,12 +1209,20 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      visible_tx_w,
+      tx_size.width(),
       visible_tx_h,
     );
+    if visible_tx_w < tx_size.width() {
+      for row in residual.chunks_mut(tx_size.width()).take(visible_tx_h) {
+        for a in &mut row[visible_tx_w..] {
+          *a = 0;
+        }
+      }
+    }
   }
-  let visible_area = visible_tx_w * visible_tx_h;
-  for a in residual[visible_area..].iter_mut() {
+  let initialized_area =
+    if visible_tx_w == 0 { 0 } else { tx_size.width() * visible_tx_h };
+  for a in residual[initialized_area..].iter_mut() {
     *a = 0;
   }
 

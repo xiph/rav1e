@@ -53,6 +53,7 @@ rav1e currently requires Rust 1.51.0 or later to build.
 
 ### Dependency: NASM
 Some `x86_64`-specific optimizations require [NASM](https://nasm.us/) `2.14.02` or newer and are enabled by default.
+`strip` will be used if available to remove the local symbols from the asm objects.
 
 The CI is testing against `nasm 2.15.05`, so bugs for other versions might happen. If you find one please open an issue!
 
@@ -178,5 +179,4 @@ Find a full list in feature-table in [`Cargo.toml`](Cargo.toml)
 Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
 ## Getting in Touch
-Come chat with us on the IRC channel #daala on Freenode! If you don't have IRC set
-up you can easily connect from your [web browser](http://webchat.freenode.net/?channels=%23daala).
+Come chat with us on the IRC channel #daala on [Libera.Chat](https://libera.chat/)! You can also use a [web client](https://web.libera.chat/?channel=#daala) to join with a web browser.
