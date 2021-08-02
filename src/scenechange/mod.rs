@@ -56,7 +56,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // conversion, but the deltas needed to be scaled down. The deltas for keyframes
     // in YUV were about 1/3 to 1/2 of what they were in HSV, but non-keyframes were
     // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
-    // the double digits in HSV. 
+    // the double digits in HSV.
     //
     // This threshold is only used for the fast scenecut implementation.
     //
@@ -237,11 +237,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let mut cloned_deque = self.score_deque.to_vec();
     cloned_deque.remove(self.deque_offset);
 
-
     // Subtract the previous metric value from the current one
     // It makes the peaks in the metric more distinctive
     if !self.fast_mode && self.deque_offset > 0 {
-      let previous_scene_score = self.score_deque[self.deque_offset-1].0;
+      let previous_scene_score = self.score_deque[self.deque_offset - 1].0;
       self.score_deque[self.deque_offset].0 -= previous_scene_score;
     }
 
