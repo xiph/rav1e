@@ -105,6 +105,7 @@ fn build_nasm_files() {
     "src/x86/mc16_avx2.asm",
     "src/x86/mc_avx512.asm",
     "src/x86/mc_sse.asm",
+    "src/x86/mc16_sse.asm",
     "src/x86/me.asm",
     "src/x86/sad_sse2.asm",
     "src/x86/sad_avx.asm",

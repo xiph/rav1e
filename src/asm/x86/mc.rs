@@ -332,6 +332,14 @@ macro_rules! decl_mc_hbd_fns {
       )*
     }
 
+    static PUT_HBD_FNS_SSSE3: [Option<PutHBDFn>; 16] = {
+      let mut out: [Option<PutHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+
     static PUT_HBD_FNS_AVX2: [Option<PutHBDFn>; 16] = {
       let mut out: [Option<PutHBDFn>; 16] = [None; 16];
       $(
@@ -358,7 +366,7 @@ decl_mc_hbd_fns!(
 cpu_function_lookup_table!(
   PUT_HBD_FNS: [[Option<PutHBDFn>; 16]],
   default: [None; 16],
-  [AVX2]
+  [SSSE3, AVX2]
 );
 
 macro_rules! decl_mct_fns {
@@ -440,6 +448,14 @@ macro_rules! decl_mct_hbd_fns {
       )*
     }
 
+    static PREP_HBD_FNS_SSSE3: [Option<PrepHBDFn>; 16] = {
+      let mut out: [Option<PrepHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+
     static PREP_HBD_FNS_AVX2: [Option<PrepHBDFn>; 16] = {
       let mut out: [Option<PrepHBDFn>; 16] = [None; 16];
       $(
@@ -466,7 +482,7 @@ decl_mct_hbd_fns!(
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
   default: [None; 16],
-  [AVX2]
+  [SSSE3, AVX2]
 );
 
 extern {
@@ -478,6 +494,11 @@ extern {
   fn rav1e_avg_avx2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
+  );
+
+  fn rav1e_avg_16bpc_ssse3(
+    dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
+    tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
 
   fn rav1e_avg_16bpc_avx2(
@@ -495,7 +516,7 @@ cpu_function_lookup_table!(
 cpu_function_lookup_table!(
   AVG_HBD_FNS: [Option<AvgHBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_avg_16bpc_avx2))]
+  [(SSSE3, Some(rav1e_avg_16bpc_ssse3)), (AVX2, Some(rav1e_avg_16bpc_avx2))]
 );
 
 #[cfg(test)]
