@@ -71,6 +71,7 @@ deint_shuf:  db  0,  1,  4,  5,  8,  9, 12, 13,  2,  3,  6,  7, 10, 11, 14, 15
 %if ARCH_X86_32
 pd_2:            times 4 dd     2
 %endif
+pw_5:            times 8 dw     5
 pd_1321:         times 4 dd  1321
 pd_2482:         times 4 dd  2482
 pd_m3344:        times 4 dd -3344
@@ -85,6 +86,7 @@ pd_3803:         times 4 dd  3803
 pw_4096:         times 8 dw  4096
 pd_5793:         times 4 dd  5793
 pd_6144:         times 4 dd  6144
+pw_8192:         times 8 dw  8192
 pd_10240:        times 4 dd 10240
 pd_11586:        times 4 dd 11586
 pw_1697x8:       times 8 dw  1697*8
@@ -4641,3 +4643,364 @@ cglobal iidentity_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     jg .loop_pass2
     jmp m(idct_16x16_internal_16bpc).zero
+
+cglobal inv_txfm_add_identity_identity_8x32_16bpc, 4, 7, 8, dst, stride, c, eob
+%if ARCH_X86_32
+    LEA                  r6, $$
+%endif
+    mova                 m5, [o(pw_5)]
+    mova                 m7, [o(pixel_10bpc_max)]
+    pxor                 m6, m6
+    mov                 r5d, eobd
+    add                eobb, 21
+    cmovc              eobd, r5d ; 43, 107, 171 -> 64, 128, 192
+    lea                  r4, [strideq*3]
+.loop:
+    mova                 m0, [cq+128*0]
+    packssdw             m0, [cq+128*1]
+    mova                 m1, [cq+128*2]
+    packssdw             m1, [cq+128*3]
+    mova                 m2, [cq+128*4]
+    packssdw             m2, [cq+128*5]
+    mova                 m3, [cq+128*6]
+    packssdw             m3, [cq+128*7]
+    REPX     {paddsw x, m5}, m0, m1, m2, m3
+    REPX     {psraw  x, 3 }, m0, m1, m2, m3
+    call .main_zero
+    add                  cq, 16
+    lea                dstq, [dstq+strideq*4]
+    btc                eobd, 16
+    jnc .loop
+    sub                eobd, 64
+    jge .loop
+    RET
+ALIGN function_align
+.main_zero:
+    REPX {mova [cq+128*x], m6}, 0, 1, 2, 3, 4, 5, 6, 7
+.main:
+    punpckhwd            m4, m0, m1
+    punpcklwd            m0, m1
+    punpckhwd            m1, m2, m3
+    punpcklwd            m2, m3
+    punpckhwd            m3, m0, m4
+    punpcklwd            m0, m4
+    punpckhwd            m4, m2, m1
+    punpcklwd            m2, m1
+    punpckhqdq           m1, m0, m2
+    punpcklqdq           m0, m2
+    punpcklqdq           m2, m3, m4
+    punpckhqdq           m3, m4
+    paddw                m0, [dstq+strideq*0]
+    paddw                m1, [dstq+strideq*1]
+    paddw                m2, [dstq+strideq*2]
+    paddw                m3, [dstq+r4       ]
+    REPX     {pmaxsw x, m6}, m0, m1, m2, m3
+    REPX     {pminsw x, m7}, m0, m1, m2, m3
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    mova   [dstq+strideq*2], m2
+    mova   [dstq+r4       ], m3
+    ret
+
+cglobal inv_txfm_add_identity_identity_32x8_16bpc, 4, 7, 8, dst, stride, c, eob
+%if ARCH_X86_32
+    LEA                  r6, $$
+%endif
+    mova                 m5, [o(pw_4096)]
+    mova                 m7, [o(pixel_10bpc_max)]
+    pxor                 m6, m6
+    mov                 r4d, eobd
+    add                eobb, 21
+    cmovc              eobd, r4d
+    lea                  r4, [strideq*3]
+    mov                  r5, dstq
+.loop:
+    mova                 m0, [cq+32*0]
+    packssdw             m0, [cq+32*1]
+    mova                 m1, [cq+32*2]
+    packssdw             m1, [cq+32*3]
+    mova                 m2, [cq+32*4]
+    packssdw             m2, [cq+32*5]
+    mova                 m3, [cq+32*6]
+    packssdw             m3, [cq+32*7]
+    REPX {mova [cq+32*x], m6}, 0, 1, 2, 3, 4, 5, 6, 7
+    REPX   {pmulhrsw x, m5}, m0, m1, m2, m3
+    call m(inv_txfm_add_identity_identity_8x32_16bpc).main
+    lea                dstq, [dstq+strideq*4]
+    add                  cq, 16
+    btc                eobd, 16
+    jnc .loop
+    add                  cq, 32*8-32
+    add                  r5, 16
+    mov                dstq, r5
+    sub                eobd, 64
+    jge .loop
+    RET
+
+cglobal inv_txfm_add_identity_identity_16x32_16bpc, 4, 7, 12, dst, stride, c, eob
+%if ARCH_X86_32
+    LEA                  r6, $$
+%else
+    mova                 m8, [o(pw_2896x8)]
+    mova                 m9, [o(pw_1697x16)]
+    mova                m11, [o(pw_8192)]
+%endif
+    mova                 m7, [o(pixel_10bpc_max)]
+    lea                  r4, [strideq*3]
+    pxor                 m6, m6
+%if ARCH_X86_64
+    paddw               m10, m11, m11 ; pw_16384
+%endif
+    mov                  r5, dstq
+    call .main
+    sub                eobd, 36
+    jl .ret
+    add                  cq, 128*8-32
+    lea                dstq, [r5+16]
+    call .main
+    sub                  cq, 128*8
+    lea                dstq, [r5+strideq*8]
+    mov                  r5, dstq
+    call .main
+    sub                eobd, 107 ; eob < 143
+    jl .ret
+    add                  cq, 128*8-32
+    lea                dstq, [r5+16]
+    call .main
+    sub                  cq, 128*8
+    lea                dstq, [r5+strideq*8]
+    mov                  r5, dstq
+    call .main
+    sub                eobd, 128 ; eob < 271
+    jl .ret
+    add                  cq, 128*8-32
+    lea                dstq, [r5+16]
+    call .main
+    sub                  cq, 128*8
+    lea                dstq, [r5+strideq*8]
+    mov                  r5, dstq
+    call .main
+    sub                eobd, 128 ; eob < 399
+    jl .ret
+    add                  cq, 128*8-32
+    lea                dstq, [r5+16]
+    call .main
+.ret:
+    RET
+ALIGN function_align
+.main:
+    mova                 m0, [cq+128*0]
+    packssdw             m0, [cq+128*1]
+    mova                 m1, [cq+128*2]
+    packssdw             m1, [cq+128*3]
+    mova                 m2, [cq+128*4]
+    packssdw             m2, [cq+128*5]
+    mova                 m3, [cq+128*6]
+    packssdw             m3, [cq+128*7]
+%if ARCH_X86_64
+    REPX  {pmulhrsw x, m8 }, m0, m1, m2, m3
+    pmulhrsw             m4, m9, m0
+    pmulhrsw             m5, m9, m1
+    REPX  {pmulhrsw x, m10}, m4, m5
+%else
+    mova                 m6, [o(pw_2896x8)]
+    REPX  {pmulhrsw x, m6 }, m0, m1, m2, m3
+    mova                 m5, [o(pw_1697x16)]
+    pmulhrsw             m4, m5, m0
+    pmulhrsw             m5, m1
+    mova                 m6, [o(pw_16384)]
+    REPX  {pmulhrsw x, m6 }, m4, m5
+%endif
+    paddsw               m0, m4
+    paddsw               m1, m5
+%if ARCH_X86_64
+    pmulhrsw             m4, m9, m2
+    pmulhrsw             m5, m9, m3
+    REPX  {pmulhrsw x, m10}, m4, m5
+%else
+    mova                 m5, [o(pw_1697x16)]
+    pmulhrsw             m4, m5, m2
+    pmulhrsw             m5, m3
+    REPX  {pmulhrsw x, m6 }, m4, m5
+%endif
+    paddsw               m2, m4
+    paddsw               m3, m5
+%if ARCH_X86_64
+    REPX  {pmulhrsw x, m11}, m0, m1, m2, m3
+%else
+    psrlw                m6, 1          ; pw_8192
+    REPX  {pmulhrsw x, m6 }, m0, m1, m2, m3
+    pxor                 m6, m6
+%endif
+    call m(inv_txfm_add_identity_identity_8x32_16bpc).main_zero
+    lea                dstq, [dstq+strideq*4]
+    add                  cq, 16
+    btc                eobd, 16
+    jnc .main
+    ret
+
+cglobal inv_txfm_add_identity_identity_32x16_16bpc, 4, 7, 11, dst, stride, c, eob
+%if ARCH_X86_32
+    LEA                  r6, $$
+%else
+    mova                 m8, [o(pw_2896x8)]
+    mova                 m9, [o(pw_1697x16)]
+    mova                m10, [o(pw_2048)]
+%endif
+    mova                 m7, [o(pixel_10bpc_max)]
+    lea                  r4, [strideq*3]
+    pxor                 m6, m6
+    mov                  r5, dstq
+    call .main
+    sub                eobd, 36
+    jl .ret
+    call .main
+    add                  cq, 64*8-64
+    lea                dstq, [r5+16*1]
+    call .main
+    sub                eobd, 107 ; eob < 143
+    jl .ret
+    call .main
+    add                  cq, 64*8-64
+    lea                dstq, [r5+16*2]
+    call .main
+    sub                eobd, 128 ; eob < 271
+    jl .ret
+    call .main
+    add                  cq, 64*8-64
+    lea                dstq, [r5+16*3]
+    call .main
+    sub                eobd, 128 ; eob < 399
+    jl .ret
+    call .main
+.ret:
+    RET
+ALIGN function_align
+.main:
+    mova                 m0, [cq+64*0]
+    packssdw             m0, [cq+64*1]
+    mova                 m1, [cq+64*2]
+    packssdw             m1, [cq+64*3]
+    mova                 m2, [cq+64*4]
+    packssdw             m2, [cq+64*5]
+    mova                 m3, [cq+64*6]
+    packssdw             m3, [cq+64*7]
+%if ARCH_X86_64
+    REPX  {pmulhrsw x, m8 }, m0, m1, m2, m3
+%else
+    mova                 m6, [o(pw_2896x8)]
+    REPX  {pmulhrsw x, m6 }, m0, m1, m2, m3
+%endif
+    REPX  {paddsw   x, x  }, m0, m1, m2, m3
+%if ARCH_X86_64
+    pmulhrsw             m4, m9, m0
+    pmulhrsw             m5, m9, m1
+%else
+    mova                 m6, [o(pw_1697x16)]
+    pmulhrsw             m4, m6, m0
+    pmulhrsw             m5, m6, m1
+%endif
+    REPX  {paddsw   x, x  }, m0, m1
+    paddsw               m0, m4
+    paddsw               m1, m5
+%if ARCH_X86_64
+    pmulhrsw             m4, m9, m2
+    pmulhrsw             m5, m9, m3
+%else
+    pmulhrsw             m4, m6, m2
+    pmulhrsw             m6, m3
+%endif
+    REPX  {paddsw   x, x  }, m2, m3
+    paddsw               m2, m4
+%if ARCH_X86_64
+    paddsw               m3, m5
+    REPX  {pmulhrsw x, m10}, m0, m1, m2, m3
+%else
+    paddsw               m3, m6
+    mova                 m6, [o(pw_2048)]
+    REPX  {pmulhrsw x, m6 }, m0, m1, m2, m3
+    pxor                 m6, m6
+%endif
+    REPX {mova [cq+64*x], m6}, 0, 1, 2, 3, 4, 5, 6, 7
+    call m(inv_txfm_add_identity_identity_8x32_16bpc).main
+    lea                dstq, [dstq+strideq*4]
+    add                  cq, 16
+    btc                eobd, 16
+    jnc .main
+    ret
+
+cglobal inv_txfm_add_identity_identity_32x32_16bpc, 4, 7, 8, dst, stride, c, eob
+%undef cmp
+%if ARCH_X86_32
+    LEA                  r6, $$
+%endif
+    mova                 m5, [o(pw_8192)]
+    mova                 m7, [o(pixel_10bpc_max)]
+    pxor                 m6, m6
+    lea                  r4, [strideq*3]
+    mov                  r5, dstq
+    call .main                              ; 0
+    cmp                eobd, 36
+    jl .ret
+    add                  cq, 128*8-32       ; 0 1
+    lea                dstq, [r5+16]        ; 1
+    call .main
+    call .main2
+    cmp                eobd, 136
+    jl .ret
+    add                  cq, 128*16-64      ; 0 1 2
+    lea                dstq, [r5+16*2]      ; 1 2
+    call .main                              ; 2
+    call .main2
+    call .main2
+    cmp                eobd, 300
+    jl .ret
+    add                  cq, 128*24-96      ; 0 1 2 3
+    add                  r5, 16*3           ; 1 2 3
+    mov                dstq, r5             ; 2 3
+    call .main                              ; 3
+    call .main2
+    call .main2
+    call .main2
+    cmp                eobd, 535
+    jl .ret
+    add                  cq, 128*24-96      ; 0 1 2 3
+    lea                dstq, [r5+strideq*8] ; 1 2 3 4
+    mov                  r5, dstq           ; 2 3 4
+    call .main                              ; 3 4
+    call .main2
+    call .main2
+    cmp                eobd, 755
+    jl .ret
+    add                  cq, 128*16-64      ; 0 1 2 3
+    lea                dstq, [r5+strideq*8] ; 1 2 3 4
+    mov                  r5, dstq           ; 2 3 4 5
+    call .main                              ; 3 4 5
+    call .main2
+    cmp                eobd, 911
+    jl .ret
+    add                  cq, 128*8-32       ; 0 1 2 3
+    lea                dstq, [r5+strideq*8] ; 1 2 3 4
+    call .main                              ; 2 3 4 5
+.ret:                                       ; 3 4 5 6
+    RET
+ALIGN function_align
+.main2:
+    sub                  cq, 128*8
+    sub                dstq, 16
+.main:
+    mova                 m0, [cq+128*0]
+    packssdw             m0, [cq+128*1]
+    mova                 m1, [cq+128*2]
+    packssdw             m1, [cq+128*3]
+    mova                 m2, [cq+128*4]
+    packssdw             m2, [cq+128*5]
+    mova                 m3, [cq+128*6]
+    packssdw             m3, [cq+128*7]
+    REPX   {pmulhrsw x, m5}, m0, m1, m2, m3
+    call m(inv_txfm_add_identity_identity_8x32_16bpc).main_zero
+    lea                dstq, [dstq+strideq*4]
+    add                  cq, 16
+    btc                eobd, 16
+    jnc .main
+    ret
