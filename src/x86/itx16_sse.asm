@@ -626,7 +626,7 @@ cglobal iidentity_4x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     movhps [r5  +strideq*1], m1
     RET
 
-%macro INV_TXFM_4X8_FN 2-3 0 ; type1, type2
+%macro INV_TXFM_4X8_FN 2-3 0 ; type1, type2, eob_offset
     INV_TXFM_FN          %1, %2, %3, 4x8
 %ifidn %1_%2, dct_dct
     imul                r5d, [cq], 2896
@@ -908,7 +908,7 @@ cglobal iidentity_4x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m4, [o(pw_4096)]
     jmp m(idct_4x8_internal_16bpc).end
 
-%macro INV_TXFM_4X16_FN 2-3 2d ; type1, type2
+%macro INV_TXFM_4X16_FN 2-3 2d ; type1, type2, eob_tbl_suffix
     INV_TXFM_FN          %1, %2, tbl_4x16_%3, 4x16
 %ifidn %1_%2, dct_dct
     imul                r5d, [cq], 2896
@@ -1683,7 +1683,7 @@ cglobal iidentity_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     paddsw               m3, m7
     jmp m(idct_8x4_internal_16bpc).end
 
-%macro INV_TXFM_8X8_FN 2-3 0 ; type1, type2
+%macro INV_TXFM_8X8_FN 2-3 0 ; type1, type2, eob_offset
 %if ARCH_X86_64
     INV_TXFM_FN          %1, %2, %3, 8x8, 14, 0-3*16
 %else
@@ -1994,7 +1994,7 @@ cglobal iidentity_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     jmp m(idct_8x8_internal_16bpc).end
 
-%macro INV_TXFM_8X16_FN 2-3 2d ; type1, type2
+%macro INV_TXFM_8X16_FN 2-3 2d ; type1, type2, eob_tbl_suffix
 %if ARCH_X86_64
     INV_TXFM_FN          %1, %2, tbl_8x16_%3, 8x16, 14, 0-16*16
 %else
@@ -3387,7 +3387,7 @@ cglobal iidentity_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     paddsw               m3, m7
     ret
 
-%macro INV_TXFM_16X8_FN 2-3 0 ; type1, type2
+%macro INV_TXFM_16X8_FN 2-3 0 ; type1, type2, eob_offset
 %if ARCH_X86_64
     INV_TXFM_FN          %1, %2, %3, 16x8, 16, 0-8*16
 %else
@@ -4105,7 +4105,7 @@ cglobal iidentity_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 %endif
 
-%macro INV_TXFM_16X16_FN 2-3 2d ; type1, type2
+%macro INV_TXFM_16X16_FN 2-3 2d ; type1, type2, eob_tbl_suffix
 %if ARCH_X86_64
     INV_TXFM_FN          %1, %2, tbl_16x16_%3, 16x16, 16, 0-(16+WIN64)*16
 %else
