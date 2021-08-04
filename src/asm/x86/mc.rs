@@ -356,16 +356,16 @@ macro_rules! decl_mc_fns {
 }
 
 decl_mc_fns!(
-  (REGULAR, REGULAR, rav1e_put_8tap_regular),
-  (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth),
-  (REGULAR, SHARP, rav1e_put_8tap_regular_sharp),
-  (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular),
-  (SMOOTH, SMOOTH, rav1e_put_8tap_smooth),
-  (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp),
-  (SHARP, REGULAR, rav1e_put_8tap_sharp_regular),
-  (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth),
-  (SHARP, SHARP, rav1e_put_8tap_sharp),
-  (BILINEAR, BILINEAR, rav1e_put_bilin)
+  (REGULAR, REGULAR, rav1e_put_8tap_regular_8bpc),
+  (REGULAR, SMOOTH, rav1e_put_8tap_regular_smooth_8bpc),
+  (REGULAR, SHARP, rav1e_put_8tap_regular_sharp_8bpc),
+  (SMOOTH, REGULAR, rav1e_put_8tap_smooth_regular_8bpc),
+  (SMOOTH, SMOOTH, rav1e_put_8tap_smooth_8bpc),
+  (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_8bpc),
+  (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_8bpc),
+  (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_8bpc),
+  (SHARP, SHARP, rav1e_put_8tap_sharp_8bpc),
+  (BILINEAR, BILINEAR, rav1e_put_bilin_8bpc)
 );
 
 cpu_function_lookup_table!(
@@ -479,16 +479,16 @@ macro_rules! decl_mct_fns {
 }
 
 decl_mct_fns!(
-  (REGULAR, REGULAR, rav1e_prep_8tap_regular),
-  (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth),
-  (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp),
-  (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular),
-  (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth),
-  (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp),
-  (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular),
-  (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth),
-  (SHARP, SHARP, rav1e_prep_8tap_sharp),
-  (BILINEAR, BILINEAR, rav1e_prep_bilin)
+  (REGULAR, REGULAR, rav1e_prep_8tap_regular_8bpc),
+  (REGULAR, SMOOTH, rav1e_prep_8tap_regular_smooth_8bpc),
+  (REGULAR, SHARP, rav1e_prep_8tap_regular_sharp_8bpc),
+  (SMOOTH, REGULAR, rav1e_prep_8tap_smooth_regular_8bpc),
+  (SMOOTH, SMOOTH, rav1e_prep_8tap_smooth_8bpc),
+  (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_8bpc),
+  (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_8bpc),
+  (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_8bpc),
+  (SHARP, SHARP, rav1e_prep_8tap_sharp_8bpc),
+  (BILINEAR, BILINEAR, rav1e_prep_bilin_8bpc)
 );
 
 cpu_function_lookup_table!(
@@ -553,22 +553,22 @@ cpu_function_lookup_table!(
 );
 
 extern {
-  fn rav1e_avg_ssse3(
+  fn rav1e_w_avg_8bpc_ssse3(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
   );
 
-  fn rav1e_avg_avx2(
+  fn rav1e_w_avg_8bpc_avx2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
   );
 
-  fn rav1e_avg_16bpc_ssse3(
+  fn rav1e_w_avg_16bpc_ssse3(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
 
-  fn rav1e_avg_16bpc_avx2(
+  fn rav1e_w_avg_16bpc_avx2(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
@@ -577,13 +577,16 @@ extern {
 cpu_function_lookup_table!(
   AVG_FNS: [Option<AvgFn>],
   default: None,
-  [(SSSE3, Some(rav1e_avg_ssse3)), (AVX2, Some(rav1e_avg_avx2))]
+  [(SSSE3, Some(rav1e_w_avg_8bpc_ssse3)), (AVX2, Some(rav1e_w_avg_8bpc_avx2))]
 );
 
 cpu_function_lookup_table!(
   AVG_HBD_FNS: [Option<AvgHBDFn>],
   default: None,
-  [(SSSE3, Some(rav1e_avg_16bpc_ssse3)), (AVX2, Some(rav1e_avg_16bpc_avx2))]
+  [
+    (SSSE3, Some(rav1e_w_avg_16bpc_ssse3)),
+    (AVX2, Some(rav1e_w_avg_16bpc_avx2))
+  ]
 );
 
 #[cfg(test)]

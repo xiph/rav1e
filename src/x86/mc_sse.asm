@@ -202,26 +202,26 @@ pw_258:  times 2 dw 258
 cextern mc_subpel_filters
 %define subpel_filters (mangle(private_prefix %+ _mc_subpel_filters)-8)
 
-%macro BIDIR_JMP_TABLE 1-*
+%macro BIDIR_JMP_TABLE 2-*
     ;evaluated at definition time (in loop below)
-    %xdefine %1_table (%%table - 2*%2)
-    %xdefine %%base %1_table
-    %xdefine %%prefix mangle(private_prefix %+ _%1)
+    %xdefine %1_%2_table (%%table - 2*%3)
+    %xdefine %%base %1_%2_table
+    %xdefine %%prefix mangle(private_prefix %+ _%1_8bpc_%2)
     ; dynamically generated label
     %%table:
-    %rep %0 - 1 ; repeat for num args
-        dd %%prefix %+ .w%2 - %%base
+    %rep %0 - 2 ; repeat for num args
+        dd %%prefix %+ .w%3 - %%base
         %rotate 1
     %endrep
 %endmacro
 
-BIDIR_JMP_TABLE avg_ssse3,        4, 8, 16, 32, 64, 128
-BIDIR_JMP_TABLE w_avg_ssse3,      4, 8, 16, 32, 64, 128
-BIDIR_JMP_TABLE mask_ssse3,       4, 8, 16, 32, 64, 128
-BIDIR_JMP_TABLE w_mask_420_ssse3, 4, 8, 16, 16, 16, 16
-BIDIR_JMP_TABLE blend_ssse3,      4, 8, 16, 32
-BIDIR_JMP_TABLE blend_v_ssse3, 2, 4, 8, 16, 32
-BIDIR_JMP_TABLE blend_h_ssse3, 2, 4, 8, 16, 16, 16, 16
+BIDIR_JMP_TABLE avg, ssse3,        4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_avg, ssse3,      4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE mask, ssse3,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_420, ssse3, 4, 8, 16, 16, 16, 16
+BIDIR_JMP_TABLE blend, ssse3,      4, 8, 16, 32
+BIDIR_JMP_TABLE blend_v, ssse3, 2, 4, 8, 16, 32
+BIDIR_JMP_TABLE blend_h, ssse3, 2, 4, 8, 16, 16, 16, 16
 
 %macro BASE_JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - %3)
@@ -233,15 +233,15 @@ BIDIR_JMP_TABLE blend_h_ssse3, 2, 4, 8, 16, 16, 16, 16
     %endrep
 %endmacro
 
-%xdefine prep_sse2 mangle(private_prefix %+ _prep_bilin_sse2.prep)
-%xdefine put_ssse3 mangle(private_prefix %+ _put_bilin_ssse3.put)
-%xdefine prep_ssse3 mangle(private_prefix %+ _prep_bilin_ssse3.prep)
+%xdefine prep_sse2 mangle(private_prefix %+ _prep_bilin_8bpc_sse2.prep)
+%xdefine put_ssse3 mangle(private_prefix %+ _put_bilin_8bpc_ssse3.put)
+%xdefine prep_ssse3 mangle(private_prefix %+ _prep_bilin_8bpc_ssse3.prep)
 
 BASE_JMP_TABLE put,  ssse3, 2, 4, 8, 16, 32, 64, 128
 BASE_JMP_TABLE prep, ssse3,    4, 8, 16, 32, 64, 128
 
 %macro HV_JMP_TABLE 5-*
-    %xdefine %%prefix mangle(private_prefix %+ _%1_%2_%3)
+    %xdefine %%prefix mangle(private_prefix %+ _%1_%2_8bpc_%3)
     %xdefine %%base %1_%3
     %assign %%types %4
     %if %%types & 1
@@ -279,33 +279,33 @@ HV_JMP_TABLE prep,  8tap, ssse3, 1,    4, 8, 16, 32, 64, 128
 HV_JMP_TABLE put,  bilin, ssse3, 7, 2, 4, 8, 16, 32, 64, 128
 HV_JMP_TABLE prep, bilin, ssse3, 7,    4, 8, 16, 32, 64, 128
 
-%macro SCALED_JMP_TABLE 1-*
-    %xdefine %1_table (%%table - %2)
-    %xdefine %%base mangle(private_prefix %+ _%1)
+%macro SCALED_JMP_TABLE 2-*
+    %xdefine %1_%2_table (%%table - %3)
+    %xdefine %%base mangle(private_prefix %+ _%1_8bpc_%2)
 %%table:
-    %rep %0 - 1
-        dw %%base %+ .w%2 - %%base
+    %rep %0 - 2
+        dw %%base %+ .w%3 - %%base
         %rotate 1
     %endrep
-    %rotate 1
+    %rotate 2
 %%dy_1024:
-    %xdefine %1_dy1_table (%%dy_1024 - %2)
-    %rep %0 - 1
-        dw %%base %+ .dy1_w%2 - %%base
+    %xdefine %1_%2_dy1_table (%%dy_1024 - %3)
+    %rep %0 - 2
+        dw %%base %+ .dy1_w%3 - %%base
         %rotate 1
     %endrep
-    %rotate 1
+    %rotate 2
 %%dy_2048:
-    %xdefine %1_dy2_table (%%dy_2048 - %2)
-    %rep %0 - 1
-        dw %%base %+ .dy2_w%2 - %%base
+    %xdefine %1_%2_dy2_table (%%dy_2048 - %3)
+    %rep %0 - 2
+        dw %%base %+ .dy2_w%3 - %%base
         %rotate 1
     %endrep
 %endmacro
 
 %if ARCH_X86_64
-SCALED_JMP_TABLE put_8tap_scaled_ssse3, 2, 4, 8, 16, 32, 64, 128
-SCALED_JMP_TABLE prep_8tap_scaled_ssse3,   4, 8, 16, 32, 64, 128
+SCALED_JMP_TABLE put_8tap_scaled, ssse3, 2, 4, 8, 16, 32, 64, 128
+SCALED_JMP_TABLE prep_8tap_scaled, ssse3,   4, 8, 16, 32, 64, 128
 %endif
 
 %define table_offset(type, fn) type %+ fn %+ SUFFIX %+ _table - type %+ SUFFIX
@@ -328,7 +328,7 @@ INIT_XMM ssse3
  %endif
 %endmacro
 
-cglobal put_bilin, 1, 8, 0, dst, ds, src, ss, w, h, mxy
+cglobal put_bilin_8bpc, 1, 8, 0, dst, ds, src, ss, w, h, mxy
     movifnidn          mxyd, r6m ; mx
     LEA                  t0, put_ssse3
     movifnidn          srcq, srcmp
@@ -953,7 +953,7 @@ cglobal put_bilin, 1, 8, 0, dst, ds, src, ss, w, h, mxy
     %define base 0
 %endif
 
-cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
+cglobal prep_bilin_8bpc, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
     movifnidn          mxyd, r5m ; mx
     LEA                  r6, prep%+SUFFIX
     tzcnt                wd, wm
@@ -1550,7 +1550,7 @@ cglobal prep_bilin, 3, 7, 0, tmp, src, stride, w, h, mxy, stride3
 %assign FILTER_SHARP   (2*15 << 16) | 3*15
 
 %macro FN 4 ; prefix, type, type_h, type_v
-cglobal %1_%2
+cglobal %1_%2_8bpc
     mov                 t0d, FILTER_%3
 %ifidn %3, %4
     mov                 t1d, t0d
@@ -1558,7 +1558,7 @@ cglobal %1_%2
     mov                 t1d, FILTER_%4
 %endif
 %ifnidn %2, regular ; skip the jump in the last filter
-    jmp mangle(private_prefix %+ _%1 %+ SUFFIX)
+    jmp mangle(private_prefix %+ _%1_8bpc %+ SUFFIX)
 %endif
 %endmacro
 
@@ -1588,7 +1588,7 @@ FN put_8tap, regular,        REGULAR, REGULAR
  %define base 0
 %endif
 
-cglobal put_8tap, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
+cglobal put_8tap_8bpc, 1, 9, 0, dst, ds, src, ss, w, h, mx, my, ss3
 %assign org_stack_offset stack_offset
     imul                mxd, mxm, 0x010101
     add                 mxd, t0d ; 8tap_h, mx, 4tap_h
@@ -2839,7 +2839,7 @@ FN prep_8tap, regular,        REGULAR, REGULAR
  %define base_reg r7
  %define base 0
 %endif
-cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
+cglobal prep_8tap_8bpc, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
 %assign org_stack_offset stack_offset
     imul                mxd, mxm, 0x010101
     add                 mxd, t0d ; 8tap_h, mx, 4tap_h
@@ -4020,26 +4020,26 @@ cglobal prep_8tap, 1, 9, 0, tmp, src, stride, w, h, mx, my, stride3
 %ifidn %1, put
  %assign isprep 0
  %if required_stack_alignment <= STACK_ALIGNMENT
-cglobal put_8tap_scaled, 4, 15, 16, 0x180, dst, ds, src, ss, w, h, mx, my, dx, dy
+cglobal put_8tap_scaled_8bpc, 4, 15, 16, 0x180, dst, ds, src, ss, w, h, mx, my, dx, dy
  %else
-cglobal put_8tap_scaled, 4, 14, 16, 0x180, dst, ds, src, ss, w, h, mx, my, dx, dy
+cglobal put_8tap_scaled_8bpc, 4, 14, 16, 0x180, dst, ds, src, ss, w, h, mx, my, dx, dy
  %endif
  %xdefine base_reg r12
  %define rndshift 10
 %else
  %assign isprep 1
  %if required_stack_alignment <= STACK_ALIGNMENT
-cglobal prep_8tap_scaled, 4, 15, 16, 0x180, tmp, src, ss, w, h, mx, my, dx, dy
+cglobal prep_8tap_scaled_8bpc, 4, 15, 16, 0x180, tmp, src, ss, w, h, mx, my, dx, dy
   %xdefine tmp_stridem r14q
  %else
-cglobal prep_8tap_scaled, 4, 14, 16, 0x180, tmp, src, ss, w, h, mx, my, dx, dy
+cglobal prep_8tap_scaled_8bpc, 4, 14, 16, 0x180, tmp, src, ss, w, h, mx, my, dx, dy
   %define tmp_stridem qword [rsp+0x138]
  %endif
  %xdefine base_reg r11
  %define rndshift 6
 %endif
-    LEA            base_reg, %1_8tap_scaled_ssse3
-%define base base_reg-%1_8tap_scaled_ssse3
+    LEA            base_reg, %1_8tap_scaled_8bpc_ssse3
+%define base base_reg-%1_8tap_scaled_8bpc_ssse3
     tzcnt                wd, wm
     movd                 m8, dxm
     movd                m14, mxm
@@ -5622,10 +5622,10 @@ cglobal prep_8tap_scaled, 4, 14, 16, 0x180, tmp, src, ss, w, h, mx, my, dx, dy
 %endmacro
 
 %macro BILIN_SCALED_FN 1
-cglobal %1_bilin_scaled
+cglobal %1_bilin_scaled_8bpc
     mov                 t0d, (5*15 << 16) | 5*15
     mov                 t1d, (5*15 << 16) | 5*15
-    jmp mangle(private_prefix %+ _%1_8tap_scaled %+ SUFFIX)
+    jmp mangle(private_prefix %+ _%1_8tap_scaled_8bpc %+ SUFFIX)
 %endmacro
 
 %if ARCH_X86_64
@@ -5819,15 +5819,15 @@ MC_8TAP_SCALED prep
 
 %macro WARP_AFFINE_8X8T 0
 %if ARCH_X86_64
-cglobal warp_affine_8x8t, 6, 14, 16, 0x90, tmp, ts
+cglobal warp_affine_8x8t_8bpc, 6, 14, 16, 0x90, tmp, ts
 %else
-cglobal warp_affine_8x8t, 0, 7, 16, -0x130-copy_args, tmp, ts
+cglobal warp_affine_8x8t_8bpc, 0, 7, 16, -0x130-copy_args, tmp, ts
  %if copy_args
   %define tmpm [esp+stack_size-4*1]
   %define tsm  [esp+stack_size-4*2]
  %endif
 %endif
-    call mangle(private_prefix %+ _warp_affine_8x8_%+cpuname).main
+    call mangle(private_prefix %+ _warp_affine_8x8_8bpc_%+cpuname).main
 .loop:
 %if ARCH_X86_32
  %define m12 m4
@@ -5868,26 +5868,26 @@ cglobal warp_affine_8x8t, 0, 7, 16, -0x130-copy_args, tmp, ts
     mova       [tmpq+tsq*0], m12
     mova       [tmpq+tsq*2], m14
     dec            counterd
-    jz   mangle(private_prefix %+ _warp_affine_8x8_%+cpuname).end
+    jz   mangle(private_prefix %+ _warp_affine_8x8_8bpc_%+cpuname).end
 %if ARCH_X86_32
     mov                tmpm, tmpd
     mov                  r0, [esp+0x100]
     mov                  r1, [esp+0x104]
 %endif
-    call mangle(private_prefix %+ _warp_affine_8x8_%+cpuname).main2
+    call mangle(private_prefix %+ _warp_affine_8x8_8bpc_%+cpuname).main2
     lea                tmpq, [tmpq+tsq*4]
     jmp .loop
 %endmacro
 
 %macro WARP_AFFINE_8X8 0
 %if ARCH_X86_64
-cglobal warp_affine_8x8, 6, 14, 16, 0x90, \
-                         dst, ds, src, ss, abcd, mx, tmp2, alpha, beta, \
-                         filter, tmp1, delta, my, gamma
+cglobal warp_affine_8x8_8bpc, 6, 14, 16, 0x90, \
+                              dst, ds, src, ss, abcd, mx, tmp2, alpha, beta, \
+                              filter, tmp1, delta, my, gamma
 %else
-cglobal warp_affine_8x8, 0, 7, 16, -0x130-copy_args, \
-                         dst, ds, src, ss, abcd, mx, tmp2, alpha, beta, \
-                         filter, tmp1, delta, my, gamma
+cglobal warp_affine_8x8_8bpc, 0, 7, 16, -0x130-copy_args, \
+                              dst, ds, src, ss, abcd, mx, tmp2, alpha, beta, \
+                              filter, tmp1, delta, my, gamma
  %define alphaq     r0
  %define alphad     r0
  %define alpham     [esp+gprsize+0x100]
@@ -6475,7 +6475,7 @@ DECLARE_REG_TMP 6, 7
     add               tmp2q, %1*mmsize
 %endmacro
 
-cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
+cglobal avg_8bpc, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
     LEA                  r6, avg_ssse3_table
     tzcnt                wd, wm ; leading zeros
     movifnidn            hd, hm ; move h(stack) to h(register) if not already that register
@@ -6506,7 +6506,7 @@ cglobal avg, 4, 7, 3, dst, stride, tmp1, tmp2, w, h, stride3
 
 %define W_AVG_INC_PTR AVG_INC_PTR
 
-cglobal w_avg, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
+cglobal w_avg_8bpc, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
     LEA                  r6, w_avg_ssse3_table
     tzcnt                wd, wm
     movd                 m4, r6m
@@ -6560,10 +6560,10 @@ cglobal w_avg, 4, 7, 6, dst, stride, tmp1, tmp2, w, h, stride3
 %endmacro
 
 %if ARCH_X86_64
-cglobal mask, 4, 8, 7, dst, stride, tmp1, tmp2, w, h, mask, stride3
+cglobal mask_8bpc, 4, 8, 7, dst, stride, tmp1, tmp2, w, h, mask, stride3
     movifnidn            hd, hm
 %else
-cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
+cglobal mask_8bpc, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
 %define hd dword r5m
 %endif
 %define base r6-mask_ssse3_table
@@ -6619,7 +6619,7 @@ cglobal mask, 4, 7, 7, dst, stride, tmp1, tmp2, w, mask, stride3
 %define reg_pw_6903 m8
 %define reg_pw_2048 m9
 ; args: dst, stride, tmp1, tmp2, w, h, mask, sign
-cglobal w_mask_420, 4, 8, 10, dst, stride, tmp1, tmp2, w, h, mask
+cglobal w_mask_420_8bpc, 4, 8, 10, dst, stride, tmp1, tmp2, w, h, mask
     lea                  r6, [w_mask_420_ssse3_table]
     mov                  wd, wm
     tzcnt               r7d, wd
@@ -6640,7 +6640,7 @@ cglobal w_mask_420, 4, 8, 10, dst, stride, tmp1, tmp2, w, h, mask
 %else
 %define reg_pw_6903 [base+pw_6903]
 %define reg_pw_2048 m3
-cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
+cglobal w_mask_420_8bpc, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
     tzcnt                wd, wm
     LEA                  r6, w_mask_420_ssse3_table
     movd                 m0, r7m ; sign
@@ -6756,7 +6756,7 @@ cglobal w_mask_420, 4, 7, 8, dst, stride, tmp1, tmp2, w, mask
     BLEND_64M            %1, %2, m2, m3
 %endmacro
 
-cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
+cglobal blend_8bpc, 3, 7, 7, dst, ds, tmp, w, h, mask
 %define base r6-blend_ssse3_table
     LEA                  r6, blend_ssse3_table
     tzcnt                wd, wm
@@ -6832,7 +6832,7 @@ cglobal blend, 3, 7, 7, dst, ds, tmp, w, h, mask
     jg .w32
     RET
 
-cglobal blend_v, 3, 6, 6, dst, ds, tmp, w, h, mask
+cglobal blend_v_8bpc, 3, 6, 6, dst, ds, tmp, w, h, mask
 %define base r5-blend_v_ssse3_table
     LEA                  r5, blend_v_ssse3_table
     tzcnt                wd, wm
@@ -6940,7 +6940,7 @@ cglobal blend_v, 3, 6, 6, dst, ds, tmp, w, h, mask
 %endif
     RET
 
-cglobal blend_h, 3, 7, 6, dst, ds, tmp, w, h, mask
+cglobal blend_h_8bpc, 3, 7, 6, dst, ds, tmp, w, h, mask
 %define base t0-blend_h_ssse3_table
 %if ARCH_X86_32
     ; We need to keep the PIC pointer for w4, reload wd from stack instead
@@ -7054,9 +7054,9 @@ cglobal blend_h, 3, 7, 6, dst, ds, tmp, w, h, mask
 ; bw, bh total filled size
 ; iw, ih, copied block -> fill bottom, right
 ; x, y, offset in bw/bh -> fill top, left
-cglobal emu_edge, 10, 13, 2, bw, bh, iw, ih, x, \
-                             y, dst, dstride, src, sstride, \
-                             bottomext, rightext, blk
+cglobal emu_edge_8bpc, 10, 13, 2, bw, bh, iw, ih, x, \
+                                  y, dst, dstride, src, sstride, \
+                                  bottomext, rightext, blk
     ; we assume that the buffer (stride) is larger than width, so we can
     ; safely overwrite by a few bytes
     pxor                 m1, m1
@@ -7417,14 +7417,14 @@ cextern resize_filter
 %endmacro
 
 %if ARCH_X86_64
-cglobal resize, 0, 14, 16, dst, dst_stride, src, src_stride, \
-                           dst_w, h, src_w, dx, mx0
+cglobal resize_8bpc, 0, 14, 16, dst, dst_stride, src, src_stride, \
+                                dst_w, h, src_w, dx, mx0
 %elif STACK_ALIGNMENT >= 16
-cglobal resize, 0, 7, 8, 3 * 16, dst, dst_stride, src, src_stride, \
-                                 dst_w, h, src_w, dx, mx0
+cglobal resize_8bpc, 0, 7, 8, 3 * 16, dst, dst_stride, src, src_stride, \
+                                      dst_w, h, src_w, dx, mx0
 %else
-cglobal resize, 0, 6, 8, 3 * 16, dst, dst_stride, src, src_stride, \
-                                 dst_w, h, src_w, dx, mx0
+cglobal resize_8bpc, 0, 6, 8, 3 * 16, dst, dst_stride, src, src_stride, \
+                                      dst_w, h, src_w, dx, mx0
 %endif
     movifnidn          dstq, dstmp
     movifnidn          srcq, srcmp
