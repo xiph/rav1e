@@ -44,6 +44,9 @@ deint_shuf:     dd 0,  4,  1,  5,  2,  6,  3,  7
 subpel_h_shufA: db 0,  1,  2,  3,  2,  3,  4,  5,  4,  5,  6,  7,  6,  7,  8,  9
 subpel_h_shufB: db 4,  5,  6,  7,  6,  7,  8,  9,  8,  9, 10, 11, 10, 11, 12, 13
 subpel_h_shuf2: db 0,  1,  2,  3,  4,  5,  6,  7,  2,  3,  4,  5,  6,  7,  8,  9
+rescale_mul:    dd 0,  1,  2,  3,  4,  5,  6,  7
+resize_shuf:    db 0,  1,  0,  1,  0,  1,  0,  1,  0,  1,  2,  3,  4,  5,  6,  7
+                db 8,  9, 10, 11, 12, 13, 14, 15, 14, 15, 14, 15, 14, 15, 14, 15
 
 put_bilin_h_rnd:  dw  8,  8, 10, 10
 prep_mul:         dw 16, 16,  4,  4
@@ -66,6 +69,8 @@ pw_27615: times 2 dw 27615
 pw_32766: times 2 dw 32766
 pw_m512:  times 2 dw -512
 pd_32:    dd 32
+pd_63:    dd 63
+pd_64:    dd 64
 pd_512:   dd 512
 pd_32768: dd 32768
 pd_65538: dd 65538
@@ -148,6 +153,7 @@ cextern mc_subpel_filters
 %define subpel_filters (mangle(private_prefix %+ _mc_subpel_filters)-8)
 
 cextern mc_warp_filter
+cextern resize_filter
 
 SECTION .text
 
@@ -4001,6 +4007,125 @@ cglobal emu_edge_16bpc, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstr
     jl .top_x_loop
 
 .end:
+    RET
+
+cglobal resize_16bpc, 6, 12, 16, dst, dst_stride, src, src_stride, \
+                                 dst_w, h, src_w, dx, mx0, pxmax
+    sub          dword mx0m, 4<<14
+    sub        dword src_wm, 8
+    vpbroadcastd         m5, dxm
+    vpbroadcastd         m8, mx0m
+    vpbroadcastd         m6, src_wm
+ DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, h, x, picptr, _, pxmax
+    LEA                  r7, $$
+%define base r7-$$
+    vpbroadcastd         m3, [base+pd_64]
+    vpbroadcastw        xm7, pxmaxm
+    pmaddwd              m2, m5, [base+rescale_mul] ; dx*[0,1,2,3,4,5,6,7]
+    pslld                m5, 3                      ; dx*8
+    pslld                m6, 14
+    paddd                m8, m2                     ; mx+[0..7]*dx
+.loop_y:
+    xor                  xd, xd
+    mova                 m4, m8             ; per-line working version of mx
+.loop_x:
+    vpbroadcastd        m10, [base+pd_63]
+    pxor                 m2, m2
+    pmaxsd               m0, m4, m2
+    psrad                m9, m4, 8          ; filter offset (unmasked)
+    pminsd               m0, m6             ; iclip(mx, 0, src_w-8)
+    psubd                m1, m4, m0         ; pshufb offset
+    psrad                m0, 14             ; clipped src_x offset
+    psrad                m1, 14             ; pshufb edge_emu offset
+    pand                 m9, m10            ; filter offset (masked)
+    ; load source pixels
+    movd                r8d, xm0
+    pextrd              r9d, xm0, 1
+    pextrd             r10d, xm0, 2
+    pextrd             r11d, xm0, 3
+    vextracti128        xm0, m0, 1
+    movu               xm10, [srcq+r8*2]
+    movu               xm11, [srcq+r9*2]
+    movu               xm12, [srcq+r10*2]
+    movu               xm13, [srcq+r11*2]
+    movd                r8d, xm0
+    pextrd              r9d, xm0, 1
+    pextrd             r10d, xm0, 2
+    pextrd             r11d, xm0, 3
+    vinserti128         m10, [srcq+r8*2], 1
+    vinserti128         m11, [srcq+r9*2], 1
+    vinserti128         m12, [srcq+r10*2], 1
+    vinserti128         m13, [srcq+r11*2], 1
+    ptest                m1, m1
+    jz .filter
+    movq                 r9, xm1
+    pextrq              r11, xm1, 1
+    movsxd               r8, r9d
+    sar                  r9, 32
+    movsxd              r10, r11d
+    sar                 r11, 32
+    vextracti128        xm1, m1, 1
+    movu               xm14, [base+resize_shuf+8+r8*2]
+    movu               xm15, [base+resize_shuf+8+r9*2]
+    movu                xm0, [base+resize_shuf+8+r10*2]
+    movu                xm2, [base+resize_shuf+8+r11*2]
+    movq                 r9, xm1
+    pextrq              r11, xm1, 1
+    movsxd               r8, r9d
+    sar                  r9, 32
+    movsxd              r10, r11d
+    sar                 r11, 32
+    vinserti128         m14, [base+resize_shuf+8+r8*2], 1
+    vinserti128         m15, [base+resize_shuf+8+r9*2], 1
+    vinserti128          m0, [base+resize_shuf+8+r10*2], 1
+    vinserti128          m2, [base+resize_shuf+8+r11*2], 1
+    pshufb              m10, m14
+    pshufb              m11, m15
+    pshufb              m12, m0
+    pshufb              m13, m2
+.filter:
+    movd                r8d, xm9
+    pextrd              r9d, xm9, 1
+    pextrd             r10d, xm9, 2
+    pextrd             r11d, xm9, 3
+    vextracti128        xm9, m9, 1
+    movq               xm14, [base+resize_filter+r8*8]
+    movq               xm15, [base+resize_filter+r9*8]
+    movq                xm0, [base+resize_filter+r10*8]
+    movq                xm2, [base+resize_filter+r11*8]
+    movd                r8d, xm9
+    pextrd              r9d, xm9, 1
+    pextrd             r10d, xm9, 2
+    pextrd             r11d, xm9, 3
+    movhps             xm14, [base+resize_filter+r8*8]
+    movhps             xm15, [base+resize_filter+r9*8]
+    movhps              xm0, [base+resize_filter+r10*8]
+    movhps              xm2, [base+resize_filter+r11*8]
+    pmovsxbw            m14, xm14
+    pmovsxbw            m15, xm15
+    pmovsxbw             m0, xm0
+    pmovsxbw             m2, xm2
+    pmaddwd             m10, m14
+    pmaddwd             m11, m15
+    pmaddwd             m12, m0
+    pmaddwd             m13, m2
+    phaddd              m10, m11
+    phaddd              m12, m13
+    phaddd              m10, m12
+    psubd               m10, m3, m10
+    psrad               m10, 7
+    vextracti128        xm0, m10, 1
+    packusdw           xm10, xm0
+    pminsw             xm10, xm7
+    mova        [dstq+xq*2], xm10
+    paddd                m4, m5
+    add                  xd, 8
+    cmp                  xd, dst_wd
+    jl .loop_x
+    add                dstq, dst_strideq
+    add                srcq, src_strideq
+    dec                  hd
+    jg .loop_y
     RET
 
 %endif ; ARCH_X86_64

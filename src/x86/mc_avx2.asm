@@ -69,7 +69,6 @@ bdct_lb_dw:     db  0,  0,  0,  0,  4,  4,  4,  4,  8,  8,  8,  8, 12, 12, 12, 1
 wswap:          db  2,  3,  0,  1,  6,  7,  4,  5, 10, 11,  8,  9, 14, 15, 12, 13
 rescale_mul:    dd  0,  1,  2,  3,  4,  5,  6,  7
 resize_shuf:    db  0,  0,  0,  0,  0,  1,  2,  3,  4,  5,  6,  7,  7,  7,  7,  7
-                db  7,  7,  7,  7,  7,  7,  7,  7
 
 wm_420_sign:    dd 0x01020102, 0x01010101
 wm_422_sign:    dd 0x80808080, 0x7f7f7f7f
@@ -5053,7 +5052,7 @@ cglobal emu_edge_8bpc, 10, 13, 1, bw, bh, iw, ih, x, y, dst, dstride, src, sstri
 .end:
     RET
 
-cglobal resize_8bpc, 6, 14, 16, dst, dst_stride, src, src_stride, \
+cglobal resize_8bpc, 6, 12, 16, dst, dst_stride, src, src_stride, \
                                 dst_w, h, src_w, dx, mx0
     sub          dword mx0m, 4<<14
     sub        dword src_wm, 8
