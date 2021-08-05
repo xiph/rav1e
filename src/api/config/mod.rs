@@ -25,6 +25,9 @@ pub use rate::{RateControlConfig, RateControlSummary};
 mod speedsettings;
 pub use speedsettings::*;
 
+mod progress;
+pub use progress::*;
+
 pub use crate::tiling::TilingInfo;
 
 /// Enumeration of possible invalid configuration errors.
@@ -131,6 +134,8 @@ pub struct Config {
   #[cfg(feature = "unstable")]
   /// Number of parallel encoding slots
   pub(crate) slots: usize,
+  /// Granular progress callback called when a macroblock is processed.
+  pub(crate) progress: Option<Arc<dyn GranularProgress>>,
 }
 
 impl Config {
@@ -183,6 +188,14 @@ impl Config {
   /// Set the maximum number of GOPs to encode in parallel
   pub fn with_parallel_gops(mut self, slots: usize) -> Self {
     self.slots = slots;
+    self
+  }
+
+  /// Set a granular progress callback
+  pub fn with_granular_progress(
+    mut self, progress: Arc<dyn GranularProgress>,
+  ) -> Self {
+    self.progress = Some(progress);
     self
   }
 }
