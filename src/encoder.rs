@@ -2973,7 +2973,8 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 #[hawktracer(encode_tile_group)]
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
-) -> Vec<u8> {
+  progress: &dyn GranularProgress,
+) -> Option<Vec<u8>> {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
@@ -2988,11 +2989,17 @@ fn encode_tile_group<T: Pixel>(
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
     .into_par_iter()
-    .map(|(mut ctx, cdf)| {
-      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg);
-      (raw, ctx.ts)
+    .map(|(ctx, cdf)| {
+      let TileContextMut { mut ts, mut tb, .. } = ctx;
+      let raw = encode_tile(fi, &mut ts, cdf, &mut tb, inter_cfg, progress);
+      raw.map(|raw| (raw, ts))
     })
+    .while_some()
     .unzip();
+
+  if raw_tiles.len() != ti.tile_count() {
+    return None;
+  }
 
   let stats =
     tile_states.into_iter().map(|ts| ts.enc_stats).collect::<Vec<_>>();
@@ -3078,7 +3085,7 @@ fn encode_tile_group<T: Pixel>(
   debug_assert!(max_tile_size_bytes > 0 && max_tile_size_bytes <= 4);
   fs.max_tile_size_bytes = max_tile_size_bytes;
 
-  build_raw_tile_group(ti, &raw_tiles, max_tile_size_bytes)
+  Some(build_raw_tile_group(ti, &raw_tiles, max_tile_size_bytes))
 }
 
 fn build_raw_tile_group(
@@ -3206,8 +3213,8 @@ fn check_lf_queue<T: Pixel>(
 fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
-  inter_cfg: &InterConfig,
-) -> Vec<u8> {
+  inter_cfg: &InterConfig, progress: &dyn GranularProgress,
+) -> Option<Vec<u8>> {
   let mut w = WriterEncoder::new();
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -3225,6 +3232,11 @@ fn encode_tile<'a, T: Pixel>(
 
     for sbx in 0..ts.sb_width {
       cw.fc_log.clear();
+
+      let data = ProgressData {};
+      if !progress.progress(&data) {
+        return None;
+      }
 
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
       let mut sbs_qe = SBSQueueEntry {
@@ -3402,7 +3414,7 @@ fn encode_tile<'a, T: Pixel>(
     ts.sbo.0.x,
     ts.sbo.0.y
   );
-  w.done()
+  Some(w.done())
 }
 
 #[allow(unused)]
@@ -3485,7 +3497,8 @@ fn get_initial_segmentation<T: Pixel>(
 
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
-) -> Vec<u8> {
+  progress: &dyn GranularProgress,
+) -> Option<Vec<u8>> {
   debug_assert!(!fi.show_existing_frame);
   debug_assert!(!fi.invalid);
   let obu_extension = 0;
@@ -3496,7 +3509,7 @@ pub fn encode_frame<T: Pixel>(
     fs.segmentation = get_initial_segmentation(fi);
     segmentation_optimize(fi, fs);
   }
-  let tile_group = encode_tile_group(fi, fs, inter_cfg);
+  let tile_group = encode_tile_group(fi, fs, inter_cfg, progress)?;
 
   if fi.frame_type == FrameType::KEY {
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
@@ -3527,7 +3540,7 @@ pub fn encode_frame<T: Pixel>(
   buf2.clear();
 
   packet.write_all(&tile_group).unwrap();
-  packet
+  Some(packet)
 }
 
 pub fn update_rec_buffer<T: Pixel>(

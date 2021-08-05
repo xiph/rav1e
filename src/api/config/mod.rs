@@ -249,6 +249,10 @@ impl Config {
       inner.rc_state.setup_second_pass(s);
     }
 
+    if let Some(ref progress) = self.progress {
+      inner.progress = Arc::clone(progress);
+    }
+
     Ok(inner)
   }
 

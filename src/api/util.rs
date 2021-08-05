@@ -175,6 +175,9 @@ pub enum EncoderStatus {
   /// [`Context::twopass_out()`]: struct.Context.html#method.twopass_out
   #[error("not ready")]
   NotReady,
+  /// Immediate exit was requested
+  #[error("immediate exit")]
+  ImmediateExit,
 }
 
 /// Represents a packet.

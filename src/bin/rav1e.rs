@@ -191,6 +191,9 @@ fn process_frame<T: Pixel, D: Decoder>(
     Err(e @ EncoderStatus::NotReady) => {
       (Err(e.context("Mismanaged handling of two-pass stats data")), false)
     }
+    Err(e @ EncoderStatus::ImmediateExit) => {
+      (Err(e.context("Immediate exit requested")), false)
+    }
     Err(EncoderStatus::Encoded) => (Ok(Some(frame_summaries)), true),
   };
 
