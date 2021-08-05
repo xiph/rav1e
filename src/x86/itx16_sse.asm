@@ -1316,21 +1316,7 @@ cglobal idct_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     packssdw             m4, m5
     packssdw             m6, m7
 .transpose:
-    ; transpose
-    punpckhwd            m5, m0, m4
-    punpcklwd            m0, m4
-    punpckhwd            m4, m2, m6
-    punpcklwd            m2, m6
-
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    punpckhwd            m7, m5, m4
-    punpcklwd            m5, m4
-
-    punpckhwd            m1, m0, m5
-    punpcklwd            m0, m5
-    punpcklwd            m2, m3, m7
-    punpckhwd            m3, m7
+    call .transpose4x8packed
     ; m0-3 = packed & transposed output
     jmp                tx2q
 .load:
@@ -1353,6 +1339,23 @@ cglobal idct_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     paddd                m7, [cq+0*16]
 %endif
     REPX      {psrad x, 12}, m0, m1, m2, m3, m4, m5, m6, m7
+    ret
+.transpose4x8packed:
+    ; transpose
+    punpckhwd            m5, m0, m4
+    punpcklwd            m0, m4
+    punpckhwd            m4, m2, m6
+    punpcklwd            m2, m6
+
+    punpckhwd            m3, m0, m2
+    punpcklwd            m0, m2
+    punpckhwd            m7, m5, m4
+    punpcklwd            m5, m4
+
+    punpckhwd            m1, m0, m5
+    punpcklwd            m0, m5
+    punpcklwd            m2, m3, m7
+    punpckhwd            m3, m7
     ret
 .main_pass1:
 %if ARCH_X86_64
@@ -2447,21 +2450,23 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     packssdw            m12, m13
     packssdw            m14, m15
 .transpose:
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    punpckhwd            m5, m4, m6
-    punpcklwd            m4, m6
-
-    punpckhwd            m2, m0, m3
-    punpcklwd            m0, m3
-    punpckhwd            m6, m4, m5
-    punpcklwd            m4, m5
-
-    punpckhqdq           m1, m0, m4
-    punpcklqdq           m0, m4
-    punpckhqdq           m3, m2, m6
-    punpcklqdq           m2, m6
-
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    call .transpose4x8packed_hi
+%else
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova          [r3+0*16], m0
+    mova          [r3+1*16], m1
+    mova          [r3+2*16], m2
+    mova          [r3+3*16], m3
+    mova                 m0, [r3+ 8*16]
+    mova                 m2, [r3+ 9*16]
+    mova                 m4, [r3+10*16]
+    mova                 m6, [r3+11*16]
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+%endif
+    jmp                tx2q
+%if ARCH_X86_64
+.transpose4x8packed_hi:
     punpckhwd           m11, m8, m10
     punpcklwd            m8, m10
     punpckhwd           m13, m12, m14
@@ -2476,35 +2481,6 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     punpcklqdq           m8, m12
     punpckhqdq          m11, m10, m14
     punpcklqdq          m10, m14
-%else
-    call .transpose4x8packed
-    mova          [r3+0*16], m0
-    mova          [r3+1*16], m1
-    mova          [r3+2*16], m2
-    mova          [r3+3*16], m3
-    mova                 m0, [r3+ 8*16]
-    mova                 m2, [r3+ 9*16]
-    mova                 m4, [r3+10*16]
-    mova                 m6, [r3+11*16]
-    call .transpose4x8packed
-%endif
-    jmp                tx2q
-%if ARCH_X86_32
-.transpose4x8packed:
-    punpckhwd            m5, m0, m4
-    punpcklwd            m0, m4
-    punpckhwd            m4, m2, m6
-    punpcklwd            m2, m6
-
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    punpckhwd            m7, m5, m4
-    punpcklwd            m5, m4
-
-    punpckhwd            m1, m0, m5
-    punpcklwd            m0, m5
-    punpcklwd            m2, m3, m7
-    punpckhwd            m3, m7
     ret
 %endif
 .main_oddhalf:
@@ -2806,7 +2782,7 @@ cglobal iadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %if ARCH_X86_64
     jmp m(idct_16x4_internal_16bpc).pack_transpose
 %else
-    call m(idct_16x4_internal_16bpc).transpose4x8packed
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     mova [rsp+gprsize+0*16], m0
     mova [rsp+gprsize+1*16], m1
     mova [rsp+gprsize+2*16], m2
@@ -2815,7 +2791,7 @@ cglobal iadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m2, [rsp+gprsize+ 9*16]
     mova                 m4, [rsp+gprsize+10*16]
     mova                 m6, [rsp+gprsize+11*16]
-    call m(idct_16x4_internal_16bpc).transpose4x8packed
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     jmp                tx2q
 %endif
 
@@ -3280,7 +3256,7 @@ cglobal iflipadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     pshufd               m4, [rsp+gprsize+ 9*16], q1032
     pshufd               m2, [rsp+gprsize+10*16], q1032
     pshufd               m0, [rsp+gprsize+11*16], q1032
-    call m(idct_16x4_internal_16bpc).transpose4x8packed
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     mova [rsp+gprsize+0*16], m0
     mova [rsp+gprsize+1*16], m1
     mova [rsp+gprsize+2*16], m2
@@ -3289,7 +3265,7 @@ cglobal iflipadst_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     pshufd               m4, [rsp+gprsize+ 5*16], q1032
     pshufd               m2, [rsp+gprsize+ 6*16], q1032
     pshufd               m0, [rsp+gprsize+ 7*16], q1032
-    call m(idct_16x4_internal_16bpc).transpose4x8packed
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     jmp                tx2q
 %endif
 
@@ -3437,79 +3413,32 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 .loop_pass1:
     call                 t0
 %if ARCH_X86_64
-    mova       [cq+0*32+r5], m0
-    mova       [cq+1*32+r5], m2
-    mova       [cq+2*32+r5], m4
-    mova       [cq+3*32+r5], m6
+    call m(idct_16x4_internal_16bpc).transpose4x8packed_hi
+    mova       [cq+4*32+r5], m8
+    mova       [cq+5*32+r5], m9
+    mova       [cq+6*32+r5], m10
+    mova       [cq+7*32+r5], m11
 %else
-    mova                 m1, [rsp+gprsize+ 8*16]
-    mova                 m3, [rsp+gprsize+ 9*16]
-    mova                 m5, [rsp+gprsize+10*16]
-    mova                 m7, [rsp+gprsize+11*16]
-    mova       [cq+0*32+r5], m1
-    mova       [cq+1*32+r5], m3
-    mova       [cq+2*32+r5], m5
-    mova       [cq+3*32+r5], m7
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova       [cq+4*32+r5], m0
+    mova       [cq+5*32+r5], m1
+    mova       [cq+6*32+r5], m2
+    mova       [cq+7*32+r5], m3
+    mova                 m0, [rsp+gprsize+ 8*16]
+    mova                 m2, [rsp+gprsize+ 9*16]
+    mova                 m4, [rsp+gprsize+10*16]
+    mova                 m6, [rsp+gprsize+11*16]
 %endif
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     test                r5d, r5d
     jz .end
-%if ARCH_X86_64
-    mova       [cq+4*32+16], m8
-    mova       [cq+5*32+16], m10
-    mova       [cq+6*32+16], m12
-    mova       [cq+7*32+16], m14
-%else
-    mova       [cq+4*32+16], m0
-    mova       [cq+5*32+16], m2
-    mova       [cq+6*32+16], m4
-    mova       [cq+7*32+16], m6
-%endif
+    mova       [cq+0*32+r5], m0
+    mova       [cq+1*32+r5], m1
+    mova       [cq+2*32+r5], m2
+    mova       [cq+3*32+r5], m3
     xor                 r5d, r5d
     jmp .loop_pass1
 .end:
-
-    ; transpose 8x8x2
-%if ARCH_X86_64
-    mova                 m9, [cq+4*32+16]
-    mova                m11, [cq+5*32+16]
-    mova                m13, [cq+6*32+16]
-    mova                m15, [cq+7*32+16]
-%else
-    mova                 m1, [cq+4*32+16]
-    mova                 m3, [cq+5*32+16]
-    mova                 m5, [cq+6*32+16]
-    mova                 m7, [cq+7*32+16]
-%endif
-    call .transpose8x8
-    mova       [cq+4*32+ 0], m0
-    mova       [cq+5*32+ 0], m1
-    mova       [cq+6*32+ 0], m2
-    mova       [cq+7*32+ 0], m3
-    mova       [cq+4*32+16], m4
-    mova       [cq+5*32+16], m5
-    mova       [cq+6*32+16], m6
-    mova       [cq+7*32+16], m7
-
-%if ARCH_X86_64
-    mova                 m8, [cq+0*32+ 0]
-    mova                m10, [cq+1*32+ 0]
-    mova                m12, [cq+2*32+ 0]
-    mova                m14, [cq+3*32+ 0]
-    mova                 m9, [cq+0*32+16]
-    mova                m11, [cq+1*32+16]
-    mova                m13, [cq+2*32+16]
-    mova                m15, [cq+3*32+16]
-%else
-    mova                 m0, [cq+0*32+ 0]
-    mova                 m2, [cq+1*32+ 0]
-    mova                 m4, [cq+2*32+ 0]
-    mova                 m6, [cq+3*32+ 0]
-    mova                 m1, [cq+0*32+16]
-    mova                 m3, [cq+1*32+16]
-    mova                 m5, [cq+2*32+16]
-    mova                 m7, [cq+3*32+16]
-%endif
-    call .transpose8x8
 
     jmp                tx2q
 .main:
@@ -3588,123 +3517,6 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call m(idct_16x4_internal_16bpc).round
 %endif
     ret
-.transpose8x8:
-%if ARCH_X86_64
-    ;  m8: a1 a2 a3 a4 b1 b2 b3 b4
-    ; m10: c1 c2 c3 c4 d1 d2 d3 d4
-    ; m12: e1 e2 e3 e4 f1 f2 f3 f4
-    ; m14: g1 g2 g3 g4 h1 h2 h3 h4
-    ;  m9: a5 a6 a7 a8 b5 b6 b7 b8
-    ; m11: c5 c6 c7 c8 d5 d6 d7 d8
-    ; m13: e5 e6 e7 e8 f5 f6 f7 f8
-    ; m15: g5 g6 g7 g8 h5 h6 h7 h8
-    punpcklwd            m0, m8, m12
-    punpckhwd            m8, m12
-    punpcklwd            m2, m10, m14
-    punpckhwd           m10, m14
-    punpcklwd            m4, m9, m13
-    punpckhwd            m9, m13
-    punpcklwd            m6, m11, m15
-    punpckhwd           m11, m15
-    ;  m0: a1 e1 a2 e2 a3 e3 a4 e4
-    ;  m2: c1 g1 c2 g2 c3 g3 c4 g4
-    ;  m8: b1 f1 b2 f2 b3 f3 b4 f4
-    ; m10: d1 h1 d2 h2 d3 h3 d4 h4
-    ;  m4: a5 e5 a6 e6 a7 e7 a8 e8
-    ;  m6: c5 g5 c6 g6 c7 g7 c8 g8
-    ;  m9: b5 f5 b6 f6 b7 f7 b8 f8
-    ; m11: d5 h5 d6 h6 d7 h7 d8 h8
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    punpckhwd            m5, m8, m10
-    punpcklwd            m8, m10
-    punpckhwd            m7, m4, m6
-    punpcklwd            m4, m6
-    punpckhwd           m12, m9, m11
-    punpcklwd            m9, m11
-    ;  m0: a1 c1 e1 g1 a2 c2 e2 g2
-    ;  m3: a3 c1 e3 g3 a4 c4 e4 g4
-    ;  m5: b3 d3 f3 h3 b4 d4 f4 h4
-    ;  m8: b1 d1 f1 h1 b2 d2 f2 h2
-    ;  m4: a5 c5 e5 g5 a6 c6 e6 g6
-    ;  m7: a7 c7 e7 g7 a8 c8 e8 g8
-    ;  m9: b5 d5 f5 h5 b6 d6 f6 h6
-    ; m12: b7 d7 f7 h7 b8 d8 f8 h8
-    punpckhwd            m1, m0, m8
-    punpcklwd            m0, m8
-    punpcklwd            m2, m3, m5
-    punpckhwd            m3, m5
-    punpckhwd            m5, m4, m9
-    punpcklwd            m4, m9
-    punpcklwd            m6, m7, m12
-    punpckhwd            m7, m12
-%else
-    ; m0: a1 a2 a3 a4 b1 b2 b3 b4
-    ; m2: c1 c2 c3 c4 d1 d2 d3 d4
-    ; m4: e1 e2 e3 e4 f1 f2 f3 f4
-    ; m6: g1 g2 g3 g4 h1 h2 h3 h4
-    ; m1: a5 a6 a7 a8 b5 b6 b7 b8
-    ; m3: c5 c6 c7 c8 d5 d6 d7 d8
-    ; m5: e5 e6 e7 e8 f5 f6 f7 f8
-    ; m7: g5 g6 g7 g8 h5 h6 h7 h8
-    mova               [r3], m1
-    punpckhwd            m1, m0, m4
-    punpcklwd            m0, m4
-    punpckhwd            m4, m2, m6
-    punpcklwd            m2, m6
-    punpckhwd            m6, m3, m7
-    punpcklwd            m3, m7
-    mova                 m7, [r3]
-    mova               [r3], m3
-    punpckhwd            m3, m7, m5
-    punpcklwd            m7, m5
-    ; m0: a1 e1 a2 e2 a3 e3 a4 e4
-    ; m1: b1 f1 b2 f2 b3 f3 b4 f4
-    ; m2: c1 g1 c2 g2 c3 g3 c4 g4
-    ; m4: d1 h1 d2 h2 d3 h3 d4 h4
-    ; r0: c5 g5 c6 g6 c7 g7 c8 g8
-    ; m6: d5 h5 d6 h6 d7 h7 d8 h8
-    ; m7: a5 e5 a6 e6 a7 e7 a8 e8
-    ; m3: b5 f5 b6 f6 b7 f7 b8 f8
-    punpckhwd            m5, m0, m2
-    punpcklwd            m0, m2
-    punpcklwd            m2, m1, m4
-    punpckhwd            m1, m4
-    mova                 m4, [r3]
-    mova               [r3], m5
-    punpcklwd            m5, m7, m4
-    punpckhwd            m7, m4
-    punpckhwd            m4, m3, m6
-    punpcklwd            m3, m6
-    ; m0: a1 c1 e1 g1 a2 c2 e2 g2
-    ; r0: a3 c1 e3 g3 a4 c4 e4 g4
-    ; m1: b3 d3 f3 h3 b4 d4 f4 h4
-    ; m2: b1 d1 f1 h1 b2 d2 f2 h2
-    ; m5: a5 c5 e5 g5 a6 c6 e6 g6
-    ; m7: a7 c7 e7 g7 a8 c8 e8 g8
-    ; m3: b5 d5 f5 h5 b6 d6 f6 h6
-    ; m4: b7 d7 f7 h7 b8 d8 f8 h8
-    punpcklwd            m6, m7, m4
-    punpckhwd            m7, m4
-    punpcklwd            m4, m5, m3
-    punpckhwd            m5, m3
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    mova                 m2, [r3]
-    mova               [r3], m3
-    punpckhwd            m3, m2, m1
-    punpcklwd            m2, m1
-    mova                 m1, [r3]
-%endif
-    ; m0: a1 b1 c1 d1 e1 f1 g1 h1
-    ; m1: a2 b2 c2 d2 e2 f2 g2 h2
-    ; m2: a3 b3 c3 d3 e3 f3 g3 h3
-    ; m3: a4 b4 c4 d4 e4 f4 g4 h4
-    ; m4: a5 b5 c5 d5 e5 f5 g5 h5
-    ; m5: a6 b6 c6 d6 e6 f6 g6 h6
-    ; m6: a7 b7 c7 d7 e7 f7 g7 h7
-    ; m7: a8 b8 c8 d8 e8 f8 g8 h8
-    ret
 
 .pass2:
     lea                  t1, [o(m_suffix(idct_8x8_internal_8bpc, _ssse3).main)]
@@ -3722,6 +3534,10 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r3, [strideq*3]
 %endif
 
+    mova                 m4, [cq+0*32+16]
+    mova                 m5, [cq+1*32+16]
+    mova                 m6, [cq+2*32+16]
+    mova                 m7, [cq+3*32+16]
     call                 t1
     call .write_8x8
     mova                 m0, [cq+4*32+ 0]
@@ -4157,41 +3973,30 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 .loop_pass1:
     call                 t0
 %if ARCH_X86_64
-    mova       [cq+0*64+r5], m0
-    mova       [cq+1*64+r5], m2
-    mova       [cq+2*64+r5], m4
-    mova       [cq+3*64+r5], m6
-%else
-    mova                 m1, [rsp+gprsize+ 8*16]
-    mova                 m3, [rsp+gprsize+ 9*16]
-    mova                 m5, [rsp+gprsize+10*16]
-    mova                 m7, [rsp+gprsize+11*16]
-    mova       [cq+0*64+r5], m1
-    mova       [cq+1*64+r5], m3
-    mova       [cq+2*64+r5], m5
-    mova       [cq+3*64+r5], m7
-%endif
-    test                r5d, 16
-    jz .tp
-    ; store so we can transpose in the next call
-%if ARCH_X86_64
+    call m(idct_16x4_internal_16bpc).transpose4x8packed_hi
     mova       [cq+4*64+r5], m8
-    mova       [cq+5*64+r5], m10
-    mova       [cq+6*64+r5], m12
-    mova       [cq+7*64+r5], m14
+    mova       [cq+5*64+r5], m9
+    mova       [cq+6*64+r5], m10
+    mova       [cq+7*64+r5], m11
 %else
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
     mova       [cq+4*64+r5], m0
-    mova       [cq+5*64+r5], m2
-    mova       [cq+6*64+r5], m4
-    mova       [cq+7*64+r5], m6
+    mova       [cq+5*64+r5], m1
+    mova       [cq+6*64+r5], m2
+    mova       [cq+7*64+r5], m3
+    mova                 m0, [rsp+gprsize+ 8*16]
+    mova                 m2, [rsp+gprsize+ 9*16]
+    mova                 m4, [rsp+gprsize+10*16]
+    mova                 m6, [rsp+gprsize+11*16]
 %endif
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova       [cq+0*64+r5], m0
+    mova       [cq+1*64+r5], m1
+    mova       [cq+2*64+r5], m2
+    mova       [cq+3*64+r5], m3
     sub                 r5d, 16
-    jmp .loop_pass1
-.tp:
-    ; transpose on even rows
-    call .transpose8x8x2
-    sub                 r5d, 16
-    jg .loop_pass1
+    jge .loop_pass1
+
 %if ARCH_X86_32
     ; restore pic-ptr
     mov                  r1, [rsp+16*16+1*gprsize]
@@ -4319,59 +4124,6 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     packssdw             m1, m3     ; out0-1
     mova          [r3+8*16], m1
 %endif
-    ret
-
-.transpose8x8x2:
-    ; transpose 8x8x2
-%if ARCH_X86_64
-    mova                 m9, [cq+4*64+r5+16]
-    mova                m11, [cq+5*64+r5+16]
-    mova                m13, [cq+6*64+r5+16]
-    mova                m15, [cq+7*64+r5+16]
-%else
-    mova                 m1, [cq+4*64+r5+16]
-    mova                 m3, [cq+5*64+r5+16]
-    mova                 m5, [cq+6*64+r5+16]
-    mova                 m7, [cq+7*64+r5+16]
-%endif
-    call m(idct_16x8_internal_16bpc).transpose8x8
-    mova    [cq+4*64+r5+ 0], m0
-    mova    [cq+5*64+r5+ 0], m1
-    mova    [cq+6*64+r5+ 0], m2
-    mova    [cq+7*64+r5+ 0], m3
-    mova    [cq+4*64+r5+16], m4
-    mova    [cq+5*64+r5+16], m5
-    mova    [cq+6*64+r5+16], m6
-    mova    [cq+7*64+r5+16], m7
-
-%if ARCH_X86_64
-    mova                 m8, [cq+0*64+r5+ 0]
-    mova                m10, [cq+1*64+r5+ 0]
-    mova                m12, [cq+2*64+r5+ 0]
-    mova                m14, [cq+3*64+r5+ 0]
-    mova                 m9, [cq+0*64+r5+16]
-    mova                m11, [cq+1*64+r5+16]
-    mova                m13, [cq+2*64+r5+16]
-    mova                m15, [cq+3*64+r5+16]
-%else
-    mova                 m0, [cq+0*64+r5+ 0]
-    mova                 m2, [cq+1*64+r5+ 0]
-    mova                 m4, [cq+2*64+r5+ 0]
-    mova                 m6, [cq+3*64+r5+ 0]
-    mova                 m1, [cq+0*64+r5+16]
-    mova                 m3, [cq+1*64+r5+16]
-    mova                 m5, [cq+2*64+r5+16]
-    mova                 m7, [cq+3*64+r5+16]
-%endif
-    call m(idct_16x8_internal_16bpc).transpose8x8
-    mova    [cq+0*64+r5+ 0], m0
-    mova    [cq+1*64+r5+ 0], m1
-    mova    [cq+2*64+r5+ 0], m2
-    mova    [cq+3*64+r5+ 0], m3
-    mova    [cq+0*64+r5+16], m4
-    mova    [cq+1*64+r5+16], m5
-    mova    [cq+2*64+r5+16], m6
-    mova    [cq+3*64+r5+16], m7
     ret
 
 .pass2:
