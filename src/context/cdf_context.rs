@@ -542,7 +542,6 @@ impl fmt::Debug for CDFContext {
   }
 }
 
-#[macro_use]
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     $w.symbol_with_update($s, $cdf, &mut $self.fc_log);
