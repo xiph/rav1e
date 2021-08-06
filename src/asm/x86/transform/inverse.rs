@@ -107,6 +107,7 @@ macro_rules! decl_itx_hbd_fns {
       )*
       // Create a lookup table for the tx types declared above
       const [<INV_TXFM_HBD_FNS_$W _$H _$OPT_UPPER>]: [Option<InvTxfmHBDFunc>; TX_TYPES] = {
+        #[allow(unused_mut)]
         let mut out: [Option<InvTxfmHBDFunc>; 16] = [None; 16];
         $(
           $(
@@ -306,10 +307,37 @@ impl_itx_hbd_fns!(
   [(avx2, AVX2)]
 );
 
+impl_itx_hbd_fns!(
+  // 64x
+  [],
+  [(64, 64), (64, 32), (32, 64), (16, 64), (64, 16)],
+  // 32x
+  [],
+  [(32, 32), (32, 16), (16, 32), (32, 8), (8, 32)],
+  // 16x
+  [],
+  [(16, 16), (16, 8), (16, 4)],
+  // 8x and 4x
+  [
+    (TxType::DCT_ADST, dct, adst),
+    (TxType::ADST_DCT, adst, dct),
+    (TxType::DCT_FLIPADST, dct, flipadst),
+    (TxType::FLIPADST_DCT, flipadst, dct),
+    (TxType::V_DCT, dct, identity),
+    (TxType::H_DCT, identity, dct),
+    (TxType::ADST_ADST, adst, adst),
+    (TxType::ADST_FLIPADST, adst, flipadst),
+    (TxType::FLIPADST_ADST, flipadst, adst),
+    (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
+  ],
+  [(8, 16), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+  [(sse4, SSE4_1)]
+);
+
 cpu_function_lookup_table!(
   INV_TXFM_HBD_FNS: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
   default: [[None; TX_TYPES]; 32],
-  [AVX2]
+  [SSE4_1, AVX2]
 );
 
 #[cfg(test)]
