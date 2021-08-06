@@ -47,6 +47,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::comparison_chain)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::enum_variant_names)]
 #![warn(clippy::expl_impl_clone_on_copy)]
 #![warn(clippy::linkedlist)]
 #![warn(clippy::map_flatten)]
