@@ -1,6 +1,6 @@
 [package]
 name = "rav1e"
-version = "0.5.0-alpha"
+version = "0.5.0-beta"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 build = "build.rs"
@@ -112,7 +112,7 @@ features = ["parallel"]
 signal-hook = { version = "0.3", optional = true }
 
 [dev-dependencies]
-assert_cmd = "1.0"
+assert_cmd = "2.0"
 criterion = "0.3"
 pretty_assertions = "0.7"
 interpolate_name = "0.2.2"
