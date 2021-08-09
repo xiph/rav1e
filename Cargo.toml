@@ -73,7 +73,7 @@ dav1d-sys = { version = "0.3.4", optional = true }
 aom-sys = { version = "0.3.0", optional = true }
 scan_fmt = { version = "0.2.3", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
-v_frame = { version = "0.2.1", path = "v_frame/" }
+v_frame = { version = "0.2.2", path = "v_frame/" }
 av-metrics = { version = "0.6.2", optional = true, default-features = false }
 rayon = "1.0"
 crossbeam = { version = "0.8", optional = true }
