@@ -1,6 +1,6 @@
 [package]
 name = "v_frame"
-version = "0.2.1"
+version = "0.2.2"
 description = "Video Frame data structures, part of rav1e"
 license = "BSD-2-Clause"
 authors = ["Luca Barbato <lu_zero@gentoo.org>"]
