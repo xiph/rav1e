@@ -1367,9 +1367,9 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   let limit = 5;
   for i in 0..limit {
     if i == flash_at {
-      send_test_frame(&mut ctx, u8::min_value());
+      send_test_frame(&mut ctx, u8::MIN);
     } else {
-      send_test_frame(&mut ctx, u8::max_value());
+      send_test_frame(&mut ctx, u8::MAX);
     }
   }
   ctx.flush();
@@ -1419,14 +1419,14 @@ fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1479,18 +1479,18 @@ fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1545,8 +1545,8 @@ fn output_frameno_scene_change_after_multiple_flashes() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   send_test_frame(&mut ctx, 40);
   send_test_frame(&mut ctx, 100);
   send_test_frame(&mut ctx, 160);

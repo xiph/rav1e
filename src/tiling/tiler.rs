@@ -813,7 +813,7 @@ pub mod test {
 
   #[test]
   fn tile_log2_overflow() {
-    assert_eq!(TilingInfo::tile_log2(1, usize::max_value()), None);
+    assert_eq!(TilingInfo::tile_log2(1, usize::MAX), None);
   }
 
   #[test]
