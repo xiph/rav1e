@@ -135,6 +135,8 @@ tbl_8x32_2d: dw 0, 14, 43, 75, 107, 139, 171, 203
 
 tbl_16x32_2d: dw 0, 14, 44, 90, 151, 215, 279, 343
 
+tbl_32x16_2d: dw 0, 10, 36, 78
+
 tbl_Nx32_odd_offset: db 2*16, 2*23
                      db 2*20, 2*19
                      db 2*18, 2*21
@@ -3925,6 +3927,8 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova       [cq+1*64+r5], m1
     mova       [cq+2*64+r5], m2
     mova       [cq+3*64+r5], m3
+    pxor                 m0, m0
+    REPX {mova [cq+x*64+r5], m0}, 8, 9, 10, 11, 12, 13, 14, 15
     sub                 r5d, 16
     jge .loop_pass1
 
@@ -4127,25 +4131,18 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call m(idct_8x8_internal_16bpc).write_8x8
 %if ARCH_X86_64
     add                  r7, 16
+%define mzero m9
 %else
     add dword [rsp+2*gprsize+16*16], 16
-%endif
-    add                  cq, 64*4
-    dec                 r4d
-    jg .loop_pass2
-.zero:
-%if ARCH_X86_32
 %define mzero m7
     pxor                 m7, m7
-%else
-%define mzero m9
 %endif
-    REPX {mova [cq+x*16-64*8], mzero}, \
-                                  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, \
-                        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, \
-                        32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, \
-                        48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63
+    REPX {mova [cq+x*16], mzero}, 0, 1, 2, 3, 4, 5, 6, 7
+    add                  cq, 64*4
+    REPX {mova [cq+x*16], mzero}, -8, -7, -6, -5, -4, -3, -2, -1
 %undef mzero
+    dec                 r4d
+    jg .loop_pass2
 %if WIN64
     mov                  r7, [rsp+16*16+gprsize]
 %endif
@@ -4342,13 +4339,22 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     call m(idct_8x8_internal_16bpc).write_8x8
 %if ARCH_X86_64
     add                  r7, 16
+%define mzero m9
 %else
     add dword [rsp+2*gprsize+16*16], 16
+%define mzero m7
+    pxor                 m7, m7
 %endif
+    REPX {mova [cq+x*16], mzero}, 0, 1, 2, 3, 4, 5, 6, 7
     add                  cq, 64*4
+    REPX {mova [cq+x*16], mzero}, -8, -7, -6, -5, -4, -3, -2, -1
+%undef mzero
     dec                 r4d
     jg .loop_pass2
-    jmp m(idct_16x16_internal_16bpc).zero
+%if WIN64
+    mov                  r7, [rsp+16*16+gprsize]
+%endif
+    RET
 
 INV_TXFM_16X16_FN flipadst, dct
 INV_TXFM_16X16_FN flipadst, adst
@@ -4535,8 +4541,6 @@ cglobal iidentity_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     add                 r5d, 4
     jmp .pass2_loop
 .end:
-    REPX {mova [cq+x*16], m6}, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, \
-                        16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 %if WIN64
     mov                  r7, [rsp+16*16+gprsize]
 %endif
@@ -5283,10 +5287,11 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 16, 0-77*16, \
     add                 rsp, 32*16
     mova                 m0, [rsp+16* 3]
     call m(inv_txfm_add_dct_dct_8x32_16bpc).pass2
+%assign stack_size (stack_size-41*16)
 %if STACK_ALIGNMENT >= 16
 %assign stack_size_padded (stack_size_padded-41*16)
+%assign stack_offset (stack_offset-41*16)
 %else
-%assign stack_size (stack_size-41*16)
 %xdefine rstkm [rsp + stack_size]
 %endif
     RET
@@ -5988,6 +5993,7 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
     mov                 r3d, 8
     add                 r5d, 10240
     sar                 r5d, 14
+.dconly2:
     imul                r5d, 2896
     add                 r5d, 34816
     movd                 m0, r5d
@@ -6011,3 +6017,337 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
     dec                 r3d
     jg .dconly_loop
     RET
+
+cglobal inv_txfm_add_dct_dct_32x16_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
+                                         dst, stride, c, eob
+    LEA                  r6, base
+    test               eobd, eobd
+    jz .dconly
+
+    ; remove entirely-zero iterations
+%undef cmp
+    mov                 r5d, 8
+.zero_loop:
+    sub                 r5d, 2
+    cmp                eobw, word [o2(tbl_32x16_2d)+r5]
+    jl .zero_loop
+
+    ; actual first pass after skipping all-zero data
+.loop_pass1:
+%if ARCH_X86_64
+    mova                m11, [o(pd_2048)]
+    mova                m12, [o(clip_min)]
+    mova                m13, [o(clip_max)]
+    mova                m14, [o(pd_2896)]
+    pmulld               m0, m14, [cq+64* 1+r5*8]
+    pmulld               m1, m14, [cq+64* 7+r5*8]
+    pmulld               m2, m14, [cq+64* 9+r5*8]
+    pmulld               m3, m14, [cq+64*15+r5*8]
+    pmulld               m4, m14, [cq+64*17+r5*8]
+    pmulld               m5, m14, [cq+64*23+r5*8]
+    pmulld               m6, m14, [cq+64*25+r5*8]
+    pmulld               m7, m14, [cq+64*31+r5*8]
+    REPX     {paddd x, m11}, m0, m1, m2, m3, m4, m5, m6, m7
+%else
+    mova                 m7, [o(pd_2896)]
+    pmulld               m0, m7, [cq+64* 1+r5*8]
+    pmulld               m1, m7, [cq+64* 7+r5*8]
+    pmulld               m2, m7, [cq+64* 9+r5*8]
+    pmulld               m3, m7, [cq+64*15+r5*8]
+    pmulld               m4, m7, [cq+64*17+r5*8]
+    pmulld               m5, m7, [cq+64*23+r5*8]
+    pmulld               m6, m7, [cq+64*25+r5*8]
+    pmulld               m7, [cq+64*31+r5*8]
+    mova              [rsp], m7
+    mova                 m7, [o(pd_2048)]
+    REPX      {paddd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    paddd                m7, [rsp]
+%endif
+    REPX     {psrad x, 12 }, m0, m1, m2, m3, m4, m5, m6, m7
+    mov                  r3, rsp
+    call m(inv_txfm_add_dct_dct_32x8_16bpc).main_oddhalf_part1
+%if ARCH_X86_64
+    pmulld               m0, m14, [cq+64* 3+r5*8]
+    pmulld               m1, m14, [cq+64* 5+r5*8]
+    pmulld               m2, m14, [cq+64*11+r5*8]
+    pmulld               m3, m14, [cq+64*13+r5*8]
+    pmulld               m4, m14, [cq+64*19+r5*8]
+    pmulld               m5, m14, [cq+64*21+r5*8]
+    pmulld               m6, m14, [cq+64*27+r5*8]
+    pmulld               m7, m14, [cq+64*29+r5*8]
+    REPX     {paddd x, m11}, m0, m1, m2, m3, m4, m5, m6, m7
+%else
+    mova                 m7, [o(pd_2896)]
+    pmulld               m0, m7, [cq+64* 3+r5*8]
+    pmulld               m1, m7, [cq+64* 5+r5*8]
+    pmulld               m2, m7, [cq+64*11+r5*8]
+    pmulld               m3, m7, [cq+64*13+r5*8]
+    pmulld               m4, m7, [cq+64*19+r5*8]
+    pmulld               m5, m7, [cq+64*21+r5*8]
+    pmulld               m6, m7, [cq+64*27+r5*8]
+    pmulld               m7, [cq+64*29+r5*8]
+    mova         [rsp+16*8], m7
+    mova                 m7, [o(pd_2048)]
+    REPX      {paddd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    paddd                m7, [rsp+16*8]
+%endif
+    REPX     {psrad x, 12 }, m0, m1, m2, m3, m4, m5, m6, m7
+    call m(inv_txfm_add_dct_dct_32x8_16bpc).main_oddhalf_part2
+    add                  r3, 16*(16+4*ARCH_X86_32)
+%if ARCH_X86_64
+    pmulld               m0, m14, [cq+64* 2+r5*8]
+    pmulld               m1, m14, [cq+64* 6+r5*8]
+    pmulld               m2, m14, [cq+64*10+r5*8]
+    pmulld               m3, m14, [cq+64*14+r5*8]
+    pmulld               m4, m14, [cq+64*18+r5*8]
+    pmulld               m5, m14, [cq+64*22+r5*8]
+    pmulld               m6, m14, [cq+64*26+r5*8]
+    pmulld               m7, m14, [cq+64*30+r5*8]
+    REPX     {paddd x, m11}, m0, m1, m2, m3, m4, m5, m6, m7
+%else
+    mova                 m7, [o(pd_2896)]
+    pmulld               m0, m7, [cq+64* 2+r5*8]
+    pmulld               m1, m7, [cq+64* 6+r5*8]
+    pmulld               m2, m7, [cq+64*10+r5*8]
+    pmulld               m3, m7, [cq+64*14+r5*8]
+    pmulld               m4, m7, [cq+64*18+r5*8]
+    pmulld               m5, m7, [cq+64*22+r5*8]
+    pmulld               m6, m7, [cq+64*26+r5*8]
+    pmulld               m7, [cq+64*30+r5*8]
+    mova        [rsp+16*16], m7
+    mova                 m7, [o(pd_2048)]
+    REPX      {paddd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    paddd                m7, [rsp+16*16]
+%endif
+    REPX     {psrad x, 12 }, m0, m1, m2, m3, m4, m5, m6, m7
+    call m(idct_16x4_internal_16bpc).main_oddhalf
+%if ARCH_X86_64
+    pmulld               m0, m14, [cq+64* 0+r5*8]
+    pmulld               m1, m14, [cq+64* 4+r5*8]
+    pmulld               m2, m14, [cq+64* 8+r5*8]
+    pmulld               m3, m14, [cq+64*12+r5*8]
+    pmulld               m4, m14, [cq+64*16+r5*8]
+    pmulld               m5, m14, [cq+64*20+r5*8]
+    pmulld               m6, m14, [cq+64*24+r5*8]
+    pmulld               m7, m14, [cq+64*28+r5*8]
+    REPX     {paddd x, m11}, m0, m1, m2, m3, m4, m5, m6, m7
+%else
+    mova                 m7, [o(pd_2896)]
+    pmulld               m0, m7, [cq+64* 0+r5*8]
+    pmulld               m1, m7, [cq+64* 4+r5*8]
+    pmulld               m2, m7, [cq+64* 8+r5*8]
+    pmulld               m3, m7, [cq+64*12+r5*8]
+    pmulld               m4, m7, [cq+64*16+r5*8]
+    pmulld               m5, m7, [cq+64*20+r5*8]
+    pmulld               m6, m7, [cq+64*24+r5*8]
+    pmulld               m7, [cq+64*28+r5*8]
+    mova        [rsp+16*16], m7
+    mova                 m7, [o(pd_2048)]
+    REPX      {paddd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    paddd                m7, [rsp+16*16]
+%endif
+    REPX     {psrad x, 12 }, m0, m1, m2, m3, m4, m5, m6, m7
+    call m(idct_8x4_internal_16bpc).main_pass1
+    call m(idct_8x4_internal_16bpc).round
+    sub                  r3, 16*(16+4*ARCH_X86_32)
+    call .round_dct32
+%if ARCH_X86_64
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    call m(idct_16x4_internal_16bpc).transpose4x8packed_hi
+    mova    [cq+64* 8+r5*8], m8
+    mova    [cq+64* 9+r5*8], m9
+    mova    [cq+64*10+r5*8], m10
+    mova    [cq+64*11+r5*8], m11
+    mova                 m8, [r3+16* 9] ;  8  9
+    mova                m10, [r3+16*11] ; 10 11
+    mova                m12, [r3+16*13] ; 12 13
+    mova                m14, [r3+16*15] ; 14 15
+    call m(idct_16x4_internal_16bpc).transpose4x8packed_hi
+    mova    [cq+64* 4+r5*8], m8
+    mova    [cq+64* 5+r5*8], m9
+    mova    [cq+64* 6+r5*8], m10
+    mova    [cq+64* 7+r5*8], m11
+    mova                 m8, [r3+16* 8] ; 24 25
+    mova                m10, [r3+16*10] ; 26 27
+    mova                m12, [r3+16*12] ; 28 29
+    mova                m14, [r3+16*14] ; 30 31
+    call m(idct_16x4_internal_16bpc).transpose4x8packed_hi
+    mova    [cq+64*12+r5*8], m8
+    mova    [cq+64*13+r5*8], m9
+    mova    [cq+64*14+r5*8], m10
+    mova    [cq+64*15+r5*8], m11
+%else
+    sub                  r3, 8*16
+    mova                 m0, [r3+ 8*16]
+    mova                 m2, [r3+10*16]
+    mova                 m4, [r3+12*16]
+    mova                 m6, [r3+14*16]
+    packssdw             m0, [r3+ 9*16]
+    packssdw             m2, [r3+11*16]
+    packssdw             m4, [r3+13*16]
+    packssdw             m6, [r3+15*16]
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova    [cq+64* 4+r5*8], m0
+    mova    [cq+64* 5+r5*8], m1
+    mova    [cq+64* 6+r5*8], m2
+    mova    [cq+64* 7+r5*8], m3
+    mova                 m0, [r3+16*16]
+    mova                 m2, [r3+18*16]
+    mova                 m4, [r3+20*16]
+    mova                 m6, [r3+22*16]
+    packssdw             m0, [r3+17*16]
+    packssdw             m2, [r3+19*16]
+    packssdw             m4, [r3+21*16]
+    packssdw             m6, [r3+23*16]
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova    [cq+64* 8+r5*8], m0
+    mova    [cq+64* 9+r5*8], m1
+    mova    [cq+64*10+r5*8], m2
+    mova    [cq+64*11+r5*8], m3
+    mova                 m0, [r3+31*16]
+    mova                 m2, [r3+29*16]
+    mova                 m4, [r3+27*16]
+    mova                 m6, [r3+25*16]
+    packssdw             m0, [r3+30*16]
+    packssdw             m2, [r3+28*16]
+    packssdw             m4, [r3+26*16]
+    packssdw             m6, [r3+24*16]
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova    [cq+64*12+r5*8], m0
+    mova    [cq+64*13+r5*8], m1
+    mova    [cq+64*14+r5*8], m2
+    mova    [cq+64*15+r5*8], m3
+    mova                 m0, [r3+ 0*16]
+    mova                 m2, [r3+ 2*16]
+    mova                 m4, [r3+ 4*16]
+    mova                 m6, [r3+ 6*16]
+    packssdw             m0, [r3+ 1*16]
+    packssdw             m2, [r3+ 3*16]
+    packssdw             m4, [r3+ 5*16]
+    packssdw             m6, [r3+ 7*16]
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+%endif
+    mova    [cq+64* 0+r5*8], m0
+    mova    [cq+64* 1+r5*8], m1
+    mova    [cq+64* 2+r5*8], m2
+    mova    [cq+64* 3+r5*8], m3
+    pxor                 m0, m0
+    REPX {mova [cq+x*64+r5*8], m0}, 16, 17, 18, 19, 20, 21, 22, 23, \
+                                    24, 25, 26, 27, 28, 29, 30, 31
+    sub                 r5d, 2
+    jge .loop_pass1
+
+    ; pass=2, we need to call this otherwise the stack pointer has
+    ; the wrong offset in the 8-bit code
+    call .pass2
+    RET
+
+.pass2:
+%if ARCH_X86_64
+    mova                 m8, [o(pw_2048)]
+    pxor                 m9, m9
+    mova                m10, [o(pixel_10bpc_max)]
+%if WIN64
+    mov [rsp+16*16+gprsize], r7
+%endif
+    mov                  r7, dstq
+%else
+    mov [rsp+2*gprsize+16*16], dstq
+%endif
+    lea                  r3, [strideq*3]
+    mov                 r4d, 4
+    jmp m(idct_16x16_internal_16bpc).loop_pass2
+
+.round_dct32:
+%if ARCH_X86_64
+    psrld               m11, 11 ; pd_1
+    IDCT32_END            0, 15, 8, 9, 10, 1    ; 0 15 16 31
+    mova         [r3+ 0*16], m6
+    mova         [r3+23*16], m7
+    IDCT32_END            1, 14, 6, 7, 10, 1    ; 1 14 17 30
+    packssdw             m0, m1       ;  0  1
+    packssdw            m14, m15      ; 14 15
+    packssdw             m8, m6       ; 16 17
+    packssdw             m7, m9       ; 30 31
+    mova         [r3+16*15], m14
+    mova         [r3+16*14], m7
+    IDCT32_END            2, 15, 10, 7, 6, 1    ; 2 13 18 29
+    IDCT32_END            3, 14,  1, 9, 6, 1    ; 3 12 19 28
+    packssdw             m2, m3       ;  2  3
+    packssdw            m14, m15      ; 12 13
+    packssdw            m10, m1       ; 18 19
+    packssdw             m9, m7       ; 28 29
+    mova         [r3+16*13], m14
+    mova         [r3+16*12], m9
+    IDCT32_END            4, 15, 1, 7, 6, 1     ; 4 11 20 27
+    IDCT32_END            5, 14, 3, 9, 6, 1     ; 5 10 21 26
+    packssdw             m4, m5       ;  4  5
+    packssdw            m14, m15      ; 10 11
+    packssdw             m1, m3       ; 20 21
+    packssdw             m9, m7       ; 26 27
+    mova         [r3+16*11], m14
+    mova         [r3+16*10], m9
+    mova                 m6, [r3+ 0*16]
+    mova                 m7, [r3+23*16]
+    IDCT32_END            6, 15, 14, 5,  3, 1   ; 6 9 22 25
+    IDCT32_END            7, 11,  3, 9, 13, 1   ; 7 8 23 24
+    packssdw             m6, m7       ;  6  7
+    packssdw            m11, m15      ;  8  9
+    packssdw            m14, m3       ; 22 23
+    packssdw             m9, m5       ; 24 25
+    mova          [r3+16*9], m11
+    mova          [r3+16*8], m9
+    mova                m12, m1
+    ret
+%else
+    mova         [r3+16*16], m0
+    mova         [r3+17*16], m1
+    mova         [r3+18*16], m2
+    mova         [r3+19*16], m3
+    mova         [r3+20*16], m4
+    mova         [r3+21*16], m5
+    mova         [r3+22*16], m6
+    mova         [r3+23*16], m7
+    pcmpeqd              m1, m1     ; -1
+    mova                 m2, [o(clip_min)]
+    mova                 m3, [o(clip_max)]
+
+    mov                  r4, 15*16
+.loop_dct32_end:
+    mova                 m0, [r3+16*16]
+    mova                 m6, [r3+16*24]
+    psubd                m5, m0, m6 ; idct16 out15 - n
+    paddd                m0, m6     ; idct16 out0  + n
+    pmaxsd               m0, m2
+    pmaxsd               m5, m2
+    pminsd               m0, m3
+    pminsd               m5, m3
+    psubd                m0, m1
+    psubd                m5, m1
+    mova                 m7, [r3]
+    mova                 m4, [r3+r4]
+    psubd                m6, m0, m4 ; out31 - n
+    paddd                m0, m4     ; out0  + n
+    paddd                m4, m5, m7 ; out15 - n
+    psubd                m5, m7     ; out16 + n
+    REPX       {psrad x, 1}, m0, m5, m4, m6
+    mova               [r3], m0
+    mova            [r3+r4], m4
+    mova         [r3+16*16], m5
+    mova         [r3+24*16], m6
+    add                  r3, 16
+    sub                  r4, 32
+    jg .loop_dct32_end
+    ret
+%endif
+
+.dconly:
+    imul                r5d, [cq], 2896
+    mov                [cq], eobd ; 0
+    mov                 r3d, 16
+    add                 r5d, 2048
+    sar                 r5d, 12
+    imul                r5d, 2896
+    add                 r5d, 6144
+    sar                 r5d, 13
+    jmp m(inv_txfm_add_dct_dct_32x8_16bpc).dconly2
