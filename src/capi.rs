@@ -209,14 +209,11 @@ impl EncContext {
     ) -> Result<Packet, rav1e::EncoderStatus> {
       ctx.receive_packet().map(|p| {
         let mut p = std::mem::ManuallyDrop::new(p);
-        let opaque = p.opaque.take().map_or_else(
-          || std::ptr::null_mut(),
-          |o| {
-            let mut opaque = o.downcast::<FrameOpaque>().unwrap();
-            opaque.cb = None;
-            opaque.opaque
-          },
-        );
+        let opaque = p.opaque.take().map_or_else(std::ptr::null_mut, |o| {
+          let mut opaque = o.downcast::<FrameOpaque>().unwrap();
+          opaque.cb = None;
+          opaque.opaque
+        });
         let p = std::mem::ManuallyDrop::into_inner(p);
         let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
         let len = data.len();
@@ -754,7 +751,7 @@ pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
   let frame_type = rav1e::FrameTypeOverride::No;
   let f = Frame { fi, frame_type, opaque: None };
-  let frame = Box::new(f.into());
+  let frame = Box::new(f);
 
   Box::into_raw(frame)
 }
@@ -952,7 +949,7 @@ pub unsafe extern fn rav1e_rc_send_pass_data(
     .ctx
     .rc_send_pass_data(maybe_buf.unwrap())
     .map(|_v| None)
-    .unwrap_or_else(|e| Some(e));
+    .unwrap_or_else(Some);
 
   (*ctx).last_err = ret;
 
@@ -1025,14 +1022,14 @@ pub unsafe extern fn rav1e_send_frame(
   let maybe_opaque = if frame.is_null() {
     None
   } else {
-    (*frame).opaque.take().map(|o| rav1e::Opaque::new(o))
+    (*frame).opaque.take().map(rav1e::Opaque::new)
   };
 
   let ret = (*ctx)
     .ctx
     .send_frame(frame_internal, frame_type, maybe_opaque)
     .map(|_v| None)
-    .unwrap_or_else(|e| Some(e));
+    .unwrap_or_else(Some);
 
   (*ctx).last_err = ret;
 
@@ -1075,7 +1072,7 @@ pub unsafe extern fn rav1e_receive_packet(
       *pkt = Box::into_raw(Box::new(packet));
       None
     })
-    .unwrap_or_else(|e| Some(e));
+    .unwrap_or_else(Some);
 
   (*ctx).last_err = ret;
 

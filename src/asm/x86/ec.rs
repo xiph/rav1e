@@ -106,7 +106,7 @@ mod test {
     }
 
     let mut cdf = [7297, 3820, 1617, 0];
-    let mut cdf2 = cdf.clone();
+    let mut cdf2 = cdf;
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
       unsafe {

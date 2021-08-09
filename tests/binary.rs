@@ -6,7 +6,7 @@ mod binary {
   use std::env::temp_dir;
   use std::fs::File;
   use std::io::Read;
-  use std::path::PathBuf;
+  use std::path::{Path, PathBuf};
 
   fn get_y4m_input() -> Vec<u8> {
     let mut input = File::open(&format!(
@@ -43,7 +43,7 @@ mod binary {
     Command::cargo_bin("rav1e").unwrap()
   }
 
-  fn get_common_cmd(outfile: &PathBuf) -> Command {
+  fn get_common_cmd(outfile: &Path) -> Command {
     let mut cmd = get_rav1e_command();
     cmd.args(&["--bitrate", "1000"]).arg("-o").arg(outfile).arg("-y");
     cmd

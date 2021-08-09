@@ -495,9 +495,9 @@ mod test {
             let bsize = BlockSize::[<BLOCK_ $W X $H>];
             if $BD > 8 {
               // dynamic allocation: test
-              let mut src = Plane::from_slice(&vec![0u16; $W * $H], $W);
+              let mut src = Plane::from_slice(&[0u16; $W * $H], $W);
               // dynamic allocation: test
-              let mut dst = Plane::from_slice(&vec![0u16; $W * $H], $W);
+              let mut dst = Plane::from_slice(&[0u16; $W * $H], $W);
               for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
                 *s = random::<u8>() as u16 * $BD / 8;
                 *d = random::<u8>() as u16 * $BD / 8;
@@ -508,9 +508,9 @@ mod test {
               assert_eq!(rust_result, result);
             } else {
               // dynamic allocation: test
-              let mut src = Plane::from_slice(&vec![0u8; $W * $H], $W);
+              let mut src = Plane::from_slice(&[0u8; $W * $H], $W);
               // dynamic allocation: test
-              let mut dst = Plane::from_slice(&vec![0u8; $W * $H], $W);
+              let mut dst = Plane::from_slice(&[0u8; $W * $H], $W);
               for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
                 *s = random::<u8>();
                 *d = random::<u8>();

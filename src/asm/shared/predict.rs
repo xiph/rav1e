@@ -71,7 +71,7 @@ mod test {
       };
       for angle in angles {
         let expected = {
-          let mut plane = Plane::from_slice(&vec![0u8; 4 * 4], 4);
+          let mut plane = Plane::from_slice(&[0u8; 4 * 4], 4);
           rust::dispatch_predict_intra(
             *mode,
             *variant,
@@ -91,7 +91,7 @@ mod test {
           data
         };
 
-        let mut output = Plane::from_slice(&vec![0u8; 4 * 4], 4);
+        let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
         dispatch_predict_intra(
           *mode,
           *variant,
