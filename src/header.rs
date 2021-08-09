@@ -307,138 +307,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_sequence_header<T: Pixel>(
-    &mut self, fi: &FrameInvariants<T>,
-  ) -> io::Result<()> {
-    self.write_max_frame_size(fi)?;
-
-    let seq = &fi.sequence;
-
-    if seq.reduced_still_picture_hdr {
-      assert!(!seq.frame_id_numbers_present_flag);
-    } else {
-      self.write_bit(seq.frame_id_numbers_present_flag)?;
-    }
-
-    if seq.frame_id_numbers_present_flag {
-      // We must always have delta_frame_id_length < frame_id_length,
-      // in order for a frame to be referenced with a unique delta.
-      // Avoid wasting bits by using a coding that enforces this restriction.
-      self.write(4, seq.delta_frame_id_length - 2)?;
-      self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
-    }
-
-    self.write_bit(seq.use_128x128_superblock)?;
-    self.write_bit(seq.enable_filter_intra)?;
-    self.write_bit(seq.enable_intra_edge_filter)?;
-
-    if seq.reduced_still_picture_hdr {
-      assert!(!seq.enable_interintra_compound);
-      assert!(!seq.enable_masked_compound);
-      assert!(!seq.enable_warped_motion);
-      assert!(!seq.enable_dual_filter);
-      assert!(!seq.enable_order_hint);
-      assert!(!seq.enable_jnt_comp);
-      assert!(!seq.enable_ref_frame_mvs);
-      assert!(seq.force_screen_content_tools == 2);
-      assert!(seq.force_integer_mv == 2);
-    } else {
-      self.write_bit(seq.enable_interintra_compound)?;
-      self.write_bit(seq.enable_masked_compound)?;
-      self.write_bit(seq.enable_warped_motion)?;
-      self.write_bit(seq.enable_dual_filter)?;
-      self.write_bit(seq.enable_order_hint)?;
-
-      if seq.enable_order_hint {
-        self.write_bit(seq.enable_jnt_comp)?;
-        self.write_bit(seq.enable_ref_frame_mvs)?;
-      }
-
-      if seq.force_screen_content_tools == 2 {
-        self.write_bit(true)?;
-      } else {
-        self.write_bit(false)?;
-        self.write_bit(seq.force_screen_content_tools != 0)?;
-      }
-      if seq.force_screen_content_tools > 0 {
-        if seq.force_integer_mv == 2 {
-          self.write_bit(true)?;
-        } else {
-          self.write_bit(false)?;
-          self.write_bit(seq.force_integer_mv != 0)?;
-        }
-      } else {
-        assert!(seq.force_integer_mv == 2);
-      }
-      if seq.enable_order_hint {
-        self.write(3, seq.order_hint_bits_minus_1)?;
-      }
-    }
-
-    self.write_bit(seq.enable_superres)?;
-    self.write_bit(seq.enable_cdef)?;
-    self.write_bit(seq.enable_restoration)?;
-
-    Ok(())
-  }
-
-  // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
-  fn write_color_config(&mut self, seq: &Sequence) -> io::Result<()> {
-    let high_bitdepth = seq.bit_depth > 8;
-    self.write_bit(high_bitdepth)?;
-    if seq.profile == 2 && high_bitdepth {
-      self.write_bit(seq.bit_depth == 12)?; // twelve_bit
-    }
-
-    let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
-    if seq.profile == 1 {
-      assert!(!monochrome);
-    } else {
-      self.write_bit(monochrome)?; // mono_chrome
-    }
-
-    // color_description_present_flag
-    self.write_bit(seq.color_description.is_some())?;
-    let mut srgb_triple = false;
-    if let Some(color_description) = seq.color_description {
-      self.write(8, color_description.color_primaries as u8)?;
-      self.write(8, color_description.transfer_characteristics as u8)?;
-      self.write(8, color_description.matrix_coefficients as u8)?;
-      srgb_triple = color_description.is_srgb_triple();
-    }
-
-    if monochrome || !srgb_triple {
-      self.write_bit(seq.pixel_range == PixelRange::Full)?; // color_range
-    }
-    if monochrome {
-      return Ok(());
-    } else if srgb_triple {
-      assert!(seq.pixel_range == PixelRange::Full);
-      assert!(seq.chroma_sampling == ChromaSampling::Cs444);
-    } else {
-      if seq.profile == 0 {
-        assert!(seq.chroma_sampling == ChromaSampling::Cs420);
-      } else if seq.profile == 1 {
-        assert!(seq.chroma_sampling == ChromaSampling::Cs444);
-      } else if seq.bit_depth == 12 {
-        let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
-        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
-        self.write_bit(subsampling_x)?;
-        if subsampling_x {
-          self.write_bit(subsampling_y)?;
-        }
-      } else {
-        assert!(seq.chroma_sampling == ChromaSampling::Cs422);
-      }
-      if seq.chroma_sampling == ChromaSampling::Cs420 {
-        self.write(2, seq.chroma_sample_position as u32)?;
-      }
-    }
-    self.write_bit(true)?; // separate_uv_delta_q
-
-    Ok(())
-  }
-
   #[allow(unused)]
   fn write_frame_header_obu<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>, fs: &FrameState<T>,
@@ -570,9 +438,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
     };
 
-    if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
+    if !fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK {
       // Write all ref frame order hints if error_resilient_mode == 1
-      if (fi.error_resilient && fi.sequence.enable_order_hint) {
+      if fi.error_resilient && fi.sequence.enable_order_hint {
         for i in 0..REF_FRAMES {
           let n = fi.sequence.order_hint_bits_minus_1 + 1;
           let mask = (1 << n) - 1;
@@ -633,7 +501,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
       self.write_bit(fi.is_motion_mode_switchable)?;
 
-      if (!fi.error_resilient && fi.sequence.enable_ref_frame_mvs) {
+      if !fi.error_resilient && fi.sequence.enable_ref_frame_mvs {
         self.write_bit(fi.use_ref_frame_mvs)?;
       }
     }
@@ -829,6 +697,138 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       unimplemented!();
     }
     self.byte_align()?;
+
+    Ok(())
+  }
+
+  fn write_sequence_header<T: Pixel>(
+    &mut self, fi: &FrameInvariants<T>,
+  ) -> io::Result<()> {
+    self.write_max_frame_size(fi)?;
+
+    let seq = &fi.sequence;
+
+    if seq.reduced_still_picture_hdr {
+      assert!(!seq.frame_id_numbers_present_flag);
+    } else {
+      self.write_bit(seq.frame_id_numbers_present_flag)?;
+    }
+
+    if seq.frame_id_numbers_present_flag {
+      // We must always have delta_frame_id_length < frame_id_length,
+      // in order for a frame to be referenced with a unique delta.
+      // Avoid wasting bits by using a coding that enforces this restriction.
+      self.write(4, seq.delta_frame_id_length - 2)?;
+      self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
+    }
+
+    self.write_bit(seq.use_128x128_superblock)?;
+    self.write_bit(seq.enable_filter_intra)?;
+    self.write_bit(seq.enable_intra_edge_filter)?;
+
+    if seq.reduced_still_picture_hdr {
+      assert!(!seq.enable_interintra_compound);
+      assert!(!seq.enable_masked_compound);
+      assert!(!seq.enable_warped_motion);
+      assert!(!seq.enable_dual_filter);
+      assert!(!seq.enable_order_hint);
+      assert!(!seq.enable_jnt_comp);
+      assert!(!seq.enable_ref_frame_mvs);
+      assert_eq!(seq.force_screen_content_tools, 2);
+      assert_eq!(seq.force_integer_mv, 2);
+    } else {
+      self.write_bit(seq.enable_interintra_compound)?;
+      self.write_bit(seq.enable_masked_compound)?;
+      self.write_bit(seq.enable_warped_motion)?;
+      self.write_bit(seq.enable_dual_filter)?;
+      self.write_bit(seq.enable_order_hint)?;
+
+      if seq.enable_order_hint {
+        self.write_bit(seq.enable_jnt_comp)?;
+        self.write_bit(seq.enable_ref_frame_mvs)?;
+      }
+
+      if seq.force_screen_content_tools == 2 {
+        self.write_bit(true)?;
+      } else {
+        self.write_bit(false)?;
+        self.write_bit(seq.force_screen_content_tools != 0)?;
+      }
+      if seq.force_screen_content_tools > 0 {
+        if seq.force_integer_mv == 2 {
+          self.write_bit(true)?;
+        } else {
+          self.write_bit(false)?;
+          self.write_bit(seq.force_integer_mv != 0)?;
+        }
+      } else {
+        assert_eq!(seq.force_integer_mv, 2);
+      }
+      if seq.enable_order_hint {
+        self.write(3, seq.order_hint_bits_minus_1)?;
+      }
+    }
+
+    self.write_bit(seq.enable_superres)?;
+    self.write_bit(seq.enable_cdef)?;
+    self.write_bit(seq.enable_restoration)?;
+
+    Ok(())
+  }
+
+  // <https://aomediacodec.github.io/av1-spec/#color-config-syntax>
+  fn write_color_config(&mut self, seq: &Sequence) -> io::Result<()> {
+    let high_bitdepth = seq.bit_depth > 8;
+    self.write_bit(high_bitdepth)?;
+    if seq.profile == 2 && high_bitdepth {
+      self.write_bit(seq.bit_depth == 12)?; // twelve_bit
+    }
+
+    let monochrome = seq.chroma_sampling == ChromaSampling::Cs400;
+    if seq.profile == 1 {
+      assert!(!monochrome);
+    } else {
+      self.write_bit(monochrome)?; // mono_chrome
+    }
+
+    // color_description_present_flag
+    self.write_bit(seq.color_description.is_some())?;
+    let mut srgb_triple = false;
+    if let Some(color_description) = seq.color_description {
+      self.write(8, color_description.color_primaries as u8)?;
+      self.write(8, color_description.transfer_characteristics as u8)?;
+      self.write(8, color_description.matrix_coefficients as u8)?;
+      srgb_triple = color_description.is_srgb_triple();
+    }
+
+    if monochrome || !srgb_triple {
+      self.write_bit(seq.pixel_range == PixelRange::Full)?; // color_range
+    }
+    if monochrome {
+      return Ok(());
+    } else if srgb_triple {
+      assert_eq!(seq.pixel_range, PixelRange::Full);
+      assert_eq!(seq.chroma_sampling, ChromaSampling::Cs444);
+    } else {
+      if seq.profile == 0 {
+        assert_eq!(seq.chroma_sampling, ChromaSampling::Cs420);
+      } else if seq.profile == 1 {
+        assert_eq!(seq.chroma_sampling, ChromaSampling::Cs444);
+      } else if seq.bit_depth == 12 {
+        let subsampling_x = seq.chroma_sampling != ChromaSampling::Cs444;
+        let subsampling_y = seq.chroma_sampling == ChromaSampling::Cs420;
+        self.write_bit(subsampling_x)?;
+        if subsampling_x {
+          self.write_bit(subsampling_y)?;
+        }
+      } else {
+        assert_eq!(seq.chroma_sampling, ChromaSampling::Cs422);
+      }
+      if seq.chroma_sampling == ChromaSampling::Cs420 {
+        self.write(2, seq.chroma_sample_position as u32)?;
+      }
+    }
+    self.write_bit(true)?; // separate_uv_delta_q
 
     Ok(())
   }

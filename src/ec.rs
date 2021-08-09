@@ -487,33 +487,6 @@ impl<S> Writer for WriterBase<S>
 where
   WriterBase<S>: StorageBackend,
 {
-  /// Encode a single binary value.
-  /// `val`: The value to encode (0 or 1).
-  /// `f`: The probability that the val is one, scaled by 32768.
-  fn bool(&mut self, val: bool, f: u16) {
-    debug_assert!(0 < f);
-    debug_assert!(f < 32768);
-    self.symbol(if val { 1 } else { 0 }, &[f, 0]);
-  }
-  /// Encode a single boolean value.
-  /// `val`: The value to encode (false or true).
-  /// `f`: The probability that the val is true, scaled by 32768.
-  fn bit(&mut self, bit: u16) {
-    self.bool(bit == 1, 16384);
-  }
-  // fake add bits
-  fn add_bits_frac(&mut self, bits_frac: u32) {
-    self.fake_bits_frac += bits_frac
-  }
-  /// Encode a literal bitstring, bit by bit in MSB order, with flat
-  /// probability.
-  /// 'bits': Length of bitstring
-  /// 's': Bit string to encode
-  fn literal(&mut self, bits: u8, s: u32) {
-    for bit in (0..bits).rev() {
-      self.bit((1 & (s >> bit)) as u16);
-    }
-  }
   /// Encodes a symbol given a cumulative distribution function (CDF) table in Q15.
   /// `s`: The index of the symbol to encode.
   /// `cdf`: The CDF, such that symbol s falls in the range
@@ -533,29 +506,6 @@ where
     debug_assert!((fh >> EC_PROB_SHIFT) <= (fl >> EC_PROB_SHIFT));
     debug_assert!(fl <= 32768);
     self.store(fl, fh, nms as u16);
-  }
-  /// Encodes a symbol given a cumulative distribution function (CDF)
-  /// table in Q15, then updates the CDF probabilities to relect we've
-  /// written one more symbol 's'.
-  /// `s`: The index of the symbol to encode.
-  /// `cdf`: The CDF, such that symbol s falls in the range
-  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
-  ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be greater 32704. There should be at most 16 values.
-  ///       The lower 6 bits of the last value hold the count.
-  fn symbol_with_update<const CDF_LEN: usize>(
-    &mut self, s: u32, cdf: &mut [u16; CDF_LEN], log: &mut CDFContextLog,
-  ) {
-    #[cfg(feature = "desync_finder")]
-    {
-      if self.debug {
-        self.print_backtrace(s);
-      }
-    }
-    log.push(cdf);
-    self.symbol(s, cdf);
-
-    update_cdf(cdf, s);
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
@@ -598,6 +548,52 @@ where
     }
     // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
     Self::frac_compute((bits + sh + 9) as u32, r << d) - pre
+  }
+  /// Encodes a symbol given a cumulative distribution function (CDF)
+  /// table in Q15, then updates the CDF probabilities to relect we've
+  /// written one more symbol 's'.
+  /// `s`: The index of the symbol to encode.
+  /// `cdf`: The CDF, such that symbol s falls in the range
+  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
+  ///       The values must be monotonically non-decreasing, and the last value
+  ///       must be greater 32704. There should be at most 16 values.
+  ///       The lower 6 bits of the last value hold the count.
+  fn symbol_with_update<const CDF_LEN: usize>(
+    &mut self, s: u32, cdf: &mut [u16; CDF_LEN], log: &mut CDFContextLog,
+  ) {
+    #[cfg(feature = "desync_finder")]
+    {
+      if self.debug {
+        self.print_backtrace(s);
+      }
+    }
+    log.push(cdf);
+    self.symbol(s, cdf);
+
+    update_cdf(cdf, s);
+  }
+  /// Encode a single binary value.
+  /// `val`: The value to encode (0 or 1).
+  /// `f`: The probability that the val is one, scaled by 32768.
+  fn bool(&mut self, val: bool, f: u16) {
+    debug_assert!(0 < f);
+    debug_assert!(f < 32768);
+    self.symbol(if val { 1 } else { 0 }, &[f, 0]);
+  }
+  /// Encode a single boolean value.
+  /// `val`: The value to encode (false or true).
+  /// `f`: The probability that the val is true, scaled by 32768.
+  fn bit(&mut self, bit: u16) {
+    self.bool(bit == 1, 16384);
+  }
+  /// Encode a literal bitstring, bit by bit in MSB order, with flat
+  /// probability.
+  /// 'bits': Length of bitstring
+  /// 's': Bit string to encode
+  fn literal(&mut self, bits: u8, s: u32) {
+    for bit in (0..bits).rev() {
+      self.bit((1 & (s >> bit)) as u16);
+    }
   }
   /// Encode a golomb to the bitstream.
   /// 'level': passed in value to encode
@@ -791,6 +787,10 @@ where
   /// 'wc': Saved Writer state/posiiton to restore
   fn rollback(&mut self, wc: &WriterCheckpoint) {
     StorageBackend::rollback(self, wc)
+  }
+  // fake add bits
+  fn add_bits_frac(&mut self, bits_frac: u32) {
+    self.fake_bits_frac += bits_frac
   }
 }
 

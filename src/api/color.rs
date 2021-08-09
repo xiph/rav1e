@@ -177,7 +177,7 @@ impl Default for MatrixCoefficients {
 pub struct ColorDescription {
   /// Color primaries.
   pub color_primaries: ColorPrimaries,
-  /// Transfer charasteristics.
+  /// Transfer characteristics.
   pub transfer_characteristics: TransferCharacteristics,
   /// Matrix coefficients.
   pub matrix_coefficients: MatrixCoefficients,

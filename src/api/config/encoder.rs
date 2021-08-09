@@ -17,9 +17,9 @@ use crate::serialize::{Deserialize, Serialize};
 use std::fmt;
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
-pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
+pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::MAX - 1;
 // Due to the math in RCState::new() regarding the reservoir frame delay.
-pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
+pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::MAX as u64 / 3;
 
 /// Encoder settings which impact the produced bitstream.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

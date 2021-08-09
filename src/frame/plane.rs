@@ -21,14 +21,13 @@ pub trait AsRegion<T: Pixel> {
 
 impl<T: Pixel> AsRegion<T> for Plane<T> {
   #[inline(always)]
-  fn region(&self, area: Area) -> PlaneRegion<'_, T> {
-    let rect = area.to_rect(
-      self.cfg.xdec,
-      self.cfg.ydec,
-      self.cfg.stride - self.cfg.xorigin as usize,
-      self.cfg.alloc_height - self.cfg.yorigin as usize,
-    );
-    PlaneRegion::new(self, rect)
+  fn as_region(&self) -> PlaneRegion<'_, T> {
+    self.region(Area::StartingAt { x: 0, y: 0 })
+  }
+
+  #[inline(always)]
+  fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
+    self.region_mut(Area::StartingAt { x: 0, y: 0 })
   }
 
   #[inline(always)]
@@ -43,12 +42,13 @@ impl<T: Pixel> AsRegion<T> for Plane<T> {
   }
 
   #[inline(always)]
-  fn as_region(&self) -> PlaneRegion<'_, T> {
-    self.region(Area::StartingAt { x: 0, y: 0 })
-  }
-
-  #[inline(always)]
-  fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
-    self.region_mut(Area::StartingAt { x: 0, y: 0 })
+  fn region(&self, area: Area) -> PlaneRegion<'_, T> {
+    let rect = area.to_rect(
+      self.cfg.xdec,
+      self.cfg.ydec,
+      self.cfg.stride - self.cfg.xorigin as usize,
+      self.cfg.alloc_height - self.cfg.yorigin as usize,
+    );
+    PlaneRegion::new(self, rect)
   }
 }

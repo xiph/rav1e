@@ -100,7 +100,7 @@ mod channel {
   #[interpolate_test(reorder_no_scene_change, false, true)]
   #[interpolate_test(low_latency_scene_change_detection, true, false)]
   #[interpolate_test(reorder_scene_change_detection, false, false)]
-  fn flush(low_lantency: bool, no_scene_detection: bool) {
+  fn flush(low_latency: bool, no_scene_detection: bool) {
     let cfg = setup_config(
       64,
       80,
@@ -111,7 +111,7 @@ mod channel {
       150,
       200,
       0,
-      low_lantency,
+      low_latency,
       0,
       no_scene_detection,
       10,
@@ -149,7 +149,7 @@ mod channel {
 #[interpolate_test(reorder_no_scene_change, false, true)]
 #[interpolate_test(low_latency_scene_change_detection, true, false)]
 #[interpolate_test(reorder_scene_change_detection, false, false)]
-fn flush(low_lantency: bool, no_scene_detection: bool) {
+fn flush(low_latency: bool, no_scene_detection: bool) {
   let mut ctx = setup_encoder::<u8>(
     64,
     80,
@@ -160,7 +160,7 @@ fn flush(low_lantency: bool, no_scene_detection: bool) {
     150,
     200,
     0,
-    low_lantency,
+    low_latency,
     0,
     no_scene_detection,
     10,
@@ -204,7 +204,7 @@ fn flush(low_lantency: bool, no_scene_detection: bool) {
 #[interpolate_test(reorder_no_scene_change, false, true)]
 #[interpolate_test(low_latency_scene_change_detection, true, false)]
 #[interpolate_test(reorder_scene_change_detection, false, false)]
-fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
+fn flush_unlimited(low_latency: bool, no_scene_detection: bool) {
   let mut ctx = setup_encoder::<u8>(
     64,
     80,
@@ -215,7 +215,7 @@ fn flush_unlimited(low_lantency: bool, no_scene_detection: bool) {
     150,
     200,
     0,
-    low_lantency,
+    low_latency,
     0,
     no_scene_detection,
     10,
@@ -1367,9 +1367,9 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   let limit = 5;
   for i in 0..limit {
     if i == flash_at {
-      send_test_frame(&mut ctx, u8::min_value());
+      send_test_frame(&mut ctx, u8::MIN);
     } else {
-      send_test_frame(&mut ctx, u8::max_value());
+      send_test_frame(&mut ctx, u8::MAX);
     }
   }
   ctx.flush();
@@ -1419,14 +1419,14 @@ fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1479,18 +1479,18 @@ fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1545,8 +1545,8 @@ fn output_frameno_scene_change_after_multiple_flashes() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   send_test_frame(&mut ctx, 40);
   send_test_frame(&mut ctx, 100);
   send_test_frame(&mut ctx, 160);
@@ -1829,7 +1829,7 @@ fn zero_frames() {
 #[test]
 fn tile_cols_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.tile_cols = usize::max_value();
+  enc.tile_cols = usize::MAX;
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -1837,7 +1837,7 @@ fn tile_cols_overflow() {
 #[test]
 fn max_key_frame_interval_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.max_key_frame_interval = i32::max_value() as u64;
+  enc.max_key_frame_interval = i32::MAX as u64;
   enc.reservoir_frame_delay = None;
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
@@ -1846,8 +1846,8 @@ fn max_key_frame_interval_overflow() {
 #[test]
 fn target_bitrate_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.bitrate = i32::max_value();
-  enc.time_base = Rational::new(i64::max_value() as u64, 1);
+  enc.bitrate = i32::MAX;
+  enc.time_base = Rational::new(i64::MAX as u64, 1);
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -1863,7 +1863,7 @@ fn time_base_den_divide_by_zero() {
 #[test]
 fn large_width_assert() {
   let mut enc = EncoderConfig::default();
-  enc.width = u32::max_value() as usize;
+  enc.width = u32::MAX as usize;
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -1871,9 +1871,9 @@ fn large_width_assert() {
 #[test]
 fn reservoir_max_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.reservoir_frame_delay = Some(i32::max_value());
-  enc.bitrate = i32::max_value();
-  enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
+  enc.reservoir_frame_delay = Some(i32::MAX);
+  enc.bitrate = i32::MAX;
+  enc.time_base = Rational::new(i32::MAX as u64 * 2, 1);
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -1890,7 +1890,7 @@ fn zero_width() {
 #[test]
 fn rdo_lookahead_frames_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.rdo_lookahead_frames = usize::max_value();
+  enc.rdo_lookahead_frames = usize::MAX;
   let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());

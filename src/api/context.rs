@@ -116,7 +116,7 @@ impl<T: Pixel> Context<T> {
     {
       return Err(EncoderStatus::EnoughData);
     // The rate control can process at most std::i32::MAX frames
-    } else if self.inner.frame_count == std::i32::MAX as u64 - 1 {
+    } else if self.inner.frame_count == i32::MAX as u64 - 1 {
       self.inner.limit = Some(self.inner.frame_count);
       self.is_flushing = true;
     }

@@ -63,7 +63,7 @@ impl Config {
 
   /// Create a first pass encoder channel
   ///
-  /// The pass data information is available throguht
+  /// The pass data information is available through
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
   /// The last buffer in the PassDataReceiver is the summary of the whole
@@ -258,7 +258,7 @@ impl Config {
         frame_limit,
       )
     } else {
-      (None, None, std::i32::MAX as u64)
+      (None, None, i32::MAX as u64)
     };
 
     let config = Arc::new(self.enc);

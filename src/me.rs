@@ -968,7 +968,7 @@ fn get_subpel_mv_rd_cost<T: Pixel>(
     || (cand_mv.row as isize) < mvy_min
     || (cand_mv.row as isize) > mvy_max
   {
-    return std::u64::MAX;
+    return u64::MAX;
   }
 
   let tile_rect = TileRect {
