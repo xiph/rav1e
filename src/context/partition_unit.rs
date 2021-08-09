@@ -500,7 +500,6 @@ impl<'a> BlockContext<'a> {
   pub fn update_partition_context(
     &mut self, bo: TileBlockOffset, subsize: BlockSize, bsize: BlockSize,
   ) {
-    #[allow(dead_code)]
     assert!(bsize.is_sqr());
 
     let bw = bsize.width_mi();

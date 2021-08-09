@@ -710,9 +710,9 @@ mod test {
     8
   );
 
-  fn get_params<'a, T: Pixel>(
-    rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
-  ) -> (i32, i32, PlaneSlice<'a, T>) {
+  fn get_params<T: Pixel>(
+    rec_plane: &Plane<T>, po: PlaneOffset, mv: MotionVector,
+  ) -> (i32, i32, PlaneSlice<T>) {
     let rec_cfg = &rec_plane.cfg;
     let shift_row = 3 + rec_cfg.ydec;
     let shift_col = 3 + rec_cfg.xdec;
