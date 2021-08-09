@@ -327,7 +327,7 @@ impl Config {
 
     // TODO: make it user-settable
     let input_len = self.enc.rdo_lookahead_frames as usize * 4;
-    let frame_limit = std::i32::MAX as u64;
+    let frame_limit = i32::MAX as u64;
 
     let (send_frame, receive_frame) = bounded(input_len);
     let (send_packet, receive_packet) = unbounded();

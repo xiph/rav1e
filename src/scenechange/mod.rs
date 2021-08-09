@@ -404,7 +404,7 @@ fn detect_scale_factor(sequence: &Arc<Sequence>) -> usize {
     481..=720 => 4,
     721..=1080 => 8,
     1081..=1600 => 16,
-    1601..=std::usize::MAX => 32,
+    1601..=usize::MAX => 32,
     _ => 1,
   } as usize;
   debug!(

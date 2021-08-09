@@ -258,7 +258,7 @@ impl Config {
         frame_limit,
       )
     } else {
-      (None, None, std::i32::MAX as u64)
+      (None, None, i32::MAX as u64)
     };
 
     let config = Arc::new(self.enc);
