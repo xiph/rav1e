@@ -236,7 +236,7 @@ pub(crate) mod rust {
   }
 
   pub(crate) fn sgrproj_box_f_r0<T: Pixel>(
-    f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<'_, T>,
     _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r0_internal(f, 0, y, w, cdeffed);
@@ -244,7 +244,8 @@ pub(crate) mod rust {
 
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r0_internal<T: Pixel>(
-    f: &mut [u32], start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    f: &mut [u32], start_x: usize, y: usize, w: usize,
+    cdeffed: &PlaneSlice<'_, T>,
   ) {
     let line = cdeffed.row(y);
     for (fp, &v) in f[start_x..w].iter_mut().zip(line[start_x..w].iter()) {
@@ -254,7 +255,7 @@ pub(crate) mod rust {
 
   pub(crate) fn sgrproj_box_f_r1<T: Pixel>(
     af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
-    cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
+    cdeffed: &PlaneSlice<'_, T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r1_internal(af, bf, f, 0, y, w, cdeffed);
   }
@@ -262,7 +263,7 @@ pub(crate) mod rust {
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r1_internal<T: Pixel>(
     af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], start_x: usize,
-    y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    y: usize, w: usize, cdeffed: &PlaneSlice<'_, T>,
   ) {
     let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
     let line = cdeffed.row(y);
@@ -288,7 +289,7 @@ pub(crate) mod rust {
 
   pub(crate) fn sgrproj_box_f_r2<T: Pixel>(
     af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-    y: usize, w: usize, cdeffed: &PlaneSlice<T>, _cpu: CpuFeatureLevel,
+    y: usize, w: usize, cdeffed: &PlaneSlice<'_, T>, _cpu: CpuFeatureLevel,
   ) {
     sgrproj_box_f_r2_internal(af, bf, f0, f1, 0, y, w, cdeffed);
   }
@@ -296,7 +297,7 @@ pub(crate) mod rust {
   #[inline(always)]
   pub(crate) fn sgrproj_box_f_r2_internal<T: Pixel>(
     af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
-    start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<T>,
+    start_x: usize, y: usize, w: usize, cdeffed: &PlaneSlice<'_, T>,
   ) {
     let shift = 5 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
     let shifto = 4 + SGRPROJ_SGR_BITS - SGRPROJ_RST_BITS;
@@ -521,7 +522,7 @@ impl<T: Pixel> FusedIterator for HorzPaddedIter<'_, T> {}
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
-  stripe_h: usize, cdeffed: &PlaneSlice<T>, deblocked: &PlaneSlice<T>,
+  stripe_h: usize, cdeffed: &PlaneSlice<'_, T>, deblocked: &PlaneSlice<'_, T>,
 ) {
   let integral_image = &mut integral_image_buffer.integral_image;
   let sq_integral_image = &mut integral_image_buffer.sq_integral_image;
@@ -620,7 +621,7 @@ pub fn setup_integral_image<T: Pixel>(
 pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
-  cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
+  cdeffed: &PlaneSlice<'_, U>, out: &mut PlaneRegionMut<'_, U>,
 ) {
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
   let bdm8 = fi.sequence.bit_depth - 8;
@@ -829,7 +830,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
-  cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
+  cdeffed: &PlaneSlice<'_, T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
   let bdm8 = fi.sequence.bit_depth - 8;
 

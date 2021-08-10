@@ -83,6 +83,12 @@
 //! See the [generate_version_rs](crate::output::codegen::generate_version_rs) documentation
 //! if you wish to use this method.
 #![deny(
+  bare_trait_objects,
+  rust_2018_compatibility,
+  rust_2018_idioms,
+  nonstandard_style,
+  future_incompatible,
+  unused,
   missing_docs,
   missing_debug_implementations,
   missing_copy_implementations,
@@ -94,8 +100,6 @@
 )]
 #[macro_use]
 extern crate bitflags;
-#[cfg(test)]
-extern crate lazy_static;
 
 mod constants;
 mod output;

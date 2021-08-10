@@ -410,7 +410,7 @@ tile_restoration_state_common!(
 
 impl<'a> TileRestorationStateMut<'a> {
   #[inline(always)]
-  pub const fn as_const(&self) -> TileRestorationState {
+  pub const fn as_const(&self) -> TileRestorationState<'_> {
     TileRestorationState {
       planes: [
         self.planes[0].as_const(),

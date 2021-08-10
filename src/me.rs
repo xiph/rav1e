@@ -463,7 +463,7 @@ pub fn motion_estimation<T: Pixel>(
 
       let po = frame_bo.to_luma_plane_offset();
       let area = Area::BlockStartingAt { bo: tile_bo.0 };
-      let org_region: &PlaneRegion<T> =
+      let org_region: &PlaneRegion<'_, T> =
         &ts.input_tile.planes[0].subregion(area);
       let p_ref: &Plane<T> = &rec.frame.planes[0];
 
@@ -615,7 +615,7 @@ impl FullpelConfig {
 
 fn full_pixel_me<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
-  org_region: &PlaneRegion<T>, p_ref: &Plane<T>, tile_bo: TileBlockOffset,
+  org_region: &PlaneRegion<'_, T>, p_ref: &Plane<T>, tile_bo: TileBlockOffset,
   po: PlaneOffset, lambda: u32, pmv: [MotionVector; 2], bsize: BlockSize,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   ref_frame: RefType, conf: &FullpelConfig,
@@ -749,7 +749,7 @@ fn full_pixel_me<T: Pixel>(
 }
 
 fn sub_pixel_me<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   p_ref: &Plane<T>, lambda: u32, pmv: [MotionVector; 2], mvx_min: isize,
   mvx_max: isize, mvy_min: isize, mvy_max: isize, bsize: BlockSize,
   use_satd: bool, best: &mut MVSearchResult, ref_frame: RefType,
@@ -774,7 +774,7 @@ fn sub_pixel_me<T: Pixel>(
 }
 
 fn get_best_predictor<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32, mvx_min: isize, mvx_max: isize,
   mvy_min: isize, mvy_max: isize, bsize: BlockSize,
@@ -802,7 +802,7 @@ fn get_best_predictor<T: Pixel>(
 }
 
 fn fullpel_diamond_me_search<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   p_ref: &Plane<T>, center: &mut FullpelSearchResult, bit_depth: usize,
   pmv: [MotionVector; 2], lambda: u32, mvx_min: isize, mvx_max: isize,
   mvy_min: isize, mvy_max: isize, bsize: BlockSize,
@@ -850,7 +850,7 @@ fn fullpel_diamond_me_search<T: Pixel>(
 }
 
 fn subpel_diamond_me_search<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   _p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
   bsize: BlockSize, use_satd: bool, center: &mut MVSearchResult,
@@ -932,7 +932,7 @@ fn subpel_diamond_me_search<T: Pixel>(
 
 #[inline]
 fn get_fullpel_mv_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
   use_satd: bool, mvx_min: isize, mvx_max: isize, mvy_min: isize,
   mvy_max: isize, bsize: BlockSize, cand_mv: MotionVector,
@@ -957,11 +957,11 @@ fn get_fullpel_mv_rd_cost<T: Pixel>(
 }
 
 fn get_subpel_mv_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
+  fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<'_, T>,
   bit_depth: usize, pmv: [MotionVector; 2], lambda: u32, use_satd: bool,
   mvx_min: isize, mvx_max: isize, mvy_min: isize, mvy_max: isize,
-  bsize: BlockSize, cand_mv: MotionVector, tmp_region: &mut PlaneRegionMut<T>,
-  ref_frame: RefType,
+  bsize: BlockSize, cand_mv: MotionVector,
+  tmp_region: &mut PlaneRegionMut<'_, T>, ref_frame: RefType,
 ) -> u64 {
   if (cand_mv.col as isize) < mvx_min
     || (cand_mv.col as isize) > mvx_max
@@ -1017,7 +1017,7 @@ fn compute_mv_rd_cost<T: Pixel>(
 
 fn full_search<T: Pixel>(
   fi: &FrameInvariants<T>, x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize,
-  bsize: BlockSize, org_region: &PlaneRegion<T>, p_ref: &Plane<T>,
+  bsize: BlockSize, org_region: &PlaneRegion<'_, T>, p_ref: &Plane<T>,
   po: PlaneOffset, step: usize, lambda: u32, pmv: [MotionVector; 2],
 ) -> FullpelSearchResult {
   let blk_w = bsize.width();

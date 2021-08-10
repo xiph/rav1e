@@ -34,7 +34,14 @@
 //! [`Context`]: struct.Context.html
 //! [`Context::receive_packet`]: struct.Context.html#method.receive_packet
 
-#![deny(bare_trait_objects)]
+#![deny(
+  bare_trait_objects,
+  rust_2018_compatibility,
+  rust_2018_idioms,
+  nonstandard_style,
+  future_incompatible,
+  unused
+)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_ptr_alignment)]
 #![allow(clippy::cognitive_complexity)]

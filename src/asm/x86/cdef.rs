@@ -46,7 +46,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
   bit_depth: usize, xdec: usize, ydec: usize, edges: u8, cpu: CpuFeatureLevel,
 ) {
-  let call_rust = |dst: &mut PlaneRegionMut<T>| {
+  let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
     rust::cdef_filter_block(
       dst,
       src,

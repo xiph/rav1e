@@ -335,7 +335,7 @@ pub enum PredictionModesSetting {
 }
 
 impl fmt::Display for PredictionModesSetting {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
     write!(
       f,
       "{}",
@@ -367,7 +367,7 @@ pub enum SGRComplexityLevel {
 }
 
 impl fmt::Display for SGRComplexityLevel {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
     write!(
       f,
       "{}",
@@ -400,7 +400,7 @@ pub enum SegmentationLevel {
 }
 
 impl fmt::Display for SegmentationLevel {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
     write!(
       f,
       "{}",

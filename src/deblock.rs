@@ -83,7 +83,7 @@ fn deblock_adjusted_level(
 
 #[inline]
 fn deblock_left<'a, T: Pixel>(
-  blocks: &'a TileBlocks, in_bo: TileBlockOffset, p: &PlaneRegion<T>,
+  blocks: &'a TileBlocks<'_>, in_bo: TileBlockOffset, p: &PlaneRegion<'_, T>,
 ) -> &'a Block {
   let xdec = p.plane_cfg.xdec;
   let ydec = p.plane_cfg.ydec;
@@ -95,7 +95,7 @@ fn deblock_left<'a, T: Pixel>(
 
 #[inline]
 fn deblock_up<'a, T: Pixel>(
-  blocks: &'a TileBlocks, in_bo: TileBlockOffset, p: &PlaneRegion<T>,
+  blocks: &'a TileBlocks<'_>, in_bo: TileBlockOffset, p: &PlaneRegion<'_, T>,
 ) -> &'a Block {
   let xdec = p.plane_cfg.xdec;
   let ydec = p.plane_cfg.ydec;
@@ -106,7 +106,7 @@ fn deblock_up<'a, T: Pixel>(
 
 // Must be called on a tx edge, and not on a frame edge.  This is enforced above the call.
 fn deblock_size<T: Pixel>(
-  block: &Block, prev_block: &Block, p: &PlaneRegion<T>, pli: usize,
+  block: &Block, prev_block: &Block, p: &PlaneRegion<'_, T>, pli: usize,
   vertical: bool, block_edge: bool,
 ) -> usize {
   let xdec = p.plane_cfg.xdec;
@@ -1120,8 +1120,9 @@ fn sse_size14<T: Pixel>(
 }
 
 fn filter_v_edge<T: Pixel>(
-  deblock: &DeblockState, blocks: &TileBlocks, bo: TileBlockOffset,
-  p: &mut PlaneRegionMut<T>, pli: usize, bd: usize, xdec: usize, ydec: usize,
+  deblock: &DeblockState, blocks: &TileBlocks<'_>, bo: TileBlockOffset,
+  p: &mut PlaneRegionMut<'_, T>, pli: usize, bd: usize, xdec: usize,
+  ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1166,9 +1167,10 @@ fn filter_v_edge<T: Pixel>(
 }
 
 fn sse_v_edge<T: Pixel>(
-  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
-  src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
-  pli: usize, bd: usize, xdec: usize, ydec: usize,
+  blocks: &TileBlocks<'_>, bo: TileBlockOffset,
+  rec_plane: &PlaneRegion<'_, T>, src_plane: &PlaneRegion<'_, T>,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize,
+  ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1216,8 +1218,9 @@ fn sse_v_edge<T: Pixel>(
 }
 
 fn filter_h_edge<T: Pixel>(
-  deblock: &DeblockState, blocks: &TileBlocks, bo: TileBlockOffset,
-  p: &mut PlaneRegionMut<T>, pli: usize, bd: usize, xdec: usize, ydec: usize,
+  deblock: &DeblockState, blocks: &TileBlocks<'_>, bo: TileBlockOffset,
+  p: &mut PlaneRegionMut<'_, T>, pli: usize, bd: usize, xdec: usize,
+  ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1262,9 +1265,10 @@ fn filter_h_edge<T: Pixel>(
 }
 
 fn sse_h_edge<T: Pixel>(
-  blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
-  src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
-  pli: usize, bd: usize, xdec: usize, ydec: usize,
+  blocks: &TileBlocks<'_>, bo: TileBlockOffset,
+  rec_plane: &PlaneRegion<'_, T>, src_plane: &PlaneRegion<'_, T>,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, bd: usize, xdec: usize,
+  ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1315,8 +1319,8 @@ fn sse_h_edge<T: Pixel>(
 // Deblocks all edges, vertical and horizontal, in a single plane
 #[hawktracer(deblock_plane)]
 pub fn deblock_plane<T: Pixel>(
-  deblock: &DeblockState, p: &mut PlaneRegionMut<T>, pli: usize,
-  blocks: &TileBlocks, crop_w: usize, crop_h: usize, bd: usize,
+  deblock: &DeblockState, p: &mut PlaneRegionMut<'_, T>, pli: usize,
+  blocks: &TileBlocks<'_>, crop_w: usize, crop_h: usize, bd: usize,
 ) {
   let xdec = p.plane_cfg.xdec;
   let ydec = p.plane_cfg.ydec;
@@ -1482,9 +1486,9 @@ pub fn deblock_plane<T: Pixel>(
 
 // sse count of all edges in a single plane, accumulates into vertical and horizontal counts
 fn sse_plane<T: Pixel>(
-  rec: &PlaneRegion<T>, src: &PlaneRegion<T>,
+  rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
   v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
-  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &TileBlocks,
+  h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &TileBlocks<'_>,
   crop_w: usize, crop_h: usize, bd: usize,
 ) {
   let xdec = rec.plane_cfg.xdec;
@@ -1565,7 +1569,7 @@ fn sse_plane<T: Pixel>(
 // Deblocks all edges in all planes of a frame
 #[hawktracer(deblock_filter_frame)]
 pub fn deblock_filter_frame<T: Pixel>(
-  deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
+  deblock: &DeblockState, tile: &mut TileMut<'_, T>, blocks: &TileBlocks<'_>,
   crop_w: usize, crop_h: usize, bd: usize, planes: usize,
 ) {
   (&mut tile.planes[..planes]).par_iter_mut().enumerate().for_each(
@@ -1576,8 +1580,8 @@ pub fn deblock_filter_frame<T: Pixel>(
 }
 
 fn sse_optimize<T: Pixel>(
-  rec: &Tile<T>, input: &Tile<T>, blocks: &TileBlocks, crop_w: usize,
-  crop_h: usize, bd: usize, monochrome: bool,
+  rec: &Tile<'_, T>, input: &Tile<'_, T>, blocks: &TileBlocks<'_>,
+  crop_w: usize, crop_h: usize, bd: usize, monochrome: bool,
 ) -> [u8; 4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
@@ -1643,8 +1647,8 @@ fn sse_optimize<T: Pixel>(
 
 #[hawktracer(deblock_filter_optimize)]
 pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
-  fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<U>,
-  blocks: &TileBlocks, crop_w: usize, crop_h: usize,
+  fi: &FrameInvariants<T>, rec: &Tile<'_, U>, input: &Tile<'_, U>,
+  blocks: &TileBlocks<'_>, crop_w: usize, crop_h: usize,
 ) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {
     let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;

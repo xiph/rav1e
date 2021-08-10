@@ -588,7 +588,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 
 #[hawktracer(cdef_filter_tile)]
 pub fn cdef_filter_tile<T: Pixel>(
-  fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
+  fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks<'_>,
   output: &mut TileMut<'_, T>,
 ) {
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.

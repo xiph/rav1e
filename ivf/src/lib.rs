@@ -8,6 +8,15 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![deny(
+  bare_trait_objects,
+  rust_2018_compatibility,
+  rust_2018_idioms,
+  nonstandard_style,
+  future_incompatible,
+  unused
+)]
+
 /// Simple ivf muxer
 ///
 use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};

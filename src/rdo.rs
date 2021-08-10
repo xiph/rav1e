@@ -720,7 +720,7 @@ pub fn compute_rd_cost<T: Pixel>(
 
 pub fn rdo_tx_size_type<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter<'_>, bsize: BlockSize, tile_bo: TileBlockOffset,
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   skip: bool,
 ) -> (TxSize, TxType) {
@@ -809,7 +809,7 @@ fn dmv_in_range(mv: MotionVector, ref_mv: MotionVector) -> bool {
 fn luma_chroma_mode_rdo<T: Pixel>(
   luma_mode: PredictionMode, fi: &FrameInvariants<T>, bsize: BlockSize,
   tile_bo: TileBlockOffset, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, rdo_type: RDOType,
+  cw: &mut ContextWriter<'_>, rdo_type: RDOType,
   cw_checkpoint: &ContextWriterCheckpoint, best: &mut PartitionParameters,
   mvs: [MotionVector; 2], ref_frames: [RefType; 2],
   mode_set_chroma: &[PredictionMode], luma_mode_is_intra: bool,
@@ -949,7 +949,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 // RDO-based mode decision
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter<'_>, bsize: BlockSize, tile_bo: TileBlockOffset,
   inter_cfg: &InterConfig,
 ) -> PartitionParameters {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
@@ -1106,7 +1106,7 @@ pub fn rdo_mode_decision<T: Pixel>(
 
 fn inter_frame_rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter<'_>, bsize: BlockSize, tile_bo: TileBlockOffset,
   inter_cfg: &InterConfig, cw_checkpoint: &ContextWriterCheckpoint,
   rdo_type: RDOType,
 ) -> PartitionParameters {
@@ -1362,7 +1362,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
 
 fn intra_frame_rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter<'_>, bsize: BlockSize, tile_bo: TileBlockOffset,
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
@@ -1658,9 +1658,10 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 /// state is created and stored for later use.
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
-  mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
-  bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
+  cw: &mut ContextWriter<'_>,
+  cw_checkpoint: &mut Option<ContextWriterCheckpoint>, mode: PredictionMode,
+  ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
+  tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
   tx_types: &[TxType],
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
@@ -1793,7 +1794,7 @@ pub fn get_sub_partitions(
 #[inline(always)]
 fn rdo_partition_none<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
+  cw: &mut ContextWriter<'_>, bsize: BlockSize, tile_bo: TileBlockOffset,
   inter_cfg: &InterConfig, child_modes: &mut ArrayVec<PartitionParameters, 4>,
 ) -> f64 {
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
@@ -1810,7 +1811,7 @@ fn rdo_partition_none<T: Pixel>(
 #[inline(always)]
 fn rdo_partition_simple<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  cw: &mut ContextWriter<'_>, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, inter_cfg: &InterConfig,
   partition: PartitionType, rdo_type: RDOType, best_rd: f64,
   child_modes: &mut ArrayVec<PartitionParameters, 4>,
@@ -1895,7 +1896,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 // RDO-based single level partitioning decision
 pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  cw: &mut ContextWriter<'_>, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   cached_block: &PartitionGroupParameters, partition_types: &[PartitionType],
   rdo_type: RDOType, inter_cfg: &InterConfig,
@@ -2037,7 +2038,7 @@ fn rdo_loop_plane_error<T: Pixel>(
 // superblocks and full, smaller LRUs in the other planes
 pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   base_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
-  ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
+  ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter<'_>, w: &mut W,
   deblock_p: bool,
 ) {
   let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {

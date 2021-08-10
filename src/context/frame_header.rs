@@ -12,7 +12,7 @@ use super::*;
 impl CDFContext {
   // rather than test writing and rolling back the cdf, we just count Q8 bits using the current cdf
   pub fn count_lrf_switchable<W: Writer>(
-    &self, w: &W, rs: &TileRestorationState, filter: RestorationFilter,
+    &self, w: &W, rs: &TileRestorationState<'_>, filter: RestorationFilter,
     pli: usize,
   ) -> u32 {
     match filter {
@@ -156,14 +156,14 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn count_lrf_switchable<W: Writer>(
-    &self, w: &W, rs: &TileRestorationState, filter: RestorationFilter,
+    &self, w: &W, rs: &TileRestorationState<'_>, filter: RestorationFilter,
     pli: usize,
   ) -> u32 {
     self.fc.count_lrf_switchable(w, rs, filter, pli)
   }
 
   pub fn write_lrf<W: Writer>(
-    &mut self, w: &mut W, rs: &mut TileRestorationStateMut,
+    &mut self, w: &mut W, rs: &mut TileRestorationStateMut<'_>,
     sbo: TileSuperBlockOffset, pli: usize,
   ) {
     let rp = &mut rs.planes[pli];

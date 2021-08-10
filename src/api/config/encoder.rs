@@ -221,7 +221,7 @@ impl EncoderConfig {
 }
 
 impl fmt::Display for EncoderConfig {
-  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
     let pairs = [
       ("keyint_min", self.min_key_frame_interval.to_string()),
       ("keyint_max", self.max_key_frame_interval.to_string()),

@@ -1066,7 +1066,7 @@ fn diff<T: Pixel>(
 }
 
 fn get_qidx<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter<'_>,
   tile_bo: TileBlockOffset,
 ) -> u8 {
   let mut qidx = fi.base_q_idx;
@@ -1084,7 +1084,7 @@ fn get_qidx<T: Pixel>(
 pub fn encode_tx_block<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter,
+  cw: &mut ContextWriter<'_>,
   w: &mut W,
   p: usize,
   // Offset in the luma plane of the partition enclosing this block.
@@ -1341,9 +1341,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, luma_mode: PredictionMode, ref_frames: [RefType; 2],
-  mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
-  luma_only: bool,
+  cw: &mut ContextWriter<'_>, luma_mode: PredictionMode,
+  ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
+  tile_bo: TileBlockOffset, luma_only: bool,
 ) {
   debug_assert!(!luma_mode.is_intra());
 
@@ -1565,8 +1565,8 @@ pub fn save_block_motion<T: Pixel>(
 }
 
 pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
-  seq: &Sequence, ts: &TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
-  bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
+  seq: &Sequence, ts: &TileStateMut<'_, T>, cw: &mut ContextWriter<'_>,
+  w: &mut W, bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
 ) -> bool {
   cw.bc.blocks.set_skip(tile_bo, bsize, skip);
   if ts.segmentation.enabled
@@ -1602,7 +1602,7 @@ pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
 
 pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
+  cw: &mut ContextWriter<'_>, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
   ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
   tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
@@ -1979,7 +1979,7 @@ pub fn luma_ac<T: Pixel>(
 
 pub fn write_tx_blocks<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
+  cw: &mut ContextWriter<'_>, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
   tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
@@ -2139,7 +2139,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
 
 pub fn write_tx_tree<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
+  cw: &mut ContextWriter<'_>, w: &mut W, luma_mode: PredictionMode,
   angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
   tx_size: TxSize, tx_type: TxType, skip: bool, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
@@ -2296,7 +2296,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
 
 pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  cw: &mut ContextWriter<'_>, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
 ) {
@@ -2361,7 +2361,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
 
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  cw: &mut ContextWriter<'_>, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
   inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
@@ -2648,7 +2648,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
 fn encode_partition_topdown<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
+  cw: &mut ContextWriter<'_>, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
 ) {
@@ -3113,7 +3113,7 @@ pub struct SBSQueueEntry {
 
 fn check_lf_queue<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  cw: &mut ContextWriter, w: &mut WriterBase<WriterEncoder>,
+  cw: &mut ContextWriter<'_>, w: &mut WriterBase<WriterEncoder>,
   sbs_q: &mut VecDeque<SBSQueueEntry>, last_lru_ready: &mut [i32; 3],
   last_lru_rdoed: &mut [i32; 3], last_lru_coded: &mut [i32; 3],
   deblock_p: bool,

@@ -83,7 +83,7 @@ impl RcDataReceiver {
   pub fn is_empty(&self) -> bool {
     self.0.is_empty()
   }
-  pub fn iter(&self) -> Iter<RcData> {
+  pub fn iter(&self) -> Iter<'_, RcData> {
     self.0.iter()
   }
 
@@ -181,7 +181,7 @@ impl<T: Pixel> PacketReceiver<T> {
   pub fn is_empty(&self) -> bool {
     self.receiver.is_empty()
   }
-  pub fn iter(&self) -> Iter<Packet<T>> {
+  pub fn iter(&self) -> Iter<'_, Packet<T>> {
     self.receiver.iter()
   }
 }

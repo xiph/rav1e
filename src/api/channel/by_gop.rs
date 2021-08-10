@@ -135,7 +135,7 @@ impl<T: Pixel> WorkerPoolRecv<T> {
 }
 
 fn workerpool<T: Pixel>(
-  s: &rayon::ScopeFifo, workers: usize, mut cfg: Config,
+  s: &rayon::ScopeFifo<'_>, workers: usize, mut cfg: Config,
 ) -> (WorkerPoolSend<T>, WorkerPoolRecv<T>) {
   let (send_workers, recv_workers) = bounded(workers);
   let (send_reassemble, recv_reassemble) = unbounded();
@@ -202,7 +202,7 @@ fn workerpool<T: Pixel>(
 }
 
 fn reassemble<P: Pixel>(
-  pool: WorkerPoolRecv<P>, s: &rayon::ScopeFifo,
+  pool: WorkerPoolRecv<P>, s: &rayon::ScopeFifo<'_>,
   send_packet: Sender<Packet<P>>,
 ) {
   s.spawn_fifo(move |_| {
@@ -241,7 +241,7 @@ fn reassemble<P: Pixel>(
 impl Config {
   // Group the incoming frames in Gops, emit a SubGop at time.
   fn scenechange<T: Pixel>(
-    &self, s: &rayon::ScopeFifo, r: Receiver<FrameInput<T>>,
+    &self, s: &rayon::ScopeFifo<'_>, r: Receiver<FrameInput<T>>,
   ) -> Receiver<SubGop<T>> {
     let inter_cfg = InterConfig::new(&self.enc);
     let pyramid_size = inter_cfg.keyframe_lookahead_distance() as usize;
@@ -289,7 +289,7 @@ impl Config {
 
   /// Encode the subgops, dispatch each Gop to an available worker
   fn encode<T: Pixel>(
-    &self, s: &rayon::ScopeFifo, workers: usize, r: Receiver<SubGop<T>>,
+    &self, s: &rayon::ScopeFifo<'_>, workers: usize, r: Receiver<SubGop<T>>,
     send_packet: Sender<Packet<T>>,
   ) {
     let (mut workers, recv) = workerpool(s, workers, self.clone());
