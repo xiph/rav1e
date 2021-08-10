@@ -1833,23 +1833,7 @@ cglobal idct_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     packssdw             m6, m7
     packssdw             m0, m1
     packssdw             m4, m5
-.transpose:
-    punpcklwd            m7, m2, m6
-    punpckhwd            m2, m6
-    punpckhwd            m5, m0, m4
-    punpcklwd            m0, m4
-
-    punpckhwd            m4, m5, m2
-    punpcklwd            m5, m2
-    punpckhwd            m2, m0, m7
-    punpcklwd            m0, m7
-
-    punpckhwd            m3, m2, m4
-    punpcklwd            m2, m4
-    punpckhwd            m1, m0, m5
-    punpcklwd            m0, m5
-
-    ret
+    jmp m(idct_8x4_internal_16bpc).transpose4x8packed
 
 .pass2:
 %if ARCH_X86_32
@@ -2045,7 +2029,7 @@ cglobal iflipadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m2, m5
     mova                 m4, m3
     mova                 m6, m1
-    jmp m(idct_8x8_internal_16bpc).transpose
+    jmp m(idct_8x4_internal_16bpc).transpose4x8packed
 
 .pass2:
     lea                dstq, [dstq+strideq*8]
