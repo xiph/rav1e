@@ -1843,14 +1843,13 @@ cglobal idct_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r5, [o(itx8_start)]
 %endif
     call m_suffix(idct_8x8_internal_8bpc, _ssse3).main
-    call .round3
-.end:
     lea                  r3, [strideq*3]
 %if ARCH_X86_64
     mova                m10, [o(pixel_10bpc_max)]
     pxor                 m9, m9
 %endif
-    call .write_8x8
+    call .round3_and_write_8x8
+.zero:
 %if ARCH_X86_64
 %define mzero m9
 %else
@@ -1868,25 +1867,25 @@ cglobal idct_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; .round2 is for m0-6 & [rsp+gprsize*2]
     ; .round3 is same, but without using m8 on x86-64 (.round2/3 are identical on x86-32)
     ; .round4 is x86-32-only, it is similar to .round2 but with constant already in m7
-%if ARCH_X86_64
-.round2:
-    mova                 m7, [rsp+gprsize*2]
-.round1:
-    REPX   {pmulhrsw x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
-    ret
-%else
-.round1:
+%if ARCH_X86_32
+.round1_and_write_8x8:
     mova    [rsp+gprsize*2], m7
-.round2:
+.round2_and_write_8x8:
 %endif
-.round3:
+.round3_and_write_8x8:
     mova                 m7, [o(pw_2048)]
 %if ARCH_X86_32
-.round4:
+.round4_and_write_8x8:
 %endif
     REPX   {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
     pmulhrsw             m7, [rsp+gprsize*2]
-    ret
+%if ARCH_X86_64
+    jmp .write_8x8
+.round2_and_write_8x8:
+    mova                 m7, [rsp+gprsize*2]
+.round1_and_write_8x8:
+    REPX   {pmulhrsw x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
+%endif
 
     ; m0-7 have to-be-written data [pre-rounded]
     ; on x86-64, m9-10 contain a zero/pixel_max
@@ -1976,8 +1975,13 @@ cglobal iadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     call m_suffix(iadst_8x8_internal_8bpc, _ssse3).main
     call m_suffix(iadst_8x8_internal_8bpc, _ssse3).main_pass2_end
-    call .round3
-    jmp m(idct_8x8_internal_16bpc).end
+    lea                  r3, [strideq*3]
+%if ARCH_X86_64
+    mova                m10, [o(pixel_10bpc_max)]
+    pxor                 m9, m9
+%endif
+    call .round3_and_write_8x8
+    jmp m(idct_8x8_internal_16bpc).zero
 
     ; round (rounded right-shift by 5) before writing; odd registers are negated
     ; data in m0-7
@@ -1986,24 +1990,24 @@ cglobal iadst_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ; .round2 is for m0-6 & [rsp+gprsize*2]
     ; .round3 is same, but without using m8 on x86-64 (.round2/3 are identical on x86-32)
 %if ARCH_X86_64
-.round2:
+.round2_and_write_8x8:
     mova                 m7, [rsp+gprsize*2]
-.round1:
+.round1_and_write_8x8:
     REPX  {pmulhrsw x, m8 }, m0, m2, m4, m6
     REPX  {pmulhrsw x, m11}, m1, m3, m5, m7
-    ret
+    jmp m(idct_8x8_internal_16bpc).write_8x8
 %else
-.round1:
+.round1_and_write_8x8:
     mova    [rsp+gprsize*2], m7
-.round2:
+.round2_and_write_8x8:
 %endif
-.round3:
+.round3_and_write_8x8:
     mova                 m7, [o(pw_2048)]
     REPX   {pmulhrsw x, m7}, m0, m2, m4, m6
     mova                 m7, [o(pw_m2048)]
     REPX   {pmulhrsw x, m7}, m1, m3, m5
     pmulhrsw             m7, [rsp+gprsize*2]
-    ret
+    jmp m(idct_8x8_internal_16bpc).write_8x8
 
 INV_TXFM_8X8_FN flipadst, dct
 INV_TXFM_8X8_FN flipadst, adst
@@ -2062,15 +2066,21 @@ cglobal iidentity_8x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp m_suffix(idct_8x8_internal_8bpc, _ssse3).pass1_end3
 
 .pass2:
-%if ARCH_X86_64
-    mova                 m8, [o(pw_4096)]
-    call m(idct_8x8_internal_16bpc).round1
-%else
-    mova [rsp+gprsize+0*16], m7
-    mova                 m7, [o(pw_4096)]
-    call m(idct_8x8_internal_16bpc).round4
+%if ARCH_X86_32
+    lea                  r5, [o(itx8_start)]
 %endif
-    jmp m(idct_8x8_internal_16bpc).end
+    lea                  r3, [strideq*3]
+%if ARCH_X86_64
+    mova                m10, [o(pixel_10bpc_max)]
+    pxor                 m9, m9
+    mova                 m8, [o(pw_4096)]
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
+%else
+    mova      [rsp+gprsize], m7
+    mova                 m7, [o(pw_4096)]
+    call m(idct_8x8_internal_16bpc).round4_and_write_8x8
+%endif
+    jmp m(idct_8x8_internal_16bpc).zero
 
 %macro INV_TXFM_8X16_FN 2-3 2d ; type1, type2, eob_tbl_suffix
 %if ARCH_X86_64
@@ -2204,24 +2214,15 @@ cglobal idct_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 
 %if ARCH_X86_64
     mova                 m8, [o(pw_2048)]
-    call m(idct_8x8_internal_16bpc).round1
-%else
-    call m(idct_8x8_internal_16bpc).round2
-%endif
-    lea                  r4, [o(m(idct_8x8_internal_16bpc).round1)]
-.end:
-%if ARCH_X86_64
     mova                m10, [o(pixel_10bpc_max)]
     pxor                 m9, m9
-%endif
-    lea                  r3, [strideq*3]
-%if ARCH_X86_64
     mov                  r6, dstq
 %else
     mov [rsp+16*16+gprsize*1], dstq
 %endif
+    lea                  r3, [strideq*3]
     lea                dstq, [dstq+strideq*8]
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round2_and_write_8x8
 %if ARCH_X86_64
 %define mzero m9
 %else
@@ -2244,8 +2245,7 @@ cglobal idct_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %else
     mov                dstq, [rsp+16*16+gprsize*1]
 %endif
-    call                 r4
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
     RET
 
 INV_TXFM_8X16_FN adst, dct
@@ -2291,13 +2291,43 @@ cglobal iadst_8x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m7, [cq+ 7*16]
     call m_suffix(iadst_16x8_internal_8bpc, _ssse3).main
     call m_suffix(iadst_16x8_internal_8bpc, _ssse3).main_pass2_end
-    lea                  r4, [o(m(iadst_8x8_internal_16bpc).round1)]
+
 %if ARCH_X86_64
-    mova                 m8, [o(pw_2048)]
     mova                m11, [o(pw_m2048)]
+    mova                 m8, [o(pw_2048)]
+    mova                m10, [o(pixel_10bpc_max)]
+    pxor                 m9, m9
+    mov                  r6, dstq
+%else
+    mov [rsp+16*16+gprsize*1], dstq
 %endif
-    call m(iadst_8x8_internal_16bpc).round2
-    jmp m(idct_8x16_internal_16bpc).end
+    lea                  r3, [strideq*3]
+    lea                dstq, [dstq+strideq*8]
+    call m(iadst_8x8_internal_16bpc).round2_and_write_8x8
+%if ARCH_X86_64
+%define mzero m9
+%else
+%define mzero m7
+    pxor                 m7, m7
+%endif
+    REPX {mova [cq+x*16], mzero}, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, \
+                     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+%undef mzero
+    mova                 m0, [rsp+gprsize+ 3*16]
+    mova                 m1, [rsp+gprsize+ 4*16]
+    mova                 m2, [rsp+gprsize+ 5*16]
+    mova                 m3, [rsp+gprsize+ 6*16]
+    mova                 m4, [rsp+gprsize+ 7*16]
+    mova                 m5, [rsp+gprsize+ 8*16]
+    mova                 m6, [rsp+gprsize+ 9*16]
+    mova                 m7, [rsp+gprsize+10*16]
+%if ARCH_X86_64
+    mov                dstq, r6
+%else
+    mov                dstq, [rsp+16*16+gprsize*1]
+%endif
+    call m(iadst_8x8_internal_16bpc).round1_and_write_8x8
+    RET
 
 INV_TXFM_8X16_FN flipadst, dct
 INV_TXFM_8X16_FN flipadst, adst
@@ -3540,8 +3570,7 @@ cglobal idct_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     lea                  r5, [o(itx8_start)]
 %endif
     call m_suffix(idct_8x8_internal_8bpc, _ssse3).main
-    call m(idct_8x8_internal_16bpc).round2
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round2_and_write_8x8
 %if ARCH_X86_64
 %define mzero m9
 %else
@@ -3667,8 +3696,7 @@ cglobal iadst_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
 %endif
     call m_suffix(iadst_8x8_internal_8bpc, _ssse3).main
     call m_suffix(iadst_8x8_internal_8bpc, _ssse3).main_pass2_end
-    call m(iadst_8x8_internal_16bpc).round2
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(iadst_8x8_internal_16bpc).round2_and_write_8x8
 %if ARCH_X86_64
 %define mzero m9
 %else
@@ -3876,10 +3904,13 @@ cglobal iidentity_16x8_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m5, [cq+1*32+16]
     mova                 m6, [cq+2*32+16]
     mova                 m7, [cq+3*32+16]
+%if ARCH_X86_64
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
+%else
     mova      [rsp+gprsize], m7
     mova                 m7, [o(pw_4096)]
-    call m(idct_8x8_internal_16bpc).round4
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round4_and_write_8x8
+%endif
 %if ARCH_X86_64
 %define mzero m9
 %else
@@ -4151,8 +4182,7 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mov                dstq, [rsp+2*gprsize+16*16]
     lea                dstq, [dstq+strideq*8]
 %endif
-    call m(idct_8x8_internal_16bpc).round2
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round2_and_write_8x8
 %if ARCH_X86_64
     mov                dstq, r7
 %else
@@ -4166,8 +4196,7 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m5, [rsp+gprsize+ 8*16]
     mova                 m6, [rsp+gprsize+ 9*16]
     mova                 m7, [rsp+gprsize+10*16]
-    call m(idct_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
 %if ARCH_X86_64
     add                  r7, 16
 %define mzero m9
@@ -4349,7 +4378,6 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m7, [cq+1*64+48]
     call m_suffix(iadst_16x8_internal_8bpc, _ssse3).main
     call m_suffix(iadst_16x8_internal_8bpc, _ssse3).main_pass2_end
-    call m(iadst_8x8_internal_16bpc).round2
 
     ; out0-7 is in rsp+gprsize+3-10*mmsize
     ; out8-14 is in m0-6, and out15 is in m7 as well as rsp+gprsize+0*mmsize
@@ -4360,7 +4388,7 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mov                dstq, [rsp+2*gprsize+16*16]
     lea                dstq, [dstq+strideq*8]
 %endif
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(iadst_8x8_internal_16bpc).round2_and_write_8x8
 %if ARCH_X86_64
     mov                dstq, r7
 %else
@@ -4374,8 +4402,7 @@ cglobal iadst_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     mova                 m5, [rsp+gprsize+ 8*16]
     mova                 m6, [rsp+gprsize+ 9*16]
     mova                 m7, [rsp+gprsize+10*16]
-    call m(iadst_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(iadst_8x8_internal_16bpc).round1_and_write_8x8
 %if ARCH_X86_64
     add                  r7, 16
 %define mzero m9
@@ -5093,8 +5120,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 14, 0-36*16, \
     mova                m10, [o(pixel_10bpc_max)]
 %endif
     lea                  r3, [strideq*3]
-    call m(idct_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
     lea                dstq, [dstq+strideq*8]
     mova                 m0, [rsp+gprsize+11*16]
     mova                 m1, [rsp+gprsize+12*16]
@@ -5104,8 +5130,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 14, 0-36*16, \
     mova                 m5, [rsp+gprsize+16*16]
     mova                 m6, [rsp+gprsize+17*16]
     mova                 m7, [rsp+gprsize+18*16]
-    call m(idct_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
     lea                dstq, [dstq+strideq*8]
     mova                 m0, [rsp+gprsize+19*16]
     mova                 m1, [rsp+gprsize+20*16]
@@ -5115,8 +5140,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 14, 0-36*16, \
     mova                 m5, [rsp+gprsize+24*16]
     mova                 m6, [rsp+gprsize+25*16]
     mova                 m7, [rsp+gprsize+26*16]
-    call m(idct_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
     lea                dstq, [dstq+strideq*8]
     mova                 m0, [rsp+gprsize+27*16]
     mova                 m1, [rsp+gprsize+28*16]
@@ -5126,8 +5150,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 14, 0-36*16, \
     mova                 m5, [rsp+gprsize+32*16]
     mova                 m6, [rsp+gprsize+33*16]
     mova                 m7, [rsp+gprsize+34*16]
-    call m(idct_8x8_internal_16bpc).round1
-    call m(idct_8x8_internal_16bpc).write_8x8
+    call m(idct_8x8_internal_16bpc).round1_and_write_8x8
     ret
 .dconly:
     imul                r5d, [cq], 2896
