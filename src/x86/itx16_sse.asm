@@ -5305,15 +5305,13 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 16, 0-77*16, \
     jge .loop_pass1
 
     ; pass=2
+    add                 rsp, 9*16
 %if ARCH_X86_64
     mov                  r6, dstq
-%if WIN64
-    mov                  r7, [rsp+gprsize*1+76*16]
-%endif
 %else
-    mov                dstq, [rsp+gprsize*1+76*16]
+    mov                dstq, [rsp+gprsize*1+67*16]
 %endif
-    mov                eobd, [rsp+gprsize*0+76*16]
+    mov                eobd, [rsp+gprsize*0+67*16]
     cmp                eobd, 44
     jl .load_veryfast
     cmp                eobd, 151
@@ -5328,21 +5326,38 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 16, 0-77*16, \
     lea                  r4, [o(m_suffix(idct_8x32_internal_8bpc, _ssse3).main_veryfast)]
     ; fall-through
 .run:
-    add                 rsp, 9*16
-    call m(inv_txfm_add_dct_dct_8x32_16bpc).pass2
 %if ARCH_X86_64
-    lea                dstq, [r6+16]
+    lea                  r2, [dstq+32]
+    mov                  r7, -4
 %else
-    mov                dstq, [rsp+gprsize*1+67*16]
-    add                dstq, 16
+    lea                  r2, [rsp+67*16]
+    mov dword [r2+0*gprsize], 2
 %endif
-    add                 rsp, 32*16
+    jmp m(inv_txfm_add_dct_dct_16x32_16bpc).loop_pass2_entry
+.loop_pass2:
     mova                 m0, [rsp+16* 3]
+.loop_pass2_entry:
+%if ARCH_X86_32
+    mov                dstq, [r2+1*gprsize]
+%endif
     call m(inv_txfm_add_dct_dct_8x32_16bpc).pass2
-%assign stack_size (stack_size-41*16)
+    add                 rsp, 32*16
+%if ARCH_X86_64
+    add                  r7, 2
+    lea                dstq, [r2+r7*8]
+    jl .loop_pass2
+%if WIN64
+    mov                  r7, [rsp+gprsize*1+3*16]
+%endif
+%else
+    add dword [r2+1*gprsize], 16
+    dec dword [r2+0*gprsize]
+    jg .loop_pass2
+%endif
+%assign stack_size (stack_size-73*16)
 %if STACK_ALIGNMENT >= 16
-%assign stack_size_padded (stack_size_padded-41*16)
-%assign stack_offset (stack_offset-41*16)
+%assign stack_size_padded (stack_size_padded-73*16)
+%assign stack_offset (stack_offset-73*16)
 %else
 %xdefine rstkm [rsp + stack_size]
 %endif
@@ -6375,9 +6390,9 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 16, 0-(5*32+1)*16, \
 
     ; remove entirely-zero iterations
 %if ARCH_X86_32
-    mov [rsp+5*32*16+0*gprsize], dstq
+    mov [rsp+5*32*16+1*gprsize], dstq
 %elif WIN64
-    mov [rsp+5*32*16+0*gprsize], r7
+    mov [rsp+5*32*16+1*gprsize], r7
 %endif
 %undef cmp
     mov                 r5d, 14
@@ -6410,7 +6425,7 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 16, 0-(5*32+1)*16, \
 .end_zero_loop:
 
     ; actual first pass after skipping all-zero data
-    mov [rsp+gprsize*1+5*32*16], eobd
+    mov [rsp+gprsize*0+5*32*16], eobd
 .loop_pass1:
     mova                 m0, [cq+128* 1+r5*8]
     mova                 m1, [cq+128* 7+r5*8]
@@ -6552,7 +6567,7 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 16, 0-(5*32+1)*16, \
     jge .loop_pass1
 
     ; pass=2 code starts here
-    mov                eobd, [rsp+gprsize*1+5*32*16]
+    mov                eobd, [rsp+gprsize*0+5*32*16]
     add                 rsp, 29*16
     cmp                eobd, 36
     jl .load_veryfast
@@ -6573,38 +6588,9 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 16, 0-(5*32+1)*16, \
     mov                  r7, -8
 %else
     lea                  r2, [rsp+(4*32+3)*16]
-    mov dword [r2+1*gprsize], 4
+    mov dword [r2+0*gprsize], 4
 %endif
-    jmp .loop_pass2_entry
-.loop_pass2:
-    mova                 m0, [rsp+16* 3]
-.loop_pass2_entry:
-%if ARCH_X86_32
-    mov                dstq, [r2+0*gprsize]
-%endif
-    call m(inv_txfm_add_dct_dct_8x32_16bpc).pass2
-    add                 rsp, 32*16
-%if ARCH_X86_64
-    add                  r7, 2
-    lea                dstq, [r2+r7*8]
-    jl .loop_pass2
-%else
-    mov                dstq, [r2+0*gprsize]
-    add dword [r2+0*gprsize], 16
-    dec dword [r2+1*gprsize]
-    jg .loop_pass2
-%endif
-%assign stack_size (stack_size-(4*32+29)*16)
-%if STACK_ALIGNMENT >= 16
-%assign stack_size_padded (stack_size_padded-(4*32+29)*16)
-%assign stack_offset (stack_offset-(4*32+29)*16)
-%else
-%xdefine rstkm [rsp + stack_size]
-%endif
-%if WIN64
-    mov                  r7, [rsp+3*16+gprsize*0]
-%endif
-    RET
+    jmp m(inv_txfm_add_dct_dct_16x32_16bpc).loop_pass2_entry
 
 .dconly:
     imul                r5d, [cq], 2896
