@@ -5105,7 +5105,7 @@ cglobal idct_16x64_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
 
 
 ALIGN function_align
-.main_fast:
+cglobal_label .main_fast
     mova                    m0, [rsp+gprsize*2+16*35]     ;in1
     pmulhrsw                m3, m0, [o(pw_4095x8)]        ;t62,t63
     pmulhrsw                m0, [o(pw_101x8)]             ;t32,t33
@@ -5179,7 +5179,7 @@ ALIGN function_align
     jmp .main2
 
 ALIGN function_align
-.main:
+cglobal_label .main
     mova                    m0, [rsp+gprsize*2+16*35]     ;in1
     mova                    m1, [rsp+gprsize*2+16*65]     ;in31
     pmulhrsw                m3, m0, [o(pw_4095x8)]        ;t63a
