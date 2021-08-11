@@ -1344,20 +1344,20 @@ cglobal idct_8x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp                tx2q
 .transpose4x8packed:
     ; transpose
-    punpckhwd            m5, m0, m4
+    punpcklwd            m1, m2, m6
+    punpckhwd            m2, m6
+    punpckhwd            m6, m0, m4
     punpcklwd            m0, m4
-    punpckhwd            m4, m2, m6
-    punpcklwd            m2, m6
 
-    punpckhwd            m3, m0, m2
-    punpcklwd            m0, m2
-    punpckhwd            m7, m5, m4
-    punpcklwd            m5, m4
+    punpckhwd            m3, m0, m1
+    punpcklwd            m0, m1
+    punpckhwd            m4, m6, m2
+    punpcklwd            m6, m2
 
-    punpckhwd            m1, m0, m5
-    punpcklwd            m0, m5
-    punpcklwd            m2, m3, m7
-    punpckhwd            m3, m7
+    punpcklwd            m2, m3, m4
+    punpckhwd            m3, m4
+    punpckhwd            m1, m0, m6
+    punpcklwd            m0, m6
     ret
 .main:
     call .main_pass1
@@ -2513,20 +2513,20 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     jmp                tx2q
 %if ARCH_X86_64
 .transpose4x8packed_hi:
-    punpckhwd           m11, m8, m10
-    punpcklwd            m8, m10
-    punpckhwd           m13, m12, m14
-    punpcklwd           m12, m14
+    punpcklwd            m9, m10, m14
+    punpckhwd           m10, m14
+    punpckhwd           m14, m8, m12
+    punpcklwd            m8, m12
 
-    punpckhwd           m10, m8, m11
-    punpcklwd            m8, m11
-    punpckhwd           m14, m12, m13
-    punpcklwd           m12, m13
+    punpckhwd           m11, m8, m9
+    punpcklwd            m8, m9
+    punpckhwd           m12, m14, m10
+    punpcklwd           m14, m10
 
-    punpckhqdq           m9, m8, m12
-    punpcklqdq           m8, m12
-    punpckhqdq          m11, m10, m14
-    punpcklqdq          m10, m14
+    punpcklwd           m10, m11, m12
+    punpckhwd           m11, m12
+    punpckhwd            m9, m8, m14
+    punpcklwd            m8, m14
     ret
 %endif
 .main_oddhalf:
