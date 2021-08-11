@@ -575,7 +575,6 @@ cglobal cdef_filter_%1x%2_8bpc, 2, 7, 8, - 7 * 16 - (%2+4)*32, \
     neg        pridmpd
     cmovs      pridmpd, dampingd
     neg           secd
-    cmovs         secd, dampingd
     PSHUFB_0        m1, m7
     PSHUFB_0       m10, m7
  %if ARCH_X86_64
