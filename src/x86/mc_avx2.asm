@@ -5117,27 +5117,23 @@ cglobal resize_8bpc, 6, 14, 16, dst, dst_stride, src, src_stride, \
     vptest               m1, m1
     jz .filter
 
-    movd                r8d, xm1
-    pextrd              r9d, xm1, 1
-    pextrd             r10d, xm1, 2
-    pextrd             r11d, xm1, 3
-    movsxd               r8, r8d
-    movsxd               r9, r9d
-    movsxd              r10, r10d
-    movsxd              r11, r11d
+    movq                 r9, xm1
+    pextrq              r11, xm1, 1
+    movsxd               r8, r9d
+    sar                  r9, 32
+    movsxd              r10, r11d
+    sar                 r11, 32
     vextracti128        xm1, m1, 1
     movq               xm14, [base+resize_shuf+4+r8]
     movq                xm0, [base+resize_shuf+4+r10]
     movhps             xm14, [base+resize_shuf+4+r9]
     movhps              xm0, [base+resize_shuf+4+r11]
-    movd                r8d, xm1
-    pextrd              r9d, xm1, 1
-    pextrd             r10d, xm1, 2
-    pextrd             r11d, xm1, 3
-    movsxd               r8, r8d
-    movsxd               r9, r9d
-    movsxd              r10, r10d
-    movsxd              r11, r11d
+    movq                 r9, xm1
+    pextrq              r11, xm1, 1
+    movsxd               r8, r9d
+    sar                  r9, 32
+    movsxd              r10, r11d
+    sar                 r11, 32
     vinserti128         m14, [base+resize_shuf+4+r8], 1
     vinserti128          m0, [base+resize_shuf+4+r10], 1
     vpbroadcastq        m10, [base+resize_shuf+4+r9]
