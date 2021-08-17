@@ -7644,6 +7644,7 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 16, 0-(64+8*ARCH_X86_32)*16, \
     imul                r5d, [cq], 2896
     mov                [cq], eobd ; 0
     mov                 r3d, 16
+.dconly1:
     add                 r5d, 10240
     sar                 r5d, 14
 .dconly2:
@@ -7894,3 +7895,235 @@ cglobal inv_txfm_add_dct_dct_64x32_16bpc, 4, 7, 16, \
     sar                 r5d, 13
     add                 rsp, (1+8*32+1*WIN64)*16
     jmp m(inv_txfm_add_dct_dct_64x16_16bpc).dconly2
+
+cglobal inv_txfm_add_dct_dct_64x64_16bpc, 4, 7, 16, \
+                                         0-(64+8*ARCH_X86_32+8*64+1*ARCH_X86_64)*16-(4+4*ARCH_X86_32)*gprsize, \
+                                         dst, stride, c, eob
+    LEA                  r6, base
+    test               eobd, eobd
+    jz .dconly
+
+%if ARCH_X86_32
+    DECLARE_REG_TMP 4, 1, 2, 0, 6
+    mov [rsp+gprsize*1+(64*9+8)*16], r0
+    mov [rsp+gprsize*2+(64*9+8)*16], r1
+    mov [rsp+gprsize*3+(64*9+8)*16], r2
+    mov [rsp+gprsize*4+(64*9+8)*16], r6
+%else
+    DECLARE_REG_TMP 8, 9, 4, 7, 0
+    mov [rsp+gprsize*1+(64*9+1)*16], r9
+    mov [rsp+gprsize*0+64*16], r0
+%if WIN64
+    mov [rsp+gprsize*2+(64*9+1)*16], r7
+    mov [rsp+gprsize*3+(64*9+1)*16], r8
+%endif
+%endif
+%undef cmp
+
+    ; remove entirely-zero iterations
+    mov                 r5d, 14
+    cmp                eobw, word [o2(tbl_32x32_2d)+r5]
+    jge .end_zero_loop
+    pxor                 m0, m0
+.zero_loop:
+    movzx               t1d, word [o2(tbl_Nx64_offset)+r5*2+0]
+    movzx               t3d, word [o2(tbl_Nx64_offset)+r5*2+2]
+    movzx               t0d, t1b
+    movzx               t2d, t3b
+    shr                 t1d, 8
+    shr                 t3d, 8
+    lea                  t4, [rsp+7*64*16]
+.zero_loop_inner:
+    mova [t4+(64+8*ARCH_X86_32+1*ARCH_X86_64)*16+t0*8], m0
+    mova [t4+(64+8*ARCH_X86_32+1*ARCH_X86_64)*16+t1*8], m0
+    mova [t4+(64+8*ARCH_X86_32+1*ARCH_X86_64)*16+t2*8], m0
+    mova [t4+(64+8*ARCH_X86_32+1*ARCH_X86_64)*16+t3*8], m0
+    sub                  t4, 64*16
+    cmp                  t4, rsp
+    jge .zero_loop_inner
+%if ARCH_X86_32
+    mov                  r6, [rsp+gprsize*4+(64*9+8)*16]
+%endif
+    sub                 r5d, 2
+    cmp                eobw, word [o2(tbl_32x32_2d)+r5]
+    jl .zero_loop
+.end_zero_loop:
+    mov [rsp+gprsize*0+(9*64+8*ARCH_X86_32+1*ARCH_X86_64)*16], eobd
+%if ARCH_X86_32
+    mov                  cq, [rsp+gprsize*3+(64*9+8)*16]
+%endif
+    ; actual first pass after skipping all-zero data
+.loop_pass1:
+%if ARCH_X86_64
+    mova                m11, [o(pd_2048)]
+    mova                m12, [o(clip_min)]
+    mova                m13, [o(clip_max)]
+    mova                m14, [o(pd_2896)]
+%endif
+
+    mov                  r3, rsp
+    lea                  r4, [o(idct64_mul_16bpc)]
+    mova                 m0, [cq+128* 1+r5*8]
+    mova                 m1, [cq+128*31+r5*8]
+    mova                 m2, [cq+128*17+r5*8]
+    mova                 m3, [cq+128*15+r5*8]
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_part1
+    mova                 m0, [cq+128* 7+r5*8]
+    mova                 m1, [cq+128*25+r5*8]
+    mova                 m2, [cq+128*23+r5*8]
+    mova                 m3, [cq+128* 9+r5*8]
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_part1
+    mova                 m0, [cq+128* 5+r5*8]
+    mova                 m1, [cq+128*27+r5*8]
+    mova                 m2, [cq+128*21+r5*8]
+    mova                 m3, [cq+128*11+r5*8]
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_part1
+    mova                 m0, [cq+128* 3+r5*8]
+    mova                 m1, [cq+128*29+r5*8]
+    mova                 m2, [cq+128*19+r5*8]
+    mova                 m3, [cq+128*13+r5*8]
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_part1
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_part2
+
+    mova                 m0, [cq+128* 2+r5*8]
+    mova                 m1, [cq+128*14+r5*8]
+    mova                 m2, [cq+128*18+r5*8]
+    mova                 m3, [cq+128*30+r5*8]
+    call m(inv_txfm_add_dct_dct_32x8_16bpc).main_oddhalf_part1_fast
+
+    mova                 m0, [cq+128* 6+r5*8]
+    mova                 m1, [cq+128*10+r5*8]
+    mova                 m2, [cq+128*22+r5*8]
+    mova                 m3, [cq+128*26+r5*8]
+    call m(inv_txfm_add_dct_dct_32x8_16bpc).main_oddhalf_part2_fast
+    add                  r3, 16*(24+4*ARCH_X86_32)
+
+    mova                 m0, [cq+128* 4+r5*8]
+    mova                 m1, [cq+128*12+r5*8]
+    mova                 m2, [cq+128*20+r5*8]
+    mova                 m3, [cq+128*28+r5*8]
+    call m(idct_16x4_internal_16bpc).main_oddhalf_fast
+
+    mova                 m0, [cq+128* 0+r5*8]
+    mova                 m1, [cq+128* 8+r5*8]
+    mova                 m2, [cq+128*16+r5*8]
+    mova                 m3, [cq+128*24+r5*8]
+    call m(idct_8x4_internal_16bpc).main_pass1_fast
+    call m(idct_8x4_internal_16bpc).round
+    mova [r3-(7+4*ARCH_X86_32)*16], m1
+    mova [r3-(6+4*ARCH_X86_32)*16], m2
+    mova [r3-(5+4*ARCH_X86_32)*16], m3
+    mova [r3-(4+4*ARCH_X86_32)*16], m4
+    mova [r3-(3+4*ARCH_X86_32)*16], m5
+    mova [r3-(2+4*ARCH_X86_32)*16], m6
+    mova [r3-(1+4*ARCH_X86_32)*16], m7
+    sub                  r3, 16*(40+4*ARCH_X86_32-4)
+
+%if ARCH_X86_64
+    psrld               m15, m11, 10 ; pd_2
+%else
+    mova                 m7, [o(pd_2)]
+%endif
+    call m(inv_txfm_add_dct_dct_64x16_16bpc).main_end_loop_start
+
+    lea                  r3, [rsp+56*16]
+    movzx               t1d, word [o2(tbl_Nx64_offset)+r5*2+0]
+    movzx               t3d, word [o2(tbl_Nx64_offset)+r5*2+2]
+    movzx               t0d, t1b
+    movzx               t2d, t3b
+    shr                 t1d, 8
+    shr                 t3d, 8
+    lea                  t4, [rsp+7*64*16+(64+8*ARCH_X86_32+1*ARCH_X86_64)*16]
+    call .shift_transpose
+    ; zero cq
+    pxor                 m7, m7
+%if ARCH_X86_32
+    mov                  cq, [rsp+gprsize*3+(64*9+8)*16]
+%endif
+    lea                  r4, [cq+30*128+r5*8]
+.zero_cq_loop:
+    REPX {mova [r4+x*128], m7}, -2, -1, 0, 1
+    sub                  r4, 4*128
+    cmp                  r4, cq
+    jg .zero_cq_loop
+%if ARCH_X86_32
+    mov                  r6, [rsp+gprsize*4+(64*9+8)*16]
+%endif
+    sub                 r5d, 2
+    jge .loop_pass1
+
+    ; pass=2 code starts here
+    mov                eobd, [rsp+gprsize*0+(9*64+8*ARCH_X86_32+1*ARCH_X86_64)*16]
+%if ARCH_X86_32
+    mov             strideq, [rsp+gprsize*2+(9*64+8)*16]
+%else
+    mov                  r0, [rsp+gprsize*0+64*16]
+%endif
+    add                 rsp, (64+8*ARCH_X86_32+1*ARCH_X86_64-3)*16
+    cmp                eobd, 151
+    jl .fast
+    ; fall-through
+%if ARCH_X86_64
+    DECLARE_REG_TMP 8, 9
+%else
+    DECLARE_REG_TMP 1, 5
+%endif
+    lea                  t0, [o(m_suffix(idct_8x32_internal_8bpc, _ssse3).main_fast)]
+    lea                  t1, [o(m_suffix(idct_16x64_internal_8bpc, _ssse3).main)]
+    jmp .run
+.fast:
+    lea                  t0, [o(m_suffix(idct_8x32_internal_8bpc, _ssse3).main_veryfast)]
+    lea                  t1, [o(m_suffix(idct_16x64_internal_8bpc, _ssse3).main_fast)]
+.run:
+
+%if ARCH_X86_64
+    lea                  r2, [dstq+128]
+    mov                  r7, -16
+%else
+    lea                  r2, [rsp+(64*8+3)*16]
+    mov      [r2+4*gprsize], t0
+    mov      [r2+5*gprsize], t1
+    mov                  r1, [r2+2*gprsize]
+    mov dword [r2+0*gprsize], 8
+%endif
+    jmp m(inv_txfm_add_dct_dct_16x64_16bpc).loop_pass2
+
+    ; copy of pass=1 tmp-regs
+%if ARCH_X86_32
+    DECLARE_REG_TMP 4, 1, 2, 0, 6
+%else
+    DECLARE_REG_TMP 8, 9, 4, 7, 0
+%endif
+
+.shift_transpose:
+    mova                 m0, [r3+0*16]
+    mova                 m1, [r3+1*16]
+    mova                 m2, [r3+2*16]
+    mova                 m3, [r3+3*16]
+    mova                 m4, [r3+4*16]
+    mova                 m5, [r3+5*16]
+    mova                 m6, [r3+6*16]
+    mova                 m7, [r3+7*16]
+    REPX       {psrad x, 2}, m0, m1, m2, m3, m4, m5, m6, m7
+    packssdw             m0, m1
+    packssdw             m2, m3
+    packssdw             m4, m5
+    packssdw             m6, m7
+    call m(idct_8x4_internal_16bpc).transpose4x8packed
+    mova          [t4+t0*8], m0
+    mova          [t4+t1*8], m1
+    mova          [t4+t2*8], m2
+    mova          [t4+t3*8], m3
+    sub                  t4, 16*64
+    sub                  r3, 8*16
+    cmp                  r3, rsp
+    jg .shift_transpose
+    ret
+
+.dconly:
+    imul                r5d, [cq], 2896
+    mov                [cq], eobd ; 0
+    mov                 r3d, 64
+    add                 rsp, (64+8*ARCH_X86_32+8*64+1*ARCH_X86_64)*16 + \
+                             (4+4*ARCH_X86_32)*gprsize - (64+8*ARCH_X86_32)*16
+    jmp m(inv_txfm_add_dct_dct_64x16_16bpc).dconly1
