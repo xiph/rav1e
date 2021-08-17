@@ -112,7 +112,7 @@ DECLARE_REG_TMP 7, 8
     jz .pri_only
     mova         [rsp], m6
     movd            m6, secd
-    bsr           secd, secd
+    tzcnt         secd, secd
     sub        pridmpd, tmpd
     sub           tmpd, secd
     pshufb          m6, m7
@@ -157,7 +157,7 @@ DECLARE_REG_TMP 7, 8
 .sec_only:
     mov           tmpd, r7m ; damping
     movd            m6, r5m
-    bsr           secd, secd
+    tzcnt         secd, secd
     mov           dird, r6m
     pshufb          m6, m7
     sub           tmpd, secd
