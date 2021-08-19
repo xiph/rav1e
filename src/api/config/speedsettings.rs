@@ -57,7 +57,7 @@ pub struct SpeedSettings {
   /// Enabled is faster.
   pub no_scene_detection: bool,
   /// Fast scene detection mode, uses simple SAD instead of encoder cost estimates.
-  pub fast_scene_detection: bool,
+  pub fast_scene_detection: SceneDetectionSpeed,
   /// Enables CDEF.
   pub cdef: bool,
   /// Enables LRF.
@@ -110,7 +110,7 @@ impl Default for SpeedSettings {
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
       no_scene_detection: false,
-      fast_scene_detection: false,
+      fast_scene_detection: SceneDetectionSpeed::Medium,
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
@@ -246,8 +246,14 @@ impl SpeedSettings {
     false
   }
 
-  const fn fast_scene_detection_preset(speed: usize) -> bool {
-    speed == 10
+  const fn fast_scene_detection_preset(speed: usize) -> SceneDetectionSpeed {
+    if speed <= 6 {
+      SceneDetectionSpeed::Slow
+    } else if speed <= 9 {
+      SceneDetectionSpeed::Medium
+    } else {
+      SceneDetectionSpeed::Fast
+    }
   }
 
   const fn cdef_preset(_speed: usize) -> bool {
@@ -310,6 +316,40 @@ impl PartitionRange {
     assert!(max.is_sqr());
 
     Self { min, max }
+  }
+}
+
+/// Prediction modes to search.
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+)]
+pub enum SceneDetectionSpeed {
+  /// Fastest scene detection using pixel-wise comparison
+  Fast,
+  /// Scene detection using motion vectors
+  Medium,
+  /// Scene detection using histogram block-based comparison
+  Slow,
+}
+
+impl fmt::Display for SceneDetectionSpeed {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        SceneDetectionSpeed::Fast => "Fast",
+        SceneDetectionSpeed::Medium => "Medium",
+        SceneDetectionSpeed::Slow => "Slow",
+      }
+    )
   }
 }
 

@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::api::lookahead::*;
-use crate::api::EncoderConfig;
+use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
@@ -17,13 +17,14 @@ use itertools::Itertools;
 use rust_hawktracer::*;
 use std::sync::Arc;
 use std::{cmp, u64};
+// use crate::api::*;
 
 /// Runs keyframe detection on frames from the lookahead queue.
 pub struct SceneChangeDetector<T: Pixel> {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
-  threshold: usize,
+  threshold: f64,
   /// Fast scene cut detection mode, uses simple SAD instead of encoder cost estimates.
-  fast_mode: bool,
+  speed_mode: SceneDetectionSpeed,
   /// scaling factor for fast scene detection
   scale_factor: usize,
   // Frame buffer for scaled frames
@@ -58,17 +59,23 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
     // the double digits in HSV.
     //
-    // This threshold is only used for the fast scenecut implementation.
-    //
-    // Experiments have shown that this threshold is optimal.
-    const BASE_THRESHOLD: usize = 18;
-    let bit_depth = encoder_config.bit_depth;
-    let fast_mode = encoder_config.speed_settings.fast_scene_detection
-      || encoder_config.low_latency;
+    // Experiments have shown that these thresholds is optimal.
+    const FAST_THRESHOLD: f64 = 18.0;
+    const SLOW_THRESHOLD: f64 = 7.0;
 
-    // Scale factor for fast scene detection
-    let scale_factor =
-      if fast_mode { detect_scale_factor(&sequence) } else { 1_usize };
+    let bit_depth = encoder_config.bit_depth;
+    let speed_mode = if encoder_config.low_latency {
+      SceneDetectionSpeed::Fast
+    } else {
+      encoder_config.speed_settings.fast_scene_detection
+    };
+
+    // Scale factor for fast and medium scene detection
+    let scale_factor = if speed_mode != SceneDetectionSpeed::Slow {
+      detect_scale_factor(&sequence, speed_mode)
+    } else {
+      1_usize
+    };
 
     // Set lookahead offset to 5 if normal lookahead available
     let lookahead_offset = if lookahead_distance >= 5 { 5 } else { 0 };
@@ -77,19 +84,28 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let score_deque = Vec::with_capacity(5 + lookahead_distance);
 
     // Pixel count for fast scenedetect
-    let pixels = if fast_mode {
+    let pixels = if speed_mode == SceneDetectionSpeed::Fast {
       (sequence.max_frame_height as usize / scale_factor)
         * (sequence.max_frame_width as usize / scale_factor)
     } else {
       1
     };
 
-    let frame_buffer =
-      if fast_mode { Vec::with_capacity(2) } else { Vec::new() };
+    let frame_buffer = if speed_mode == SceneDetectionSpeed::Fast {
+      Vec::with_capacity(2)
+    } else {
+      Vec::new()
+    };
+
+    let threshold = if speed_mode == SceneDetectionSpeed::Fast {
+      FAST_THRESHOLD * (bit_depth as f64) / 8.0
+    } else {
+      SLOW_THRESHOLD * (bit_depth as f64) / 8.0
+    };
 
     Self {
-      threshold: BASE_THRESHOLD * bit_depth / 8,
-      fast_mode,
+      threshold,
+      speed_mode,
       scale_factor,
       frame_buffer,
       lookahead_offset,
@@ -220,7 +236,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
     input_frameno: u64, previous_keyframe: u64,
   ) {
-    let result = if self.fast_mode {
+    let result = if self.speed_mode == SceneDetectionSpeed::Fast {
       self.fast_scenecut(frame1, frame2)
     } else {
       self.cost_scenecut(frame1, frame2, input_frameno, previous_keyframe)
@@ -239,7 +255,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     // Subtract the previous metric value from the current one
     // It makes the peaks in the metric more distinctive
-    if !self.fast_mode && self.deque_offset > 0 {
+    if (self.speed_mode != SceneDetectionSpeed::Fast) && self.deque_offset > 0
+    {
       let previous_scene_score = self.score_deque[self.deque_offset - 1].0;
       self.score_deque[self.deque_offset].0 -= previous_scene_score;
     }
@@ -324,6 +341,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     previous_keyframe: u64,
   ) -> ScenecutResult {
     let frame2_ref2 = Arc::clone(&frame2);
+
     let (intra_cost, inter_cost) = crate::rayon::join(
       move || {
         let intra_costs = estimate_intra_costs(
@@ -335,13 +353,18 @@ impl<T: Pixel> SceneChangeDetector<T> {
           / intra_costs.len() as f64
       },
       move || {
-        let inter_costs = estimate_inter_costs(
-          frame2_ref2,
-          frame1,
-          self.bit_depth,
-          self.encoder_config,
-          self.sequence.clone(),
-        );
+        let inter_costs = if self.speed_mode == SceneDetectionSpeed::Medium {
+          estimate_inter_costs(
+            frame2_ref2,
+            frame1,
+            self.bit_depth,
+            self.encoder_config,
+            self.sequence.clone(),
+          )
+        } else {
+          estimate_inter_costs_histogram_blocks(frame2_ref2, frame1)
+        };
+
         inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
           / inter_costs.len() as f64
       },
@@ -359,6 +382,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // This also matches the default scenecut threshold in x264.
     const THRESH_MAX: f64 = 0.4;
     const THRESH_MIN: f64 = THRESH_MAX * 0.25;
+    const SCALE_FACTOR: f64 = 3.6;
     let distance_from_keyframe = frameno - previous_keyframe;
     let min_keyint = self.encoder_config.min_key_frame_interval;
     let max_keyint = self.encoder_config.max_key_frame_interval;
@@ -372,7 +396,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
           * (distance_from_keyframe - min_keyint) as f64
           / (max_keyint - min_keyint) as f64
     };
-    let threshold = intra_cost * (1.0 - bias) / 2.2;
+
+    // Adaptive threshold for medium version, static thresholf for the slow one
+    let threshold = if self.speed_mode == SceneDetectionSpeed::Medium {
+      intra_cost * (1.0 - bias) / SCALE_FACTOR
+    } else {
+      self.threshold as f64
+    };
 
     ScenecutResult { intra_cost, inter_cost, threshold }
   }
@@ -401,18 +431,31 @@ impl<T: Pixel> SceneChangeDetector<T> {
 }
 
 /// Scaling factor for frame in scene detection
-fn detect_scale_factor(sequence: &Arc<Sequence>) -> usize {
+fn detect_scale_factor(
+  sequence: &Arc<Sequence>, speed_mode: SceneDetectionSpeed,
+) -> usize {
   let small_edge =
     cmp::min(sequence.max_frame_height, sequence.max_frame_width) as usize;
-  let scale_factor = match small_edge {
-    0..=240 => 1,
-    241..=480 => 2,
-    481..=720 => 4,
-    721..=1080 => 8,
-    1081..=1600 => 16,
-    1601..=usize::MAX => 32,
-    _ => 1,
-  } as usize;
+  let scale_factor;
+  if speed_mode == SceneDetectionSpeed::Fast {
+    scale_factor = match small_edge {
+      0..=240 => 1,
+      241..=480 => 2,
+      481..=720 => 4,
+      721..=1080 => 8,
+      1081..=1600 => 16,
+      1601..=usize::MAX => 32,
+      _ => 1,
+    } as usize
+  } else {
+    scale_factor = match small_edge {
+      0..=1600 => 1,
+      1601..=2160 => 2,
+      2161..=usize::MAX => 4,
+      _ => 1,
+    } as usize
+  };
+
   debug!(
     "Scene detection scale factor {}, [{},{}] -> [{},{}]",
     scale_factor,

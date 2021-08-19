@@ -14,8 +14,10 @@ use crate::rayon::iter::*;
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
+use histogram::Histogram;
 use rust_hawktracer::*;
 use std::sync::Arc;
+use v_frame::pixel::CastFromPrimitive;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
 pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
@@ -113,6 +115,64 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
   }
 
   intra_costs.into_boxed_slice()
+}
+
+#[hawktracer(estimate_inter_costs_histogram)]
+pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
+  frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>,
+) -> Box<[u32]> {
+  let plane_org = &frame.planes[0];
+  let plane_ref = &ref_frame.planes[0];
+  let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
+  let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
+  let mut inter_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
+
+  (0..h_in_imp_b).for_each(|y| {
+    (0..w_in_imp_b).for_each(|x| {
+      // Coordinates of the top-left corner of the reference block, in MV
+      // units.
+      let region_org = plane_org.region(Area::Rect {
+        x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+        y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+        width: IMPORTANCE_BLOCK_SIZE,
+        height: IMPORTANCE_BLOCK_SIZE,
+      });
+
+      let region_ref = plane_ref.region(Area::Rect {
+        x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+        y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+        width: IMPORTANCE_BLOCK_SIZE,
+        height: IMPORTANCE_BLOCK_SIZE,
+      });
+
+      let mut histogram_org =
+        Histogram::configure().max_value(256).build().unwrap();
+      let iter_org = region_org.rows_iter();
+      for row in iter_org {
+        for pixel in row {
+          let cur = i16::cast_from(*pixel);
+          histogram_org.increment(cur as u64).unwrap();
+        }
+      }
+
+      let mut histogram_ref =
+        Histogram::configure().max_value(256).build().unwrap();
+      let iter_ref = region_ref.rows_iter();
+      for row in iter_ref {
+        for pixel in row {
+          let cur = i16::cast_from(*pixel);
+          histogram_ref.increment(cur as u64).unwrap();
+        }
+      }
+
+      let mean = (histogram_org.mean().unwrap() as i32
+        - histogram_ref.mean().unwrap() as i32)
+        .abs();
+
+      inter_costs.push(mean as u32);
+    });
+  });
+  inter_costs.into_boxed_slice()
 }
 
 #[hawktracer(estimate_inter_costs)]
