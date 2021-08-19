@@ -176,6 +176,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("6")
     )
     .arg(
+      Arg::with_name("SCENE_CHANGE_DETECTION_SPEED")
+        .help("Speed level (0 is best quality, 2 is fastest)")
+        .long("scd_speed")
+        .takes_value(true)
+        .default_value("2")
+    )
+    .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
         .help("Minimum interval between keyframes")
         .short("i")
@@ -563,6 +570,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
+  let scene_detection_speed: u32 =
+    matches.value_of("SCENE_CHANGE_DETECTION_SPEED").unwrap().parse().unwrap();
   let max_interval: u64 =
     matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
   let mut min_interval: u64 =
@@ -576,6 +585,9 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     panic!("Speed must be between 0-10");
   } else if min_interval > max_interval {
     panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
+  }
+  if scene_detection_speed > 2 {
+    panic!("Scene change detection speed must be between 0-2");
   }
 
   let color_primaries =
@@ -592,6 +604,16 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     .unwrap_or_default();
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
+
+  if matches.occurrences_of("SCENE_CHANGE_DETECTION_SPEED") != 0 {
+    cfg.speed_settings.fast_scene_detection = match scene_detection_speed {
+      0 => SceneDetectionSpeed::Slow,
+      1 => SceneDetectionSpeed::Medium,
+      2 => SceneDetectionSpeed::Fast,
+      3..=u32::MAX => cfg.speed_settings.fast_scene_detection,
+    };
+  }
+
   cfg.set_key_frame_interval(min_interval, max_interval);
   cfg.switch_frame_interval =
     matches.value_of("SWITCH_FRAME_INTERVAL").unwrap().parse().unwrap();
