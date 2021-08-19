@@ -177,7 +177,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("SCENE_CHANGE_DETECTION_SPEED")
-        .help("Speed level (0 is best quality, 2 is fastest)")
+        .help("Speed level for scene-change detection, 0: best quality, 1: speed-to-quality trade-off, 2: fastest mode\n\
+          [default:  0 for s0-s6, 1 for s7-s9, 2 for s10]")
         .long("scd_speed")
         .takes_value(true)
         .default_value("2")
@@ -606,11 +607,12 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   let mut cfg = EncoderConfig::with_speed_preset(speed);
 
   if matches.occurrences_of("SCENE_CHANGE_DETECTION_SPEED") != 0 {
-    cfg.speed_settings.fast_scene_detection = match scene_detection_speed {
-      0 => SceneDetectionSpeed::Slow,
-      1 => SceneDetectionSpeed::Medium,
-      2 => SceneDetectionSpeed::Fast,
-      3..=u32::MAX => cfg.speed_settings.fast_scene_detection,
+    cfg.speed_settings.fast_scene_detection = if scene_detection_speed == 0 {
+      SceneDetectionSpeed::Slow
+    } else if scene_detection_speed == 1 {
+      SceneDetectionSpeed::Medium
+    } else {
+      SceneDetectionSpeed::Fast
     };
   }
 
