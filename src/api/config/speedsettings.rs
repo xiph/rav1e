@@ -110,7 +110,7 @@ impl Default for SpeedSettings {
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
       no_scene_detection: false,
-      fast_scene_detection: SceneDetectionSpeed::Medium,
+      fast_scene_detection: SceneDetectionSpeed::Fast,
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
