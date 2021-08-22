@@ -10,7 +10,7 @@
 #![allow(clippy::print_literal)]
 #![allow(clippy::unused_io_amount)]
 
-use rustc_version::{version, Version};
+use rustc_version::{version, version_meta, Channel, Version};
 #[allow(unused_imports)]
 use std::env;
 use std::fs;
@@ -219,6 +219,10 @@ fn rustc_version_check() {
   if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
     eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
     exit(1);
+  }
+
+  if version_meta().unwrap().channel == Channel::Nightly {
+    println!("cargo:rustc-cfg=nightly_rustc");
   }
 }
 
