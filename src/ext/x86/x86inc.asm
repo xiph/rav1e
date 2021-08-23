@@ -79,6 +79,11 @@
     %define mangle(x) x
 %endif
 
+; Use VEX-encoding even in non-AVX functions
+%ifndef FORCE_VEX_ENCODING
+    %define FORCE_VEX_ENCODING 0
+%endif
+
 %macro SECTION_RODATA 0-1 16
     %ifidn __OUTPUT_FORMAT__,win32
         SECTION .rdata align=%1
@@ -1008,7 +1013,7 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
 %endmacro
 
 %macro INIT_XMM 0-1+
-    %assign avx_enabled 0
+    %assign avx_enabled FORCE_VEX_ENCODING
     %define RESET_MM_PERMUTATION INIT_XMM %1
     %define mmsize 16
     %define mova movdqa
