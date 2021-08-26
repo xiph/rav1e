@@ -384,6 +384,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       let delta_line = l1
         .iter()
         .zip(l2.iter())
+        .take(plane1.cfg.width)
         .map(|(&p1, &p2)| {
           (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
         })
