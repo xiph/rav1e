@@ -416,6 +416,7 @@ endfunc
 .endm
 
 function inv_dct_4s_x4_neon
+        AARCH64_VALID_CALL_TARGET
         movrel          x16, idct_coeffs
         ld1             {v0.4s}, [x16]
         idct_4          v16, v17, v18, v19
@@ -449,16 +450,19 @@ endfunc
 .endm
 
 function inv_adst_4s_x4_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_4x4       v16, v17, v18, v19
         ret
 endfunc
 
 function inv_flipadst_4s_x4_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_4x4       v19, v18, v17, v16
         ret
 endfunc
 
 function inv_identity_4s_x4_neon
+        AARCH64_VALID_CALL_TARGET
         movz            w16, #(5793-4096)*8, lsl #16
         dup             v0.2s,   w16
         sqrdmulh        v4.4s,   v16.4s,  v0.s[0]
@@ -626,6 +630,7 @@ def_fn_4x4 identity, flipadst
 .endm
 
 function inv_dct_4s_x8_neon
+        AARCH64_VALID_CALL_TARGET
         movrel          x16, idct_coeffs
         ld1             {v0.4s, v1.4s}, [x16]
         idct_8          v16, v17, v18, v19, v20, v21, v22, v23
@@ -702,16 +707,19 @@ endfunc
 .endm
 
 function inv_adst_4s_x8_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_8         v16, v17, v18, v19, v20, v21, v22, v23
         ret
 endfunc
 
 function inv_flipadst_4s_x8_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_8         v23, v22, v21, v20, v19, v18, v17, v16
         ret
 endfunc
 
 function inv_identity_4s_x8_neon
+        AARCH64_VALID_CALL_TARGET
         sqshl           v16.4s,  v16.4s,  #1
         sqshl           v17.4s,  v17.4s,  #1
         sqshl           v18.4s,  v18.4s,  #1
@@ -945,6 +953,7 @@ def_fns_48 8, 4
 
 
 function inv_dct_4s_x16_neon
+        AARCH64_VALID_CALL_TARGET
         movrel          x16, idct_coeffs
         ld1             {v0.4s, v1.4s}, [x16], #32
 
@@ -1206,16 +1215,19 @@ endfunc
 .endm
 
 function inv_adst_4s_x16_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_16        v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27, v28, v29, v30, v31
         ret
 endfunc
 
 function inv_flipadst_4s_x16_neon
+        AARCH64_VALID_CALL_TARGET
         iadst_16        v31, v30, v29, v28, v27, v26, v25, v24, v23, v22, v21, v20, v19, v18, v17, v16
         ret
 endfunc
 
 function inv_identity_4s_x16_neon
+        AARCH64_VALID_CALL_TARGET
         movz            w16, #2*(5793-4096)*8, lsl #16
         dup             v0.2s,   w16
 .irp i, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31

@@ -1370,6 +1370,7 @@ endfunc
 
 .macro def_horz_16 scale=0, identity=0, shift=2, suffix
 function inv_txfm_horz\suffix\()_16x8_neon
+        AARCH64_VALID_CALL_TARGET
         mov             x14, x30
         movi            v7.8h,  #0
 .if \identity
