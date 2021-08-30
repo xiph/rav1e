@@ -265,8 +265,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let scene_threshold = self.score_deque[self.deque_offset].1;
 
     if scene_score >= scene_threshold as f64 {
-      let back_deque = self.score_deque[self.deque_offset + 1..].to_vec();
-      let forward_deque = self.score_deque[..self.deque_offset].to_vec();
+      let back_deque = &self.score_deque[self.deque_offset + 1..];
+      let forward_deque = &self.score_deque[..self.deque_offset];
       let back_over_tr =
         back_deque.iter().filter(|(x, y)| x > y).collect_vec();
 
