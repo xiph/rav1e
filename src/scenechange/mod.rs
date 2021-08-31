@@ -377,12 +377,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // `THRESH_MAX` determines how likely we are
     // to choose a keyframe, between 0.0-1.0.
     // Higher values mean we are more likely to choose a keyframe.
-    // `0.4` was chosen based on trials of the `scenecut-720p` set in AWCY,
-    // as it appeared to provide the best average compression.
-    // This also matches the default scenecut threshold in x264.
-    const THRESH_MAX: f64 = 0.4;
-    const THRESH_MIN: f64 = THRESH_MAX * 0.25;
-    const SCALE_FACTOR: f64 = 3.6;
+    // `0.833` was chosen based on trials using the new
+    // adaptive scenecut code.
+    const THRESH_MAX: f64 = 0.833;
+    const THRESH_MIN: f64 = 0.75;
     let distance_from_keyframe = frameno - previous_keyframe;
     let min_keyint = self.encoder_config.min_key_frame_interval;
     let max_keyint = self.encoder_config.max_key_frame_interval;
@@ -394,7 +392,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     // Adaptive threshold for medium version, static thresholf for the slow one
     let threshold = if self.speed_mode == SceneDetectionSpeed::Medium {
-      intra_cost * (1.0 - bias) / SCALE_FACTOR
+      intra_cost * (1.0 - bias)
     } else {
       self.threshold as f64
     };
