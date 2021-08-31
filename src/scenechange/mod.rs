@@ -386,16 +386,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let distance_from_keyframe = frameno - previous_keyframe;
     let min_keyint = self.encoder_config.min_key_frame_interval;
     let max_keyint = self.encoder_config.max_key_frame_interval;
-    let bias = if distance_from_keyframe <= min_keyint / 4 {
-      THRESH_MIN / 4.0
-    } else if distance_from_keyframe <= min_keyint {
-      THRESH_MIN * distance_from_keyframe as f64 / min_keyint as f64
-    } else {
-      THRESH_MIN
-        + (THRESH_MAX - THRESH_MIN)
-          * (distance_from_keyframe - min_keyint) as f64
-          / (max_keyint - min_keyint) as f64
-    };
+    debug_assert!(distance_from_keyframe >= min_keyint);
+    let bias = THRESH_MIN
+      + (THRESH_MAX - THRESH_MIN)
+        * (distance_from_keyframe - min_keyint) as f64
+        / (max_keyint - min_keyint) as f64;
 
     // Adaptive threshold for medium version, static thresholf for the slow one
     let threshold = if self.speed_mode == SceneDetectionSpeed::Medium {
