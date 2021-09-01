@@ -293,7 +293,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
   #[cfg(feature = "tracing")]
   use rust_hawktracer::*;
   init_logger();
@@ -306,10 +306,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     buffer_size: 4096,
   });
 
-  run().map_err(|e| {
+  let _ = run().map_err(|e| {
     error::print_error(&e);
-    Box::new(e) as Box<dyn std::error::Error>
-  })
+    std::process::exit(1);
+  });
 }
 
 fn init_logger() {
