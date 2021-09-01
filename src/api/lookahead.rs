@@ -145,8 +145,10 @@ pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
+      let max_value = 1u64 << 12; // At most 12 bit per pixel
+
       let mut histogram_org =
-        Histogram::configure().max_value(256).build().unwrap();
+        Histogram::configure().max_value(max_value).build().unwrap();
       let iter_org = region_org.rows_iter();
       for row in iter_org {
         for pixel in row {
@@ -156,7 +158,7 @@ pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
       }
 
       let mut histogram_ref =
-        Histogram::configure().max_value(256).build().unwrap();
+        Histogram::configure().max_value(max_value).build().unwrap();
       let iter_ref = region_ref.rows_iter();
       for row in iter_ref {
         for pixel in row {
