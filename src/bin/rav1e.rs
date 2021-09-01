@@ -48,6 +48,7 @@ use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
 use std::fs::File;
 use std::io::{Read, Seek, Write};
+use std::process::exit;
 use std::sync::Arc;
 
 impl<T: Pixel> FrameBuilder<T> for Context<T> {
@@ -293,7 +294,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
   #[cfg(feature = "tracing")]
   use rust_hawktracer::*;
   init_logger();
@@ -306,10 +307,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     buffer_size: 4096,
   });
 
-  run().map_err(|e| {
+  run().unwrap_or_else(|e| {
     error::print_error(&e);
-    Box::new(e) as Box<dyn std::error::Error>
-  })
+    exit(1);
+  });
 }
 
 fn init_logger() {
