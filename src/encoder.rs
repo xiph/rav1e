@@ -191,8 +191,8 @@ impl Sequence {
       if config.max_width > 0 { config.max_width } else { config.width };
     let max_height =
       if config.max_height > 0 { config.max_height } else { config.height };
-    let width_bits = 32 - ((max_width as u32) - 1).leading_zeros();
-    let height_bits = 32 - ((max_height as u32) - 1).leading_zeros();
+    let width_bits = 32 - (max_width as u32).leading_zeros();
+    let height_bits = 32 - (max_height as u32).leading_zeros();
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 

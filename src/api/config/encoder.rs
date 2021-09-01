@@ -221,7 +221,7 @@ impl EncoderConfig {
     // has the property that the scaled distortion of a 2Nx2N block is always
     // equal to the sum of the scaled distortions of the NxN sub-blocks it's
     // made of, this is a necessary property to be able to do RDO between
-    // multiple partition sizes properly. Unfortunately, when tx domains
+    // multiple partition sizes properly. Unfortunately, when tx domain
     // distortion is used, distortion is only known at the tx block level which
     // might be bigger than 8x8. So temporal RDO is always disabled in that case.
     !self.speed_settings.tx_domain_distortion

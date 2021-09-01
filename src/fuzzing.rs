@@ -221,6 +221,8 @@ impl Arbitrary for ArbitraryEncoder {
       speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
       width: u.int_in_range(1..=256)?,
       height: u.int_in_range(1..=256)?,
+      max_width: 0,
+      max_height: 0,
       still_picture: Arbitrary::arbitrary(u)?,
       time_base: arbitrary_rational(u)?,
       min_key_frame_interval: u.int_in_range(0..=3)?,

@@ -32,11 +32,21 @@ pub use crate::tiling::TilingInfo;
 #[non_exhaustive]
 pub enum InvalidConfig {
   /// The width is invalid.
-  #[error("invalid width {0} (expected >= 16, <= 65535)")]
-  InvalidWidth(usize),
+  #[error("invalid width {actual} (expected >= 16, <= {max})")]
+  InvalidWidth {
+    /// The actual value.
+    actual: usize,
+    /// The maximal supported value.
+    max: usize,
+  },
   /// The height is invalid.
-  #[error("invalid height {0} (expected >= 16, <= 65535)")]
-  InvalidHeight(usize),
+  #[error("invalid height {actual} (expected >= 16, <= {max})")]
+  InvalidHeight {
+    /// The actual value.
+    actual: usize,
+    /// The maximal supported value.
+    max: usize,
+  },
   /// Aspect ratio numerator is invalid.
   #[error("invalid aspect ratio numerator {0} (expected > 0)")]
   InvalidAspectRatioNum(usize),
@@ -285,14 +295,30 @@ impl Config {
     if (config.still_picture && config.width < 1)
       || (!config.still_picture && config.width < 16)
       || config.width > u16::max_value() as usize
+      || (config.max_width != 0 && config.width > config.max_width)
     {
-      return Err(InvalidWidth(config.width));
+      return Err(InvalidWidth {
+        actual: config.width,
+        max: if config.max_width != 0 {
+          config.max_width
+        } else {
+          u16::max_value() as usize
+        },
+      });
     }
     if (config.still_picture && config.height < 1)
       || (!config.still_picture && config.height < 16)
       || config.height > u16::max_value() as usize
+      || (config.max_height != 0 && config.height > config.max_height)
     {
-      return Err(InvalidHeight(config.height));
+      return Err(InvalidHeight {
+        actual: config.height,
+        max: if config.max_height != 0 {
+          config.max_height
+        } else {
+          u16::max_value() as usize
+        },
+      });
     }
 
     if config.sample_aspect_ratio.num == 0 {
@@ -312,12 +338,6 @@ impl Config {
     }
     if render_height == 0 || render_height > u16::max_value() as usize {
       return Err(InvalidRenderHeight(render_height));
-    }
-    if config.max_width != 0 && config.width > config.max_width {
-      return Err(InvalidWidth(config.width));
-    }
-    if config.max_height != 0 && config.height > config.max_height {
-      return Err(InvalidHeight(config.height));
     }
 
     if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
