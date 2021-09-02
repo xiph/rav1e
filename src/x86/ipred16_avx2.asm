@@ -91,6 +91,7 @@ z_filter_k:    dw  4,  4,  5,  5,  4,  4
 %define pw_4  (z_filter_k+ 0)
 %define pw_16 (z2_ymul8  +20)
 
+pw_1:    times 2 dw 1
 pw_3:    times 2 dw 3
 pw_62:   times 2 dw 62
 pw_512:  times 2 dw 512
@@ -125,6 +126,7 @@ JMP_TABLE ipred_filter_16bpc,     avx2, w4, w8, w16, w32
 JMP_TABLE ipred_cfl_16bpc,        avx2, h4, h8, h16, h32, w4, w8, w16, w32, \
                                         s4-8*4, s8-8*4, s16-8*4, s32-8*4
 JMP_TABLE ipred_cfl_left_16bpc,   avx2, h4, h8, h16, h32
+JMP_TABLE ipred_cfl_ac_444_16bpc, avx2, w4, w8, w16, w32
 JMP_TABLE pal_pred_16bpc,         avx2, w4, w8, w16, w32, w64
 
 cextern dr_intra_derivative
@@ -4735,6 +4737,165 @@ cglobal ipred_cfl_ac_422_16bpc, 4, 7, 6, ac, ypx, stride, wpad, hpad, w, h
     sub                  hd, 2
     jg .w16_wpad
     jmp mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).w16_hpad
+
+cglobal ipred_cfl_ac_444_16bpc, 4, 7, 6, ac, ypx, stride, wpad, hpad, w, h
+    lea                  r6, [ipred_cfl_ac_444_16bpc_avx2_table]
+    tzcnt                wd, wm
+    movifnidn         hpadd, hpadm
+    vpbroadcastd         m5, [pw_1]
+    movsxd               wq, [r6+wq*4]
+    shl               hpadd, 2
+    add                  wq, r6
+    mov                  hd, hm
+    pxor                 m4, m4
+    sub                  hd, hpadd
+    jmp                  wq
+.w4:
+    lea                  r3, [strideq*3]
+    mov                  r5, acq
+.w4_loop:
+    movq                xm0, [ypxq+strideq*0]
+    movhps              xm0, [ypxq+strideq*1]
+    vpbroadcastq         m1, [ypxq+strideq*2]
+    vpbroadcastq         m2, [ypxq+r3       ]
+    lea                ypxq, [ypxq+strideq*4]
+    vpblendd             m0, m1, 0x30
+    vpblendd             m0, m2, 0xc0
+    psllw                m0, 3
+    pmaddwd              m1, m0, m5
+    mova              [acq], m0
+    add                 acq, 32
+    paddd                m4, m1
+    sub                  hd, 4
+    jg .w4_loop
+    test              hpadd, hpadd
+    jz mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+    vpermq               m0, m0, q3333
+    paddd                m1, m1
+    mova         [acq+32*0], m0
+    vpermq               m1, m1, q3333
+    mova         [acq+32*1], m0
+    add                 acq, 32*2
+    paddd                m4, m1
+    jmp mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+.w8:
+    lea                  r3, [strideq*3]
+    mov                  r5, acq
+.w8_loop:
+    mova                xm2, [ypxq+strideq*0]
+    vinserti128          m2, [ypxq+strideq*1], 1
+    mova                xm1, [ypxq+strideq*2]
+    vinserti128          m1, [ypxq+r3       ], 1
+    lea                ypxq, [ypxq+strideq*4]
+    psllw                m2, 3
+    psllw                m1, 3
+    mova         [acq+32*0], m2
+    pmaddwd              m2, m5
+    mova         [acq+32*1], m1
+    pmaddwd              m0, m1, m5
+    add                 acq, 32*2
+    paddd                m4, m2
+    paddd                m4, m0
+    sub                  hd, 4
+    jg .w8_loop
+    test              hpadd, hpadd
+    jz mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+    vperm2i128           m1, m1, 0x11
+    pslld                m0, 2
+    pxor                 m2, m2
+    vpblendd             m0, m2, 0x0f
+    jmp mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).hpad
+.w16_wpad2:
+    vpbroadcastw         m3, [ypxq+strideq*0+14]
+    vpbroadcastw         m0, [ypxq+strideq*1+14]
+    vpblendd             m2, m3, 0xf0
+    vpblendd             m1, m0, 0xf0
+    jmp .w16_wpad_end
+.w16:
+    mov                  r5, acq
+.w16_loop:
+    mova                 m2, [ypxq+strideq*0]
+    mova                 m1, [ypxq+strideq*1]
+    test              wpadd, wpadd
+    jnz .w16_wpad2
+.w16_wpad_end:
+    lea                ypxq, [ypxq+strideq*2]
+    psllw                m2, 3
+    psllw                m1, 3
+    mova         [acq+32*0], m2
+    pmaddwd              m2, m5
+    mova         [acq+32*1], m1
+    pmaddwd              m0, m1, m5
+    add                 acq, 32*2
+    paddd                m4, m2
+    paddd                m4, m0
+    sub                  hd, 2
+    jg .w16_loop
+    add               hpadd, hpadd
+    jz mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+    paddd                m0, m0
+    jmp mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).hpad
+.w32:
+    mov                  r5, acq
+    test              wpadd, wpadd
+    jnz .w32_wpad
+.w32_loop:
+    mova                 m0, [ypxq+ 0]
+    mova                 m1, [ypxq+32]
+    add                ypxq, strideq
+    psllw                m0, 3
+    psllw                m1, 3
+    pmaddwd              m2, m0, m5
+    mova         [acq+32*0], m0
+    pmaddwd              m3, m1, m5
+    mova         [acq+32*1], m1
+    add                 acq, 32*2
+    paddd                m2, m3
+    paddd                m4, m2
+    dec                  hd
+    jg .w32_loop
+.w32_hpad:
+    test              hpadd, hpadd
+    jz mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+    paddd                m2, m2
+.w32_hpad_loop:
+    mova         [acq+32*0], m0
+    mova         [acq+32*1], m1
+    paddd                m4, m2
+    mova         [acq+32*2], m0
+    mova         [acq+32*3], m1
+    add                 acq, 32*4
+    sub               hpadd, 2
+    jg .w32_hpad_loop
+    jmp mangle(private_prefix %+ _ipred_cfl_ac_420_16bpc_avx2).dc
+.w32_wpad:
+    mova                 m0, [ypxq+ 0]
+    cmp               wpadd, 4
+    jl .w32_wpad2
+    je .w32_wpad4
+    vpbroadcastw         m1, [ypxq+14]
+    vpblendd             m0, m1, 0xf0
+    jmp .w32_wpad_end
+.w32_wpad4:
+    vpbroadcastw         m1, [ypxq+30]
+    jmp .w32_wpad_end
+.w32_wpad2:
+    vpbroadcastw         m1, [ypxq+46]
+    vinserti128          m1, [ypxq+32], 0
+.w32_wpad_end:
+    add                ypxq, strideq
+    psllw                m0, 3
+    psllw                m1, 3
+    pmaddwd              m2, m0, m5
+    mova         [acq+32*0], m0
+    pmaddwd              m3, m1, m5
+    mova         [acq+32*1], m1
+    add                 acq, 32*2
+    paddd                m2, m3
+    paddd                m4, m2
+    dec                  hd
+    jg .w32_wpad
+    jmp .w32_hpad
 
 cglobal pal_pred_16bpc, 4, 6, 5, dst, stride, pal, idx, w, h
     vbroadcasti128       m3, [palq]
