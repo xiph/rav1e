@@ -79,14 +79,6 @@ pd_0xf00800a4: dd 0xf00800a4
 
 SECTION .text
 
-%macro REPX 2-*
-    %xdefine %%f(x) %1
-%rep %0 - 1
-    %rotate 1
-    %%f(%1)
-%endrep
-%endmacro
-
 DECLARE_REG_TMP 4, 9, 7, 11, 12, 13, 14 ; ring buffer pointers
 
 INIT_YMM avx2
@@ -111,6 +103,8 @@ cglobal wiener_filter7_8bpc, 5, 15, 16, -384*12-16, dst, dst_stride, left, lpf, 
     add           dstq, wq
     vpbroadcastd   m15, [fltq+20] ; y2 y3
     neg             wq
+    psllw          m14, 5
+    psllw          m15, 5
     test         edgeb, 4 ; LR_HAVE_TOP
     jz .no_top
     call .h_top
@@ -357,9 +351,7 @@ ALIGN function_align
     mova            m3, [t3+r10*2+32]
     mova            m5, [t5+r10*2+32]
     paddw           m5, [t1+r10*2+32]
-    psrad           m0, 11
-    psrad           m4, 11
-    packssdw        m0, m4
+    packuswb        m0, m4
     paddw           m4, m1, [t6+r10*2+32]
     mova [t0+r10*2+32], m1
     punpcklwd       m1, m2, m3
@@ -372,9 +364,9 @@ ALIGN function_align
     pmaddwd         m4, m14
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova    [dstq+r10], m0
     add            r10, 32
@@ -423,9 +415,10 @@ ALIGN function_align
     paddd           m2, m6
     paddd           m1, m5
     paddd           m3, m7
-    REPX {psrad x, 11}, m0, m2, m1, m3
-    packssdw        m0, m2
-    packssdw        m1, m3
+    packuswb        m0, m2
+    packuswb        m1, m3
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova    [dstq+r10], m0
     add            r10, 32
@@ -459,6 +452,8 @@ cglobal wiener_filter5_8bpc, 5, 13, 16, 384*8+16, dst, dst_stride, left, lpf, \
     add           dstq, wq
     vpbroadcastd   m15, [fltq+20] ; y2 y3
     neg             wq
+    psllw          m14, 5
+    psllw          m15, 5
     test         edgeb, 4 ; LR_HAVE_TOP
     jz .no_top
     call .h_top
@@ -661,9 +656,7 @@ ALIGN function_align
     mova            m2, [t3+r10*2+32]
     paddw           m2, [t1+r10*2+32]
     mova            m3, [t2+r10*2+32]
-    psrad           m0, 11
-    psrad           m4, 11
-    packssdw        m0, m4
+    packuswb        m0, m4
     paddw           m4, m1, [t4+r10*2+32]
     mova [t0+r10*2+32], m1
     punpcklwd       m1, m2, m3
@@ -676,9 +669,9 @@ ALIGN function_align
     pmaddwd         m4, m14
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova    [dstq+r10], m0
     add            r10, 32
@@ -720,9 +713,10 @@ ALIGN function_align
     paddd           m2, m6
     paddd           m1, m5
     paddd           m3, m7
-    REPX {psrad x, 11}, m0, m2, m1, m3
-    packssdw        m0, m2
-    packssdw        m1, m3
+    packuswb        m0, m2
+    packuswb        m1, m3
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova    [dstq+r10], m0
     add            r10, 32

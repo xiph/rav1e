@@ -203,6 +203,7 @@ cglobal wiener_filter7_8bpc, 0, 7, 8, -384*12-stk_off, _, x, left, lpf, lpf_stri
     mova           m13, m2
     mova           m14, m3
 %endif
+    psllw           m7, 5
     pshufd          m6, m7, q0000 ; y0 y1
     pshufd          m7, m7, q1111 ; y2 y3
     test         edgeb, 4 ; LR_HAVE_TOP
@@ -547,9 +548,7 @@ ALIGN function_align
     mov             r2, t6
 %endif
     paddw           m5, [t1+xq*2+16]
-    psrad           m0, 11
-    psrad           m4, 11
-    packssdw        m0, m4
+    packuswb        m0, m4
 %if ARCH_X86_64
     paddw           m4, m1, [t6+xq*2+16]
 %else
@@ -567,9 +566,9 @@ ALIGN function_align
     pmaddwd         m4, m6
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova     [dstq+xq], m0
     add             xq, 16
@@ -651,9 +650,7 @@ ALIGN function_align
     paddw           m5, [r2+xq*2+16]
     movifnidn     dstq, dstmp
 %endif
-    psrad           m0, 11
-    psrad           m1, 11
-    packssdw        m0, m1
+    packuswb        m0, m1
     punpcklwd       m1, m2, m3
     pmaddwd         m1, m7
     punpckhwd       m2, m3
@@ -664,9 +661,9 @@ ALIGN function_align
     pmaddwd         m4, m6
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova     [dstq+xq], m0
     add             xq, 16
@@ -766,6 +763,7 @@ cglobal wiener_filter5_8bpc, 0, 7, 8, -384*8-stk_off, _, x, left, lpf, lpf_strid
     mova           m13, m1
     mova           m14, m2
 %endif
+    psllw           m7, 5
     pshufd          m6, m7, q0000 ; __ y1
     pshufd          m7, m7, q1111 ; y2 y3
     test         edgeb, 4 ; LR_HAVE_TOP
@@ -1026,9 +1024,7 @@ ALIGN function_align
     paddd           m4, m2
     mova            m2, [t3+xq*2+16]
     paddw           m2, [t1+xq*2+16]
-    psrad           m0, 11
-    psrad           m4, 11
-    packssdw        m0, m4
+    packuswb        m0, m4
 %if ARCH_X86_64
     mova            m3, [t2+xq*2+16]
     paddw           m4, m1, [t4+xq*2+16]
@@ -1049,9 +1045,9 @@ ALIGN function_align
     pmaddwd         m4, m6
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova     [dstq+xq], m0
     add             xq, 16
@@ -1100,9 +1096,7 @@ ALIGN function_align
     mova            m3, [r2+xq*2+16]
     mov           dstq, dstmp
 %endif
-    psrad           m0, 11
-    psrad           m1, 11
-    packssdw        m0, m1
+    packuswb        m0, m1
     punpcklwd       m1, m2, m3
     pmaddwd         m1, m7
     punpckhwd       m2, m3
@@ -1113,9 +1107,9 @@ ALIGN function_align
     pmaddwd         m4, m6
     paddd           m1, m3
     paddd           m2, m4
-    psrad           m1, 11
-    psrad           m2, 11
-    packssdw        m1, m2
+    packuswb        m1, m2
+    psrlw           m0, 8
+    psrlw           m1, 8
     packuswb        m0, m1
     mova     [dstq+xq], m0
     add             xq, 16
