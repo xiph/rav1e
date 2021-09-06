@@ -57,7 +57,6 @@ wasm = ["wasm-bindgen"]
 dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
-histogram = "0.6.9"
 arg_enum_proc_macro = "0.3"
 bitstream-io = "1"
 cfg-if = "1.0"
