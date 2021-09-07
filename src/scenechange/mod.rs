@@ -13,7 +13,6 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::util::{CastFromPrimitive, Pixel};
-use itertools::Itertools;
 use rust_hawktracer::*;
 use std::sync::Arc;
 use std::{cmp, u64};
@@ -264,33 +263,32 @@ impl<T: Pixel> SceneChangeDetector<T> {
     if scene_score >= scene_threshold as f64 {
       let back_deque = &self.score_deque[self.deque_offset + 1..];
       let forward_deque = &self.score_deque[..self.deque_offset];
-      let back_over_tr =
-        back_deque.iter().filter(|(x, y)| x > y).collect_vec();
 
-      let forward_over_tr =
-        forward_deque.iter().filter(|(x, y)| x > y).collect_vec();
+      let back_over_tr_count =
+        back_deque.iter().filter(|(x, y)| x > y).count();
+      let forward_over_tr_count =
+        forward_deque.iter().filter(|(x, y)| x > y).count();
 
       // Check for scenecut after the flashes
       // No frames over threshold forward
       // and some frames over threshold backward
-      if !back_over_tr.is_empty()
-        && forward_over_tr.is_empty()
+      if forward_over_tr_count == 0
         && back_deque.len() > 1
-        && back_over_tr.len() > 1
+        && back_over_tr_count > 1
       {
         return true;
       }
 
       // Check for scenecut before flash
       // If distance longer than max flash length
-      if back_over_tr.is_empty()
-        && forward_over_tr.len() == 1
+      if back_over_tr_count == 0
+        && forward_over_tr_count == 1
         && forward_deque[0].0 > forward_deque[0].1
       {
         return true;
       }
 
-      if !back_over_tr.is_empty() || !forward_over_tr.is_empty() {
+      if back_over_tr_count != 0 || forward_over_tr_count != 0 {
         return false;
       }
     }
