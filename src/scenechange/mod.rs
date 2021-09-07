@@ -272,10 +272,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       // Check for scenecut after the flashes
       // No frames over threshold forward
       // and some frames over threshold backward
-      if forward_over_tr_count == 0
-        && back_deque.len() > 1
-        && back_over_tr_count > 1
-      {
+      if forward_over_tr_count == 0 && back_over_tr_count > 1 {
         return true;
       }
 
