@@ -250,9 +250,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Value of current frame is offset by lookahead, if lookahead >=5
   /// Returns true if current scene score is higher than adapted threshold
   fn adaptive_scenecut(&mut self) -> bool {
-    let mut cloned_deque = self.score_deque.to_vec();
-    cloned_deque.remove(self.deque_offset);
-
     // Subtract the previous metric value from the current one
     // It makes the peaks in the metric more distinctive
     if (self.speed_mode != SceneDetectionSpeed::Fast) && self.deque_offset > 0
