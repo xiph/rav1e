@@ -26,13 +26,18 @@ pub struct SceneChangeDetector<T: Pixel> {
   speed_mode: SceneDetectionSpeed,
   /// scaling factor for fast scene detection
   scale_factor: usize,
-  // Frame buffer for scaled frames
-  frame_buffer: Vec<Plane<T>>,
-  // Deque offset for current
+  /// Frame buffer for scaled frames
+  frame_buffer: Option<(
+    Box<[Plane<T>; 2]>,
+    // `true` if the data is valid and initialized, or `false`
+    // if it should be assumed that the data is uninitialized.
+    bool,
+  )>,
+  /// Deque offset for current
   lookahead_offset: usize,
-  // Start deque offset based on lookahead
+  /// Start deque offset based on lookahead
   deque_offset: usize,
-  // Scenechange results for adaptive threshold
+  /// Scenechange results for adaptive threshold
   score_deque: Vec<(f64, f64)>,
   /// Number of pixels in scaled frame for fast mode
   pixels: usize,
@@ -90,12 +95,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
       1
     };
 
-    let frame_buffer = if speed_mode == SceneDetectionSpeed::Fast {
-      Vec::with_capacity(2)
-    } else {
-      Vec::new()
-    };
-
     let threshold = if speed_mode == SceneDetectionSpeed::Fast {
       FAST_THRESHOLD * (bit_depth as f64) / 8.0
     } else {
@@ -106,7 +105,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       threshold,
       speed_mode,
       scale_factor,
-      frame_buffer,
+      frame_buffer: None,
       lookahead_offset,
       deque_offset,
       score_deque,
@@ -146,6 +145,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
       return false;
     }
     if distance >= self.encoder_config.max_key_frame_interval {
+      // Clear buffers and `score_deque`
+      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+        *is_initialized = false;
+      }
+      debug!("[SC-score-deque]{:.0?}", self.score_deque);
+      self.score_deque.clear();
+
       return true;
     }
 
@@ -199,8 +205,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
     );
 
     if scenecut {
-      // Clear buffers and deque
-      self.frame_buffer.clear();
+      // Clear buffers and `score_deque`
+      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+        *is_initialized = false;
+      }
       debug!("[SC-score-deque]{:.0?}", self.score_deque);
       self.score_deque.clear();
     } else {
@@ -299,26 +307,43 @@ impl<T: Pixel> SceneChangeDetector<T> {
   fn fast_scenecut(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
   ) -> ScenecutResult {
-    // Downscaling both frames for comparison
-    // Moving scaled frames to buffer
-    if self.frame_buffer.is_empty() {
-      let frame1_scaled = frame1.planes[0].downscale(self.scale_factor);
-      self.frame_buffer.push(frame1_scaled);
-
-      let frame2_scaled = frame2.planes[0].downscale(self.scale_factor);
-      self.frame_buffer.push(frame2_scaled);
+    // downscale both frames for faster comparison
+    if let Some((frame_buffer, is_initialized)) = &mut self.frame_buffer {
+      let frame_buffer = &mut **frame_buffer;
+      if *is_initialized {
+        frame_buffer.swap(0, 1);
+        frame2.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+      } else {
+        // both frames are in an irrelevant and invalid state, so we have to reinitialize
+        // them, but we can reuse their allocations
+        frame1.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[0]);
+        frame2.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+        *is_initialized = true;
+      }
     } else {
-      self.frame_buffer.remove(0);
-      self.frame_buffer.push(frame2.planes[0].downscale(self.scale_factor));
+      self.frame_buffer = Some((
+        Box::new([
+          frame1.planes[0].downscale(self.scale_factor),
+          frame2.planes[0].downscale(self.scale_factor),
+        ]),
+        true, // the frame buffer is initialized and in a valid state
+      ));
     }
 
-    let delta =
-      self.delta_in_planes(&self.frame_buffer[0], &self.frame_buffer[1]);
+    if let Some((frame_buffer, _)) = &self.frame_buffer {
+      let frame_buffer = &**frame_buffer;
+      let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
 
-    ScenecutResult {
-      intra_cost: self.threshold as f64,
-      threshold: self.threshold as f64,
-      inter_cost: delta as f64,
+      ScenecutResult {
+        intra_cost: self.threshold as f64,
+        threshold: self.threshold as f64,
+        inter_cost: delta as f64,
+      }
+    } else {
+      unreachable!()
     }
   }
 

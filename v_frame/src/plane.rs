@@ -477,7 +477,7 @@ impl<T: Pixel> Plane<T> {
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
     let src = self;
-    // unsafe: all pixels initialized in this function
+    // SAFETY: all pixels initialized in this function
     let mut new = unsafe {
       Plane::new_uninitialized(
         (src.cfg.width + 1) / 2,
@@ -519,22 +519,13 @@ impl<T: Pixel> Plane<T> {
     new
   }
 
-  /// Returns plane with downscaled resolution
-  /// Downscaling the plane by integer value
-  /// Not padded
-  #[hawktracer(downscale)]
+  /// Returns a plane downscaled from the source plane by a factor of `scale` (not padded)
   pub fn downscale(&self, scale: usize) -> Plane<T> {
-    let box_pixels = scale * scale;
-    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
-
-    let src = self;
-    let data_origin = src.data_origin();
-
-    // unsafe: all pixels initialized in this function
+    // SAFETY: all pixels initialized when `downscale_in_place` is called
     let mut new_plane = unsafe {
       Plane::new_uninitialized(
-        src.cfg.width / scale,
-        src.cfg.height / scale,
+        self.cfg.width / scale,
+        self.cfg.height / scale,
         0,
         0,
         0,
@@ -542,19 +533,35 @@ impl<T: Pixel> Plane<T> {
       )
     };
 
-    let stride = new_plane.cfg.stride;
-    let width = new_plane.cfg.width;
-    let height = new_plane.cfg.height;
+    self.downscale_in_place(scale, &mut new_plane);
+
+    new_plane
+  }
+
+  /// Downscales the source plane by a factor of `scale`, writing the result to `in_plane` (not padded)
+  ///
+  /// `in_plane`'s width and height must be sufficient for `scale`.
+  #[hawktracer(downscale)]
+  pub fn downscale_in_place(&self, scale: usize, in_plane: &mut Plane<T>) {
+    let src = self;
+    let box_pixels = scale * scale;
+    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
+
+    let data_origin = src.data_origin();
+
+    let stride = in_plane.cfg.stride;
+    let width = in_plane.cfg.width;
+    let height = in_plane.cfg.height;
 
     // Par iter over dst chunks
-    let np_raw_slice = new_plane.data.deref_mut();
+    let plane_data_mut_slice = in_plane.data.deref_mut();
     let threads = current_num_threads();
     let chunk_rows = cmp::max((height + threads / 2) / threads, 1);
 
     let chunk_size = chunk_rows * stride;
 
     let height_limit = height * stride;
-    np_raw_slice[0..height_limit]
+    plane_data_mut_slice[0..height_limit]
       .par_chunks_mut(chunk_size)
       .enumerate()
       .for_each(|(chunk_idx, chunk)| {
@@ -586,8 +593,6 @@ impl<T: Pixel> Plane<T> {
           }
         }
       });
-
-    new_plane
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
