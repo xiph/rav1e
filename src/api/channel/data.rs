@@ -209,10 +209,10 @@ impl<T: Pixel> PacketReceiver<T> {
         bw.write_bit(false)?; // tier
         bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
         bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
-        bw.write_bit(seq.bit_depth == 1)?; // monochrome
+        bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs400)?; // monochrome
         bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
         bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
-        bw.write(2, 0)?; // sample_position
+        bw.write(2, 0)?; // chroma_sample_position
         bw.write(3, 0)?; // reserved
         bw.write_bit(false)?; // initial_presentation_delay_present
 
