@@ -145,27 +145,27 @@ pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
       });
 
       let mut count = 0u64;
-      let mut histogram_org_sum = 0f64;
+      let mut histogram_org_sum = 0u64;
       let iter_org = region_org.rows_iter();
       for row in iter_org {
         for pixel in row {
           let cur = u16::cast_from(*pixel);
-          histogram_org_sum += cur as f64;
+          histogram_org_sum += cur as u64;
           count += 1;
         }
       }
 
-      let mut histogram_ref_sum = 0f64;
+      let mut histogram_ref_sum = 0u64;
       let iter_ref = region_ref.rows_iter();
       for row in iter_ref {
         for pixel in row {
           let cur = u16::cast_from(*pixel);
-          histogram_ref_sum += cur as f64;
+          histogram_ref_sum += cur as u64;
         }
       }
 
-      let mean = ((histogram_org_sum / count as f64)
-        - (histogram_ref_sum / count as f64))
+      let mean = ((histogram_org_sum as f64 / count as f64)
+        - (histogram_ref_sum as f64 / count as f64))
         .abs()
         .round();
 
