@@ -14,7 +14,6 @@ use crate::rayon::iter::*;
 use crate::tiling::{Area, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
-use histogram::Histogram;
 use rust_hawktracer::*;
 use std::sync::Arc;
 use v_frame::pixel::CastFromPrimitive;
@@ -145,30 +144,28 @@ pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      let max_value = 1u64 << 12; // At most 12 bit per pixel
-
-      let mut histogram_org =
-        Histogram::configure().max_value(max_value).build().unwrap();
+      let mut count = 0i64;
+      let mut histogram_org_sum = 0i64;
       let iter_org = region_org.rows_iter();
       for row in iter_org {
         for pixel in row {
-          let cur = i16::cast_from(*pixel);
-          histogram_org.increment(cur as u64).unwrap();
+          let cur = u16::cast_from(*pixel);
+          histogram_org_sum += cur as i64;
+          count += 1;
         }
       }
 
-      let mut histogram_ref =
-        Histogram::configure().max_value(max_value).build().unwrap();
+      let mut histogram_ref_sum = 0i64;
       let iter_ref = region_ref.rows_iter();
       for row in iter_ref {
         for pixel in row {
-          let cur = i16::cast_from(*pixel);
-          histogram_ref.increment(cur as u64).unwrap();
+          let cur = u16::cast_from(*pixel);
+          histogram_ref_sum += cur as i64;
         }
       }
 
-      let mean = (histogram_org.mean().unwrap() as i32
-        - histogram_ref.mean().unwrap() as i32)
+      let mean = (((histogram_org_sum + count / 2) / count)
+        - ((histogram_ref_sum + count / 2) / count))
         .abs();
 
       inter_costs.push(mean as u32);
