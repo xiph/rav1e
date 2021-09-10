@@ -435,6 +435,41 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
+  /// Copies data from a plane into a pixel array.
+  pub fn copy_to_raw_u8(
+    &self, dest: &mut [u8], dest_stride: usize, dest_bytewidth: usize,
+  ) {
+    let stride = self.cfg.stride;
+    for (self_row, dest_row) in
+      self.data_origin().chunks(stride).zip(dest.chunks_mut(dest_stride))
+    {
+      match dest_bytewidth {
+        1 => {
+          for (self_pixel, dest_pixel) in
+            self_row[..self.cfg.width].iter().zip(dest_row.iter_mut())
+          {
+            *dest_pixel = u8::cast_from(*self_pixel);
+          }
+        }
+        2 => {
+          assert!(
+            mem::size_of::<T>() >= 2,
+            "dest bytewidth ({}) cannot fit in Plane<u8>",
+            dest_bytewidth
+          );
+          for (self_pixel, bytes) in
+            self_row[..self.cfg.width].iter().zip(dest_row.chunks_mut(2))
+          {
+            bytes[0] = u16::cast_from(*self_pixel) as u8;
+            bytes[1] = (u16::cast_from(*self_pixel) >> 8) as u8;
+          }
+        }
+
+        _ => {}
+      }
+    }
+  }
+
   /// Returns plane with half the resolution for width and height.
   /// Downscaled with 2x2 box filter.
   /// Padded to dimensions with frame_width and frame_height.
@@ -838,6 +873,33 @@ pub mod test {
     println!("{:?}", &plane.data[..10]);
 
     assert_eq!(&input[..64], &plane.data[..64]);
+  }
+
+  #[test]
+  fn copy_to_raw_u8() {
+    #[rustfmt::skip]
+    let plane = Plane::from_slice(&
+      vec![
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ],
+      8,
+    );
+
+    let mut output = vec![42u8; 64];
+
+    plane.copy_to_raw_u8(&mut output, 8, 1);
+
+    println!("{:?}", &plane.data[..10]);
+
+    assert_eq!(&output[..64], &plane.data[..64]);
   }
 
   #[test]
