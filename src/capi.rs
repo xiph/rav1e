@@ -61,6 +61,18 @@ impl From<rav1e::Frame<u16>> for FrameInternal {
   }
 }
 
+impl From<Arc<rav1e::Frame<u8>>> for FrameInternal {
+  fn from(f: Arc<rav1e::Frame<u8>>) -> FrameInternal {
+    FrameInternal::U8(f)
+  }
+}
+
+impl From<Arc<rav1e::Frame<u16>>> for FrameInternal {
+  fn from(f: Arc<rav1e::Frame<u16>>) -> FrameInternal {
+    FrameInternal::U16(f)
+  }
+}
+
 struct FrameOpaque {
   opaque: *mut c_void,
   cb: FrameOpaqueCb,
