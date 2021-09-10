@@ -218,7 +218,10 @@ impl EncContext {
   fn receive_packet(&mut self) -> Result<Packet, rav1e::EncoderStatus> {
     fn receive_packet<T: rav1e::Pixel>(
       ctx: &mut rav1e::Context<T>,
-    ) -> Result<Packet, rav1e::EncoderStatus> {
+    ) -> Result<Packet, rav1e::EncoderStatus>
+    where
+      FrameInternal: From<Arc<v_frame::frame::Frame<T>>>,
+    {
       ctx.receive_packet().map(|p| {
         let mut p = std::mem::ManuallyDrop::new(p);
         let opaque = p.opaque.take().map_or_else(std::ptr::null_mut, |o| {
@@ -227,10 +230,32 @@ impl EncContext {
           opaque.opaque
         });
         let p = std::mem::ManuallyDrop::into_inner(p);
-        let rav1e::Packet { data, input_frameno, frame_type, .. } = p;
+        let rav1e::Packet {
+          data, rec, source, input_frameno, frame_type, ..
+        } = p;
         let len = data.len();
         let data = Box::into_raw(data.into_boxed_slice()) as *const u8;
-        Packet { data, len, input_frameno, frame_type, opaque }
+        let rec = if let Some(rec) = rec {
+          let rec = FrameInternal::from(rec);
+          Box::into_raw(Box::new(Frame {
+            fi: rec,
+            frame_type: FrameTypeOverride::No,
+            opaque: None,
+          }))
+        } else {
+          std::ptr::null_mut()
+        };
+        let source = if let Some(source) = source {
+          let source = FrameInternal::from(source);
+          Box::into_raw(Box::new(Frame {
+            fi: source,
+            frame_type: FrameTypeOverride::No,
+            opaque: None,
+          }))
+        } else {
+          std::ptr::null_mut()
+        };
+        Packet { data, rec, source, len, input_frameno, frame_type, opaque }
       })
     }
     match self {
@@ -328,6 +353,12 @@ pub struct Packet {
   pub frame_type: FrameType,
   /// User provided opaque data
   pub opaque: *mut c_void,
+  /// The reconstruction of the shown frame.
+  /// This is freed automatically by rav1e_packet_unref().
+  pub rec: *mut Frame,
+  /// The Reference Frame
+  /// This is freed automatically by rav1e_packet_unref().
+  pub source: *mut Frame,
 }
 
 /// Version information as presented in `[package]` `version`.
@@ -1101,6 +1132,8 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
       pkt.len as usize,
       pkt.len as usize,
     );
+    rav1e_frame_unref(pkt.rec);
+    rav1e_frame_unref(pkt.source);
   }
 }
 
@@ -1127,6 +1160,17 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
 ) {
   let input = Arc::get_mut(f).unwrap();
   input.planes[plane as usize].copy_from_raw_u8(
+    data_slice,
+    stride as usize,
+    bytewidth as usize,
+  );
+}
+
+fn rav1e_frame_extract_plane_internal<T: rav1e::Pixel>(
+  f: &Arc<rav1e::Frame<T>>, plane: c_int, data_slice: &mut [u8],
+  stride: ptrdiff_t, bytewidth: c_int,
+) {
+  f.planes[plane as usize].copy_to_raw_u8(
     data_slice,
     stride as usize,
     bytewidth as usize,
@@ -1160,6 +1204,39 @@ pub unsafe extern fn rav1e_frame_fill_plane(
     FrameInternal::U16(ref mut f) => {
       rav1e_frame_fill_plane_internal(f, plane, data_slice, stride, bytewidth)
     }
+  }
+}
+
+/// Extract a frame plane
+///
+/// This is the reverse of rav1e_frame_fill_plane(), primarily used for
+/// extracting the source and reconstruction data from a RaPacket.
+///
+/// Currently the frame contains 3 planes, the first is luminance followed by
+/// chrominance.
+///
+/// The data is copied out of the frame for a single plane.
+///
+/// frame: A frame provided inside a packet returned by rav1e_receive_packet()
+/// plane: The index of the plane starting from 0
+/// data: The destination for the data
+/// data_len: Length of the buffer
+/// stride: Plane line in bytes, including padding
+/// bytewidth: Number of bytes per component, either 1 or 2
+#[no_mangle]
+pub unsafe extern fn rav1e_frame_extract_plane(
+  frame: *const Frame, plane: c_int, data: *mut u8, data_len: size_t,
+  stride: ptrdiff_t, bytewidth: c_int,
+) {
+  let data_slice = slice::from_raw_parts_mut(data, data_len as usize);
+
+  match (*frame).fi {
+    FrameInternal::U8(ref f) => rav1e_frame_extract_plane_internal(
+      f, plane, data_slice, stride, bytewidth,
+    ),
+    FrameInternal::U16(ref f) => rav1e_frame_extract_plane_internal(
+      f, plane, data_slice, stride, bytewidth,
+    ),
   }
 }
 
@@ -1201,6 +1278,16 @@ mod test {
         let ret = rav1e_receive_packet(rax, &mut p);
 
         if ret == EncoderStatus::Success {
+          let mut source = vec![1; 64 * 64];
+          rav1e_frame_extract_plane(
+            (*p).source,
+            0,
+            source.as_mut_ptr(),
+            64 * 64,
+            64,
+            1,
+          );
+          assert_eq!(source, vec![128; 64 * 64]);
           let v = Box::from_raw((*p).opaque as *mut u8);
           eprintln!("Opaque {}", v);
         }
