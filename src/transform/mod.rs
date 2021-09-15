@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -559,10 +559,10 @@ mod test {
       (TX_16X16, IDTX, 0),
       (TX_16X16, V_DCT, 1),
       (TX_16X16, H_DCT, 1),
-      // 32x tranforms only use DCT_DCT and IDTX
+      // 32x transforms only use DCT_DCT and IDTX
       (TX_32X32, DCT_DCT, 2),
       (TX_32X32, IDTX, 0),
-      // 64x tranforms only use DCT_DCT and IDTX
+      // 64x transforms only use DCT_DCT and IDTX
       //(TX_64X64, DCT_DCT, 0),
       (TX_4X8, DCT_DCT, 1),
       (TX_8X4, DCT_DCT, 1),

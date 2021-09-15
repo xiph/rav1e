@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -47,6 +47,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::comparison_chain)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::enum_variant_names)]
 #![warn(clippy::expl_impl_clone_on_copy)]
 #![warn(clippy::linkedlist)]
 #![warn(clippy::map_flatten)]

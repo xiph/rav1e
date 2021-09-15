@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -103,7 +103,6 @@ impl<D: Decoder> Source<D> {
         return false;
       }
     }
-
     match self.input.read_frame(send_frame, &video_info) {
       Ok(frame) => {
         self.count += 1;
@@ -316,8 +315,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     buffer_size: 4096,
   });
 
-  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
-
   run().map_err(|e| {
     error::print_error(&e);
     Box::new(e) as Box<dyn std::error::Error>
@@ -411,22 +408,23 @@ fn run() -> Result<(), error::CliError> {
     Ok(d) => d,
   };
   let video_info = y4m_dec.get_video_details();
-  let y4m_enc = match cli.io.rec {
-    Some(rec) => Some(
-      y4m::encode(
-        video_info.width,
-        video_info.height,
-        y4m::Ratio::new(
-          video_info.time_base.den as usize,
-          video_info.time_base.num as usize,
-        ),
-      )
-      .with_colorspace(y4m_dec.get_colorspace())
-      .write_header(rec)
-      .unwrap(),
-    ),
-    None => None,
-  };
+  let y4m_enc = cli.io.rec.map(|rec| {
+    y4m::encode(
+      video_info.width,
+      video_info.height,
+      y4m::Ratio::new(
+        video_info.time_base.den as usize,
+        video_info.time_base.num as usize,
+      ),
+    )
+    .with_colorspace(y4m_dec.get_colorspace())
+    .with_pixel_aspect(y4m::Ratio {
+      num: video_info.sample_aspect_ratio.num as usize,
+      den: video_info.sample_aspect_ratio.den as usize,
+    })
+    .write_header(rec)
+    .unwrap()
+  });
 
   match video_info.bit_depth {
     8 | 10 | 12 => {}
@@ -436,6 +434,7 @@ fn run() -> Result<(), error::CliError> {
   cli.enc.width = video_info.width;
   cli.enc.height = video_info.height;
   cli.enc.bit_depth = video_info.bit_depth;
+  cli.enc.sample_aspect_ratio = video_info.sample_aspect_ratio;
   cli.enc.chroma_sampling = video_info.chroma_sampling;
   cli.enc.chroma_sample_position = video_info.chroma_sample_position;
 
@@ -487,7 +486,8 @@ fn run() -> Result<(), error::CliError> {
   let cfg = Config::new()
     .with_encoder_config(cli.enc)
     .with_threads(cli.threads)
-    .with_rate_control(rc);
+    .with_rate_control(rc)
+    .with_parallel_gops(cli.slots);
 
   #[cfg(feature = "serialize")]
   {
@@ -507,6 +507,8 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base.den as usize,
     cli.enc.time_base.num as usize,
   );
+
+  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
   info!(
     "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",

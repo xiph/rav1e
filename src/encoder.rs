@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -1209,12 +1209,20 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      visible_tx_w,
+      tx_size.width(),
       visible_tx_h,
     );
+    if visible_tx_w < tx_size.width() {
+      for row in residual.chunks_mut(tx_size.width()).take(visible_tx_h) {
+        for a in &mut row[visible_tx_w..] {
+          *a = 0;
+        }
+      }
+    }
   }
-  let visible_area = visible_tx_w * visible_tx_h;
-  for a in residual[visible_area..].iter_mut() {
+  let initialized_area =
+    if visible_tx_w == 0 { 0 } else { tx_size.width() * visible_tx_h };
+  for a in residual[initialized_area..].iter_mut() {
     *a = 0;
   }
 
@@ -3028,7 +3036,7 @@ fn encode_tile_group<T: Pixel>(
   if fi.sequence.enable_restoration {
     // Until the loop filters are better pipelined, we'll need to keep
     // around a copy of both the deblocked and cdeffed frame.
-    let deblocked_frame = fs.rec.clone();
+    let deblocked_frame = (*fs.rec).clone();
 
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
@@ -3038,14 +3046,14 @@ fn encode_tile_group<T: Pixel>(
     }
     /* TODO: Don't apply if lossless */
     fs.restoration.lrf_filter_frame(
-      Arc::make_mut(&mut fs.rec),
+      Arc::get_mut(&mut fs.rec).unwrap(),
       &deblocked_frame,
       fi,
     );
   } else {
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
-      let deblocked_frame = fs.rec.clone();
+      let deblocked_frame = (*fs.rec).clone();
       let ts = &mut fs.as_tile_state_mut();
       let rec = &mut ts.rec;
       cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
@@ -3166,13 +3174,14 @@ fn check_lf_queue<T: Pixel>(
           }
         }
         // write LRF information
-        if fi.sequence.enable_restoration {
+        if !fi.allow_intrabc && fi.sequence.enable_restoration {
+          // TODO: also disallow if lossless
           for pli in 0..planes {
             if qe.lru_index[pli] != -1
               && last_lru_coded[pli] < qe.lru_index[pli]
             {
               last_lru_coded[pli] = qe.lru_index[pli];
-              cw.write_lrf(w, fi, &mut ts.restoration, qe.sbo, pli);
+              cw.write_lrf(w, &mut ts.restoration, qe.sbo, pli);
             }
           }
         }
@@ -3449,7 +3458,7 @@ pub fn encode_show_existing_frame<T: Pixel>(
 
   let map_idx = fi.frame_to_show_map_idx as usize;
   if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
-    let fs_rec = Arc::make_mut(&mut fs.rec);
+    let fs_rec = Arc::get_mut(&mut fs.rec).unwrap();
     let planes =
       if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
     for p in 0..planes {

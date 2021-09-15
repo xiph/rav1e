@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -186,7 +186,7 @@ pub fn prep_8tap<T: Pixel>(
         None => call_rust(tmp),
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if bit_depth > 8 => {
       match PREP_HBD_FNS[cpu.as_index()][get_2d_mode_idx(mode_x, mode_y)] {
         Some(func) => unsafe {
           (func)(
@@ -203,6 +203,7 @@ pub fn prep_8tap<T: Pixel>(
         None => call_rust(tmp),
       }
     }
+    _ => call_rust(tmp),
   }
   #[cfg(feature = "check_asm")]
   {
@@ -237,7 +238,7 @@ pub fn mc_avg<T: Pixel>(
       },
       None => call_rust(dst),
     },
-    PixelType::U16 => match AVG_HBD_FNS[cpu.as_index()] {
+    PixelType::U16 if bit_depth > 8 => match AVG_HBD_FNS[cpu.as_index()] {
       Some(func) => unsafe {
         (func)(
           dst.data_ptr_mut() as *mut _,
@@ -251,6 +252,7 @@ pub fn mc_avg<T: Pixel>(
       },
       None => call_rust(dst),
     },
+    _ => call_rust(dst),
   }
   #[cfg(feature = "check_asm")]
   {
@@ -330,6 +332,14 @@ macro_rules! decl_mc_hbd_fns {
       )*
     }
 
+    static PUT_HBD_FNS_SSSE3: [Option<PutHBDFn>; 16] = {
+      let mut out: [Option<PutHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+
     static PUT_HBD_FNS_AVX2: [Option<PutHBDFn>; 16] = {
       let mut out: [Option<PutHBDFn>; 16] = [None; 16];
       $(
@@ -349,13 +359,14 @@ decl_mc_hbd_fns!(
   (SMOOTH, SHARP, rav1e_put_8tap_smooth_sharp_16bpc_avx2),
   (SHARP, REGULAR, rav1e_put_8tap_sharp_regular_16bpc_avx2),
   (SHARP, SMOOTH, rav1e_put_8tap_sharp_smooth_16bpc_avx2),
-  (SHARP, SHARP, rav1e_put_8tap_sharp_16bpc_avx2)
+  (SHARP, SHARP, rav1e_put_8tap_sharp_16bpc_avx2),
+  (BILINEAR, BILINEAR, rav1e_put_bilin_16bpc_avx2)
 );
 
 cpu_function_lookup_table!(
   PUT_HBD_FNS: [[Option<PutHBDFn>; 16]],
   default: [None; 16],
-  [AVX2]
+  [SSSE3, AVX2]
 );
 
 macro_rules! decl_mct_fns {
@@ -437,6 +448,14 @@ macro_rules! decl_mct_hbd_fns {
       )*
     }
 
+    static PREP_HBD_FNS_SSSE3: [Option<PrepHBDFn>; 16] = {
+      let mut out: [Option<PrepHBDFn>; 16] = [None; 16];
+      $(
+        out[get_2d_mode_idx($mode_x, $mode_y)] = Some($func_name);
+      )*
+      out
+    };
+
     static PREP_HBD_FNS_AVX2: [Option<PrepHBDFn>; 16] = {
       let mut out: [Option<PrepHBDFn>; 16] = [None; 16];
       $(
@@ -456,13 +475,14 @@ decl_mct_hbd_fns!(
   (SMOOTH, SHARP, rav1e_prep_8tap_smooth_sharp_16bpc_avx2),
   (SHARP, REGULAR, rav1e_prep_8tap_sharp_regular_16bpc_avx2),
   (SHARP, SMOOTH, rav1e_prep_8tap_sharp_smooth_16bpc_avx2),
-  (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2)
+  (SHARP, SHARP, rav1e_prep_8tap_sharp_16bpc_avx2),
+  (BILINEAR, BILINEAR, rav1e_prep_bilin_16bpc_avx2)
 );
 
 cpu_function_lookup_table!(
   PREP_HBD_FNS: [[Option<PrepHBDFn>; 16]],
   default: [None; 16],
-  [AVX2]
+  [SSSE3, AVX2]
 );
 
 extern {
@@ -474,6 +494,11 @@ extern {
   fn rav1e_avg_avx2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
+  );
+
+  fn rav1e_avg_16bpc_ssse3(
+    dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
+    tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
 
   fn rav1e_avg_16bpc_avx2(
@@ -491,7 +516,7 @@ cpu_function_lookup_table!(
 cpu_function_lookup_table!(
   AVG_HBD_FNS: [Option<AvgHBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_avg_16bpc_avx2))]
+  [(SSSE3, Some(rav1e_avg_16bpc_ssse3)), (AVX2, Some(rav1e_avg_16bpc_avx2))]
 );
 
 #[cfg(test)]
@@ -685,9 +710,9 @@ mod test {
     8
   );
 
-  fn get_params<'a, T: Pixel>(
-    rec_plane: &'a Plane<T>, po: PlaneOffset, mv: MotionVector,
-  ) -> (i32, i32, PlaneSlice<'a, T>) {
+  fn get_params<T: Pixel>(
+    rec_plane: &Plane<T>, po: PlaneOffset, mv: MotionVector,
+  ) -> (i32, i32, PlaneSlice<T>) {
     let rec_cfg = &rec_plane.cfg;
     let shift_row = 3 + rec_cfg.ydec;
     let shift_col = 3 + rec_cfg.xdec;

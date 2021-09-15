@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -48,6 +48,7 @@ use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
 use std::fs::File;
 use std::io::{Read, Seek, Write};
+use std::process::exit;
 use std::sync::Arc;
 
 impl<T: Pixel> FrameBuilder<T> for Context<T> {
@@ -293,7 +294,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
   #[cfg(feature = "tracing")]
   use rust_hawktracer::*;
   init_logger();
@@ -306,12 +307,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     buffer_size: 4096,
   });
 
-  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
-
-  run().map_err(|e| {
+  run().unwrap_or_else(|e| {
     error::print_error(&e);
-    Box::new(e) as Box<dyn std::error::Error>
-  })
+    exit(1);
+  });
 }
 
 fn init_logger() {
@@ -400,26 +399,23 @@ fn run() -> Result<(), error::CliError> {
     Ok(d) => d,
   };
   let video_info = y4m_dec.get_video_details();
-  let y4m_enc = match cli.io.rec {
-    Some(rec) => Some(
-      y4m::encode(
-        video_info.width,
-        video_info.height,
-        y4m::Ratio::new(
-          video_info.time_base.den as usize,
-          video_info.time_base.num as usize,
-        ),
-      )
-      .with_colorspace(y4m_dec.get_colorspace())
-      .with_pixel_aspect(y4m::Ratio {
-        num: video_info.sample_aspect_ratio.num as usize,
-        den: video_info.sample_aspect_ratio.den as usize,
-      })
-      .write_header(rec)
-      .unwrap(),
-    ),
-    None => None,
-  };
+  let y4m_enc = cli.io.rec.map(|rec| {
+    y4m::encode(
+      video_info.width,
+      video_info.height,
+      y4m::Ratio::new(
+        video_info.time_base.den as usize,
+        video_info.time_base.num as usize,
+      ),
+    )
+    .with_colorspace(y4m_dec.get_colorspace())
+    .with_pixel_aspect(y4m::Ratio {
+      num: video_info.sample_aspect_ratio.num as usize,
+      den: video_info.sample_aspect_ratio.den as usize,
+    })
+    .write_header(rec)
+    .unwrap()
+  });
 
   cli.enc.width = video_info.width;
   cli.enc.height = video_info.height;
@@ -496,6 +492,8 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base.den as usize,
     cli.enc.time_base.num as usize,
   );
+
+  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
   info!(
     "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",

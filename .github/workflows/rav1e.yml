@@ -54,6 +54,7 @@ jobs:
           - cargo-c
           - check-no-default
           - check-extra-feats
+          - check-unstable-feats
           - fuzz
         include:
           - conf: beta-build
@@ -77,6 +78,8 @@ jobs:
           - conf: check-no-default
             toolchain: stable
           - conf: check-extra-feats
+            toolchain: stable
+          - conf: check-unstable-feats
             toolchain: stable
           - conf: fuzz
             toolchain: stable
@@ -120,33 +123,49 @@ jobs:
         run: |
           echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
           echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
+      - name: Add libvmaf
+        if: >
+          matrix.conf == '1.51.0-tests' || matrix.conf == 'aom-tests' ||
+          matrix.conf == 'grcov-coveralls'
+        env:
+          LINK: https://www.deb-multimedia.org/pool/main/v/vmaf-dmo
+          LIBVMAF_VERSION: 2.2.0-dmo1
+          LIBVMAF_SHA256: >-
+            88dace39e1aa0c88973a397640c457b85fd86746b4e79399e4aefdf5167aae92
+          LIBVMAF_DEV_SHA256: >-
+            bfaecbeba9fc413e69e2301d88720b2c72d35986778b30381d11eee0274ba78f
+        run: |
+          echo "$LINK/libvmaf1_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libvmaf-dev_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
+          echo "$LIBVMAF_SHA256 libvmaf1_${LIBVMAF_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$LIBVMAF_DEV_SHA256 libvmaf-dev_${LIBVMAF_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add aom
         if: >
           matrix.conf == '1.51.0-tests' || matrix.conf == 'aom-tests' ||
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-          AOM_VERSION: 2.0.2-dmo0~bpo10+1
+          AOM_VERSION: 3.1.2-dmo1
           AOM_DEV_SHA256: >-
-            d31eee6524ea64c080312eeafc65355e378e043b1d738ff9b9bde3734a85779c
+            63cf8804e1a010431e06f6da02582c5b95fae546c0e47ba75b1921aa7cbd9d3a
           AOM_LIB_SHA256: >-
-            db8a04ca0984604f410c6bd8810ee31666a3bfd3964f3109cdb8f1ae33fec664
+            5df58fa6f6b1f28e64dfec77959516ea714ba6fd753c2b7e85527ac892932777
         run: |
           echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
-          echo "$LINK/libaom2_${AOM_VERSION}_amd64.deb" >> DEBS
+          echo "$LINK/libaom3_${AOM_VERSION}_amd64.deb" >> DEBS
           echo "$AOM_DEV_SHA256 libaom-dev_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
-          echo "$AOM_LIB_SHA256 libaom2_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
+          echo "$AOM_LIB_SHA256 libaom3_${AOM_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add dav1d
         if: >
           matrix.conf == '1.51.0-tests' || matrix.conf == 'dav1d-tests' ||
           matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/d/dav1d-dmo
-          DAV1D_VERSION: 0.8.2-dmo1
+          DAV1D_VERSION: 0.9.2-dmo1
           DAV1D_DEV_SHA256: >-
-            04d30fc34056467b91a627563c61b9a0046a2e084bb649791cd31887a6c76d8e
+            2ed10b35fa2663d2e7ba04d8fe01f0518602008d066cadcb311a5b8105f70f14
           DAV1D_LIB_SHA256: >-
-            0c3debb3a926e10009503e639dddcfd4082ed6e012340ca49682b738c243dedc
+            1c4336743115b8a512fb984d289cac65c49ad249ba1456940258e53d9c91bd0c
         run: |
           echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libdav1d5_${DAV1D_VERSION}_amd64.deb" >> DEBS
@@ -174,7 +193,7 @@ jobs:
         if: matrix.conf == 'cargo-c'
         env:
           LINK: https://github.com/lu-zero/cargo-c/releases/download
-          CARGO_C_VERSION: 0.7.1
+          CARGO_C_VERSION: 0.8.0
         run: |
           curl -L "$LINK/v$CARGO_C_VERSION/cargo-c-linux.tar.gz" |
           tar xz -C $HOME/.cargo/bin
@@ -252,6 +271,10 @@ jobs:
         if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
         run: |
           cargo check --features=check_asm,capi,dump_lookahead_data,serialize
+      - name: Check extra features
+        if: matrix.toolchain == 'stable' && matrix.conf == 'check-unstable-feats'
+        run: |
+          cargo check --features=unstable,channel-api
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
@@ -449,7 +472,7 @@ jobs:
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
-          $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.7.3"
+          $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.8.0"
           $CARGO_C_FILE = "cargo-c-windows-msvc"
           curl -LO "$LINK/$CARGO_C_FILE.zip"
           7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"

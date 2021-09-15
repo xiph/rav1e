@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -561,14 +561,8 @@ impl IntraEdgeFilterParameters {
         .into(),
         None => None,
       },
-      above_ref_frame_types: match above_ctx {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
-      left_ref_frame_types: match left_ctx {
-        Some(bi) => Some(bi.reference_types),
-        None => None,
-      },
+      above_ref_frame_types: above_ctx.map(|bi| bi.reference_types),
+      left_ref_frame_types: left_ctx.map(|bi| bi.reference_types),
     }
   }
 
@@ -1421,7 +1415,7 @@ mod test {
     let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
     let top_left = edge_buf.data[MAX_TX_SIZE];
 
-    let mut output = Plane::from_slice(&vec![0u8; 4 * 4], 4);
+    let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
 
     pred_dc(&mut output.as_region_mut(), above, left, 4, 4, 8);
     assert_eq!(&output.data[..], [32u8; 16]);
@@ -1473,7 +1467,7 @@ mod test {
 
     let left = &edge_buf.data[MAX_TX_SIZE - 8..MAX_TX_SIZE];
     let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 9];
-    let top_left = &edge_buf.data[MAX_TX_SIZE..MAX_TX_SIZE + 1];
+    let top_left = &edge_buf.data[MAX_TX_SIZE..=MAX_TX_SIZE];
     let angles = [
       3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58, 61,
       64, 67, 70, 73, 76, 81, 84, 87,

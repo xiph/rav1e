@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -191,8 +191,8 @@ mod test {
         let mut qcoeffs = Aligned::new([0i16; 32 * 32]);
         let mut rcoeffs = Aligned::new([0i16; 32 * 32]);
 
-        // Generate quantized coefficients upto the eob
-        let between = Uniform::from(-std::i16::MAX..=std::i16::MAX);
+        // Generate quantized coefficients up to the eob
+        let between = Uniform::from(-i16::MAX..=i16::MAX);
         for (i, qcoeff) in qcoeffs.data.iter_mut().enumerate().take(eob) {
           *qcoeff = between.sample(&mut rng)
             / if i == 0 { dc_quant } else { ac_quant };

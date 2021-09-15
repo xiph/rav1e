@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -327,10 +327,10 @@ impl<T: Pixel> Context<T> {
         bw.write_bit(false)?; // tier
         bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
         bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
-        bw.write_bit(seq.bit_depth == 1)?; // monochrome
+        bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs400)?; // monochrome
         bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
         bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
-        bw.write(2, 0)?; // sample_position
+        bw.write(2, 0)?; // chroma_sample_position
         bw.write(3, 0)?; // reserved
         bw.write_bit(false)?; // initial_presentation_delay_present
 

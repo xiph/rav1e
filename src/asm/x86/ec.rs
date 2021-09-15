@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -106,7 +106,7 @@ mod test {
     }
 
     let mut cdf = [7297, 3820, 1617, 0];
-    let mut cdf2 = cdf.clone();
+    let mut cdf2 = cdf;
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
       unsafe {

@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -246,7 +246,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   gop_output_frameno_start: BTreeMap<u64, u64>,
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
-  keyframe_detector: SceneChangeDetector,
+  keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: Arc<EncoderConfig>,
   seq: Arc<Sequence>,
   pub(crate) rc_state: RCState,
@@ -291,7 +291,6 @@ impl<T: Pixel> ContextInner<T> {
         CpuFeatureLevel::default(),
         lookahead_distance,
         seq.clone(),
-        true,
       ),
       config: Arc::new(*enc),
       seq,
@@ -433,14 +432,12 @@ impl<T: Pixel> ContextInner<T> {
     let mut data_location = PathBuf::new();
     if env::var_os("RAV1E_DATA_PATH").is_some() {
       data_location.push(&env::var_os("RAV1E_DATA_PATH").unwrap());
-      fs::create_dir_all(data_location.clone()).unwrap();
-      data_location
     } else {
       data_location.push(&env::current_dir().unwrap());
       data_location.push(".lookahead_data");
-      fs::create_dir_all(data_location.clone()).unwrap();
-      data_location
     }
+    fs::create_dir_all(&data_location).unwrap();
+    data_location
   }
 
   fn build_frame_properties(
@@ -1001,7 +998,7 @@ impl<T: Pixel> ContextInner<T> {
       let mut unique_indices = ArrayVec::<_, 3>::new();
 
       for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
-        if unique_indices.iter().find(|&&(_, r)| r == rec_index).is_none() {
+        if !unique_indices.iter().any(|&(_, r)| r == rec_index) {
           unique_indices.push((mv_index, rec_index));
         }
       }
@@ -1140,7 +1137,7 @@ impl<T: Pixel> ContextInner<T> {
         return Err(EncoderStatus::NotReady);
       }
       let mut frame_data =
-        self.frame_data.get(&cur_output_frameno).cloned().unwrap();
+        self.frame_data.remove(&cur_output_frameno).unwrap();
       let fti = frame_data.fi.get_frame_subtype();
       let qps = self.rc_state.select_qi(
         self,
@@ -1202,13 +1199,12 @@ impl<T: Pixel> ContextInner<T> {
       let planes =
         if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
 
-      Arc::make_mut(&mut frame_data.fs.rec).pad(
+      Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
         frame_data.fi.width,
         frame_data.fi.height,
         planes,
       );
 
-      // TODO avoid the clone by having rec Arc.
       let (rec, source) = if frame_data.fi.show_frame {
         (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
       } else {

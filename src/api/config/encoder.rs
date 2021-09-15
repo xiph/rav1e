@@ -1,4 +1,4 @@
-// Copyright (c) 2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -105,7 +105,7 @@ pub struct EncoderConfig {
   /// Number of frames to read ahead for the RDO lookahead computation.
   pub rdo_lookahead_frames: usize,
 
-  /// Settings which affect the enconding speed vs. quality trade-off.
+  /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -10,7 +10,7 @@
 #![allow(clippy::print_literal)]
 #![allow(clippy::unused_io_amount)]
 
-use rustc_version::{version, Version};
+use rustc_version::{version, version_meta, Channel, Version};
 #[allow(unused_imports)]
 use std::env;
 use std::fs;
@@ -40,7 +40,11 @@ fn hash_changed(
 
   let mut hasher = DefaultHasher::new();
 
-  let paths = files.iter().map(Path::new).chain(std::iter::once(config));
+  let paths = files
+    .iter()
+    .map(Path::new)
+    .chain(std::iter::once(config))
+    .chain(std::iter::once(Path::new("build.rs")));
 
   for path in paths {
     if let Ok(mut f) = std::fs::File::open(path) {
@@ -52,6 +56,10 @@ fn hash_changed(
       panic!("Cannot open {}", path.display());
     }
   }
+
+  let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
+
+  hasher.write(strip.as_bytes());
 
   let hash = hasher.finish().to_be_bytes();
 
@@ -80,20 +88,25 @@ fn build_nasm_files() {
   config_file.write(b"	%define PIC 1\n").unwrap();
   config_file.write(b" %define STACK_ALIGNMENT 16\n").unwrap();
   config_file.write(b" %define HAVE_AVX512ICL 1\n").unwrap();
-  if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+  if env::var("CARGO_CFG_TARGET_VENDOR").unwrap() == "apple" {
     config_file.write(b" %define PREFIX 1\n").unwrap();
   }
 
   let asm_files = &[
-    "src/x86/ipred.asm",
-    "src/x86/ipred_ssse3.asm",
-    "src/x86/itx.asm",
-    "src/x86/itx_ssse3.asm",
+    "src/x86/ipred_avx2.asm",
+    "src/x86/ipred_sse.asm",
+    "src/x86/ipred16_avx2.asm",
+    "src/x86/itx_avx2.asm",
+    "src/x86/itx_sse.asm",
+    "src/x86/itx16_avx2.asm",
+    "src/x86/itx16_sse.asm",
+    "src/x86/looprestoration_avx2.asm",
     "src/x86/looprestoration16_avx2.asm",
     "src/x86/mc_avx2.asm",
     "src/x86/mc16_avx2.asm",
     "src/x86/mc_avx512.asm",
     "src/x86/mc_sse.asm",
+    "src/x86/mc16_sse.asm",
     "src/x86/me.asm",
     "src/x86/sad_sse2.asm",
     "src/x86/sad_avx.asm",
@@ -128,6 +141,20 @@ fn build_nasm_files() {
     }
     cc.compile("rav1easm");
 
+    // Strip local symbols from the asm library since they
+    // confuse the debugger.
+    fn strip<P: AsRef<Path>>(obj: P) {
+      let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
+
+      let mut cmd = std::process::Command::new(strip);
+
+      cmd.arg("-x").arg(obj.as_ref());
+
+      let _ = cmd.output();
+    }
+
+    strip(Path::new(&out_dir).join("librav1easm.a"));
+
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
     println!("cargo:rustc-link-search={}", out_dir);
@@ -145,7 +172,7 @@ fn build_asm_files() {
 
   let dest_path = Path::new(&out_dir).join("config.h");
   let mut config_file = File::create(&dest_path).unwrap();
-  if env::var("CARGO_CFG_TARGET_OS").unwrap() == "macos" {
+  if env::var("CARGO_CFG_TARGET_VENDOR").unwrap() == "apple" {
     config_file.write(b" #define PREFIX 1\n").unwrap();
   }
   config_file.write(b" #define PRIVATE_PREFIX rav1e_\n").unwrap();
@@ -192,6 +219,10 @@ fn rustc_version_check() {
   if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
     eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
     exit(1);
+  }
+
+  if version_meta().unwrap().channel == Channel::Nightly {
+    println!("cargo:rustc-cfg=nightly_rustc");
   }
 }
 

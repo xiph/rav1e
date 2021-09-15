@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -64,7 +64,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
   };
 
   // TODO: handle padding in the fast path
-  if edges != CDEF_HAVE_ALL {
+  if edges != CDEF_HAVE_ALL && matches!(T::type_enum(), PixelType::U16) {
     call_rust(dst);
   } else {
     #[cfg(feature = "check_asm")]
@@ -220,7 +220,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
         call_rust(var)
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if coeff_shift > 0 => {
       if let Some(func) = CDEF_DIR_HBD_FNS[cpu.as_index()] {
         unsafe {
           (func)(
@@ -234,6 +234,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
         call_rust(var)
       }
     }
+    _ => call_rust(var),
   };
 
   #[cfg(feature = "check_asm")]

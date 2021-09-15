@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -8,40 +8,51 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::api::lookahead::*;
-use crate::api::EncoderConfig;
+use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::util::{CastFromPrimitive, Pixel};
 use rust_hawktracer::*;
-use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::{cmp, u64};
+// use crate::api::*;
 
 /// Runs keyframe detection on frames from the lookahead queue.
-pub struct SceneChangeDetector {
+pub struct SceneChangeDetector<T: Pixel> {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
-  threshold: u64,
+  threshold: f64,
   /// Fast scene cut detection mode, uses simple SAD instead of encoder cost estimates.
-  fast_mode: bool,
-  /// Determine whether or not short scene flashes should be excluded
-  exclude_scene_flashes: bool,
-  /// Frames that cannot be marked as keyframes due to the algorithm excluding them.
-  /// Storing the frame numbers allows us to avoid looking back more than one frame.
-  excluded_frames: BTreeSet<u64>,
+  speed_mode: SceneDetectionSpeed,
+  /// scaling factor for fast scene detection
+  scale_factor: usize,
+  /// Frame buffer for scaled frames
+  frame_buffer: Option<(
+    Box<[Plane<T>; 2]>,
+    // `true` if the data is valid and initialized, or `false`
+    // if it should be assumed that the data is uninitialized.
+    bool,
+  )>,
+  /// Deque offset for current
+  lookahead_offset: usize,
+  /// Start deque offset based on lookahead
+  deque_offset: usize,
+  /// Scenechange results for adaptive threshold
+  score_deque: Vec<(f64, f64)>,
+  /// Number of pixels in scaled frame for fast mode
+  pixels: usize,
   /// The bit depth of the video.
   bit_depth: usize,
   /// The CPU feature level to be used.
   cpu_feature_level: CpuFeatureLevel,
   encoder_config: EncoderConfig,
-  lookahead_distance: usize,
   sequence: Arc<Sequence>,
 }
 
-impl SceneChangeDetector {
+impl<T: Pixel> SceneChangeDetector<T> {
   pub fn new(
     encoder_config: EncoderConfig, cpu_feature_level: CpuFeatureLevel,
     lookahead_distance: usize, sequence: Arc<Sequence>,
-    exclude_scene_flashes: bool,
   ) -> Self {
     // This implementation is based on a Python implementation at
     // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
@@ -50,24 +61,58 @@ impl SceneChangeDetector {
     // conversion, but the deltas needed to be scaled down. The deltas for keyframes
     // in YUV were about 1/3 to 1/2 of what they were in HSV, but non-keyframes were
     // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
-    // the double digits in HSV. Therefore, 12 was chosen as a reasonable default threshold.
-    // This may be adjusted later.
+    // the double digits in HSV.
     //
-    // This threshold is only used for the fast scenecut implementation.
-    const BASE_THRESHOLD: u64 = 12;
+    // Experiments have shown that these thresholds is optimal.
+    const FAST_THRESHOLD: f64 = 18.0;
+    const SLOW_THRESHOLD: f64 = 7.0;
+
     let bit_depth = encoder_config.bit_depth;
-    let fast_mode = encoder_config.speed_settings.fast_scene_detection
-      || encoder_config.low_latency;
+    let speed_mode = if encoder_config.low_latency {
+      SceneDetectionSpeed::Fast
+    } else {
+      encoder_config.speed_settings.fast_scene_detection
+    };
+
+    // Scale factor for fast and medium scene detection
+    let scale_factor = if speed_mode != SceneDetectionSpeed::Slow {
+      detect_scale_factor(&sequence, speed_mode)
+    } else {
+      1_usize
+    };
+
+    // Set lookahead offset to 5 if normal lookahead available
+    let lookahead_offset = if lookahead_distance >= 5 { 5 } else { 0 };
+    let deque_offset = lookahead_offset;
+
+    let score_deque = Vec::with_capacity(5 + lookahead_distance);
+
+    // Pixel count for fast scenedetect
+    let pixels = if speed_mode == SceneDetectionSpeed::Fast {
+      (sequence.max_frame_height as usize / scale_factor)
+        * (sequence.max_frame_width as usize / scale_factor)
+    } else {
+      1
+    };
+
+    let threshold = if speed_mode == SceneDetectionSpeed::Fast {
+      FAST_THRESHOLD * (bit_depth as f64) / 8.0
+    } else {
+      SLOW_THRESHOLD * (bit_depth as f64) / 8.0
+    };
 
     Self {
-      threshold: BASE_THRESHOLD * bit_depth as u64 / 8,
-      fast_mode,
-      exclude_scene_flashes,
-      excluded_frames: BTreeSet::new(),
+      threshold,
+      speed_mode,
+      scale_factor,
+      frame_buffer: None,
+      lookahead_offset,
+      deque_offset,
+      score_deque,
+      pixels,
       bit_depth,
       cpu_feature_level,
       encoder_config,
-      lookahead_distance,
       sequence,
     }
   }
@@ -81,18 +126,32 @@ impl SceneChangeDetector {
   ///
   /// This will gracefully handle the first frame in the video as well.
   #[hawktracer(analyze_next_frame)]
-  pub fn analyze_next_frame<T: Pixel>(
+  pub fn analyze_next_frame(
     &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
     previous_keyframe: u64,
   ) -> bool {
+    // Use score deque for adaptive threshold for scene cut
+    // Declare score_deque offset based on lookahead  for scene change scores
+
     // Find the distance to the previous keyframe.
     let distance = input_frameno - previous_keyframe;
 
-    // Handle minimum and maximum key frame intervals.
+    if frame_set.len() < 2 {
+      return false;
+    }
+
+    // Handle minimum and maximum keyframe intervals.
     if distance < self.encoder_config.min_key_frame_interval {
       return false;
     }
     if distance >= self.encoder_config.max_key_frame_interval {
+      // Clear buffers and `score_deque`
+      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+        *is_initialized = false;
+      }
+      debug!("[SC-score-deque]{:.0?}", self.score_deque);
+      self.score_deque.clear();
+
       return true;
     }
 
@@ -100,237 +159,328 @@ impl SceneChangeDetector {
       return false;
     }
 
-    if self.exclude_scene_flashes {
-      self.exclude_scene_flashes(frame_set, input_frameno, previous_keyframe);
+    // Initiallization of score deque
+    // based on frame set length
+    if self.deque_offset > 0
+      && frame_set.len() > self.deque_offset + 1
+      && self.score_deque.is_empty()
+    {
+      self.initialize_score_deque(
+        frame_set,
+        input_frameno,
+        previous_keyframe,
+        self.deque_offset,
+      );
+    } else if self.score_deque.is_empty() {
+      self.initialize_score_deque(
+        frame_set,
+        input_frameno,
+        previous_keyframe,
+        frame_set.len() - 1,
+      );
+
+      self.deque_offset = frame_set.len() - 2;
+    }
+    // Running single frame comparison and adding it to deque
+    // Decrease deque offset if there is no new frames
+    if frame_set.len() > self.deque_offset + 1 {
+      self.run_comparison(
+        frame_set[self.deque_offset].clone(),
+        frame_set[self.deque_offset + 1].clone(),
+        input_frameno,
+        previous_keyframe,
+      );
+    } else {
+      self.deque_offset -= 1;
     }
 
-    self.is_key_frame(
-      frame_set[0].clone(),
-      frame_set[1].clone(),
-      input_frameno,
-      previous_keyframe,
-    )
-  }
-
-  /// Determines if `current_frame` should be a keyframe.
-  fn is_key_frame<T: Pixel>(
-    &self, previous_frame: Arc<Frame<T>>, current_frame: Arc<Frame<T>>,
-    current_frameno: u64, previous_keyframe: u64,
-  ) -> bool {
-    if self.excluded_frames.contains(&current_frameno) {
-      return false;
-    }
-
-    let result = self.has_scenecut(
-      previous_frame,
-      current_frame,
-      current_frameno,
-      previous_keyframe,
-    );
+    // Adaptive scenecut check
+    let scenecut = self.adaptive_scenecut();
     debug!(
-      "[SC-Detect] Frame {} to {}: I={:.3} T={:.3} P={:.3} {}",
-      current_frameno - 1,
-      current_frameno,
-      result.intra_cost,
-      result.threshold,
-      result.inter_cost,
-      if result.has_scenecut { "Scenecut" } else { "No cut" }
+      "[SC-Detect] Frame {}: I={:4.0}  T= {:.0} {}",
+      input_frameno,
+      self.score_deque[self.deque_offset].0,
+      self.score_deque[self.deque_offset].1,
+      if scenecut { "Scenecut" } else { "No cut" }
     );
-    result.has_scenecut
+
+    if scenecut {
+      // Clear buffers and `score_deque`
+      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+        *is_initialized = false;
+      }
+      debug!("[SC-score-deque]{:.0?}", self.score_deque);
+      self.score_deque.clear();
+    } else {
+      // Keep score deque of 5 backward frames
+      // and forward frames of lenght of lookahead offset
+      if self.score_deque.len() > 5 + self.lookahead_offset {
+        self.score_deque.pop();
+      }
+    }
+
+    scenecut
   }
 
-  /// Uses lookahead to avoid coding short flashes as scenecuts.
-  /// Saves excluded frame numbers in `self.excluded_frames`.
-  fn exclude_scene_flashes<T: Pixel>(
-    &mut self, frame_subset: &[Arc<Frame<T>>], frameno: u64,
-    previous_keyframe: u64,
+  // Initially fill score deque with frame scores
+  fn initialize_score_deque(
+    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
+    previous_keyframe: u64, init_len: usize,
   ) {
-    let lookahead_distance = self.lookahead_distance;
-
-    if frame_subset.len() - 1 < lookahead_distance {
-      // Don't add a keyframe in the last frame pyramid.
-      // It's effectively the same as a scene flash,
-      // and really wasteful for compression.
-      for frame in frameno..=(frameno + lookahead_distance as u64) {
-        self.excluded_frames.insert(frame);
-      }
-      return;
-    }
-
-    // Where A and B are scenes: AAAAAABBBAAAAAA
-    // If BBB is shorter than lookahead_distance, it is detected as a flash
-    // and not considered a scenecut.
-    //
-    // Search starting with the furthest frame,
-    // to enable early loop exit if we find a scene flash.
-    for j in (1..=lookahead_distance).rev() {
-      let result = self.has_scenecut(
-        frame_subset[0].clone(),
-        frame_subset[j].clone(),
-        frameno - 1 + j as u64,
+    for x in 0..init_len {
+      self.run_comparison(
+        frame_set[x].clone(),
+        frame_set[x + 1].clone(),
+        input_frameno,
         previous_keyframe,
       );
-      debug!(
-        "[SF-Detect-1] Frame {} to {}: I={:.3} T={:.3} P={:.3} {}",
-        frameno - 1,
-        frameno - 1 + j as u64,
-        result.intra_cost,
-        result.threshold,
-        result.inter_cost,
-        if result.has_scenecut { "No flash" } else { "Scene flash" }
-      );
-      if !result.has_scenecut {
-        // Any frame in between `0` and `j` cannot be a real scenecut.
-        for i in 0..=j {
-          let frameno = frameno + i as u64 - 1;
-          self.excluded_frames.insert(frameno);
-        }
-        // Because all frames in this gap are already excluded,
-        // exit the loop early as an optimization.
-        break;
+    }
+  }
+
+  /// Runs scene change comparison beetween 2 given frames
+  /// Insert result to start of score deque
+  fn run_comparison(
+    &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
+    input_frameno: u64, previous_keyframe: u64,
+  ) {
+    let result = if self.speed_mode == SceneDetectionSpeed::Fast {
+      self.fast_scenecut(frame1, frame2)
+    } else {
+      self.cost_scenecut(frame1, frame2, input_frameno, previous_keyframe)
+    };
+    self
+      .score_deque
+      .insert(0, (result.inter_cost as f64, result.threshold as f64));
+  }
+
+  /// Compares current scene score to adapted threshold based on previous scores
+  /// Value of current frame is offset by lookahead, if lookahead >=5
+  /// Returns true if current scene score is higher than adapted threshold
+  fn adaptive_scenecut(&mut self) -> bool {
+    // Subtract the previous metric value from the current one
+    // It makes the peaks in the metric more distinctive
+    if (self.speed_mode != SceneDetectionSpeed::Fast) && self.deque_offset > 0
+    {
+      let previous_scene_score = self.score_deque[self.deque_offset - 1].0;
+      self.score_deque[self.deque_offset].0 -= previous_scene_score;
+    }
+
+    let scene_score = self.score_deque[self.deque_offset].0;
+    let scene_threshold = self.score_deque[self.deque_offset].1;
+
+    if scene_score >= scene_threshold as f64 {
+      let back_deque = &self.score_deque[self.deque_offset + 1..];
+      let forward_deque = &self.score_deque[..self.deque_offset];
+
+      let back_over_tr_count =
+        back_deque.iter().filter(|(x, y)| x > y).count();
+      let forward_over_tr_count =
+        forward_deque.iter().filter(|(x, y)| x > y).count();
+
+      // Check for scenecut after the flashes
+      // No frames over threshold forward
+      // and some frames over threshold backward
+      if forward_over_tr_count == 0 && back_over_tr_count > 1 {
+        return true;
+      }
+
+      // Check for scenecut before flash
+      // If distance longer than max flash length
+      if back_over_tr_count == 0
+        && forward_over_tr_count == 1
+        && forward_deque[0].0 > forward_deque[0].1
+      {
+        return true;
+      }
+
+      if back_over_tr_count != 0 || forward_over_tr_count != 0 {
+        return false;
       }
     }
 
-    // Where A-F are scenes: AAAAABBCCDDEEFFFFFF
-    // If each of BB ... EE are shorter than `lookahead_distance`, they are
-    // detected as flashes and not considered scenecuts.
-    // Instead, the first F frame becomes a scenecut.
-    // If the video ends before F, no frame becomes a scenecut.
-    for i in 1..lookahead_distance {
-      let result = self.has_scenecut(
-        frame_subset[i].clone(),
-        frame_subset[lookahead_distance].clone(),
-        frameno - 1 + lookahead_distance as u64,
-        previous_keyframe,
-      );
-      debug!(
-        "[SF-Detect-2] Frame {} to {}: I={:.3} T={:.3} P={:.3} {}",
-        frameno - 1 + i as u64,
-        frameno - 1 + lookahead_distance as u64,
-        result.intra_cost,
-        result.threshold,
-        result.inter_cost,
-        if result.has_scenecut { "Scene flash" } else { "No flash" }
-      );
-      if result.has_scenecut {
-        // If the current frame is the frame before a scenecut, it cannot also be the frame of a scenecut.
-        let frameno = frameno + i as u64 - 1;
-        self.excluded_frames.insert(frameno);
+    scene_score >= scene_threshold
+  }
+
+  /// The fast algorithm detects fast cuts using a raw difference
+  /// in pixel values between the scaled frames.
+  #[hawktracer(fast_scenecut)]
+  fn fast_scenecut(
+    &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
+  ) -> ScenecutResult {
+    // downscale both frames for faster comparison
+    if let Some((frame_buffer, is_initialized)) = &mut self.frame_buffer {
+      let frame_buffer = &mut **frame_buffer;
+      if *is_initialized {
+        frame_buffer.swap(0, 1);
+        frame2.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+      } else {
+        // both frames are in an irrelevant and invalid state, so we have to reinitialize
+        // them, but we can reuse their allocations
+        frame1.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[0]);
+        frame2.planes[0]
+          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+        *is_initialized = true;
       }
+    } else {
+      self.frame_buffer = Some((
+        Box::new([
+          frame1.planes[0].downscale(self.scale_factor),
+          frame2.planes[0].downscale(self.scale_factor),
+        ]),
+        true, // the frame buffer is initialized and in a valid state
+      ));
+    }
+
+    if let Some((frame_buffer, _)) = &self.frame_buffer {
+      let frame_buffer = &**frame_buffer;
+      let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
+
+      ScenecutResult {
+        intra_cost: self.threshold as f64,
+        threshold: self.threshold as f64,
+        inter_cost: delta as f64,
+      }
+    } else {
+      unreachable!()
     }
   }
 
   /// Run a comparison between two frames to determine if they qualify for a scenecut.
   ///
-  /// The standard algorithm uses block intra and inter costs
+  /// Using block intra and inter costs
   /// to determine which method would be more efficient
   /// for coding this frame.
-  ///
-  /// The fast algorithm detects fast cuts using a raw difference
-  /// in pixel values between the frames.
-  /// It does not handle pans well, but the scene flash detection compensates for this
-  /// in many cases.
-  fn has_scenecut<T: Pixel>(
+  #[hawktracer(cost_scenecut)]
+  fn cost_scenecut(
     &self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>, frameno: u64,
     previous_keyframe: u64,
   ) -> ScenecutResult {
-    if self.fast_mode {
-      let len = frame2.planes[0].cfg.width * frame2.planes[0].cfg.height;
-      let delta = self.delta_in_planes(&frame1.planes[0], &frame2.planes[0]);
-      let threshold = self.threshold * len as u64;
-      ScenecutResult {
-        intra_cost: threshold as f64,
-        threshold: threshold as f64,
-        inter_cost: delta as f64,
-        has_scenecut: delta >= threshold,
-      }
-    } else {
-      let frame2_ref2 = Arc::clone(&frame2);
-      let (intra_cost, inter_cost) = crate::rayon::join(
-        move || {
-          let intra_costs = estimate_intra_costs(
-            &*frame2,
-            self.bit_depth,
-            self.cpu_feature_level,
-          );
-          intra_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
-            / intra_costs.len() as f64
-        },
-        move || {
-          let inter_costs = estimate_inter_costs(
+    let frame2_ref2 = Arc::clone(&frame2);
+
+    let (intra_cost, inter_cost) = crate::rayon::join(
+      move || {
+        let intra_costs = estimate_intra_costs(
+          &*frame2,
+          self.bit_depth,
+          self.cpu_feature_level,
+        );
+        intra_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
+          / intra_costs.len() as f64
+      },
+      move || {
+        let inter_costs = if self.speed_mode == SceneDetectionSpeed::Medium {
+          estimate_inter_costs(
             frame2_ref2,
             frame1,
             self.bit_depth,
             self.encoder_config,
             self.sequence.clone(),
-          );
-          inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
-            / inter_costs.len() as f64
-        },
-      );
+          )
+        } else {
+          estimate_inter_costs_histogram_blocks(frame2_ref2, frame1)
+        };
 
-      // Sliding scale, more likely to choose a keyframe
-      // as we get farther from the last keyframe.
-      // Based on x264 scenecut code.
-      //
-      // `THRESH_MAX` determines how likely we are
-      // to choose a keyframe, between 0.0-1.0.
-      // Higher values mean we are more likely to choose a keyframe.
-      // `0.4` was chosen based on trials of the `scenecut-720p` set in AWCY,
-      // as it appeared to provide the best average compression.
-      // This also matches the default scenecut threshold in x264.
-      const THRESH_MAX: f64 = 0.4;
-      const THRESH_MIN: f64 = THRESH_MAX * 0.25;
-      let distance_from_keyframe = frameno - previous_keyframe;
-      let min_keyint = self.encoder_config.min_key_frame_interval;
-      let max_keyint = self.encoder_config.max_key_frame_interval;
-      let bias = if distance_from_keyframe <= min_keyint / 4 {
-        THRESH_MIN / 4.0
-      } else if distance_from_keyframe <= min_keyint {
-        THRESH_MIN * distance_from_keyframe as f64 / min_keyint as f64
-      } else {
-        THRESH_MIN
-          + (THRESH_MAX - THRESH_MIN)
-            * (distance_from_keyframe - min_keyint) as f64
-            / (max_keyint - min_keyint) as f64
-      };
-      let threshold = intra_cost * (1.0 - bias);
+        inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
+          / inter_costs.len() as f64
+      },
+    );
 
-      ScenecutResult {
-        intra_cost,
-        threshold,
-        inter_cost,
-        has_scenecut: inter_cost > threshold,
-      }
-    }
+    // Sliding scale, more likely to choose a keyframe
+    // as we get farther from the last keyframe.
+    // Based on x264 scenecut code.
+    //
+    // `THRESH_MAX` determines how likely we are
+    // to choose a keyframe, between 0.0-1.0.
+    // Higher values mean we are more likely to choose a keyframe.
+    // `0.833` was chosen based on trials using the new
+    // adaptive scenecut code.
+    const THRESH_MAX: f64 = 0.833;
+    const THRESH_MIN: f64 = 0.75;
+    let distance_from_keyframe = frameno - previous_keyframe;
+    let min_keyint = self.encoder_config.min_key_frame_interval;
+    let max_keyint = self.encoder_config.max_key_frame_interval;
+    debug_assert!(distance_from_keyframe >= min_keyint);
+    let bias = THRESH_MIN
+      + (THRESH_MAX - THRESH_MIN)
+        * (distance_from_keyframe - min_keyint) as f64
+        / (max_keyint - min_keyint) as f64;
+
+    // Adaptive threshold for medium version, static thresholf for the slow one
+    let threshold = if self.speed_mode == SceneDetectionSpeed::Medium {
+      intra_cost * (1.0 - bias)
+    } else {
+      self.threshold as f64
+    };
+
+    ScenecutResult { intra_cost, inter_cost, threshold }
   }
 
-  fn delta_in_planes<T: Pixel>(
-    &self, plane1: &Plane<T>, plane2: &Plane<T>,
-  ) -> u64 {
+  /// Calculates delta beetween 2 planes
+  /// returns average for pixel
+  #[hawktracer(delta_in_planes)]
+  fn delta_in_planes(&self, plane1: &Plane<T>, plane2: &Plane<T>) -> f64 {
     let mut delta = 0;
+
     let lines = plane1.rows_iter().zip(plane2.rows_iter());
 
     for (l1, l2) in lines {
       let delta_line = l1
         .iter()
         .zip(l2.iter())
+        .take(plane1.cfg.width)
         .map(|(&p1, &p2)| {
-          (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u64
+          (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
         })
-        .sum::<u64>();
-      delta += delta_line;
+        .sum::<u32>();
+      delta += delta_line as u64;
     }
-    delta
+    delta as f64 / self.pixels as f64
   }
 }
 
+/// Scaling factor for frame in scene detection
+fn detect_scale_factor(
+  sequence: &Arc<Sequence>, speed_mode: SceneDetectionSpeed,
+) -> usize {
+  let small_edge =
+    cmp::min(sequence.max_frame_height, sequence.max_frame_width) as usize;
+  let scale_factor;
+  if speed_mode == SceneDetectionSpeed::Fast {
+    scale_factor = match small_edge {
+      0..=240 => 1,
+      241..=480 => 2,
+      481..=720 => 4,
+      721..=1080 => 8,
+      1081..=1600 => 16,
+      1601..=usize::MAX => 32,
+      _ => 1,
+    } as usize
+  } else {
+    scale_factor = match small_edge {
+      0..=1600 => 1,
+      1601..=2160 => 2,
+      2161..=usize::MAX => 4,
+      _ => 1,
+    } as usize
+  };
+
+  debug!(
+    "Scene detection scale factor {}, [{},{}] -> [{},{}]",
+    scale_factor,
+    sequence.max_frame_width,
+    sequence.max_frame_height,
+    sequence.max_frame_width as usize / scale_factor,
+    sequence.max_frame_height as usize / scale_factor
+  );
+  scale_factor
+}
+
 /// This struct primarily exists for returning metrics to the caller
-/// for logging debug information.
 #[derive(Debug, Clone, Copy)]
 struct ScenecutResult {
   intra_cost: f64,
   inter_cost: f64,
   threshold: f64,
-  has_scenecut: bool,
 }

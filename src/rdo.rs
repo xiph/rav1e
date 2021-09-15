@@ -1,5 +1,5 @@
 // Copyright (c) 2001-2016, Alliance for Open Media. All rights reserved
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -153,6 +153,10 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let mut sum_s2_cols: [u32; 8] = [0; 8];
   let mut sum_d2_cols: [u32; 8] = [0; 8];
   let mut sum_sd_cols: [u32; 8] = [0; 8];
+
+  // Check upfront that 8 rows are available.
+  let _row1 = &src1[7];
+  let _row2 = &src2[7];
 
   for j in 0..8 {
     let row1 = &src1[j][0..8];

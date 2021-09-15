@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -47,6 +47,7 @@ pub struct CliOptions {
   pub pass1file_name: Option<String>,
   pub pass2file_name: Option<String>,
   pub save_config: Option<String>,
+  pub slots: usize,
 }
 
 #[cfg(feature = "serialize")]
@@ -173,6 +174,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("speed")
         .takes_value(true)
         .default_value("6")
+    )
+    .arg(
+      Arg::with_name("SCENE_CHANGE_DETECTION_SPEED")
+        .help("Speed level for scene-change detection, 0: best quality, 1: speed-to-quality trade-off, 2: fastest mode\n\
+          [default:  0 for s0-s6, 1 for s7-s9, 2 for s10]")
+        .long("scd_speed")
+        .takes_value(true)
+        .default_value("2")
     )
     .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
@@ -354,7 +363,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("METRICS")
-        .help("Calulate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
+        .help("Calculate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
         .long("metrics")
     )
     .arg(
@@ -392,6 +401,17 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
                      .takes_value(true)
                 )
     );
+
+  if cfg!(feature = "unstable") {
+    app = app.arg(
+      Arg::with_name("SLOTS")
+        .help("Maximum number of GOPs that can be encoded in parallel")
+        .long("parallel_gops")
+        .long("slots")
+        .takes_value(true)
+        .default_value("0"),
+    );
+  }
 
   let matches = app.clone().get_matches();
 
@@ -486,6 +506,12 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     panic!("A limit cannot be set above 1 in still picture mode");
   }
 
+  let slots = if cfg!(feature = "unstable") {
+    matches.value_of("SLOTS").unwrap().parse().unwrap()
+  } else {
+    0
+  };
+
   Ok(CliOptions {
     io,
     enc,
@@ -502,6 +528,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
     pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
     save_config,
+    slots,
   })
 }
 
@@ -544,6 +571,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   }
 
   let speed = matches.value_of("SPEED").unwrap().parse().unwrap();
+  let scene_detection_speed: u32 =
+    matches.value_of("SCENE_CHANGE_DETECTION_SPEED").unwrap().parse().unwrap();
   let max_interval: u64 =
     matches.value_of("KEYFRAME_INTERVAL").unwrap().parse().unwrap();
   let mut min_interval: u64 =
@@ -557,6 +586,9 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     panic!("Speed must be between 0-10");
   } else if min_interval > max_interval {
     panic!("Maximum keyframe interval must be greater than or equal to minimum keyframe interval");
+  }
+  if scene_detection_speed > 2 {
+    panic!("Scene change detection speed must be between 0-2");
   }
 
   let color_primaries =
@@ -573,6 +605,17 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
     .unwrap_or_default();
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
+
+  if matches.occurrences_of("SCENE_CHANGE_DETECTION_SPEED") != 0 {
+    cfg.speed_settings.fast_scene_detection = if scene_detection_speed == 0 {
+      SceneDetectionSpeed::Slow
+    } else if scene_detection_speed == 1 {
+      SceneDetectionSpeed::Medium
+    } else {
+      SceneDetectionSpeed::Fast
+    };
+  }
+
   cfg.set_key_frame_interval(min_interval, max_interval);
   cfg.switch_frame_interval =
     matches.value_of("SWITCH_FRAME_INTERVAL").unwrap().parse().unwrap();

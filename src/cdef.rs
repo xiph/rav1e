@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -392,7 +392,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 //   provided blocks co-locate with the output region.  The TileBlocks
 //   provide by-[super]qblock CDEF parameters.
 
-//   output: TileMut detination for filtered pixels.  The output's
+//   output: TileMut destination for filtered pixels.  The output's
 //   rect specifies the region of the input to be processed (x and y
 //   are relative to the input Frame's origin).  Note that an
 //   additional area of 2 pixels of padding is used for CDEF.  When
@@ -584,7 +584,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 //   tb: the TileBlocks associated with the filtered region; the
 //   provided blocks co-locate with the output region.
 
-//   output: TileMut detination for filtered pixels.  The output's
+//   output: TileMut destination for filtered pixels.  The output's
 //   rect specifies the region of the input to be processed (x and y
 //   are relative to the input Frame's origin).  Note that an
 //   additional area of 2 pixels of padding is used for CDEF.  When

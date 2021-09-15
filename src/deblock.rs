@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -1355,7 +1355,7 @@ pub fn deblock_plane<T: Pixel>(
     >> ydec
     << ydec; // Clippy can go suck an egg
 
-  // vertical edge filtering leads horizonal by one full MI-sized
+  // vertical edge filtering leads horizontal by one full MI-sized
   // row (and horizontal filtering doesn't happen along the upper
   // edge).  Unroll to avoid corner-cases.
   if rows > 0 {

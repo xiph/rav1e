@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use libfuzzer_sys::arbitrary::{Arbitrary, Error, Unstructured};
@@ -295,7 +296,7 @@ pub fn fuzz_encode(arbitrary: ArbitraryEncoder) {
 }
 
 #[derive(Debug)]
-pub struct DecodeTestParameters {
+pub struct DecodeTestParameters<T: Pixel> {
   w: usize,
   h: usize,
   speed: usize,
@@ -312,9 +313,10 @@ pub struct DecodeTestParameters {
   tile_cols_log2: usize,
   tile_rows_log2: usize,
   still_picture: bool,
+  pixel: PhantomData<T>,
 }
 
-impl Arbitrary for DecodeTestParameters {
+impl<T: Pixel> Arbitrary for DecodeTestParameters<T> {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut p = Self {
       w: u.int_in_range(16..=16 + 255)?,
@@ -338,7 +340,11 @@ impl Arbitrary for DecodeTestParameters {
       tile_cols_log2: u.int_in_range(0..=2)?,
       tile_rows_log2: u.int_in_range(0..=2)?,
       still_picture: bool::arbitrary(u)?,
+      pixel: PhantomData,
     };
+    if matches!(T::type_enum(), PixelType::U16) {
+      p.bit_depth = *u.choose(&[8, 10, 12])?;
+    }
     if !p.low_latency {
       p.switch_frame_interval = 0;
     }
@@ -350,10 +356,10 @@ impl Arbitrary for DecodeTestParameters {
 }
 
 #[cfg(feature = "decode_test_dav1d")]
-pub fn fuzz_encode_decode(p: DecodeTestParameters) {
+pub fn fuzz_encode_decode<T: Pixel>(p: DecodeTestParameters<T>) {
   use crate::test_encode_decode::*;
 
-  let mut dec = get_decoder::<u8>("dav1d", p.w, p.h);
+  let mut dec = get_decoder::<T>("dav1d", p.w, p.h);
   dec.encode_decode(
     p.w,
     p.h,

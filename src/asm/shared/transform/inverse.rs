@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -14,7 +14,6 @@ use crate::util::*;
 pub type InvTxfmFunc =
   unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
 
-#[cfg(asm_neon)]
 pub type InvTxfmHBDFunc =
   unsafe extern fn(*mut u16, libc::ptrdiff_t, *mut i16, i32);
 
@@ -46,7 +45,6 @@ pub fn call_inverse_func<T: Pixel>(
   }
 }
 
-#[cfg(asm_neon)]
 pub fn call_inverse_hbd_func<T: Pixel>(
   func: InvTxfmHBDFunc, input: &[T::Coeff],
   output: &mut PlaneRegionMut<'_, T>, eob: usize, width: usize, height: usize,

@@ -269,7 +269,7 @@ def blockImportance(input, verbose, path, figure, raw, csv):
 
     elif verbose and csv:
         click.secho(
-            "CSV Saved sucessfully: " + folder_path + "/" + csv + ".",
+            "CSV Saved successfully: " + folder_path + "/" + csv + ".",
             fg="blue",
         )
 

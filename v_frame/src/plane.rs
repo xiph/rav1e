@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -435,6 +435,41 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
+  /// Copies data from a plane into a pixel array.
+  pub fn copy_to_raw_u8(
+    &self, dest: &mut [u8], dest_stride: usize, dest_bytewidth: usize,
+  ) {
+    let stride = self.cfg.stride;
+    for (self_row, dest_row) in
+      self.data_origin().chunks(stride).zip(dest.chunks_mut(dest_stride))
+    {
+      match dest_bytewidth {
+        1 => {
+          for (self_pixel, dest_pixel) in
+            self_row[..self.cfg.width].iter().zip(dest_row.iter_mut())
+          {
+            *dest_pixel = u8::cast_from(*self_pixel);
+          }
+        }
+        2 => {
+          assert!(
+            mem::size_of::<T>() >= 2,
+            "dest bytewidth ({}) cannot fit in Plane<u8>",
+            dest_bytewidth
+          );
+          for (self_pixel, bytes) in
+            self_row[..self.cfg.width].iter().zip(dest_row.chunks_mut(2))
+          {
+            bytes[0] = u16::cast_from(*self_pixel) as u8;
+            bytes[1] = (u16::cast_from(*self_pixel) >> 8) as u8;
+          }
+        }
+
+        _ => {}
+      }
+    }
+  }
+
   /// Returns plane with half the resolution for width and height.
   /// Downscaled with 2x2 box filter.
   /// Padded to dimensions with frame_width and frame_height.
@@ -442,7 +477,7 @@ impl<T: Pixel> Plane<T> {
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
     let src = self;
-    // unsafe: all pixels initialized in this function
+    // SAFETY: all pixels initialized in this function
     let mut new = unsafe {
       Plane::new_uninitialized(
         (src.cfg.width + 1) / 2,
@@ -484,22 +519,13 @@ impl<T: Pixel> Plane<T> {
     new
   }
 
-  /// Returns plane with downscaled resolution
-  /// Downscaling the plane by integer value
-  /// Not padded
-  #[hawktracer(downscale)]
+  /// Returns a plane downscaled from the source plane by a factor of `scale` (not padded)
   pub fn downscale(&self, scale: usize) -> Plane<T> {
-    let box_pixels = scale * scale;
-    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
-
-    let src = self;
-    let data_origin = src.data_origin();
-
-    // unsafe: all pixels initialized in this function
+    // SAFETY: all pixels initialized when `downscale_in_place` is called
     let mut new_plane = unsafe {
       Plane::new_uninitialized(
-        src.cfg.width / scale,
-        src.cfg.height / scale,
+        self.cfg.width / scale,
+        self.cfg.height / scale,
         0,
         0,
         0,
@@ -507,19 +533,35 @@ impl<T: Pixel> Plane<T> {
       )
     };
 
-    let stride = new_plane.cfg.stride;
-    let width = new_plane.cfg.width;
-    let height = new_plane.cfg.height;
+    self.downscale_in_place(scale, &mut new_plane);
+
+    new_plane
+  }
+
+  /// Downscales the source plane by a factor of `scale`, writing the result to `in_plane` (not padded)
+  ///
+  /// `in_plane`'s width and height must be sufficient for `scale`.
+  #[hawktracer(downscale)]
+  pub fn downscale_in_place(&self, scale: usize, in_plane: &mut Plane<T>) {
+    let src = self;
+    let box_pixels = scale * scale;
+    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
+
+    let data_origin = src.data_origin();
+
+    let stride = in_plane.cfg.stride;
+    let width = in_plane.cfg.width;
+    let height = in_plane.cfg.height;
 
     // Par iter over dst chunks
-    let np_raw_slice = new_plane.data.deref_mut();
+    let plane_data_mut_slice = in_plane.data.deref_mut();
     let threads = current_num_threads();
     let chunk_rows = cmp::max((height + threads / 2) / threads, 1);
 
     let chunk_size = chunk_rows * stride;
 
     let height_limit = height * stride;
-    np_raw_slice[0..height_limit]
+    plane_data_mut_slice[0..height_limit]
       .par_chunks_mut(chunk_size)
       .enumerate()
       .for_each(|(chunk_idx, chunk)| {
@@ -551,8 +593,6 @@ impl<T: Pixel> Plane<T> {
           }
         }
       });
-
-    new_plane
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
@@ -838,6 +878,33 @@ pub mod test {
     println!("{:?}", &plane.data[..10]);
 
     assert_eq!(&input[..64], &plane.data[..64]);
+  }
+
+  #[test]
+  fn copy_to_raw_u8() {
+    #[rustfmt::skip]
+    let plane = Plane::from_slice(&
+      vec![
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 1, 2, 3, 4, 0, 0,
+        0, 0, 8, 7, 6, 5, 0, 0,
+        0, 0, 9, 8, 7, 6, 0, 0,
+        0, 0, 2, 3, 4, 5, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+      ],
+      8,
+    );
+
+    let mut output = vec![42u8; 64];
+
+    plane.copy_to_raw_u8(&mut output, 8, 1);
+
+    println!("{:?}", &plane.data[..10]);
+
+    assert_eq!(&output[..64], &plane.data[..64]);
   }
 
   #[test]

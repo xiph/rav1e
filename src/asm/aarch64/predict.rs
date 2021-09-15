@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -78,7 +78,7 @@ macro_rules! decl_cfl_pred_fn {
       $(
         fn $f(
           dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
-          width: libc::c_int, height: libc::c_int, ac: *const u8,
+          width: libc::c_int, height: libc::c_int, ac: *const i16,
           alpha: libc::c_int,
         );
       )*
@@ -99,7 +99,7 @@ macro_rules! decl_cfl_pred_hbd_fn {
       $(
         fn $f(
           dst: *mut u16, stride: libc::ptrdiff_t, topleft: *const u16,
-          width: libc::c_int, height: libc::c_int, ac: *const u16,
+          width: libc::c_int, height: libc::c_int, ac: *const i16,
           alpha: libc::c_int, bit_depth_max: libc::c_int,
         );
       )*
@@ -187,7 +187,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
         }
         _ => call_rust(dst),
       },
-      PixelType::U16 => match mode {
+      PixelType::U16 if bit_depth > 8 => match mode {
         PredictionMode::DC_PRED => {
           (match variant {
             PredictionVariant::NONE => rav1e_ipred_dc_128_16bpc_neon,
@@ -237,6 +237,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
         }
         _ => call_rust(dst),
       },
+      _ => call_rust(dst),
     }
   }
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -542,7 +542,6 @@ impl fmt::Debug for CDFContext {
   }
 }
 
-#[macro_use]
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
     $w.symbol_with_update($s, $cdf, &mut $self.fc_log);
@@ -701,8 +700,8 @@ impl<'a> ContextWriter<'a> {
     let fc_log = CDFContextLog::new(fc);
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
-      fc,
       bc,
+      fc,
       fc_log,
       #[cfg(feature = "desync_finder")]
       fc_map: Default::default(),

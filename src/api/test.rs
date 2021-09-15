@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -1367,9 +1367,9 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   let limit = 5;
   for i in 0..limit {
     if i == flash_at {
-      send_test_frame(&mut ctx, u8::min_value());
+      send_test_frame(&mut ctx, u8::MIN);
     } else {
-      send_test_frame(&mut ctx, u8::max_value());
+      send_test_frame(&mut ctx, u8::MAX);
     }
   }
   ctx.flush();
@@ -1394,7 +1394,7 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
 }
 
 #[test]
-fn output_frameno_no_scene_change_at_max_len_flash() {
+fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   // Test output_frameno configurations when there's a multi-frame flash
   // with length equal to the max flash length
 
@@ -1419,14 +1419,14 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1454,7 +1454,7 @@ fn output_frameno_no_scene_change_at_max_len_flash() {
 }
 
 #[test]
-fn output_frameno_scene_change_past_max_len_flash() {
+fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
   // Test output_frameno configurations when there's a multi-frame flash
   // with length greater than the max flash length
 
@@ -1479,18 +1479,18 @@ fn output_frameno_scene_change_past_max_len_flash() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::max_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MAX);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
@@ -1521,7 +1521,7 @@ fn output_frameno_scene_change_past_max_len_flash() {
 }
 
 #[test]
-fn output_frameno_no_scene_change_at_multiple_flashes() {
+fn output_frameno_scene_change_after_multiple_flashes() {
   // Test output_frameno configurations when there are multiple consecutive flashes
 
   let mut ctx = setup_encoder::<u8>(
@@ -1545,8 +1545,8 @@ fn output_frameno_no_scene_change_at_multiple_flashes() {
   assert_eq!(ctx.inner.inter_cfg.pyramid_depth, 2);
   assert_eq!(ctx.inner.inter_cfg.group_input_len, 4);
 
-  send_test_frame(&mut ctx, u8::min_value());
-  send_test_frame(&mut ctx, u8::min_value());
+  send_test_frame(&mut ctx, u8::MIN);
+  send_test_frame(&mut ctx, u8::MIN);
   send_test_frame(&mut ctx, 40);
   send_test_frame(&mut ctx, 100);
   send_test_frame(&mut ctx, 160);
@@ -1941,7 +1941,7 @@ fn log_q_exp_overflow() {
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
       no_scene_detection: true,
-      fast_scene_detection: false,
+      fast_scene_detection: SceneDetectionSpeed::Fast,
       cdef: true,
       lrf: true,
       use_satd_subpel: false,
@@ -2006,7 +2006,7 @@ fn guess_frame_subtypes_assert() {
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
       no_scene_detection: true,
-      fast_scene_detection: false,
+      fast_scene_detection: SceneDetectionSpeed::Fast,
       cdef: true,
       lrf: true,
       use_satd_subpel: false,

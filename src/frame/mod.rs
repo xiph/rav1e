@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -68,7 +68,7 @@ impl<T: Pixel> FrameAlloc for Frame<T> {
   }
 }
 
-/// Public Trait for calulating Padding
+/// Public Trait for calculating Padding
 pub(crate) trait FramePad {
   fn pad(&mut self, w: usize, h: usize, planes: usize);
 }

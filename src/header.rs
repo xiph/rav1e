@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -273,8 +273,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
 
     if fi.sequence.reduced_still_picture_hdr {
-      assert_eq!(fi.sequence.timing_info_present, false);
-      assert_eq!(fi.sequence.decoder_model_info_present_flag, false);
+      assert!(!fi.sequence.timing_info_present);
+      assert!(!fi.sequence.decoder_model_info_present_flag);
       assert_eq!(fi.sequence.operating_points_cnt_minus_1, 0);
       assert_eq!(fi.sequence.operating_point_idc[0], 0);
       self.write(5, 31)?; // level
@@ -564,11 +564,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // Inter frame info goes here
       if fi.intra_only {
         assert!(fi.refresh_frame_flags != ALL_REF_FRAMES_MASK);
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
       } else {
         // TODO: This should be set once inter mode is used
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
       }
+      self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
     };
 
     if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
@@ -991,7 +990,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_frame_cdef<T: Pixel>(
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()> {
-    if fi.sequence.enable_cdef {
+    if fi.sequence.enable_cdef && !fi.allow_intrabc {
       assert!(fi.cdef_damping >= 3);
       assert!(fi.cdef_damping <= 6);
       self.write(2, fi.cdef_damping - 3)?;
@@ -1067,8 +1066,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     if segmentation.enabled {
       if fi.primary_ref_frame == PRIMARY_REF_NONE {
-        assert_eq!(segmentation.update_map, true);
-        assert_eq!(segmentation.update_data, true);
+        assert!(segmentation.update_map);
+        assert!(segmentation.update_data);
       } else {
         self.write_bit(segmentation.update_map)?;
         if segmentation.update_map {

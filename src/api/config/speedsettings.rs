@@ -1,4 +1,4 @@
-// Copyright (c) 2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2021, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -57,7 +57,7 @@ pub struct SpeedSettings {
   /// Enabled is faster.
   pub no_scene_detection: bool,
   /// Fast scene detection mode, uses simple SAD instead of encoder cost estimates.
-  pub fast_scene_detection: bool,
+  pub fast_scene_detection: SceneDetectionSpeed,
   /// Enables CDEF.
   pub cdef: bool,
   /// Enables LRF.
@@ -110,7 +110,7 @@ impl Default for SpeedSettings {
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
       no_scene_detection: false,
-      fast_scene_detection: false,
+      fast_scene_detection: SceneDetectionSpeed::Fast,
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
@@ -133,15 +133,17 @@ impl SpeedSettings {
   /// - 7: min block size 8x8, reduced TX set.
   /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
   /// - 5: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
-  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, full SGR search.
+  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
+  ///        full SGR search.
   /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
-  ///        full SGR search.
-  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        full SGR search.
-  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
   ///        bottom-up encoding, full SGR search.
-  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  ///        bottom-up encoding, full SGR search.
+  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
   ///        bottom-up encoding with non-square partitions everywhere, full SGR search.
+  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
+  ///        bottom-up encoding with non-square partitions everywhere, full SGR search,
+  ///        full segmentation search.
   pub fn from_preset(speed: usize) -> Self {
     SpeedSettings {
       partition_range: Self::partition_range_preset(speed),
@@ -208,7 +210,7 @@ impl SpeedSettings {
   }
 
   const fn encode_bottomup_preset(speed: usize) -> bool {
-    speed <= 1
+    speed <= 3
   }
 
   /// Set default rdo-lookahead-frames for different speed settings
@@ -237,15 +239,21 @@ impl SpeedSettings {
   }
 
   const fn include_near_mvs_preset(speed: usize) -> bool {
-    speed <= 3
+    speed <= 4
   }
 
   const fn no_scene_detection_preset(_speed: usize) -> bool {
     false
   }
 
-  const fn fast_scene_detection_preset(speed: usize) -> bool {
-    speed == 10
+  const fn fast_scene_detection_preset(speed: usize) -> SceneDetectionSpeed {
+    if speed <= 6 {
+      SceneDetectionSpeed::Slow
+    } else if speed <= 9 {
+      SceneDetectionSpeed::Medium
+    } else {
+      SceneDetectionSpeed::Fast
+    }
   }
 
   const fn cdef_preset(_speed: usize) -> bool {
@@ -269,7 +277,7 @@ impl SpeedSettings {
   }
 
   const fn non_square_partition_preset(speed: usize) -> bool {
-    speed == 0
+    speed <= 1
   }
 
   fn segmentation_preset(speed: usize) -> SegmentationLevel {
@@ -308,6 +316,40 @@ impl PartitionRange {
     assert!(max.is_sqr());
 
     Self { min, max }
+  }
+}
+
+/// Prediction modes to search.
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  PartialOrd,
+  PartialEq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+)]
+pub enum SceneDetectionSpeed {
+  /// Fastest scene detection using pixel-wise comparison
+  Fast,
+  /// Scene detection using motion vectors
+  Medium,
+  /// Scene detection using histogram block-based comparison
+  Slow,
+}
+
+impl fmt::Display for SceneDetectionSpeed {
+  fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    write!(
+      f,
+      "{}",
+      match self {
+        SceneDetectionSpeed::Fast => "Fast",
+        SceneDetectionSpeed::Medium => "Medium",
+        SceneDetectionSpeed::Slow => "Slow",
+      }
+    )
   }
 }
 
