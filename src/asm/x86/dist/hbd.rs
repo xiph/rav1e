@@ -5,7 +5,7 @@ macro_rules! satd_hbd_avx2 {
   ($(($W:expr, $H:expr)),*) => {
     $(
       paste::item! {
-        #[target_feature(enable = "avx2")]
+        #[target_feature(enable = "avx2,bmi1,bmi2")]
         pub(crate) unsafe extern fn [<rav1e_satd_ $W x $H _hbd_avx2>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u32 {
@@ -43,7 +43,7 @@ macro_rules! satd_kernel_hbd_avx2 {
   ($(($W:expr, $H:expr)),*) => {
     $(
       paste::item! {
-        #[target_feature(enable = "avx2")]
+        #[target_feature(enable = "avx2,bmi1,bmi2")]
         unsafe extern fn [<satd_kernel_ $W x $H _hbd_avx2>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u64 {
