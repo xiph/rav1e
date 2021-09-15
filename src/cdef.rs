@@ -65,7 +65,7 @@ pub(crate) mod rust {
   ///
   /// Panics if `elems` is empty
   #[inline]
-  fn first_max_element(elems: &[i32]) -> (usize, i32) {
+  fn first_max_element(elems: &[i32; 8]) -> (usize, i32) {
     // In case of a tie, the first element must be selected.
     let (max_idx, max_value) = elems
       .iter()
@@ -307,7 +307,7 @@ pub(crate) mod rust {
     fn check_max_element() {
       assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 6, 6]), (6, 6));
       assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 7, 6]), (6, 7));
-      assert_eq!(first_max_element(&[0, 0]), (0, 0));
+      assert_eq!(first_max_element(&[0, 0, 0, 0, 0, 0, 0, 0]), (0, 0));
     }
   }
 }
