@@ -426,10 +426,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let lines = plane1.rows_iter().zip(plane2.rows_iter());
 
     for (l1, l2) in lines {
+      let l1 = l1.get(..plane1.cfg.width).unwrap_or(l1);
+      let l2 = l2.get(..plane1.cfg.width).unwrap_or(l2);
       let delta_line = l1
         .iter()
         .zip(l2.iter())
-        .take(plane1.cfg.width)
         .map(|(&p1, &p2)| {
           (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
         })
