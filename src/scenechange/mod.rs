@@ -27,12 +27,17 @@ pub struct SceneChangeDetector<T: Pixel> {
   /// scaling factor for fast scene detection
   scale_factor: usize,
   /// Frame buffer for scaled frames
-  frame_buffer: Option<(
+  downscaled_frame_buffer: Option<(
     Box<[Plane<T>; 2]>,
     // `true` if the data is valid and initialized, or `false`
     // if it should be assumed that the data is uninitialized.
     bool,
   )>,
+  /// Frame buffer for holding references to source frames.
+  ///
+  /// Useful for not copying data into the downscaled frame buffer
+  /// when using a downscale factor of 1.
+  frame_ref_buffer: Option<Box<[Arc<Frame<T>>; 2]>>,
   /// Deque offset for current
   lookahead_offset: usize,
   /// Start deque offset based on lookahead
@@ -105,7 +110,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
       threshold,
       speed_mode,
       scale_factor,
-      frame_buffer: None,
+      downscaled_frame_buffer: None,
+      frame_ref_buffer: None,
       lookahead_offset,
       deque_offset,
       score_deque,
@@ -146,7 +152,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
     if distance >= self.encoder_config.max_key_frame_interval {
       // Clear buffers and `score_deque`
-      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+      if let Some((_, is_initialized)) = &mut self.downscaled_frame_buffer {
         *is_initialized = false;
       }
       debug!("[SC-score-deque]{:.0?}", self.score_deque);
@@ -206,7 +212,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     if scenecut {
       // Clear buffers and `score_deque`
-      if let Some((_, is_initialized)) = &mut self.frame_buffer {
+      if let Some((_, is_initialized)) = &mut self.downscaled_frame_buffer {
         *is_initialized = false;
       }
       debug!("[SC-score-deque]{:.0?}", self.score_deque);
@@ -307,43 +313,69 @@ impl<T: Pixel> SceneChangeDetector<T> {
   fn fast_scenecut(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
   ) -> ScenecutResult {
-    // downscale both frames for faster comparison
-    if let Some((frame_buffer, is_initialized)) = &mut self.frame_buffer {
-      let frame_buffer = &mut **frame_buffer;
-      if *is_initialized {
+    if self.scale_factor == 1 {
+      if let Some(frame_buffer) = self.frame_ref_buffer.as_deref_mut() {
         frame_buffer.swap(0, 1);
-        frame2.planes[0]
-          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+        frame_buffer[1] = frame2;
       } else {
-        // both frames are in an irrelevant and invalid state, so we have to reinitialize
-        // them, but we can reuse their allocations
-        frame1.planes[0]
-          .downscale_in_place(self.scale_factor, &mut frame_buffer[0]);
-        frame2.planes[0]
-          .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
-        *is_initialized = true;
+        self.frame_ref_buffer = Some(Box::new([frame1, frame2]));
+      }
+
+      if let Some(frame_buffer) = self.frame_ref_buffer.as_deref() {
+        let delta = self.delta_in_planes(
+          &frame_buffer[0].planes[0],
+          &frame_buffer[1].planes[0],
+        );
+
+        ScenecutResult {
+          intra_cost: self.threshold as f64,
+          threshold: self.threshold as f64,
+          inter_cost: delta as f64,
+        }
+      } else {
+        unreachable!()
       }
     } else {
-      self.frame_buffer = Some((
-        Box::new([
-          frame1.planes[0].downscale(self.scale_factor),
-          frame2.planes[0].downscale(self.scale_factor),
-        ]),
-        true, // the frame buffer is initialized and in a valid state
-      ));
-    }
-
-    if let Some((frame_buffer, _)) = &self.frame_buffer {
-      let frame_buffer = &**frame_buffer;
-      let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
-
-      ScenecutResult {
-        intra_cost: self.threshold as f64,
-        threshold: self.threshold as f64,
-        inter_cost: delta as f64,
+      // downscale both frames for faster comparison
+      if let Some((frame_buffer, is_initialized)) =
+        &mut self.downscaled_frame_buffer
+      {
+        let frame_buffer = &mut **frame_buffer;
+        if *is_initialized {
+          frame_buffer.swap(0, 1);
+          frame2.planes[0]
+            .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+        } else {
+          // both frames are in an irrelevant and invalid state, so we have to reinitialize
+          // them, but we can reuse their allocations
+          frame1.planes[0]
+            .downscale_in_place(self.scale_factor, &mut frame_buffer[0]);
+          frame2.planes[0]
+            .downscale_in_place(self.scale_factor, &mut frame_buffer[1]);
+          *is_initialized = true;
+        }
+      } else {
+        self.downscaled_frame_buffer = Some((
+          Box::new([
+            frame1.planes[0].downscale(self.scale_factor),
+            frame2.planes[0].downscale(self.scale_factor),
+          ]),
+          true, // the frame buffer is initialized and in a valid state
+        ));
       }
-    } else {
-      unreachable!()
+
+      if let Some((frame_buffer, _)) = &self.downscaled_frame_buffer {
+        let frame_buffer = &**frame_buffer;
+        let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
+
+        ScenecutResult {
+          intra_cost: self.threshold as f64,
+          threshold: self.threshold as f64,
+          inter_cost: delta as f64,
+        }
+      } else {
+        unreachable!()
+      }
     }
   }
 
