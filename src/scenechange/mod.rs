@@ -185,7 +185,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // Adaptive scenecut check
     let mut scenecut = self.adaptive_scenecut();
     debug!(
-      "[SC-Detect] Frame {}: I={:4.0}  T= {:.0} {}",
+      "[SC-Detect] Frame {}: I={:5.1}  T= {:.1} {}",
       input_frameno,
       self.score_deque[self.deque_offset].0,
       self.score_deque[self.deque_offset].1,
