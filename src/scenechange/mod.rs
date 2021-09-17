@@ -140,22 +140,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
       return false;
     }
 
-    // Handle minimum and maximum keyframe intervals.
-    if distance < self.encoder_config.min_key_frame_interval {
-      return false;
-    }
-    if distance >= self.encoder_config.max_key_frame_interval {
-      // Clear buffers and `score_deque`
-      if let Some((_, is_initialized)) = &mut self.frame_buffer {
-        *is_initialized = false;
-      }
-      debug!("[SC-score-deque]{:.0?}", self.score_deque);
-      self.score_deque.clear();
-
-      return true;
-    }
-
     if self.encoder_config.speed_settings.no_scene_detection {
+      if let Some(true) = self.handle_min_max_intervals(distance) {
+        return true;
+      };
       return false;
     }
 
@@ -195,7 +183,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
 
     // Adaptive scenecut check
-    let scenecut = self.adaptive_scenecut();
+    let mut scenecut = self.adaptive_scenecut();
     debug!(
       "[SC-Detect] Frame {}: I={:4.0}  T= {:.0} {}",
       input_frameno,
@@ -203,6 +191,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
       self.score_deque[self.deque_offset].1,
       if scenecut { "Scenecut" } else { "No cut" }
     );
+
+    if let Some(result) = self.handle_min_max_intervals(distance) {
+      scenecut = result;
+    }
 
     if scenecut {
       // Clear buffers and `score_deque`
@@ -220,6 +212,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
 
     scenecut
+  }
+
+  fn handle_min_max_intervals(&mut self, distance: u64) -> Option<bool> {
+    // Handle minimum and maximum keyframe intervals.
+    if distance < self.encoder_config.min_key_frame_interval {
+      return Some(false);
+    }
+    if distance >= self.encoder_config.max_key_frame_interval {
+      return Some(true);
+    }
+    None
   }
 
   // Initially fill score deque with frame scores
@@ -268,7 +271,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let scene_score = self.score_deque[self.deque_offset].0;
     let scene_threshold = self.score_deque[self.deque_offset].1;
 
-    if scene_score >= scene_threshold as f64 {
+    if scene_score >= scene_threshold {
       let back_deque = &self.score_deque[self.deque_offset + 1..];
       let forward_deque = &self.score_deque[..self.deque_offset];
 
@@ -280,7 +283,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       // Check for scenecut after the flashes
       // No frames over threshold forward
       // and some frames over threshold backward
-      if forward_over_tr_count == 0 && back_over_tr_count > 1 {
+      if forward_over_tr_count == 0 && back_over_tr_count > 0 {
         return true;
       }
 
@@ -398,10 +401,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // adaptive scenecut code.
     const THRESH_MAX: f64 = 0.833;
     const THRESH_MIN: f64 = 0.75;
-    let distance_from_keyframe = frameno - previous_keyframe;
     let min_keyint = self.encoder_config.min_key_frame_interval;
     let max_keyint = self.encoder_config.max_key_frame_interval;
-    debug_assert!(distance_from_keyframe >= min_keyint);
+    let distance_from_keyframe =
+      cmp::max(min_keyint, frameno - previous_keyframe);
     let bias = THRESH_MIN
       + (THRESH_MAX - THRESH_MIN)
         * (distance_from_keyframe - min_keyint) as f64
