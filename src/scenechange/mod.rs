@@ -65,7 +65,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     //
     // Experiments have shown that these thresholds is optimal.
     const FAST_THRESHOLD: f64 = 18.0;
-    const SLOW_THRESHOLD: f64 = 7.0;
+    const SLOW_THRESHOLD: f64 = 3.5;
 
     let bit_depth = encoder_config.bit_depth;
     let speed_mode = if encoder_config.low_latency {
