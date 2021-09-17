@@ -116,8 +116,8 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
   intra_costs.into_boxed_slice()
 }
 
-#[hawktracer(estimate_inter_costs_histogram)]
-pub(crate) fn estimate_inter_costs_histogram_blocks<T: Pixel>(
+#[hawktracer(estimate_importance_block_difference)]
+pub(crate) fn estimate_importance_block_difference<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>,
 ) -> Box<[u32]> {
   let plane_org = &frame.planes[0];
