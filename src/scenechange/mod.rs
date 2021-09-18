@@ -174,10 +174,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
       scenecut = result;
     }
     debug!(
-      "[SC-Detect] Frame {}: Raw={:5.1}  Adj={:5.1}  Th={:.1}  {}",
+      "[SC-Detect] Frame {}: Raw={:5.1}  Adj={:5.1}  Fwd={:5.1}  Th={:.1}  {}",
       input_frameno,
       score.inter_cost,
       score.adjusted_cost,
+      score.forward_adjusted_cost,
       score.threshold,
       if scenecut { "Scenecut" } else { "No cut" }
     );
@@ -242,6 +243,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
           result.adjusted_cost = 0.0;
         }
       }
+      if !self.score_deque.is_empty() {
+        self.score_deque[0].forward_adjusted_cost =
+          self.score_deque[0].inter_cost - result.inter_cost;
+        if self.score_deque[0].forward_adjusted_cost < 0.0 {
+          self.score_deque[0].forward_adjusted_cost = 0.0;
+        }
+      }
     }
     self.score_deque.insert(0, result);
   }
@@ -261,7 +269,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
         .count();
       let forward_over_tr_count = forward_deque
         .iter()
-        .filter(|result| result.adjusted_cost > result.threshold)
+        .filter(|result| result.forward_adjusted_cost > result.threshold)
         .count();
 
       // Check for scenecut after the flashes
@@ -328,6 +336,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
         threshold: self.threshold as f64,
         inter_cost: delta as f64,
         adjusted_cost: delta as f64,
+        forward_adjusted_cost: delta as f64,
       }
     } else {
       unreachable!()
@@ -377,7 +386,12 @@ impl<T: Pixel> SceneChangeDetector<T> {
     const BIAS: f64 = 0.5;
     let threshold = intra_cost * (1.0 - BIAS);
 
-    ScenecutResult { inter_cost, threshold, adjusted_cost: inter_cost }
+    ScenecutResult {
+      inter_cost,
+      threshold,
+      adjusted_cost: 0.0,
+      forward_adjusted_cost: 0.0,
+    }
   }
 
   /// Calculates delta beetween 2 planes
@@ -445,5 +459,6 @@ fn detect_scale_factor(
 struct ScenecutResult {
   inter_cost: f64,
   adjusted_cost: f64,
+  forward_adjusted_cost: f64,
   threshold: f64,
 }
