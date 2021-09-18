@@ -136,7 +136,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // Find the distance to the previous keyframe.
     let distance = input_frameno - previous_keyframe;
 
-    if frame_set.len() < 2 {
+    if frame_set.len() <= self.lookahead_offset {
+      // Don't insert keyframes in the last few frames of the video
+      // This is basically a scene flash and a waste of bits
       return false;
     }
 
