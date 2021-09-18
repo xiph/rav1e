@@ -177,11 +177,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     .arg(
       Arg::with_name("SCENE_CHANGE_DETECTION_SPEED")
-        .help("Speed level for scene-change detection, 0: best quality, 1: speed-to-quality trade-off, 2: fastest mode\n\
-          [default:  0 for s0-s6, 1 for s7-s9, 2 for s10]")
+        .help("Speed level for scene-change detection, 0: best quality, 1: fastest mode\n\
+          [default:  0 for s0-s9, 1 for s10]")
         .long("scd_speed")
         .takes_value(true)
-        .default_value("2")
+        .default_value("1")
     )
     .arg(
       Arg::with_name("MIN_KEYFRAME_INTERVAL")
@@ -608,9 +608,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
 
   if matches.occurrences_of("SCENE_CHANGE_DETECTION_SPEED") != 0 {
     cfg.speed_settings.fast_scene_detection = if scene_detection_speed == 0 {
-      SceneDetectionSpeed::Slow
-    } else if scene_detection_speed == 1 {
-      SceneDetectionSpeed::Medium
+      SceneDetectionSpeed::Standard
     } else {
       SceneDetectionSpeed::Fast
     };

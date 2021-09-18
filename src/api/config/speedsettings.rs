@@ -247,10 +247,8 @@ impl SpeedSettings {
   }
 
   const fn fast_scene_detection_preset(speed: usize) -> SceneDetectionSpeed {
-    if speed <= 6 {
-      SceneDetectionSpeed::Slow
-    } else if speed <= 9 {
-      SceneDetectionSpeed::Medium
+    if speed <= 9 {
+      SceneDetectionSpeed::Standard
     } else {
       SceneDetectionSpeed::Fast
     }
@@ -333,10 +331,8 @@ impl PartitionRange {
 pub enum SceneDetectionSpeed {
   /// Fastest scene detection using pixel-wise comparison
   Fast,
-  /// Scene detection using motion vectors
-  Medium,
-  /// Scene detection using histogram block-based comparison
-  Slow,
+  /// Scene detection using motion vectors and cost estimates
+  Standard,
 }
 
 impl fmt::Display for SceneDetectionSpeed {
@@ -346,8 +342,7 @@ impl fmt::Display for SceneDetectionSpeed {
       "{}",
       match self {
         SceneDetectionSpeed::Fast => "Fast",
-        SceneDetectionSpeed::Medium => "Medium",
-        SceneDetectionSpeed::Slow => "Slow",
+        SceneDetectionSpeed::Standard => "Standard",
       }
     )
   }

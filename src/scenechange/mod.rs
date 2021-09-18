@@ -63,9 +63,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // very unlikely to have a delta greater than 3 in YUV, whereas they may reach into
     // the double digits in HSV.
     //
-    // Experiments have shown that these thresholds is optimal.
+    // Experiments have shown that this threshold is optimal.
     const FAST_THRESHOLD: f64 = 18.0;
-    const SLOW_THRESHOLD: f64 = 11.0;
 
     let bit_depth = encoder_config.bit_depth;
     let speed_mode = if encoder_config.low_latency {
@@ -75,11 +74,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     };
 
     // Scale factor for fast and medium scene detection
-    let scale_factor = if speed_mode != SceneDetectionSpeed::Slow {
-      detect_scale_factor(&sequence, speed_mode)
-    } else {
-      1_usize
-    };
+    let scale_factor = detect_scale_factor(&sequence, speed_mode);
 
     // Set lookahead offset to 5 if normal lookahead available
     let lookahead_offset = if lookahead_distance >= 5 { 5 } else { 0 };
@@ -95,11 +90,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       1
     };
 
-    let threshold = if speed_mode == SceneDetectionSpeed::Fast {
-      FAST_THRESHOLD * (bit_depth as f64) / 8.0
-    } else {
-      SLOW_THRESHOLD * (bit_depth as f64) / 8.0
-    };
+    let threshold = FAST_THRESHOLD * (bit_depth as f64) / 8.0;
 
     Self {
       threshold,
@@ -348,7 +339,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
       let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
 
       ScenecutResult {
-        intra_cost: self.threshold as f64,
         threshold: self.threshold as f64,
         inter_cost: delta as f64,
       }
@@ -380,17 +370,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
           / intra_costs.len() as f64
       },
       move || {
-        let inter_costs = if self.speed_mode == SceneDetectionSpeed::Medium {
-          estimate_inter_costs(
-            frame2_ref2,
-            frame1,
-            self.bit_depth,
-            self.encoder_config,
-            self.sequence.clone(),
-          )
-        } else {
-          estimate_inter_costs_histogram_blocks(frame2_ref2, frame1)
-        };
+        let inter_costs = estimate_inter_costs(
+          frame2_ref2,
+          frame1,
+          self.bit_depth,
+          self.encoder_config,
+          self.sequence.clone(),
+        );
 
         inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
           / inter_costs.len() as f64
@@ -417,14 +403,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
         * (distance_from_keyframe - min_keyint) as f64
         / (max_keyint - min_keyint) as f64;
 
-    // Adaptive threshold for medium version, static thresholf for the slow one
-    let threshold = if self.speed_mode == SceneDetectionSpeed::Medium {
-      intra_cost * (1.0 - bias)
-    } else {
-      self.threshold as f64
-    };
+    let threshold = intra_cost * (1.0 - bias);
 
-    ScenecutResult { intra_cost, inter_cost, threshold }
+    ScenecutResult { inter_cost, threshold }
   }
 
   /// Calculates delta beetween 2 planes
@@ -491,7 +472,6 @@ fn detect_scale_factor(
 /// This struct primarily exists for returning metrics to the caller
 #[derive(Debug, Clone, Copy)]
 struct ScenecutResult {
-  intra_cost: f64,
   inter_cost: f64,
   threshold: f64,
 }
