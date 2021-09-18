@@ -38,7 +38,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   /// Start deque offset based on lookahead
   deque_offset: usize,
   /// Scenechange results for adaptive threshold
-  score_deque: Vec<(f64, f64)>,
+  score_deque: Vec<ScenecutResult>,
   /// Number of pixels in scaled frame for fast mode
   pixels: usize,
   /// The bit depth of the video.
@@ -146,17 +146,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
       && frame_set.len() > self.deque_offset + 1
       && self.score_deque.is_empty()
     {
-      self.initialize_score_deque(
-        frame_set,
-        input_frameno,
-        previous_keyframe,
-        self.deque_offset,
-      );
+      self.initialize_score_deque(frame_set, input_frameno, self.deque_offset);
     } else if self.score_deque.is_empty() {
       self.initialize_score_deque(
         frame_set,
         input_frameno,
-        previous_keyframe,
         frame_set.len() - 1,
       );
 
@@ -169,38 +163,29 @@ impl<T: Pixel> SceneChangeDetector<T> {
         frame_set[self.deque_offset].clone(),
         frame_set[self.deque_offset + 1].clone(),
         input_frameno,
-        previous_keyframe,
       );
     } else {
       self.deque_offset -= 1;
     }
 
     // Adaptive scenecut check
-    let (mut scenecut, score, threshold) = self.adaptive_scenecut();
+    let (mut scenecut, score) = self.adaptive_scenecut();
     if let Some(result) = self.handle_min_max_intervals(distance) {
       scenecut = result;
     }
     debug!(
-      "[SC-Detect] Frame {}: I={:5.1}  T= {:.1} {}",
+      "[SC-Detect] Frame {}: Raw={:5.1}  Adj={:5.1}  Th={:.1}  {}",
       input_frameno,
-      score,
-      threshold,
+      score.inter_cost,
+      score.adjusted_cost,
+      score.threshold,
       if scenecut { "Scenecut" } else { "No cut" }
     );
 
-    if scenecut {
-      // Clear buffers and `score_deque`
-      if let Some((_, is_initialized)) = &mut self.frame_buffer {
-        *is_initialized = false;
-      }
-      debug!("[SC-score-deque]{:.0?}", self.score_deque);
-      self.score_deque.clear();
-    } else {
-      // Keep score deque of 5 backward frames
-      // and forward frames of lenght of lookahead offset
-      if self.score_deque.len() > 5 + self.lookahead_offset {
-        self.score_deque.pop();
-      }
+    // Keep score deque of 5 backward frames
+    // and forward frames of lenght of lookahead offset
+    if self.score_deque.len() > 5 + self.lookahead_offset {
+      self.score_deque.pop();
     }
 
     scenecut
@@ -220,14 +205,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
   // Initially fill score deque with frame scores
   fn initialize_score_deque(
     &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
-    previous_keyframe: u64, init_len: usize,
+    init_len: usize,
   ) {
     for x in 0..init_len {
       self.run_comparison(
         frame_set[x].clone(),
         frame_set[x + 1].clone(),
         input_frameno,
-        previous_keyframe,
       );
     }
   }
@@ -236,70 +220,72 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Insert result to start of score deque
   fn run_comparison(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
-    input_frameno: u64, previous_keyframe: u64,
+    input_frameno: u64,
   ) {
-    let result = if self.speed_mode == SceneDetectionSpeed::Fast {
+    let mut result = if self.speed_mode == SceneDetectionSpeed::Fast {
       self.fast_scenecut(frame1, frame2)
     } else {
-      self.cost_scenecut(frame1, frame2, input_frameno, previous_keyframe)
+      self.cost_scenecut(frame1, frame2)
     };
-    self
-      .score_deque
-      .insert(0, (result.inter_cost as f64, result.threshold as f64));
+
+    // Subtract the previous metric value from the current one
+    // It makes the peaks in the metric more distincti
+    if self.speed_mode != SceneDetectionSpeed::Fast && self.deque_offset > 0 {
+      if input_frameno == 1 {
+        // Accounts for the second frame not having a score to adjust against.
+        // It should always be 0 because the first frame of the video is always a keyframe.
+        result.adjusted_cost = 0.0;
+      } else {
+        result.adjusted_cost =
+          result.inter_cost - self.score_deque[0].inter_cost;
+        if result.adjusted_cost < 0.0 {
+          result.adjusted_cost = 0.0;
+        }
+      }
+    }
+    self.score_deque.insert(0, result);
   }
 
   /// Compares current scene score to adapted threshold based on previous scores
   /// Value of current frame is offset by lookahead, if lookahead >=5
   /// Returns true if current scene score is higher than adapted threshold
-  fn adaptive_scenecut(&mut self) -> (bool, f64, f64) {
-    // Subtract the previous metric value from the current one
-    // It makes the peaks in the metric more distinctive
-    let mut adjusted_deque = self.score_deque.clone();
-    if (self.speed_mode != SceneDetectionSpeed::Fast) && self.deque_offset > 0
-    {
-      for i in (1..self.score_deque.len()).rev() {
-        let previous_scene_score = adjusted_deque[i - 1].0;
-        adjusted_deque[i].0 -= previous_scene_score;
-        if adjusted_deque[i].0 < 0.0 {
-          adjusted_deque[i].0 = 0.0;
-        }
-      }
-    }
+  fn adaptive_scenecut(&mut self) -> (bool, ScenecutResult) {
+    let score = self.score_deque[self.deque_offset];
 
-    let scene_score = adjusted_deque[self.deque_offset].0;
-    let scene_threshold = adjusted_deque[self.deque_offset].1;
-
-    if scene_score >= scene_threshold {
-      let back_deque = &adjusted_deque[self.deque_offset + 1..];
-      let forward_deque = &adjusted_deque[..self.deque_offset];
-
-      let back_over_tr_count =
-        back_deque.iter().filter(|(x, y)| x > y).count();
-      let forward_over_tr_count =
-        forward_deque.iter().filter(|(x, y)| x > y).count();
+    if score.adjusted_cost >= score.threshold {
+      let back_deque = &self.score_deque[self.deque_offset + 1..];
+      let forward_deque = &self.score_deque[..self.deque_offset];
+      let back_over_tr_count = back_deque
+        .iter()
+        .filter(|result| result.adjusted_cost > result.threshold)
+        .count();
+      let forward_over_tr_count = forward_deque
+        .iter()
+        .filter(|result| result.adjusted_cost > result.threshold)
+        .count();
 
       // Check for scenecut after the flashes
       // No frames over threshold forward
       // and some frames over threshold backward
       if forward_over_tr_count == 0 && back_over_tr_count > 1 {
-        return (true, scene_score, scene_threshold);
+        return (true, score);
       }
 
       // Check for scenecut before flash
       // If distance longer than max flash length
       if back_over_tr_count == 0
         && forward_over_tr_count == 1
-        && forward_deque[0].0 > forward_deque[0].1
+        && forward_deque[0].adjusted_cost > forward_deque[0].adjusted_cost
       {
-        return (true, scene_score, scene_threshold);
+        return (true, score);
       }
 
       if back_over_tr_count != 0 || forward_over_tr_count != 0 {
-        return (false, scene_score, scene_threshold);
+        return (false, score);
       }
     }
 
-    (scene_score >= scene_threshold, scene_score, scene_threshold)
+    (score.adjusted_cost >= score.threshold, score)
   }
 
   /// The fast algorithm detects fast cuts using a raw difference
@@ -341,6 +327,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       ScenecutResult {
         threshold: self.threshold as f64,
         inter_cost: delta as f64,
+        adjusted_cost: delta as f64,
       }
     } else {
       unreachable!()
@@ -354,8 +341,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// for coding this frame.
   #[hawktracer(cost_scenecut)]
   fn cost_scenecut(
-    &self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>, frameno: u64,
-    previous_keyframe: u64,
+    &self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
   ) -> ScenecutResult {
     let frame2_ref2 = Arc::clone(&frame2);
 
@@ -383,29 +369,15 @@ impl<T: Pixel> SceneChangeDetector<T> {
       },
     );
 
-    // Sliding scale, more likely to choose a keyframe
-    // as we get farther from the last keyframe.
-    // Based on x264 scenecut code.
-    //
-    // `THRESH_MAX` determines how likely we are
+    // `BIAS` determines how likely we are
     // to choose a keyframe, between 0.0-1.0.
     // Higher values mean we are more likely to choose a keyframe.
-    // `0.833` was chosen based on trials using the new
+    // This value was chosen based on trials using the new
     // adaptive scenecut code.
-    const THRESH_MAX: f64 = 0.833;
-    const THRESH_MIN: f64 = 0.75;
-    let min_keyint = self.encoder_config.min_key_frame_interval;
-    let max_keyint = self.encoder_config.max_key_frame_interval;
-    let distance_from_keyframe =
-      cmp::max(min_keyint, frameno - previous_keyframe);
-    let bias = THRESH_MIN
-      + (THRESH_MAX - THRESH_MIN)
-        * (distance_from_keyframe - min_keyint) as f64
-        / (max_keyint - min_keyint) as f64;
+    const BIAS: f64 = 0.5;
+    let threshold = intra_cost * (1.0 - BIAS);
 
-    let threshold = intra_cost * (1.0 - bias);
-
-    ScenecutResult { inter_cost, threshold }
+    ScenecutResult { inter_cost, threshold, adjusted_cost: inter_cost }
   }
 
   /// Calculates delta beetween 2 planes
@@ -469,9 +441,9 @@ fn detect_scale_factor(
   scale_factor
 }
 
-/// This struct primarily exists for returning metrics to the caller
 #[derive(Debug, Clone, Copy)]
 struct ScenecutResult {
   inter_cost: f64,
+  adjusted_cost: f64,
   threshold: f64,
 }
