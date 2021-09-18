@@ -183,18 +183,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
 
     // Adaptive scenecut check
-    let mut scenecut = self.adaptive_scenecut();
-    debug!(
-      "[SC-Detect] Frame {}: I={:5.1}  T= {:.1} {}",
-      input_frameno,
-      self.score_deque[self.deque_offset].0,
-      self.score_deque[self.deque_offset].1,
-      if scenecut { "Scenecut" } else { "No cut" }
-    );
-
+    let (mut scenecut, score, threshold) = self.adaptive_scenecut();
     if let Some(result) = self.handle_min_max_intervals(distance) {
       scenecut = result;
     }
+    debug!(
+      "[SC-Detect] Frame {}: I={:5.1}  T= {:.1} {}",
+      input_frameno,
+      score,
+      threshold,
+      if scenecut { "Scenecut" } else { "No cut" }
+    );
 
     if scenecut {
       // Clear buffers and `score_deque`
@@ -259,21 +258,27 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Compares current scene score to adapted threshold based on previous scores
   /// Value of current frame is offset by lookahead, if lookahead >=5
   /// Returns true if current scene score is higher than adapted threshold
-  fn adaptive_scenecut(&mut self) -> bool {
+  fn adaptive_scenecut(&mut self) -> (bool, f64, f64) {
     // Subtract the previous metric value from the current one
     // It makes the peaks in the metric more distinctive
+    let mut adjusted_deque = self.score_deque.clone();
     if (self.speed_mode != SceneDetectionSpeed::Fast) && self.deque_offset > 0
     {
-      let previous_scene_score = self.score_deque[self.deque_offset - 1].0;
-      self.score_deque[self.deque_offset].0 -= previous_scene_score;
+      for i in (1..self.score_deque.len()).rev() {
+        let previous_scene_score = adjusted_deque[i - 1].0;
+        adjusted_deque[i].0 -= previous_scene_score;
+        if adjusted_deque[i].0 < 0.0 {
+          adjusted_deque[i].0 = 0.0;
+        }
+      }
     }
 
-    let scene_score = self.score_deque[self.deque_offset].0;
-    let scene_threshold = self.score_deque[self.deque_offset].1;
+    let scene_score = adjusted_deque[self.deque_offset].0;
+    let scene_threshold = adjusted_deque[self.deque_offset].1;
 
     if scene_score >= scene_threshold {
-      let back_deque = &self.score_deque[self.deque_offset + 1..];
-      let forward_deque = &self.score_deque[..self.deque_offset];
+      let back_deque = &adjusted_deque[self.deque_offset + 1..];
+      let forward_deque = &adjusted_deque[..self.deque_offset];
 
       let back_over_tr_count =
         back_deque.iter().filter(|(x, y)| x > y).count();
@@ -283,8 +288,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
       // Check for scenecut after the flashes
       // No frames over threshold forward
       // and some frames over threshold backward
-      if forward_over_tr_count == 0 && back_over_tr_count > 0 {
-        return true;
+      if forward_over_tr_count == 0 && back_over_tr_count > 1 {
+        return (true, scene_score, scene_threshold);
       }
 
       // Check for scenecut before flash
@@ -293,15 +298,15 @@ impl<T: Pixel> SceneChangeDetector<T> {
         && forward_over_tr_count == 1
         && forward_deque[0].0 > forward_deque[0].1
       {
-        return true;
+        return (true, scene_score, scene_threshold);
       }
 
       if back_over_tr_count != 0 || forward_over_tr_count != 0 {
-        return false;
+        return (false, scene_score, scene_threshold);
       }
     }
 
-    scene_score >= scene_threshold
+    (scene_score >= scene_threshold, scene_score, scene_threshold)
   }
 
   /// The fast algorithm detects fast cuts using a raw difference
