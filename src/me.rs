@@ -31,17 +31,11 @@ use std::sync::Arc;
 
 use rust_hawktracer::*;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct MEStats {
   pub mv: MotionVector,
   /// sad value, on the scale of a 128x128 block
   pub normalized_sad: u32,
-}
-
-impl Default for MEStats {
-  fn default() -> Self {
-    Self { mv: MotionVector::default(), normalized_sad: 0 }
-  }
 }
 
 #[derive(Debug, Clone)]

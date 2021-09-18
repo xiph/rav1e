@@ -516,17 +516,10 @@ pub enum IntraParam {
   None,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct AngleDelta {
   pub y: i8,
   pub uv: i8,
-}
-
-impl Default for AngleDelta {
-  #[inline]
-  fn default() -> Self {
-    Self { y: 0, uv: 0 }
-  }
 }
 
 #[derive(Copy, Clone)]

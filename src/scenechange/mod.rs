@@ -328,7 +328,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
         );
 
         ScenecutResult {
-          intra_cost: self.threshold as f64,
           threshold: self.threshold as f64,
           inter_cost: delta as f64,
         }
@@ -369,7 +368,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
         let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
 
         ScenecutResult {
-          intra_cost: self.threshold as f64,
           threshold: self.threshold as f64,
           inter_cost: delta as f64,
         }
@@ -446,7 +444,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       self.threshold as f64
     };
 
-    ScenecutResult { intra_cost, inter_cost, threshold }
+    ScenecutResult { inter_cost, threshold }
   }
 
   /// Calculates delta beetween 2 planes
@@ -513,7 +511,6 @@ fn detect_scale_factor(
 /// This struct primarily exists for returning metrics to the caller
 #[derive(Debug, Clone, Copy)]
 struct ScenecutResult {
-  intra_cost: f64,
   inter_cost: f64,
   threshold: f64,
 }

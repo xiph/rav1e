@@ -486,7 +486,7 @@ impl Default for DeblockState {
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct SegmentationState {
   pub enabled: bool,
   pub update_data: bool,
@@ -495,20 +495,6 @@ pub struct SegmentationState {
   pub last_active_segid: u8,
   pub features: [[bool; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub data: [[i16; SegLvl::SEG_LVL_MAX as usize]; 8],
-}
-
-impl Default for SegmentationState {
-  fn default() -> Self {
-    SegmentationState {
-      enabled: false,
-      update_data: false,
-      update_map: false,
-      preskip: false,
-      last_active_segid: 0,
-      features: [[false; SegLvl::SEG_LVL_MAX as usize]; 8],
-      data: [[0; SegLvl::SEG_LVL_MAX as usize]; 8],
-    }
-  }
 }
 
 // Frame Invariants are invariant inside a frame
