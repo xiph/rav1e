@@ -250,19 +250,22 @@ impl<T: Pixel> SceneChangeDetector<T> {
         }
       }
       if self.score_deque.len() >= self.deque_offset {
-        let count = self.deque_offset + 1;
+        let count = self.deque_offset;
         let sum = self
           .score_deque
           .iter()
-          .take(self.deque_offset)
+          .take(self.deque_offset - 1)
           .map(|i| i.inter_cost)
           .sum::<f64>()
           + result.inter_cost;
-        self.score_deque[self.deque_offset].forward_adjusted_cost =
-          self.score_deque[self.deque_offset].inter_cost
+        // The location of the item we want to change is at deque_offset - 1,
+        // because we will insert the new result after this.
+        self.score_deque[self.deque_offset - 1].forward_adjusted_cost =
+          self.score_deque[self.deque_offset - 1].inter_cost
             - (sum / count as f64);
-        if self.score_deque[self.deque_offset].forward_adjusted_cost < 0.0 {
-          self.score_deque[self.deque_offset].forward_adjusted_cost = 0.0;
+        if self.score_deque[self.deque_offset - 1].forward_adjusted_cost < 0.0
+        {
+          self.score_deque[self.deque_offset - 1].forward_adjusted_cost = 0.0;
         }
       }
     }
