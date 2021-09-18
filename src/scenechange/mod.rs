@@ -406,7 +406,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // Higher values mean we are more likely to choose a keyframe.
     // This value was chosen based on trials using the new
     // adaptive scenecut code.
-    const BIAS: f64 = 0.5;
+    const BIAS: f64 = 0.45;
     let threshold = intra_cost * (1.0 - BIAS);
 
     ScenecutResult {
