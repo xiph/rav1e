@@ -249,23 +249,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
           result.adjusted_cost = 0.0;
         }
       }
-      if self.score_deque.len() >= self.deque_offset {
-        let count = self.deque_offset;
-        let sum = self
-          .score_deque
-          .iter()
-          .take(self.deque_offset - 1)
-          .map(|i| i.inter_cost)
-          .sum::<f64>()
-          + result.inter_cost;
-        // The location of the item we want to change is at deque_offset - 1,
-        // because we will insert the new result after this.
-        self.score_deque[self.deque_offset - 1].forward_adjusted_cost =
-          self.score_deque[self.deque_offset - 1].inter_cost
-            - (sum / count as f64);
-        if self.score_deque[self.deque_offset - 1].forward_adjusted_cost < 0.0
-        {
-          self.score_deque[self.deque_offset - 1].forward_adjusted_cost = 0.0;
+      if !self.score_deque.is_empty() {
+        for i in 0..(cmp::min(self.deque_offset, self.score_deque.len())) {
+          let count = i + 1;
+          let sum =
+            self.score_deque.iter().take(i).map(|i| i.inter_cost).sum::<f64>()
+              + result.inter_cost;
+          self.score_deque[i].forward_adjusted_cost =
+            self.score_deque[i].inter_cost - (sum / count as f64);
+          if self.score_deque[i].forward_adjusted_cost < 0.0 {
+            self.score_deque[i].forward_adjusted_cost = 0.0;
+          }
         }
       }
     }
@@ -306,7 +300,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       // If distance longer than max flash length
       if back_over_tr_count == 0
         && forward_over_tr_count == 1
-        && forward_deque[0].adjusted_cost > forward_deque[0].adjusted_cost
+        && forward_deque[0].adjusted_cost > forward_deque[0].threshold
       {
         return (true, score);
       }
