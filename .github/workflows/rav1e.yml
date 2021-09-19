@@ -48,7 +48,7 @@ jobs:
           - aom-tests
           - dav1d-tests
           - no-asm-tests
-          - grcov-coveralls
+          # - grcov-coveralls
           - bench
           - doc
           - cargo-c
@@ -67,8 +67,8 @@ jobs:
             toolchain: stable
           - conf: no-asm-tests
             toolchain: stable
-          - conf: grcov-coveralls
-            toolchain: stable
+          # - conf: grcov-coveralls
+          #   toolchain: stable
           - conf: bench
             toolchain: stable
           - conf: doc
