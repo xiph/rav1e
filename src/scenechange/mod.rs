@@ -177,7 +177,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       "[SC-Detect] Frame {}: Raw={:5.1}  Adj={:5.1}  Fwd={:5.1}  Th={:.1}  {}",
       input_frameno,
       score.inter_cost,
-      score.adjusted_cost,
+      score.backward_adjusted_cost,
       score.forward_adjusted_cost,
       score.threshold,
       if scenecut { "Scenecut" } else { "No cut" }
@@ -235,7 +235,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       if input_frameno == 1 {
         // Accounts for the second frame not having a score to adjust against.
         // It should always be 0 because the first frame of the video is always a keyframe.
-        result.adjusted_cost = 0.0;
+        result.backward_adjusted_cost = 0.0;
       } else {
         let count = cmp::min(self.deque_offset, self.score_deque.len());
         let sum = self
@@ -244,9 +244,10 @@ impl<T: Pixel> SceneChangeDetector<T> {
           .take(self.deque_offset)
           .map(|i| i.inter_cost)
           .sum::<f64>();
-        result.adjusted_cost = result.inter_cost - (sum / count as f64);
-        if result.adjusted_cost < 0.0 {
-          result.adjusted_cost = 0.0;
+        result.backward_adjusted_cost =
+          result.inter_cost - (sum / count as f64);
+        if result.backward_adjusted_cost < 0.0 {
+          result.backward_adjusted_cost = 0.0;
         }
       }
       if !self.score_deque.is_empty() {
@@ -278,11 +279,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
       let forward_deque = &self.score_deque[..self.deque_offset];
       let back_over_tr_count = back_deque
         .iter()
-        .filter(|result| result.adjusted_cost > result.threshold)
+        .filter(|result| result.backward_adjusted_cost >= result.threshold)
         .count();
       let forward_over_tr_count = forward_deque
         .iter()
-        .filter(|result| result.forward_adjusted_cost > result.threshold)
+        .filter(|result| result.forward_adjusted_cost >= result.threshold)
         .count();
 
       // Check for scenecut after the flashes
@@ -296,7 +297,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       // If distance longer than max flash length
       if back_over_tr_count == 0
         && forward_over_tr_count == 1
-        && forward_deque[0].adjusted_cost > forward_deque[0].threshold
+        && forward_deque[0].forward_adjusted_cost >= forward_deque[0].threshold
       {
         return (true, score);
       }
@@ -348,7 +349,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       ScenecutResult {
         threshold: self.threshold as f64,
         inter_cost: delta as f64,
-        adjusted_cost: delta as f64,
+        backward_adjusted_cost: delta as f64,
         forward_adjusted_cost: delta as f64,
       }
     } else {
@@ -402,7 +403,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     ScenecutResult {
       inter_cost,
       threshold,
-      adjusted_cost: 0.0,
+      backward_adjusted_cost: 0.0,
       forward_adjusted_cost: 0.0,
     }
   }
@@ -471,7 +472,7 @@ fn detect_scale_factor(
 #[derive(Debug, Clone, Copy)]
 struct ScenecutResult {
   inter_cost: f64,
-  adjusted_cost: f64,
+  backward_adjusted_cost: f64,
   forward_adjusted_cost: f64,
   threshold: f64,
 }
