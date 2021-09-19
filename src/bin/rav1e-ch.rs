@@ -508,30 +508,32 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base.num as usize,
   );
 
-  info!("CPU Feature Level: {}", CpuFeatureLevel::default());
-
-  info!(
-    "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",
-    video_info.width,
-    video_info.height,
-    video_info.time_base.den,
-    video_info.time_base.num,
-    video_info.chroma_sampling,
-    video_info.bit_depth
-  );
-  info!("Encoding settings: {}", cli.enc);
-
   let tiling =
     cfg.tiling_info().map_err(|e| e.context("Invalid configuration"))?;
-  if tiling.tile_count() == 1 {
-    info!("Using 1 tile");
-  } else {
+  if cli.verbose != Verbose::Quiet {
+    info!("CPU Feature Level: {}", CpuFeatureLevel::default());
+
     info!(
-      "Using {} tiles ({}x{})",
-      tiling.tile_count(),
-      tiling.cols,
-      tiling.rows
+      "Using y4m decoder: {}x{}p @ {}/{} fps, {}, {}-bit",
+      video_info.width,
+      video_info.height,
+      video_info.time_base.den,
+      video_info.time_base.num,
+      video_info.chroma_sampling,
+      video_info.bit_depth
     );
+    info!("Encoding settings: {}", cli.enc);
+
+    if tiling.tile_count() == 1 {
+      info!("Using 1 tile");
+    } else {
+      info!(
+        "Using {} tiles ({}x{})",
+        tiling.tile_count(),
+        tiling.cols,
+        tiling.rows
+      );
+    }
   }
 
   let progress = ProgressInfo::new(
