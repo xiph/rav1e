@@ -272,11 +272,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   fn adaptive_scenecut(&mut self) -> (bool, ScenecutResult) {
     let score = self.score_deque[self.deque_offset];
 
-    let cost = if score.adjusted_cost > score.forward_adjusted_cost {
-      score.adjusted_cost
-    } else {
-      score.forward_adjusted_cost
-    };
+    let cost = score.forward_adjusted_cost;
     if cost >= score.threshold {
       let back_deque = &self.score_deque[self.deque_offset + 1..];
       let forward_deque = &self.score_deque[..self.deque_offset];
@@ -400,7 +396,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // Higher values mean we are more likely to choose a keyframe.
     // This value was chosen based on trials using the new
     // adaptive scenecut code.
-    const BIAS: f64 = 0.45;
+    const BIAS: f64 = 0.75;
     let threshold = intra_cost * (1.0 - BIAS);
 
     ScenecutResult {
