@@ -1392,7 +1392,9 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
       cw.get_cdf_intra_mode_kf(tile_bo)
     }
     .iter()
-    .take(INTRA_MODES)
+    .take(INTRA_MODES - 1)
+    // Tac on the final icdf (always 0), since it isn't stored explicitly.
+    .chain(&[0u16])
     .scan(32768, |z, &a| {
       let d = *z - a;
       *z = a;
