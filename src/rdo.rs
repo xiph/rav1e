@@ -1386,22 +1386,16 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
   // Find mode with lowest rate cost
   {
-    let probs_all = if fi.frame_type.has_inter() {
+    use crate::ec::cdf_to_pdf;
+
+    let probs_all = cdf_to_pdf(if fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
       cw.get_cdf_intra_mode_kf(tile_bo)
-    }
-    .iter()
-    .take(INTRA_MODES)
-    .scan(32768, |z, &a| {
-      let d = *z - a;
-      *z = a;
-      Some(!d)
-    })
-    .collect::<ArrayVec<_, INTRA_MODES>>();
+    });
 
     modes.try_extend_from_slice(intra_mode_set).unwrap();
-    modes.sort_by_key(|&a| probs_all[a as usize]);
+    modes.sort_by_key(|&a| !probs_all[a as usize]);
   }
 
   // If tx partition (i.e. fi.tx_mode_select) is enabled, the below intra prediction screening
