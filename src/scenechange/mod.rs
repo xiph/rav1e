@@ -12,11 +12,11 @@ use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
-use crate::util::{CastFromPrimitive, Pixel};
+use crate::sad_row;
+use crate::util::Pixel;
 use rust_hawktracer::*;
 use std::sync::Arc;
 use std::{cmp, u64};
-// use crate::api::*;
 
 // The fast implementation is based on a Python implementation at
 // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
@@ -486,8 +486,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
   }
 
-  /// Calculates delta beetween 2 planes
-  /// returns average for pixel
+  /// Calculates the average sum of absolute difference (SAD) per pixel between 2 planes
   #[hawktracer(delta_in_planes)]
   fn delta_in_planes(&self, plane1: &Plane<T>, plane2: &Plane<T>) -> f64 {
     let mut delta = 0;
@@ -497,14 +496,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     for (l1, l2) in lines {
       let l1 = l1.get(..plane1.cfg.width).unwrap_or(l1);
       let l2 = l2.get(..plane1.cfg.width).unwrap_or(l2);
-      let delta_line = l1
-        .iter()
-        .zip(l2.iter())
-        .map(|(&p1, &p2)| {
-          (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
-        })
-        .sum::<u32>();
-      delta += delta_line as u64;
+      delta += sad_row::sad_row(l1, l2, self.cpu_feature_level);
     }
     delta as f64 / self.pixels as f64
   }

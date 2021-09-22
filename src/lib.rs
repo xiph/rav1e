@@ -228,6 +228,7 @@ mod mc;
 mod me;
 mod rate;
 mod recon_intra;
+mod sad_row;
 mod scan_order;
 #[cfg(feature = "scenechange")]
 pub mod scenechange;
