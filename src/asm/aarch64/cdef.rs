@@ -19,6 +19,7 @@ type CdefPaddingFn = unsafe extern fn(
   src_stride: isize,
   left: *const [u8; 2],
   top: *const u8,
+  bottom: *const u8,
   h: i32,
   edges: isize,
 );
@@ -29,6 +30,7 @@ type CdefPaddingHBDFn = unsafe extern fn(
   src_stride: isize,
   left: *const [u16; 2],
   top: *const u16,
+  bottom: *const u16,
   h: i32,
   edges: isize,
 );
@@ -105,6 +107,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           let mut tmp: Aligned<[u16; TMPSIZE]> =
             Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
           let top = src.offset(-2 * src_stride);
+          let bottom = src.offset(h as isize * src_stride);
           let mut left: Aligned<[[u8; 2]; 8]> = Aligned::new([[0; 2]; 8]);
 
           // Rather than modify the dav1d assembly, just swallow our
@@ -134,6 +137,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             T::to_asm_stride(src_stride as usize),
             left.data.as_ptr() as *const [u8; 2],
             top as *const u8,
+            bottom as *const u8,
             8 >> ydec,
             edges.into(),
           );
@@ -170,6 +174,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           let mut tmp: Aligned<[u16; TMPSIZE]> =
             Aligned::new([CDEF_VERY_LARGE; TMPSIZE]);
           let top = src.offset(-2 * src_stride);
+          let bottom = src.offset(h as isize * src_stride);
           let mut left: Aligned<[[u16; 2]; 8]> = Aligned::new([[0; 2]; 8]);
 
           if edges & CDEF_HAVE_LEFT != 0 {
@@ -187,6 +192,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             T::to_asm_stride(src_stride as usize),
             left.data.as_ptr() as *const [u16; 2],
             top as *const u16,
+            bottom as *const u16,
             8 >> ydec,
             edges.into(),
           );
@@ -228,7 +234,7 @@ extern {
 
   fn rav1e_cdef_padding4_8bpc_neon(
     tmp: *mut u16, src: *const u8, src_stride: isize, left: *const [u8; 2],
-    top: *const u8, h: i32, edges: isize,
+    top: *const u8, bottom: *const u8, h: i32, edges: isize,
   );
 
   fn rav1e_cdef_filter8_8bpc_neon(
@@ -238,7 +244,7 @@ extern {
 
   fn rav1e_cdef_padding8_8bpc_neon(
     tmp: *mut u16, src: *const u8, src_stride: isize, left: *const [u8; 2],
-    top: *const u8, h: i32, edges: isize,
+    top: *const u8, bottom: *const u8, h: i32, edges: isize,
   );
 
   fn rav1e_cdef_filter4_16bpc_neon(
@@ -248,7 +254,7 @@ extern {
 
   fn rav1e_cdef_padding4_16bpc_neon(
     tmp: *mut u16, src: *const u16, src_stride: isize, left: *const [u16; 2],
-    top: *const u16, h: i32, edges: isize,
+    top: *const u16, bottom: *const u16, h: i32, edges: isize,
   );
 
   fn rav1e_cdef_filter8_16bpc_neon(
@@ -258,7 +264,7 @@ extern {
 
   fn rav1e_cdef_padding8_16bpc_neon(
     tmp: *mut u16, src: *const u16, src_stride: isize, left: *const [u16; 2],
-    top: *const u16, h: i32, edges: isize,
+    top: *const u16, bottom: *const u16, h: i32, edges: isize,
   );
 }
 
