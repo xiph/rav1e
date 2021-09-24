@@ -287,6 +287,20 @@ fn test_parse_nasm_version() {
 }
 
 #[cfg(feature = "asm")]
+fn is_nasm_installed_check() {
+  let mut cmd = std::process::Command::new("nasm");
+  cmd.arg("-h");
+  match cmd.status() {
+    Ok(_) => (),
+    Err(_) => {
+      panic!(
+        r#"Couldn't find NASM, make sure NASM installed and in PATH or disable "asm" feature"#
+      )
+    }
+  }
+}
+
+#[cfg(feature = "asm")]
 fn nasm_version_check() -> std::path::PathBuf {
   let nasm_path = std::path::PathBuf::from("nasm");
   match is_nasm_new_enough(Some((2, 14, 0)), &nasm_path) {
@@ -319,6 +333,7 @@ fn main() {
   {
     if arch == "x86_64" {
       println!("cargo:rustc-cfg={}", "nasm_x86_64");
+      is_nasm_installed_check();
       nasm_version_check();
       build_nasm_files()
     }
