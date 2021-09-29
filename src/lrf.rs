@@ -1181,15 +1181,9 @@ fn wiener_stripe_filter<T: Pixel>(
   }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct RestorationUnit {
   pub filter: RestorationFilter,
-}
-
-impl Default for RestorationUnit {
-  fn default() -> RestorationUnit {
-    RestorationUnit { filter: RestorationFilter::default() }
-  }
 }
 
 #[derive(Clone, Debug)]

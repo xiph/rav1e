@@ -17,9 +17,6 @@ use rust_hawktracer::*;
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
   variances: Box<[u32]>,
-  // Width and height of the original frame that is masked
-  width: usize,
-  height: usize,
 }
 
 impl ActivityMask {
@@ -55,7 +52,7 @@ impl ActivityMask {
         variances.push(variance);
       }
     }
-    ActivityMask { variances: variances.into_boxed_slice(), width, height }
+    ActivityMask { variances: variances.into_boxed_slice() }
   }
 
   #[hawktracer(activity_mask_fill_scales)]

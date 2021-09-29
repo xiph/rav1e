@@ -888,6 +888,18 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   }
 }
 
+pub(crate) fn cdf_to_pdf<const CDF_LEN: usize>(
+  cdf: &[u16; CDF_LEN],
+) -> [u16; CDF_LEN] {
+  let mut pdf = [0; CDF_LEN];
+  let mut z = 32768u16 >> EC_PROB_SHIFT;
+  for (d, &a) in pdf.iter_mut().zip(cdf.iter()) {
+    *d = z - (a >> EC_PROB_SHIFT);
+    z = a >> EC_PROB_SHIFT;
+  }
+  pdf
+}
+
 pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
   #[inline]
