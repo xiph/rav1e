@@ -1200,16 +1200,27 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     );
     if visible_tx_w < tx_size.width() {
       for row in residual.chunks_mut(tx_size.width()).take(visible_tx_h) {
-        for a in &mut row[visible_tx_w..] {
-          *a = 0;
-        }
+        // do edge-extension padding of residual horizontally
+        let (initialized_area, uninitialized_area) =
+          row.split_at_mut(visible_tx_w);
+        uninitialized_area.fill(initialized_area[visible_tx_w - 1]);
       }
     }
-  }
-  let initialized_area =
-    if visible_tx_w == 0 { 0 } else { tx_size.width() * visible_tx_h };
-  for a in residual[initialized_area..].iter_mut() {
-    *a = 0;
+    let initialized_area_idx =
+      if visible_tx_w == 0 { 0 } else { tx_size.width() * visible_tx_h };
+    {
+      // do edge-extension padding of residual vertically
+      let (initialized_area, uninitialized_area) =
+        residual.split_at_mut(initialized_area_idx);
+      let last_row = &initialized_area
+        [initialized_area_idx - tx_size.width()..initialized_area_idx];
+      for a in uninitialized_area.chunks_exact_mut(tx_size.width()) {
+        a.clone_from_slice(last_row);
+      }
+    }
+  } else {
+    // entire tx area is not visible, fill with 0
+    residual.fill(0);
   }
 
   forward_transform(
