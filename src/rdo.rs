@@ -344,26 +344,69 @@ fn compute_distortion<T: Pixel>(
   }
 
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual
-      if bsize.width() >= 8
-        && bsize.height() >= 8
-        && (visible_w & 0x7 == 0)
-        && (visible_h & 0x7 == 0) =>
-    {
-      cdef_dist_wxh(
-        &input_region,
-        &rec_region,
-        visible_w,
-        visible_h,
-        fi.sequence.bit_depth,
-        |bias_area, bsize| {
-          distortion_scale(
-            fi,
-            input_region.subregion(bias_area).frame_block_offset(),
-            bsize,
-          )
-        },
-      )
+    Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
+      let w8 = visible_w & !7;
+      let h8 = visible_h & !7;
+      let mut sum = Distortion(0);
+      if w8 > 0 && h8 > 0 {
+        sum += cdef_dist_wxh(
+          &input_region,
+          &rec_region,
+          w8,
+          h8,
+          fi.sequence.bit_depth,
+          |bias_area, bsize| {
+            distortion_scale(
+              fi,
+              input_region.subregion(bias_area).frame_block_offset(),
+              bsize,
+            )
+          },
+        );
+      }
+      if visible_w > w8 && h8 > 0 {
+        let area = Area::StartingAt { x: w8 as isize, y: 0 };
+        sum += sse_wxh(
+          &input_region.subregion(area),
+          &rec_region.subregion(area),
+          visible_w - w8,
+          h8,
+          |bias_area, bsize| {
+            spatiotemporal_scale(
+              fi,
+              input_region
+                .subregion(area)
+                .subregion(bias_area)
+                .frame_block_offset(),
+              bsize,
+            )
+          },
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
+        );
+      }
+      if visible_h > h8 && visible_w > 0 {
+        let area = Area::StartingAt { x: 0, y: h8 as isize };
+        sum += sse_wxh(
+          &input_region.subregion(area),
+          &rec_region.subregion(area),
+          visible_w,
+          visible_h - h8,
+          |bias_area, bsize| {
+            spatiotemporal_scale(
+              fi,
+              input_region
+                .subregion(area)
+                .subregion(bias_area)
+                .frame_block_offset(),
+              bsize,
+            )
+          },
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
+        );
+      }
+      sum
     }
     Tune::Psnr | Tune::Psychovisual => sse_wxh(
       &input_region,
