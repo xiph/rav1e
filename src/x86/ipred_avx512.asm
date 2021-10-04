@@ -55,6 +55,32 @@ smooth_weights: SMOOTH_WEIGHT_TABLE         \
      18,  16,  15,  13,  12,  10,   9,   8, \
       7,   6,   6,   5,   5,   4,   4,   4
 
+; dav1d_filter_intra_taps[], reordered for VNNI: p1 p2 p3 p4, p6 p5 p0 __
+filter_taps:  db 10,  0,  0,  0,  2, 10,  0,  0,  1,  1, 10,  0,  1,  1,  2, 10
+              db  6,  0,  0,  0,  2,  6,  0,  0,  2,  2,  6,  0,  1,  2,  2,  6
+              db  0, 12, -6,  0,  0,  9, -5,  0,  0,  7, -3,  0,  0,  5, -3,  0
+              db 12,  2, -4,  0,  9,  2, -3,  0,  7,  2, -3,  0,  5,  3, -3,  0
+              db 16,  0,  0,  0,  0, 16,  0,  0,  0,  0, 16,  0,  0,  0,  0, 16
+              db 16,  0,  0,  0,  0, 16,  0,  0,  0,  0, 16,  0,  0,  0,  0, 16
+              db  0, 10,-10,  0,  0,  6, -6,  0,  0,  4, -4,  0,  0,  2, -2,  0
+              db 10,  0,-10,  0,  6,  0, -6,  0,  4,  0, -4,  0,  2,  0, -2,  0
+              db  8,  0,  0,  0,  0,  8,  0,  0,  0,  0,  8,  0,  0,  0,  0,  8
+              db  4,  0,  0,  0,  0,  4,  0,  0,  0,  0,  4,  0,  0,  0,  0,  4
+              db  0, 16, -8,  0,  0, 16, -8,  0,  0, 16, -8,  0,  0, 16, -8,  0
+              db 16,  0, -4,  0, 16,  0, -4,  0, 16,  0, -4,  0, 16,  0, -4,  0
+              db  8,  0,  0,  0,  3,  8,  0,  0,  2,  3,  8,  0,  1,  2,  3,  8
+              db  4,  0,  0,  0,  3,  4,  0,  0,  2,  3,  4,  0,  2,  2,  3,  4
+              db  0, 10, -2,  0,  0,  6, -1,  0,  0,  4, -1,  0,  0,  2,  0,  0
+              db 10,  3, -1,  0,  6,  4, -1,  0,  4,  4, -1,  0,  3,  3, -1,  0
+              db 14,  0,  0,  0,  0, 14,  0,  0,  0,  0, 14,  0,  0,  0,  0, 14
+              db 12,  0,  0,  0,  1, 12,  0,  0,  0,  0, 12,  0,  0,  0,  1, 12
+              db  0, 14,-12,  0,  0, 12,-10,  0,  0, 11, -9,  0,  0, 10, -8,  0
+              db 14,  0,-10,  0, 12,  0, -9,  0, 11,  1, -8,  0,  9,  1, -7,  0
+filter_perm:  db  0,  1,  2,  3, 24, 25, 26, 27,  4,  5,  6,  7, 28, 29, 30, 31
+              db 15, 11,  7,  3, 15, 11,  7,  3, 15, 11,  7,  3, 15, 11,  7,131
+              db 31, 27, 23, 19, 31, 27, 23, 19, 31, 27, 23, 19, 31, 27, 23,147
+              db 47, 43, 39, 35, 47, 43, 39, 35, 47, 43, 39, 35, 47, 43, 39,163
+filter_end:   dd  2,  3, 16, 17, -1, -1, 20, 21,  0,  6, 24, 30,  1,  7, 25, 31
 smooth_shuf:  db  7,  7,  7,  7,  0,  1,  0,  1,  3,  3,  3,  3,  8,  9,  8,  9
               db  5,  5,  5,  5,  4,  5,  4,  5,  1,  1,  1,  1, 12, 13, 12, 13
               db  6,  6,  6,  6,  2,  3,  2,  3,  2,  2,  2,  2, 10, 11, 10, 11
@@ -78,6 +104,7 @@ pw_255:       times 2 dw 255
 %define pb_1 (ipred_h_shuf+24)
 %define pb_2 (ipred_h_shuf+20)
 %define pb_3 (ipred_h_shuf+16)
+%define pd_8 (filter_taps+128)
 
 %macro JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - 2*4)
@@ -1153,6 +1180,253 @@ cglobal pal_pred_8bpc, 4, 7, 5, dst, stride, pal, idx, w, h, stride3
     lea                dstq, [dstq+strideq*4]
     sub                  hd, 4
     jg .w64
+    RET
+
+; The ipred_filter code processes 4x2 blocks in the following order
+; which increases parallelism compared to doing things row by row.
+; Some redundant blocks are calculated for w > 4.
+;     w4     w8       w16             w32
+;     1     1 2     1 2 3 4     1 2 3 4 9 a b c
+;     2     2 3     2 3 4 5     2 3 4 5 a b c d
+;     3     3 4     3 4 5 6     3 4 5 6 b c d e
+;     4     4 5     4 5 6 7     4 5 6 7 c d e f
+;     5     5 6     5 6 7 8     5 6 7 8 d e f g
+;     6     6 7     6 7 8 9     6 7 8 9 e f g h
+;     7     7 8     7 8 9 a     7 8 9 a f g h i
+; ___ 8 ___ 8 9 ___ 8 9 a b ___ 8 9 a b g h i j ___
+;           9       9 a b               h i j
+;                   a b                 i j
+;                   b                   j
+
+cglobal ipred_filter_8bpc, 4, 7, 14, dst, stride, tl, w, h, flt
+%define base r6-filter_taps
+    lea                  r6, [filter_taps]
+%ifidn fltd, fltm
+    movzx              fltd, fltb
+%else
+    movzx              fltd, byte fltm
+%endif
+    vpbroadcastd       xmm2, [tlq+1]        ; t0 t0 t0 t0
+    movifnidn            hd, hm
+    shl                fltd, 6
+    vpbroadcastd         m6, [base+pd_8]
+    vpbroadcastd       xmm3, [tlq-2]        ; l1 l0 tl __
+    vbroadcasti32x4      m7, [r6+fltq+16*0] ; p1 p2 p3 p4
+    vbroadcasti32x4      m8, [r6+fltq+16*1]
+    vbroadcasti32x4      m9, [r6+fltq+16*2] ; p6 p5 p0 __
+    vbroadcasti32x4     m10, [r6+fltq+16*3]
+    mova               xmm0, xm6
+    vpdpbusd           xmm0, xmm2, xm7
+    mova               xmm1, xm6
+    vpdpbusd           xmm1, xmm2, xm8
+    vpdpbusd           xmm0, xmm3, xm9
+    vpdpbusd           xmm1, xmm3, xm10
+    packssdw           xmm0, xmm1
+    cmp                  wd, 8
+    jb .w4
+    vpbroadcastd        ym2, [tlq+5]
+    mova                m11, [base+filter_perm]
+    mov                  r5, 0xffffffffffff000f
+    psrldq             xmm2, 1           ; __ t0
+    kmovq                k1, r5          ; 0x000f
+    psraw               xm5, xmm0, 4
+    packuswb           xmm2, xm5         ; __ t0 a0 b0
+    pshufd          ym2{k1}, ymm2, q3333 ; b0 b0 b0 b0   t1 t1 t1 t1
+    je .w8
+    kxnorb               k3, k3, k3      ; 0x00ff
+    vpbroadcastd        xm3, [tlq-4]
+    kandnq               k2, k3, k1      ; 0xffffffffffff0000
+    vpermb          ym3{k2}, ym11, ymm2  ; l3 l2 l1 __   b3 a3 t3 __
+    mova                ym0, ym6
+    vpdpbusd            ym0, ym2, ym7
+    mova                ym1, ym6
+    vpdpbusd            ym1, ym2, ym8
+    pshufb          ym5{k2}, ym2, ym11   ; a0 b0   __ t0
+    vpbroadcastd         m2, [tlq+9]
+    vpdpbusd            ym0, ym3, ym9
+    vpdpbusd            ym1, ym3, ym10
+    vpbroadcastd        xm3, [tlq-6]     ; l5 l4 l3 __
+    kunpckbw             k4, k1, k3      ; 0x0fff
+    packssdw            ym0, ym1
+    psraw               ym0, 4           ; a0 d0         a1 b1
+    packuswb            ym5, ym0         ; a0 b0 c0 d0   __ t1 a1 b1
+    pshufd           m2{k3}, m5, q3333   ; d0 d0 d0 d0   b1 b1 b1 b1   t2 t2 t2 t2
+    vpermb           m3{k2}, m11, m5     ; l5 l4 l3 __   d3 c3 b3 __   b7 a7 t7 __
+    mova                 m4, m6
+    vpdpbusd             m4, m2, m7
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m8
+    psrldq               m0, m2, 1       ; __ d0         __ b0         __ t0
+    vpbroadcastd         m2, [tlq+13]
+    vpdpbusd             m4, m3, m9
+    vpdpbusd             m1, m3, m10
+    mova                m12, [base+filter_end]
+    lea                 r5d, [hq-6]
+    mov                  r6, dstq
+    cmovp                hd, r5d         ; w == 16 ? h : h - 6
+    packssdw             m4, m1
+    psraw                m4, 4           ; e0 f0         c1 d1         a2 b2
+    packuswb             m0, m4          ; __ d0 e0 f0   __ b1 c1 d1   __ t2 a2 b2
+    pshufd           m2{k4}, m0, q3333   ; f0 f0 f0 f0   d1 d1 d1 d1   b2 b2 b2 b2   t3 t3 t3 t3
+.w16_loop:
+    vpbroadcastd        xm3, [tlq-8]
+    vpermb           m3{k2}, m11, m0     ; l7 l6 l5 __   f3 e3 d3 __   d7 c7 b7 __   bb ab tb __
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m7
+    mova                 m0, m6
+    vpdpbusd             m0, m2, m8
+    sub                 tlq, 2
+    vpdpbusd             m1, m3, m9
+    vpdpbusd             m0, m3, m10
+    packssdw             m1, m0
+    mova                 m0, m4
+    psraw                m4, m1, 4       ; g0 h0         e1 f1         c2 d2         a3 b3
+    packuswb             m0, m4          ; e0 f0 g0 h0   c1 d1 e1 f1   a2 b2 c2 d2   __ __ a3 b3
+    pshufd               m2, m0, q3333   ; h0 h0 h0 h0   f1 f1 f1 f1   d2 d2 d2 d2   b3 b3 b3 b3
+    vpermt2d             m5, m12, m0     ; c0 d0 e0 f0   __ __ c1 d1   a0 a1 a2 a3   b0 b1 b2 b3
+    vextracti32x4 [dstq+strideq*0], m5, 2
+    vextracti32x4 [dstq+strideq*1], m5, 3
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w16_loop
+    cmp                  wd, 16
+    je .ret
+    mova               xm13, [filter_perm+16]
+    mova               xmm3, [r6+strideq*0]
+    punpckhdq          xmm3, [r6+strideq*1]
+    vpbroadcastd     m2{k1}, [tlq+r5+17] ; t4 t4 t4 t4   f1 f1 f1 f1   d2 d2 d2 d2   b3 b3 b3 b3
+    pinsrb              xm3, xmm3, [tlq+r5+16], 7
+    pshufb              xm3, xm13
+    vpermb           m3{k2}, m11, m0     ; bf af tf __   h3 g3 f3 __   f7 e7 d7 __   db cb bb __
+    mova                 m0, m6
+    vpdpbusd             m0, m2, m7
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m8
+    kunpckbw             k5, k3, k1      ; 0xff0f
+    lea                  r3, [strideq*3]
+    vpdpbusd             m0, m3, m9
+    vpdpbusd             m1, m3, m10
+    packssdw             m0, m1
+    psraw                m0, 4           ; a4 b4         g1 h1         e2 f2         c3 d3
+    packuswb             m4, m0          ; g0 h0 a4 b4   e1 f1 g1 h1   c2 d2 e2 f2   __ __ c3 d3
+    vpblendmb        m1{k3}, m4, m2      ; __ t4 a4 b4   e1 f1 g1 h1   c2 d2 e2 f2   __ __ c3 d3
+    vpbroadcastd        ym2, [tlq+r5+21]
+    pshufd           m2{k5}, m4, q3333   ; b4 b4 b4 b4   t5 t5 t5 t5   f2 f2 f2 f2   d3 d3 d3 d3
+    vpermt2d             m5, m12, m4     ; e0 f0 g0 h0   __ __ e1 f1   c0 c1 c2 c3   d0 d1 d2 d3
+    vextracti32x4 [dstq+strideq*0], m5, 2
+    vextracti32x4 [dstq+strideq*1], m5, 3
+    punpckhqdq         xmm3, [r6+r3]
+    pinsrb             xmm3, [r6+strideq*2+15], 11
+    pshufb              xm3, xmm3, xm13
+    vpermb           m3{k2}, m11, m1     ; df cf bf __   bj aj tj __   h7 g7 f7 __   fb eb db __
+    mova                 m4, m6
+    vpdpbusd             m4, m2, m7
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m8
+    kxnord               k3, k3, k4      ; 0xfffff0ff
+    lea                  r4, [strideq*5]
+    vpdpbusd             m4, m3, m9
+    vpdpbusd             m1, m3, m10
+    packssdw             m4, m1
+    psraw                m4, 4           ; c4 d4         a5 b5         g2 h2         e3 f3
+    packuswb             m0, m4          ; a4 b4 c4 d4   g1 h1 a5 b5   e2 f2 g2 h2   __ __ e3 f3
+    vpblendmw        m1{k3}, m2, m0      ; a4 b4 c4 d4   __ t5 a5 b5   e2 f2 g2 h2   __ __ e3 f3
+    vpbroadcastd         m2, [tlq+r5+25]
+    pshufd           m2{k3}, m0, q3333   ; d4 d4 d4 d4   b5 b5 b5 b5   t6 t6 t6 t6   f3 f3 f3 f3
+    vpermt2d             m5, m12, m0     ; g0 h0 a4 b4   __ __ g1 h1   e0 e1 e2 e3   f0 f1 f2 f3
+    vextracti32x4 [dstq+strideq*2], m5, 2
+    vextracti32x4 [dstq+r3       ], m5, 3
+    punpckhqdq         xmm3, [r6+r4]
+    pinsrb             xmm3, [r6+strideq*4+15], 11
+    pshufb              xm3, xmm3, xm13
+    vpermb           m3{k2}, m11, m1     ; ff ef df __   dj cj bj __   bn an tn __   hb hb fb __
+    mova                 m0, m6
+    vpdpbusd             m0, m2, m7
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m8
+    kunpckwd             k1, k1, k2      ; 0x000f0000
+    vpdpbusd             m0, m3, m9
+    vpdpbusd             m1, m3, m10
+    packssdw             m0, m1
+    psraw                m0, 4           ; e4 f4         c5 d5         a6 b6         g3 h3
+    packuswb             m4, m0          ; c4 d4 e4 f4   a5 b5 c5 d5   g2 h2 a6 b6   __ __ g3 h3
+    vpblendmw        m1{k1}, m4, m2      ; c4 d4 e4 f4   a5 b5 c5 d5   __ t6 a6 b6   __ __ g3 h3
+    vpbroadcastd         m2, [tlq+r5+29]
+    pshufd           m2{k4}, m4, q3333   ; f4 f4 f4 f4   d5 d5 d5 d5   b6 b6 b6 b6   t7 t7 t7 t7
+    vpermt2d             m5, m12, m4     ; a4 b4 c4 d4   __ __ a5 b5   g0 g1 g2 g3   h0 h1 h2 h3
+    vextracti32x4 [dstq+strideq*4], m5, 2
+    vextracti32x4 [dstq+r4       ], m5, 3
+    lea                  r0, [strideq+r3*2]
+.w32_loop:
+    punpckhqdq         xmm3, [r6+r0]
+    pinsrb             xmm3, [r6+r3*2+15], 11
+    pshufb              xm3, xmm3, xm13
+    vpermb           m3{k2}, m11, m1     ; hf gf ff __   fj ej dj __   dn cn bn __   br ar tr __
+.w32_loop_tail:
+    mova                 m4, m6
+    vpdpbusd             m4, m2, m7
+    mova                 m1, m6
+    vpdpbusd             m1, m2, m8
+    vpdpbusd             m4, m3, m9
+    vpdpbusd             m1, m3, m10
+    packssdw             m4, m1
+    mova                 m1, m0
+    psraw                m0, m4, 4       ; g4 h4         e5 f5         c6 d6         a7 b7
+    packuswb             m1, m0          ; e4 f4 g4 h4   c5 d5 e5 f5   a6 b6 c6 d6   __ __ a7 b7
+    pshufd               m2, m1, q3333   ; h4 h4 h4 h4   f5 f5 f5 f5   d6 d6 d6 d6   b7 b7 b7 b7
+    vpermt2d             m5, m12, m1     ; c4 d4 e4 f4   __ __ c5 d5   a4 a5 a6 a7   b4 b5 b6 b7
+    vextracti32x4 [r6+strideq*0+16], m5, 2
+    vextracti32x4 [r6+strideq*1+16], m5, 3
+    lea                  r6, [r6+strideq*2]
+    sub                 r5d, 2
+    jg .w32_loop
+    vpermb               m3, m11, m1
+    cmp                 r5d, -6
+    jg .w32_loop_tail
+.ret:
+    RET
+.w8:
+    vpermb              ym3, ym11, ymm2
+.w8_loop:
+    vpbroadcastd    ym3{k1}, [tlq-4]     ; l3 l2 l1 __   b3 a3 t3 __
+    mova                ym0, ym6
+    vpdpbusd            ym0, ym2, ym7
+    mova                ym1, ym6
+    vpdpbusd            ym1, ym2, ym8
+    sub                 tlq, 2
+    vpdpbusd            ym0, ym3, ym9
+    vpdpbusd            ym1, ym3, ym10
+    mova                ym3, ym5
+    packssdw            ym0, ym1
+    psraw               ym5, ym0, 4      ; c0 d0         a1 b1
+    packuswb            ym3, ym5         ; a0 b0 c0 d0   __ __ a1 b1
+    pshufd              ym2, ym3, q3333  ; d0 d0 d0 d0   b1 b1 b1 b1
+    vpermb              ym3, ym11, ym3   ; a0 a1 b0 b1
+    movq   [dstq+strideq*0], xm3
+    movhps [dstq+strideq*1], xm3
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w8_loop
+    RET
+.w4_loop:
+    vpbroadcastd       xmm3, [tlq-4]     ; l3 l2 l1 __
+    mova               xmm0, xm6
+    vpdpbusd           xmm0, xmm2, xm7
+    mova               xmm1, xm6
+    vpdpbusd           xmm1, xmm2, xm8
+    sub                 tlq, 2
+    vpdpbusd           xmm0, xmm3, xm9
+    vpdpbusd           xmm1, xmm3, xm10
+    packssdw           xmm0, xmm1
+.w4:
+    psraw              xmm0, 4           ; a0 b0
+    packuswb           xmm0, xmm0
+    movd   [dstq+strideq*0], xmm0
+    pshufd             xmm2, xmm0, q1111 ; b0 b0 b0 b0
+    movd   [dstq+strideq*1], xmm2
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w4_loop
     RET
 
 %endif ; ARCH_X86_64
