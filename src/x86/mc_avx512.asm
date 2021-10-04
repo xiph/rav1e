@@ -26,7 +26,7 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
-%if HAVE_AVX512ICL && ARCH_X86_64
+%if ARCH_X86_64
 
 SECTION_RODATA 64
 
@@ -2392,4 +2392,4 @@ cglobal w_mask_444_8bpc, 4, 8, 12, dst, stride, tmp1, tmp2, w, h, mask, stride3
     jg .w128_loop
     RET
 
-%endif ; HAVE_AVX512ICL && ARCH_X86_64
+%endif ; ARCH_X86_64

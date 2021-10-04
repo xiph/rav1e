@@ -26,7 +26,7 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
-%if HAVE_AVX512ICL && ARCH_X86_64
+%if ARCH_X86_64
 
 %macro DUP4 1-*
     %rep %0
@@ -865,4 +865,4 @@ ALIGN function_align
     CDEF_FILTER_8x8_SEC m12, m13, m14, m15
     ret
 
-%endif ; HAVE_AVX512ICL && ARCH_X86_64
+%endif ; ARCH_X86_64
