@@ -30,6 +30,23 @@
 
 SECTION_RODATA 64
 
+warp_8x8_permA: db  4,  5,  6,  7, 16, 17, 18, 19,  5,  6,  7,  8, 17, 18, 19, 20
+                db  6,  7,  8,  9, 18, 19, 20, 21,  7,  8,  9, 10, 19, 20, 21, 22
+                db  8,  9, 10, 11, 20, 21, 22, 23,  9, 10, 11, 12, 21, 22, 23, 24
+                db 10, 11, 12, 13, 22, 23, 24, 25, 11, 12, 13, 14, 23, 24, 25, 26
+warp_8x8_permB: db  0,  1,  2,  3, 20, 21, 22, 23,  1,  2,  3,  4, 21, 22, 23, 24
+                db  2,  3,  4,  5, 22, 23, 24, 25,  3,  4,  5,  6, 23, 24, 25, 26
+                db  4,  5,  6,  7, 24, 25, 26, 27,  5,  6,  7,  8, 25, 26, 27, 28
+                db  6,  7,  8,  9, 26, 27, 28, 29,  7,  8,  9, 10, 27, 28, 29, 30
+warp_8x8_permC: db -1,  0, -1,  1, -1,  8, -1,  9, -1,  4, -1,  5, -1, 12, -1, 13
+warp_8x8_permD: db -1,  2, -1,  3, -1, 10, -1, 11, -1,  6, -1,  7, -1, 14, -1, 15
+pd_0to7:        dd  0,  1,  2,  3,  4,  5,  6,  7
+warp_8x8_hpack: db  3, 11,  3, 11, 35, 43, 35, 43
+pd_16384:       dd 16384
+pd_262144:      dd 262144
+warp_8x8_end:   db  0,  4, 16, 20, 32, 36, 48, 52,  2,  6, 18, 22, 34, 38, 50, 54
+warp_8x8t_end:  db  2,  3, 10, 11, 18, 19, 26, 27, 34, 35, 42, 43, 50, 51, 58, 59
+                db  6,  7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55, 62, 63
 bidir_sctr_w4:  dd  0,  1,  8,  9,  2,  3, 10, 11,  4,  5, 12, 13,  6,  7, 14, 15
 wm_420_perm4:   db  1,  3,  9, 11,  5,  7, 13, 15, 17, 19, 25, 27, 21, 23, 29, 31
                 db 33, 35, 41, 43, 37, 39, 45, 47, 49, 51, 57, 59, 53, 55, 61, 63
@@ -170,15 +187,17 @@ pw_1024:  times 2 dw 1024
 pw_2048:  times 2 dw 2048
 pw_6903:  times 2 dw 6903
 pw_8192:  times 2 dw 8192
-pd_2:             dd 2
 pd_32:            dd 32
 pd_34:            dd 34
+pd_512:           dd 512
 pd_32768:         dd 32768
 
 %define pb_m64 (wm_sign+4)
 %define pb_64  (wm_sign+8)
+%define pd_2   (pd_0to7+8)
 
 cextern mc_subpel_filters
+cextern mc_warp_filter
 %define subpel_filters (mangle(private_prefix %+ _mc_subpel_filters)-8)
 
 %macro BASE_JMP_TABLE 3-*
@@ -3130,6 +3149,135 @@ cglobal prep_8tap_8bpc, 3, 8, 0, tmp, src, stride, w, h, mx, my, stride3
     sub                 r6d, 1<<8
     jg .hv_loop0
     RET
+
+cglobal warp_affine_8x8t_8bpc, 4, 7, 22, tmp, ts
+    vpbroadcastd         m9, [pd_16384]
+    mova               ym15, [warp_8x8t_end]
+    call mangle(private_prefix %+ _warp_affine_8x8_8bpc_avx512icl).main
+    jmp .start
+.loop:
+    call mangle(private_prefix %+ _warp_affine_8x8_8bpc_avx512icl).main2
+    lea                tmpq, [tmpq+tsq*4]
+.start:
+    paddd               m16, m16
+    vpermb              m16, m15, m16
+    mova         [tmpq+tsq*0], xm16
+    vextracti128 [tmpq+tsq*2], ym16, 1
+    sub                 r6d, 0x1800
+    jg .loop
+    RET
+
+cglobal warp_affine_8x8_8bpc, 4, 7, 22, dst, ds, src, ss, abcd, filter
+    vpbroadcastd         m9, [pd_262144]
+    mova               xm15, [warp_8x8_end]
+    call .main
+    jmp .start
+.loop:
+    call .main2
+    lea                dstq, [dstq+dsq*2]
+.start:
+    psrad               m16, 19
+    packuswb            m16, m16
+    vpermb              m16, m15, m16
+    movq       [dstq+dsq*0], xm16
+    movhps     [dstq+dsq*1], xm16
+    sub                 r6d, 0x1800
+    jg .loop
+    RET
+ALIGN function_align
+.main:
+    vpbroadcastd         m1, [pd_512]
+%if WIN64
+    mov               abcdq, r5mp
+    vpaddd             ym18, ym1, r6m {1to8} ; mx
+%else
+    add                 r5d, 512
+    vpbroadcastd       ym18, r5d
+%endif
+    vpaddd             ym20, ym1, r7m {1to8} ; my
+    mova               ym16, [pd_0to7]
+    vpbroadcastd       ym19, [abcdq+4*0]
+    vpbroadcastd       ym21, [abcdq+4*1]
+    lea                  r4, [ssq*3+3]
+    mova                m10, [warp_8x8_permA]
+    mov                 r6d, 0x5555
+    mova                m11, [warp_8x8_permB]
+    lea             filterq, [mc_warp_filter+64*8]
+    vpbroadcastq        m12, [warp_8x8_hpack]
+    sub                srcq, r4               ; src -= src_stride*3 + 3
+    vbroadcasti32x4     m13, [warp_8x8_permC]
+    kxnorb               k2, k2, k2
+    vbroadcasti32x4     m14, [warp_8x8_permD]
+    vpdpwssd           ym18, ym19, ym16       ; alpha
+    vpdpwssd           ym20, ym21, ym16       ; gamma
+    vbroadcasti32x4      m0, [srcq]
+    psrad              ym19, 16               ; beta
+    psrad              ym21, 16               ; delta
+    kmovw                k1, r6d
+    psrad              ym16, ym18, 10
+    kmovb                k3, k2
+    paddd              ym18, ym19
+    vpgatherdq       m2{k2}, [filterq+ym16*8] ; filter_x0
+    psrld                m1, 8                ; pd_2
+    pshufb               m0, m11
+    paddd                m8, m1, m1           ; pd_4
+    vpdpbusd             m1, m0, m2
+    call .h
+    psllq                m2, m1, 45
+    pslld                m1, 13
+    paddd                m1, m2
+    vpshrdq              m1, m0, 48           ; 01 12
+    call .h
+    vpshrdq              m2, m1, m0, 48       ; 23 34
+    call .h
+    vpshrdq              m3, m2, m0, 48       ; 45 56
+.main2:
+    call .h
+    psrad              ym17, ym20, 10
+    kmovb                k2, k3
+    paddd              ym20, ym21
+    vpgatherdq       m7{k3}, [filterq+ym17*8] ; filter_y0
+    psrad              ym16, ym20, 10
+    kmovb                k3, k2
+    paddd              ym20, ym21
+    vpgatherdq      m17{k2}, [filterq+ym16*8] ; filter_y1
+    shufps               m5, m7, m17, q2020   ; a0 a1 a2 a3 b0 b1 b2 b3 A0 A1 A2 A3 B0 B1 B2 B3
+    mova                m16, m9
+    pshufb               m4, m5, m13          ;    a0    a1    A0    A1    b0    b1    B0    B1
+    vpdpwssd            m16, m1, m4
+    pshufb               m5, m14              ;    a2    a3    A2    A3    b2    b3    B2    B3
+    mova                 m1, m2
+    vpdpwssd            m16, m2, m5
+    shufps               m5, m7, m17, q3131   ; a4 a5 a6 a7 b4 b5 b6 b7 A4 A5 A6 A7 B4 B5 B6 B7
+    mova                 m2, m3
+    pshufb               m4, m5, m13          ;    a4    a5    A4    A5    b4    b5    B4    B5
+    vpdpwssd            m16, m3, m4
+    vpshrdq              m3, m0, 48           ; 67 78
+    pshufb               m5, m14              ;    a6    a7    A6    A7    b6    b7    B6    B7
+    vpdpwssd            m16, m3, m5
+    ret
+ALIGN function_align
+.h:
+    movu                xm5, [srcq+ssq*1]
+    psrad              ym16, ym18, 10
+    lea                srcq, [srcq+ssq*2]
+    vinserti32x4        ym5, [srcq+ssq*0], 1
+    kmovb                k2, k3
+    paddd              ym18, ym19
+    vpgatherdq       m6{k3}, [filterq+ym16*8] ; filter_x1
+    psrad              ym17, ym18, 10
+    kmovb                k3, k2
+    paddd              ym18, ym19
+    vpgatherdq      m16{k2}, [filterq+ym17*8] ; filter_x2
+    mova                 m0, m8
+    vpermb               m4, m10, m5          ; a4 b0 a5 b1   a6 b2 a7 b3   a8 b4 a9 b5   aa b6 ab b7
+    vpshldq             m17, m16, m6, 32      ; a4 a5 a6 a7   b0 b1 b2 b3
+    vpdpbusd             m0, m4, m17
+    vpermb               m5, m11, m5          ; a0 b4 a1 b5   a2 b6 a3 b7   a4 b8 a5 b9   a6 ba a7 bb
+    vmovdqa32       m16{k1}, m6               ; a0 a1 a2 a3   b4 b5 b6 b7
+    vpdpbusd             m0, m5, m16
+    vpmultishiftqb       m0, m12, m0          ; 1 1 2 2 (>> 3)
+    ret
 
 %macro BIDIR_FN 1 ; op
     lea            stride3q, [strideq*3]
