@@ -1019,7 +1019,7 @@ ALIGN function_align
     vinserti128          m0, m1, xm4, 1 ; in0  in3  in2  in1
     vperm2i128           m4, m1, m4, 0x31
     vinserti128          m1, m5, xm2, 1 ; in4  in7  in6  in5
-    pshufd               m3, m3, q1032  ; in12 in15 in13 in14
+    pshufd               m3, m3, q1032  ; in15 in12 in13 in14
     pshufd               m2, m4, q1032  ; in11 in8  in9  in10
 cglobal_label .main2
     vpbroadcastd         m8, [o(pd_2048)]
