@@ -204,7 +204,7 @@ pub(crate) mod rust {
       for block_x in 0..(w + chunk_size - 1) / chunk_size {
         let mut block_sse: u32 = 0;
 
-        for j in 0..chunk_size {
+        for j in 0..chunk_size.min(h - block_y * chunk_size) {
           let s1 = &src1[block_y * chunk_size + j]
             [block_x * chunk_size..((block_x + 1) * chunk_size).min(w)];
           let s2 = &src2[block_y * chunk_size + j]
