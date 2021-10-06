@@ -56,4 +56,38 @@ pub fn downsample_10bit(c: &mut Criterion) {
   });
 }
 
-criterion_group!(plane, downsample_8bit, downsample_odd, downsample_10bit);
+fn init_raw_plane_data(width: usize, height: usize) -> Vec<u8> {
+  let mut ra = ChaChaRng::from_seed([0; 32]);
+  (0..(width * height)).map(|_| ra.gen()).collect()
+}
+
+pub fn copy_from_raw_u8_8bit(c: &mut Criterion) {
+  let input = init_raw_plane_data(1920, 1080);
+  let dest = Plane::<u8>::new(1920, 1080, 0, 0, 0, 0);
+  c.bench_function("copy_from_raw_u8", move |b| {
+    b.iter(|| {
+      let mut dest = dest.clone();
+      let _ = dest.copy_from_raw_u8(&input, dest.cfg.stride, 1);
+    })
+  });
+}
+
+pub fn copy_from_raw_u8_10bit(c: &mut Criterion) {
+  let input = init_raw_plane_data(1920, 1080);
+  let dest = Plane::<u16>::new(1920, 1080, 0, 0, 0, 0);
+  c.bench_function("copy_from_raw_u8", move |b| {
+    b.iter(|| {
+      let mut dest = dest.clone();
+      let _ = dest.copy_from_raw_u8(&input, dest.cfg.stride, 2);
+    })
+  });
+}
+
+criterion_group!(
+  plane,
+  downsample_8bit,
+  downsample_odd,
+  downsample_10bit,
+  copy_from_raw_u8_8bit,
+  copy_from_raw_u8_10bit
+);
