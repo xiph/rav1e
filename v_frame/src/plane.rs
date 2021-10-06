@@ -422,11 +422,9 @@ impl<T: Pixel> Plane<T> {
             source_bytewidth
           );
           for (self_pixel, bytes) in
-            self_row.iter_mut().zip(source_row.chunks(2))
+            self_row.iter_mut().zip(source_row.chunks_exact(2))
           {
-            *self_pixel = T::cast_from(
-              u16::cast_from(bytes[1]) << 8 | u16::cast_from(bytes[0]),
-            );
+            *self_pixel = T::cast_from(bytes[1]) << 8 | T::cast_from(bytes[0]);
           }
         }
 
