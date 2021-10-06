@@ -502,15 +502,19 @@ impl<T: Pixel> Plane<T> {
       .enumerate()
       .take(height)
     {
-      let src_top_row = &data_origin[(src.cfg.stride * row_idx * 2)..];
+      let src_top_row =
+        &data_origin[(src.cfg.stride * row_idx * 2)..][..(2 * width)];
       let src_bottom_row =
-        &data_origin[(src.cfg.stride * (row_idx * 2 + 1))..];
+        &data_origin[(src.cfg.stride * (row_idx * 2 + 1))..][..(2 * width)];
       for (col, dst) in dst_row.iter_mut().take(width).enumerate() {
         let mut sum = 0;
-        sum += u32::cast_from(src_top_row[2 * col]);
-        sum += u32::cast_from(src_top_row[2 * col + 1]);
-        sum += u32::cast_from(src_bottom_row[2 * col]);
-        sum += u32::cast_from(src_bottom_row[2 * col + 1]);
+        unsafe {
+          // SAFETY: We perform a bounds check above to ensure these are safe
+          sum += u32::cast_from(*src_top_row.get_unchecked(2 * col));
+          sum += u32::cast_from(*src_top_row.get_unchecked(2 * col + 1));
+          sum += u32::cast_from(*src_bottom_row.get_unchecked(2 * col));
+          sum += u32::cast_from(*src_bottom_row.get_unchecked(2 * col + 1));
+        }
         let avg = (sum + 2) >> 2;
         *dst = T::cast_from(avg);
       }
