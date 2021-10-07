@@ -664,7 +664,7 @@ impl<T: Pixel> ContextInner<T> {
     compute_motion_vectors(fi, fs, &self.inter_cfg);
 
     // Save the motion vectors to FrameInvariants.
-    fi.lookahead_me_stats = fs.frame_me_stats.clone();
+    fi.lookahead_me_stats = Some(fs.frame_me_stats.clone());
 
     #[cfg(feature = "dump_lookahead_data")]
     {
@@ -1007,6 +1007,11 @@ impl<T: Pixel> ContextInner<T> {
       let frame_data = &mut self.frame_data;
       let len = unique_indices.len();
 
+      let lookahead_me_stats = fi
+        .lookahead_me_stats
+        .as_ref()
+        .expect("Lookahead ME stats not populated, this is a bug");
+
       // Compute and propagate the importance, split evenly between the
       // referenced frames.
       unique_indices.iter().for_each(|&(mv_index, rec_index)| {
@@ -1019,7 +1024,7 @@ impl<T: Pixel> ContextInner<T> {
           fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
         let reference_frame = &reference.frame;
         let reference_output_frameno = reference.output_frameno;
-        let me_stats = &fi.lookahead_me_stats[mv_index];
+        let me_stats = &lookahead_me_stats[mv_index];
 
         // We should never use frame as its own reference.
         assert_ne!(reference_output_frameno, output_frameno);
