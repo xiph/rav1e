@@ -1186,8 +1186,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
-    fi.width >> xdec,
-    fi.height >> ydec,
+    (fi.width + xdec) >> xdec,
+    (fi.height + ydec) >> ydec,
     tx_size.block_size(),
     (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
@@ -1199,20 +1199,10 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
       tx_size.width(),
-      visible_tx_h,
+      tx_size.height(),
     );
-    if visible_tx_w < tx_size.width() {
-      for row in residual.chunks_mut(tx_size.width()).take(visible_tx_h) {
-        for a in &mut row[visible_tx_w..] {
-          *a = 0;
-        }
-      }
-    }
-  }
-  let initialized_area =
-    if visible_tx_w == 0 { 0 } else { tx_size.width() * visible_tx_h };
-  for a in residual[initialized_area..].iter_mut() {
-    *a = 0;
+  } else {
+    residual.fill(0);
   }
 
   forward_transform(

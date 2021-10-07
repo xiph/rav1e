@@ -314,8 +314,22 @@ impl<T: Pixel> ContextInner<T> {
 
   #[hawktracer(send_frame)]
   pub fn send_frame(
-    &mut self, frame: Option<Arc<Frame<T>>>, params: Option<FrameParameters>,
+    &mut self, mut frame: Option<Arc<Frame<T>>>,
+    params: Option<FrameParameters>,
   ) -> Result<(), EncoderStatus> {
+    if let Some(ref mut frame) = frame {
+      use crate::api::color::ChromaSampling;
+      let EncoderConfig { width, height, chroma_sampling, .. } = *self.config;
+      let planes =
+        if chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+      // Try to add padding
+      if let Some(ref mut frame) = Arc::get_mut(frame) {
+        for plane in frame.planes[..planes].iter_mut() {
+          plane.pad(width, height);
+        }
+      }
+    }
+
     let input_frameno = self.frame_count;
     let is_flushing = frame.is_none();
     if !is_flushing {

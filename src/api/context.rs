@@ -64,6 +64,10 @@ impl<T: Pixel> Context<T> {
   ///
   /// Passing `None` is equivalent to calling [`flush`].
   ///
+  /// The caller is responsible for padding the invisible portion of the frame,
+  /// if multiple references to the frame are held.
+  /// Calling [`Plane::pad()`] after filling each plane is recommended.
+  ///
   /// # Errors
   ///
   /// If this method is called with a frame after the encoder has been flushed
