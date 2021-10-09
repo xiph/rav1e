@@ -321,6 +321,13 @@ impl EncContext {
       EncContext::U16(ctx) => ctx.rc_send_pass_data(data),
     }
   }
+
+  fn config(&self) -> rav1e::EncoderConfig {
+    match self {
+      EncContext::U8(ctx) => ctx.config,
+      EncContext::U16(ctx) => ctx.config,
+    }
+  }
 }
 
 /// Encoder context
@@ -1054,6 +1061,20 @@ pub unsafe extern fn rav1e_twopass_in(
 pub unsafe extern fn rav1e_send_frame(
   ctx: *mut Context, frame: *mut Frame,
 ) -> EncoderStatus {
+  if !frame.is_null() {
+    let rav1e::EncoderConfig { width, height, chroma_sampling, .. } =
+      (*ctx).ctx.config();
+    let planes = if chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+    match (*frame).fi {
+      FrameInternal::U8(ref mut f) => {
+        rav1e_frame_pad_internal(f, planes, width, height)
+      }
+      FrameInternal::U16(ref mut f) => {
+        rav1e_frame_pad_internal(f, planes, width, height)
+      }
+    }
+  }
+
   let frame_internal =
     if frame.is_null() { None } else { Some((*frame).fi.clone()) };
   let frame_type = if frame.is_null() {
@@ -1166,6 +1187,16 @@ fn rav1e_frame_fill_plane_internal<T: rav1e::Pixel>(
   );
 }
 
+fn rav1e_frame_pad_internal<T: rav1e::Pixel>(
+  f: &mut Arc<rav1e::Frame<T>>, planes: usize, width: usize, height: usize,
+) {
+  if let Some(ref mut input) = Arc::get_mut(f) {
+    for plane in input.planes[..planes].iter_mut() {
+      plane.pad(width, height);
+    }
+  }
+}
+
 fn rav1e_frame_extract_plane_internal<T: rav1e::Pixel>(
   f: &Arc<rav1e::Frame<T>>, plane: c_int, data_slice: &mut [u8],
   stride: ptrdiff_t, bytewidth: c_int,
@@ -1261,6 +1292,9 @@ mod test {
 
       let f = rav1e_frame_new(rax);
 
+      let pixels = [42; 64 * 64];
+      rav1e_frame_fill_plane(f, 0, pixels.as_ptr(), pixels.len(), 64, 1);
+
       for i in 0..30 {
         let v = Box::new(i as u8);
         extern fn cb(o: *mut c_void) {
@@ -1287,7 +1321,7 @@ mod test {
             64,
             1,
           );
-          assert_eq!(source, vec![128; 64 * 64]);
+          assert_eq!(source, vec![42; 64 * 64]);
           let v = Box::from_raw((*p).opaque as *mut u8);
           eprintln!("Opaque {}", v);
         }
@@ -1328,6 +1362,9 @@ mod test {
 
       let rax = rav1e_context_new(rac);
       let f = rav1e_frame_new(rax);
+
+      let pixels = [42; 64 * 64];
+      rav1e_frame_fill_plane(f, 0, pixels.as_ptr(), pixels.len(), 64, 1);
 
       for _ in 0..10 {
         rav1e_send_frame(rax, f);
