@@ -78,9 +78,9 @@ pd_10240:  dd 10240 ; 2048 + 8192
 pd_11586:  dd 11586 ; 5793 * 2
 pd_38912:  dd 38912 ; 2048 + 4096 + 32768
 
-pixel_max: times 2 dw 0x03ff ; 10bpc
-clip_min:  dd -0x20000
-clip_max:  dd  0x1ffff
+pixel_10bpc_max: times 2 dw 0x03ff
+clip_18b_min:  dd -0x20000
+clip_18b_max:  dd  0x1ffff
 
 idct64_mul_16bpc:
 dd 4095,  101, 2967, -2824,  3745, 1660, 3822, -1474,   401,  4076,   799,  4017
@@ -354,7 +354,7 @@ cglobal idct_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     lea                  r6, [dstq+strideq*2]
     movq                xm3, [r6  +strideq*1]
     movhps              xm3, [r6  +strideq*0]
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pxor                 m4, m4
     mova          [cq+32*0], m4
     mova          [cq+32*1], m4
@@ -392,7 +392,7 @@ cglobal iadst_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     lea                  r6, [dstq+strideq*2]
     movq                xm3, [r6  +strideq*0]
     movhps              xm3, [r6  +strideq*1]
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pmulhrsw            xm0, xm4
     pmulhrsw            xm1, xm4
     pxor                 m4, m4
@@ -464,7 +464,7 @@ cglobal iflipadst_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     lea                  r6, [dstq+strideq*2]
     movq                xm2, [r6  +strideq*1]
     movhps              xm2, [r6  +strideq*0]
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pmulhrsw            xm0, xm4
     pmulhrsw            xm1, xm4
     pxor                 m4, m4
@@ -511,7 +511,7 @@ cglobal iidentity_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     paddsw               m0, m1
     movq                xm3, [r6  +strideq*0]
     movhps              xm3, [r6  +strideq*1]
-    vpbroadcastd        xm4, [pixel_max]
+    vpbroadcastd        xm4, [pixel_10bpc_max]
     packssdw             m5, m5 ; pw_2048
     pmulhrsw             m0, m5
     pxor                 m5, m5
@@ -548,7 +548,7 @@ cglobal iidentity_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     movd                xm0, r6d
     vpbroadcastw        xm0, xm0
 .end2:
-    vpbroadcastd        xm3, [pixel_max]
+    vpbroadcastd        xm3, [pixel_10bpc_max]
     pxor                xm2, xm2
 .end_loop:
     movq                xm1, [dstq+strideq*0]
@@ -624,7 +624,7 @@ cglobal idct_4x8_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     paddw               xm1, xm5 ; 3 2
     paddw               xm2, xm6 ; 4 5
     paddw               xm3, xm7 ; 7 6
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     REPX    {pmaxsw x, xm4}, xm0, xm1, xm2, xm3
@@ -670,7 +670,7 @@ cglobal iadst_4x8_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     paddw               xm1, xm5 ; 2 3
     paddw               xm2, xm6 ; 4 5
     paddw               xm3, xm7 ; 6 7
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     REPX    {pmaxsw x, xm4}, xm0, xm1, xm2, xm3
@@ -712,8 +712,8 @@ ALIGN function_align
     vbroadcasti128       m5, [cq+16*1]
     vbroadcasti128       m3, [cq+16*3]
     vpbroadcastd         m7, [pd_2048]
-    vpbroadcastd         m8, [clip_min]
-    vpbroadcastd         m9, [clip_max]
+    vpbroadcastd         m8, [clip_18b_min]
+    vpbroadcastd         m9, [clip_18b_max]
     shufpd               m2, m4, 0x0c ; 4 6
     shufpd               m3, m5, 0x0c ; 3 1
     REPX {pmulld x, m6}, m0, m1, m2, m3
@@ -787,7 +787,7 @@ cglobal iflipadst_4x8_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     paddw               xm2, xm5 ; 3 2
     paddw               xm1, xm6 ; 5 4
     paddw               xm0, xm7 ; 7 6
-    vpbroadcastd        xm5, [pixel_max]
+    vpbroadcastd        xm5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     REPX    {pmaxsw x, xm4}, xm3, xm2, xm1, xm0
@@ -845,7 +845,7 @@ cglobal iidentity_4x8_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
     vpbroadcastq         m5, [r6  +r3       ]
     vpblendd             m3, m4, 0x30
     vpblendd             m3, m5, 0xc0
-    vpbroadcastd         m5, [pixel_max]
+    vpbroadcastd         m5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     paddw                m0, m2
@@ -940,7 +940,7 @@ cglobal idct_4x16_internal_16bpc, 0, 7, 11, dst, stride, c, eob, tx2
     vinserti128          m1, m2, xm3, 1 ; 4 5   7 6
     vinserti128          m2, m4, xm5, 1 ; 8 9   b a
     vinserti128          m3, m6, xm7, 1 ; c d   f e
-    vpbroadcastd         m8, [pixel_max]
+    vpbroadcastd         m8, [pixel_10bpc_max]
     lea                  r6, [strideq*3]
     pxor                 m7, m7
     pmulhrsw             m0, m9
@@ -993,7 +993,7 @@ cglobal iadst_4x16_internal_16bpc, 0, 7, 11, dst, stride, c, eob, tx2
 .pass2:
     call .pass2_main
     vpbroadcastd         m5, [pw_2048]
-    vpbroadcastd         m8, [pixel_max]
+    vpbroadcastd         m8, [pixel_10bpc_max]
     lea                  r6, [strideq*3]
     vpblendd             m4, m3, m0, 0xcc ; -out3   out0   out2  -out1
     pshufd               m2, m2, q1032    ; -out11  out8   out10 -out9
@@ -1162,7 +1162,7 @@ cglobal iflipadst_4x16_internal_16bpc, 0, 7, 11, dst, stride, c, eob, tx2
 .pass2:
     call m(iadst_4x16_internal_16bpc).pass2_main
     vpbroadcastd         m5, [pw_2048]
-    vpbroadcastd         m8, [pixel_max]
+    vpbroadcastd         m8, [pixel_10bpc_max]
     lea                  r6, [strideq*3]
     vpblendd             m4, m3, m0, 0x33 ; -out0   out3   out1  -out2
     pshufd               m2, m2, q1032    ; -out11  out8   out10 -out9
@@ -1236,7 +1236,7 @@ cglobal iidentity_4x16_internal_16bpc, 0, 7, 11, dst, stride, c, eob, tx2
     paddsw               m1, m5
     paddsw               m2, m6
     paddsw               m3, m7
-    vpbroadcastd         m4, [pixel_max]
+    vpbroadcastd         m4, [pixel_10bpc_max]
     punpckhwd            m7, m0, m1
     punpcklwd            m0, m1
     punpckhwd            m1, m2, m3
@@ -1295,7 +1295,7 @@ ALIGN function_align
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
 .end:
-    vpbroadcastd         m4, [pixel_max]
+    vpbroadcastd         m4, [pixel_10bpc_max]
     pxor                 m3, m3
     mova                xm1, [dstq+strideq*0]
     vinserti128          m1, [dstq+strideq*1], 1
@@ -1363,8 +1363,8 @@ ALIGN function_align
 .main:
     ITX_MULSUB_2D         1, 3, 4, 5, 6, 7, 799_3406, 4017_2276, 1
     IDCT4_1D_PACKED       0, 2, 4, 5, 6, 7
-    vpbroadcastd         m8, [clip_min]
-    vpbroadcastd         m9, [clip_max]
+    vpbroadcastd         m8, [clip_18b_min]
+    vpbroadcastd         m9, [clip_18b_max]
     vpbroadcastd         m6, [pd_2896]
     punpcklqdq           m4, m1, m3   ; t4a  t7a
     punpckhqdq           m1, m3       ; t5a  t6a
@@ -1410,7 +1410,7 @@ cglobal iadst_8x4_internal_16bpc, 0, 7, 10, dst, stride, c, eob, tx2
     lea                  r6, [dstq+strideq*2]
     mova                xm3, [r6  +strideq*0]
     vinserti128          m3, [r6  +strideq*1], 1
-    vpbroadcastd         m5, [pixel_max]
+    vpbroadcastd         m5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     paddw                m0, m2
@@ -1532,7 +1532,7 @@ cglobal iidentity_8x4_internal_16bpc, 0, 7, 10, dst, stride, c, eob, tx2
     vinserti128          m2, [r6  +strideq*0], 1
     mova                xm3, [dstq+strideq*1]
     vinserti128          m3, [r6  +strideq*1], 1
-    vpbroadcastd         m5, [pixel_max]
+    vpbroadcastd         m5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3
     paddw                m0, m2
@@ -1562,7 +1562,7 @@ cglobal iidentity_8x4_internal_16bpc, 0, 7, 10, dst, stride, c, eob, tx2
     sar                 r6d, 16
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
-    vpbroadcastd         m3, [pixel_max]
+    vpbroadcastd         m3, [pixel_10bpc_max]
     pxor                 m2, m2
 .dconly_loop:
     mova                xm1, [dstq+strideq*0]
@@ -1629,8 +1629,8 @@ cglobal idct_8x8_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     mova                 m6, [cq+32*6]
     mova                 m7, [cq+32*7]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     call .main
     call .round_shift1
     jmp                tx2q
@@ -1651,7 +1651,7 @@ cglobal idct_8x8_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     RET
 ALIGN function_align
 .write_8x4_start:
-    vpbroadcastd         m11, [pixel_max]
+    vpbroadcastd         m11, [pixel_10bpc_max]
     lea                   r6, [strideq*3]
     pxor                 m10, m10
 .write_8x4:
@@ -1777,8 +1777,8 @@ ALIGN function_align
     mova                 m3, [cq+32*3]
     mova                 m4, [cq+32*4]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
 .main2:
     IADST8_1D             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
     psrld                m8, 11 ; pd_1
@@ -1891,7 +1891,7 @@ cglobal iidentity_8x8_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     call .write_2x8x2_zero
     RET
 .write_2x8x2_start:
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     lea                  r6, [strideq*5]
     pxor                 m6, m6
 .write_2x8x2_zero:
@@ -1940,8 +1940,8 @@ cglobal idct_8x16_internal_16bpc, 0, 7, 16, dst, stride, c, eob, tx2
 %undef cmp
     vpbroadcastd        m14, [pd_2896]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     cmp                eobd, 43
     jl .fast
     add                  cq, 32
@@ -2133,8 +2133,8 @@ cglobal iadst_8x16_internal_16bpc, 0, 7, 16, dst, stride, c, eob, tx2
 %undef cmp
     vpbroadcastd        m14, [pd_2896]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     cmp                eobd, 43
     jl .fast
     add                  cq, 32
@@ -2198,8 +2198,8 @@ cglobal iflipadst_8x16_internal_16bpc, 0, 7, 16, dst, stride, c, eob, tx2
 %undef cmp
     vpbroadcastd        m14, [pd_2896]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     cmp                eobd, 43
     jl .fast
     add                  cq, 32
@@ -2358,7 +2358,7 @@ cglobal iidentity_8x16_internal_16bpc, 0, 7, 16, dst, stride, c, eob, tx2
     sar                 r6d, 16
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
-    vpbroadcastd         m4, [pixel_max]
+    vpbroadcastd         m4, [pixel_10bpc_max]
     pxor                 m3, m3
 .dconly_loop:
     paddw                m1, m0, [dstq+strideq*0]
@@ -2469,7 +2469,7 @@ cglobal idct_16x4_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     lea                  r6, [dstq+strideq*2]
     paddw                m2, [r6  +strideq*0]
     paddw                m3, [r6  +strideq*1]
-    vpbroadcastd         m5, [pixel_max]
+    vpbroadcastd         m5, [pixel_10bpc_max]
     pxor                 m4, m4
     REPX {mova [cq+32*x], m4}, 0, 1, 2, 3, 4, 5, 6, 7
     REPX     {pmaxsw x, m4}, m0, m1, m2, m3
@@ -2668,8 +2668,8 @@ cglobal idct_16x8_internal_16bpc, 0, 7, 16, 32*8, dst, stride, c, eob, tx2
     pmulld               m6, m14, [cq+32*13]
     pmulld               m7, m14, [cq+32*15]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*4]
     call m(idct_8x16_internal_16bpc).main_oddhalf_rect2
     pmulld               m0, m14, [cq+32* 0]
@@ -2774,7 +2774,7 @@ ALIGN function_align
     ret
 ALIGN function_align
 .write_16x4_start:
-    vpbroadcastd         m9, [pixel_max]
+    vpbroadcastd         m9, [pixel_10bpc_max]
     lea                  r3, [strideq*3]
     pxor                 m8, m8
 .write_16x4_zero:
@@ -2855,8 +2855,8 @@ ALIGN function_align
     pmulld               m6, m15, [cq+32*14]
     pmulld               m7, m15, [cq+32* 1]
     vpbroadcastd        m12, [pd_2048]
-    vpbroadcastd        m13, [clip_min]
-    vpbroadcastd        m14, [clip_max]
+    vpbroadcastd        m13, [clip_18b_min]
+    vpbroadcastd        m14, [clip_18b_max]
     REPX     {paddd x, m12}, m0, m1, m2, m3, m4, m5, m6, m7
     REPX     {psrad x, 12 }, m0, m1, m2, m3, m4, m5, m6, m7
     call .main_part1
@@ -3127,8 +3127,8 @@ INV_TXFM_16X16_FN dct, flipadst
 
 cglobal idct_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*4]
     sub                eobd, 36
@@ -3372,8 +3372,8 @@ INV_TXFM_16X16_FN adst, adst
 INV_TXFM_16X16_FN adst, flipadst
 
 cglobal iadst_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
-    vpbroadcastd        m13, [clip_min]
-    vpbroadcastd        m14, [clip_max]
+    vpbroadcastd        m13, [clip_18b_min]
+    vpbroadcastd        m14, [clip_18b_max]
     vpbroadcastd        m15, [pd_2896]
     lea                  r6, [rsp+32*4]
     sub                eobd, 36
@@ -3507,8 +3507,8 @@ INV_TXFM_16X16_FN flipadst, adst
 INV_TXFM_16X16_FN flipadst, flipadst
 
 cglobal iflipadst_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
-    vpbroadcastd        m13, [clip_min]
-    vpbroadcastd        m14, [clip_max]
+    vpbroadcastd        m13, [clip_18b_min]
+    vpbroadcastd        m14, [clip_18b_max]
     vpbroadcastd        m15, [pd_2896]
     lea                  r6, [rsp+32*4]
     sub                eobd, 36
@@ -3710,8 +3710,8 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 7, 16, 32*12, dst, stride, c, eob
 %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vbroadcasti128      m14, [idct32_shuf]
     mov                  r4, cq
     call .pass1_main
@@ -4136,7 +4136,7 @@ ALIGN function_align
 
 cglobal inv_txfm_add_identity_identity_8x32_16bpc, 4, 7, 8, dst, stride, c, eob
     vpbroadcastd         m5, [pw_5]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     pxor                 m6, m6
     mov                 r6d, eobd
     add                eobb, 21
@@ -4216,7 +4216,7 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 0, dst, stride, c, eob
     sar                 r6d, 16
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
-    vpbroadcastd         m4, [pixel_max]
+    vpbroadcastd         m4, [pixel_10bpc_max]
     pxor                 m3, m3
 .dconly_loop:
     paddw                m1, m0, [dstq+32*0]
@@ -4242,8 +4242,8 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m6, [cq+32*25]
     mova                 m7, [cq+32*31]
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*4]
     call m(inv_txfm_add_dct_dct_8x32_16bpc).main_oddhalf_part1
@@ -4305,7 +4305,7 @@ ALIGN function_align
 
 cglobal inv_txfm_add_identity_identity_32x8_16bpc, 4, 7, 8, dst, stride, c, eob
     vpbroadcastd         m5, [pw_4096]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     pxor                 m6, m6
     mov                 r6d, eobd
     add                eobb, 21
@@ -4357,8 +4357,8 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 8, 16, 32*36, dst, stride, c, eob
 %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*16]
     lea                  r4, [r6+32*8]
@@ -4592,7 +4592,7 @@ ALIGN function_align
     mova [rsp+gprsize+32*2], m7
     mova [rsp+gprsize+32*3], m15
     vpbroadcastd        m15, [pw_2048]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     IDCT32_PASS2_END      0, r5+32*3, 1, 6, strideq*0, r3*4
     IDCT32_PASS2_END      4, r5-32*1, 0, 1, strideq*4, strideq*8
     IDCT32_PASS2_END      8, r4+32*3, 0, 4, strideq*8, strideq*4
@@ -4625,7 +4625,7 @@ cglobal inv_txfm_add_identity_identity_16x32_16bpc, 4, 7, 12, dst, stride, c, eo
     vpbroadcastd         m8, [pw_2896x8]
     vpbroadcastd         m9, [pw_1697x16]
     vpbroadcastd        m11, [pw_8192]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     lea                  r6, [strideq*5]
     pxor                 m6, m6
     paddw               m10, m11, m11 ; pw_16384
@@ -4700,8 +4700,8 @@ cglobal inv_txfm_add_dct_dct_32x16_16bpc, 4, 7, 0, dst, stride, c, eob
     jz .dconly
     PROLOGUE              0, 8, 16, 32*40, dst, stride, c, eob
     %undef cmp
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*4]
     call .main
     cmp                eobd, 36
@@ -4895,7 +4895,7 @@ ALIGN function_align
     mova [rsp+gprsize+32*1], m9
     mova [rsp+gprsize+32*2], m12
     vpbroadcastd        m12, [pw_2048]
-    vpbroadcastd         m9, [pixel_max]
+    vpbroadcastd         m9, [pixel_10bpc_max]
     lea                  r3, [strideq*3]
     pxor                 m8, m8
     pmulhrsw             m0, m12
@@ -4923,7 +4923,7 @@ cglobal inv_txfm_add_identity_identity_32x16_16bpc, 4, 7, 11, dst, stride, c, eo
     vpbroadcastd         m8, [pw_2896x8]
     vpbroadcastd         m9, [pw_1697x16]
     vpbroadcastd        m10, [pw_2048]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     lea                  r6, [strideq*5]
     pxor                 m6, m6
     mov                  r5, dstq
@@ -4981,8 +4981,8 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 0, dst, stride, c, eob
     jz .dconly
     PROLOGUE              0, 8, 16, 32*83, dst, stride, c, eob
     %undef cmp
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*7]
     call .main
     cmp                eobd, 36
@@ -5149,7 +5149,7 @@ ALIGN function_align
 cglobal inv_txfm_add_identity_identity_32x32_16bpc, 4, 8, 8, dst, stride, c, eob
     %undef cmp
     vpbroadcastd         m5, [pw_8192]
-    vpbroadcastd         m7, [pixel_max]
+    vpbroadcastd         m7, [pixel_10bpc_max]
     pxor                 m6, m6
     lea                  r6, [strideq*3]
     lea                  r5, [strideq*5]
@@ -5243,7 +5243,7 @@ ALIGN function_align
     paddw               m%6, [%%d1+%10]
     pxor                m%2, m%2
     REPX    {pmaxsw x, m%2}, m%3, m%4, m%5, m%6
-    vpbroadcastd        m%2, [pixel_max]
+    vpbroadcastd        m%2, [pixel_10bpc_max]
     REPX    {pminsw x, m%2}, m%3, m%4, m%5, m%6
     mova         [%%d0+%7 ], m%3
     mova         [%%d1+%8 ], m%4
@@ -5257,8 +5257,8 @@ cglobal inv_txfm_add_dct_dct_16x64_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 10, 16, 32*98, dst, stride, c, eob
     %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*6]
     call .main
@@ -5597,8 +5597,8 @@ cglobal inv_txfm_add_dct_dct_32x64_16bpc, 4, 7, 0, dst, stride, c, eob
     jz .dconly
     PROLOGUE              0, 11, 16, 32*134, dst, stride, c, eob
     %undef cmp
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*6]
     call .main
     cmp                eobd, 36
@@ -5809,7 +5809,7 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 0, dst, stride, c, eob
     movaps          [rsp+8], xmm6
 %endif
     vpbroadcastw         m0, xm0
-    vpbroadcastd         m6, [pixel_max]
+    vpbroadcastd         m6, [pixel_10bpc_max]
     pxor                 m5, m5
 .dconly_loop:
     paddw                m1, m0, [dstq+32*0]
@@ -5833,8 +5833,8 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 8, 16, 32*96, dst, stride, c, eob
     %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*4]
     call .main
@@ -6052,8 +6052,8 @@ cglobal inv_txfm_add_dct_dct_64x32_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 8, 16, 32*163, dst, stride, c, eob
     %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*7]
     call .main
@@ -6201,8 +6201,8 @@ cglobal inv_txfm_add_dct_dct_64x64_16bpc, 4, 7, 0, dst, stride, c, eob
     PROLOGUE              0, 11, 16, 32*195, dst, stride, c, eob
     %undef cmp
     vpbroadcastd        m11, [pd_2048]
-    vpbroadcastd        m12, [clip_min]
-    vpbroadcastd        m13, [clip_max]
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m14, [pd_2896]
     lea                  r6, [rsp+32*7]
     call .main
