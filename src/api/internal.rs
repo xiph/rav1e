@@ -328,6 +328,14 @@ impl<T: Pixel> ContextInner<T> {
           plane.pad(width, height);
         }
       }
+      // Enforce that padding is added
+      for (p, plane) in frame.planes[..planes].iter().enumerate() {
+        assert!(
+          plane.probe_padding(width, height),
+          "Plane {} was not padded before passing Frame to send_frame().",
+          p
+        );
+      }
     }
 
     let input_frameno = self.frame_count;

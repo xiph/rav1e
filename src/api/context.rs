@@ -66,7 +66,7 @@ impl<T: Pixel> Context<T> {
   ///
   /// The caller is responsible for padding the invisible portion of the frame,
   /// if multiple references to the frame are held.
-  /// Calling [`Plane::pad()`] after filling each plane is recommended.
+  /// Calling [`Plane::pad()`] after filling each plane or equivalent is required.
   ///
   /// # Errors
   ///

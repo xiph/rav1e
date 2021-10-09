@@ -357,6 +357,22 @@ impl<T: Pixel> Plane<T> {
     }
   }
 
+  /// Minimally test that the plane has been padded.
+  pub fn probe_padding(&self, w: usize, h: usize) -> bool {
+    let PlaneConfig {
+      xorigin, yorigin, stride, alloc_height, xdec, ydec, ..
+    } = self.cfg;
+    let width = (w + xdec) >> xdec;
+    let height = (h + ydec) >> ydec;
+    let corner = (yorigin + height - 1) * stride + xorigin + width - 1;
+    let corner_value = self.data[corner];
+
+    self.data[(yorigin + height) * stride - 1] == corner_value
+      && self.data[(alloc_height - 1) * stride + xorigin + width - 1]
+        == corner_value
+      && self.data[alloc_height * stride - 1] == corner_value
+  }
+
   pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
