@@ -382,7 +382,7 @@ cglobal iadst_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     pshufb               m0, m4
     jmp                tx2q
 .pass2:
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     vextracti128        xm1, m0, 1
     call m(iadst_4x4_internal_8bpc).main
 .end:
@@ -455,7 +455,7 @@ cglobal iflipadst_4x4_internal_16bpc, 0, 7, 6, dst, stride, c, eob, tx2
     pshufb               m0, m4
     jmp                tx2q
 .pass2:
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     vextracti128        xm1, m0, 1
     call m(iadst_4x4_internal_8bpc).main
     vpbroadcastd        xm4, [pw_2048]
@@ -600,7 +600,7 @@ cglobal idct_4x8_internal_16bpc, 0, 7, 8, dst, stride, c, eob, tx2
 .pass2:
     packssdw             m0, m2
     packssdw             m1, m3
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpckhwd            m2, m0, m1
     punpcklwd            m0, m1
     punpckhdq            m1, m0, m2 ; 2 3
@@ -688,7 +688,7 @@ ALIGN function_align
 .pass2_main:
     packssdw             m0, m2
     packssdw             m1, m3
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpcklwd            m4, m0, m1
     punpckhwd            m0, m1
     punpckhdq            m5, m4, m0
@@ -921,7 +921,7 @@ cglobal idct_4x16_internal_16bpc, 0, 7, 11, dst, stride, c, eob, tx2
     packssdw             m1, m5
     packssdw             m2, m6
     packssdw             m3, m7
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpcklwd            m4, m2, m3
     punpckhwd            m2, m3
     punpckhwd            m5, m0, m1
@@ -1037,7 +1037,7 @@ ALIGN function_align
     packssdw             m1, m5
     packssdw             m2, m6
     packssdw             m3, m7
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpcklwd            m4, m2, m3
     punpckhwd            m2, m3
     punpckhwd            m5, m0, m1
@@ -1429,7 +1429,7 @@ ALIGN function_align
     vbroadcasti128       m4, [deint_shuf]
     packssdw             m0, m1
     packssdw             m2, m3
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     vperm2i128           m1, m0, m2, 0x31
     vinserti128          m0, xm2, 1
     pshufb               m0, m4
@@ -1682,7 +1682,7 @@ ALIGN function_align
     packssdw             m1, m5
     packssdw             m2, m6
     packssdw             m3, m7
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpckhwd            m4, m0, m1
     punpcklwd            m0, m1
     punpckhwd            m1, m2, m3
@@ -1999,7 +1999,7 @@ ALIGN function_align
     packssdw             m5, m13
     packssdw             m6, m14
     packssdw             m7, m15
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     punpckhwd            m8, m0, m1
     punpcklwd            m0, m1
     punpckhwd            m1, m2, m3
@@ -2457,7 +2457,7 @@ cglobal idct_16x4_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     jmp                tx2q
 .pass2:
     call .transpose_4x16_packed
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     call m(idct_16x4_internal_8bpc).main
 .end:
     vpbroadcastd         m4, [pw_2048]
@@ -2516,7 +2516,7 @@ cglobal iadst_16x4_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     jmp                tx2q
 .pass2:
     call m(idct_16x4_internal_16bpc).transpose_4x16_packed
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     call m(iadst_16x4_internal_8bpc).main
     jmp m(idct_16x4_internal_16bpc).end
 ALIGN function_align
@@ -2595,7 +2595,7 @@ cglobal iflipadst_16x4_internal_16bpc, 0, 7, 14, dst, stride, c, eob, tx2
     jmp m(iadst_16x4_internal_16bpc).pass1_end
 .pass2:
     call m(idct_16x4_internal_16bpc).transpose_4x16_packed
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     call m(iadst_16x4_internal_8bpc).main
     vpbroadcastd         m4, [pw_2048]
     pmulhrsw             m5, m3, m4
@@ -2728,7 +2728,7 @@ cglobal idct_16x8_internal_16bpc, 0, 7, 16, 32*8, dst, stride, c, eob, tx2
     RET
 ALIGN function_align
 .transpose:
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
 .transpose2:
     packssdw             m0, m8
     packssdw             m1, m9
@@ -3214,7 +3214,7 @@ cglobal idct_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
     jmp                tx2q
 .pass2:
     call .transpose
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mova              [rsp], m15
     call m(idct_16x16_internal_8bpc).main
     mova                 m1, [rsp+32*1]
@@ -3448,7 +3448,7 @@ cglobal iadst_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
     jmp                tx2q
 .pass2:
     call m(idct_16x16_internal_16bpc).transpose
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mova              [rsp], m15
     call m(iadst_16x16_internal_8bpc).main
     call m(iadst_16x16_internal_8bpc).main_pass2_end
@@ -3580,7 +3580,7 @@ cglobal iflipadst_16x16_internal_16bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx
     jmp m(iadst_16x16_internal_16bpc).pass1_end
 .pass2:
     call m(idct_16x16_internal_16bpc).transpose
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mova              [rsp], m15
     call m(iadst_16x16_internal_8bpc).main
     call m(iadst_16x16_internal_8bpc).main_pass2_end
@@ -3738,7 +3738,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 0, dst, stride, c, eob
     pxor                 m4, m4
 .pass1_end_fast:
     vpbroadcastd        m10, [pw_2048]
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     REPX       {mova x, m4}, m5, m6, m7
     call m(inv_txfm_add_dct_dct_8x32_8bpc).main_fast
     jmp .end
@@ -3775,7 +3775,7 @@ cglobal inv_txfm_add_dct_dct_8x32_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m1, [r6-32*3]        ; out4  out6
     mova                 m2, [r6-32*2]        ; out8  out10
     mova                 m3, [r6-32*1]        ; out12 out14
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     mova                m11, [rsp+32*3]       ; out13 out15
     vpbroadcastd        m10, [pw_2048]
     call m(inv_txfm_add_dct_dct_8x32_8bpc).main
@@ -4276,7 +4276,7 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 0, dst, stride, c, eob
     call m(idct_8x8_internal_16bpc).main
     call m(idct_8x16_internal_16bpc).main_evenhalf
     call m(inv_txfm_add_dct_dct_8x32_16bpc).main_end
-    lea                 rax, [deint_shuf+128]
+    lea                  r6, [deint_shuf+128]
     vpbroadcastd        m11, [pw_2048]
     mov                  r4, dstq
     call .pass2
@@ -4403,7 +4403,7 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m2, [r4+32*2]
     mova                 m3, [r4+32*3]
 .fast:
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     call m(inv_txfm_add_dct_dct_16x32_8bpc).main_oddhalf_fast
     pxor                 m8, m8
     REPX       {mova x, m8}, m9, m10, m11, m12, m13, m14, m15
@@ -4455,7 +4455,7 @@ cglobal inv_txfm_add_dct_dct_16x32_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [r4-32*3]
     mova                 m6, [r4-32*2]
     mova                 m7, [r4-32*1]
-    lea                 rax, [pw_5 + 128]
+    lea                  r6, [pw_5 + 128]
     call m(inv_txfm_add_dct_dct_16x32_8bpc).main_oddhalf
     lea                  r3, [rsp+32*8]
     mova                 m8, [r3+32*0]
@@ -4709,7 +4709,7 @@ cglobal inv_txfm_add_dct_dct_32x16_16bpc, 4, 7, 0, dst, stride, c, eob
     call m(inv_txfm_add_dct_dct_8x32_16bpc).transpose
     pxor                 m8, m8
     REPX       {mova x, m8}, m9, m10, m11, m12, m13, m14, [rsp]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mov                  r7, dstq
     call m(idct_16x16_internal_8bpc).main
     call .write_16x16
@@ -4748,7 +4748,7 @@ cglobal inv_txfm_add_dct_dct_32x16_16bpc, 4, 7, 0, dst, stride, c, eob
     call .main
     sub                  r4, 32*16 ; topleft 16x8
     call .transpose_16x16
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mov                  r7, dstq
     call m(idct_16x16_internal_8bpc).main
     call .write_16x16
@@ -5012,7 +5012,7 @@ cglobal inv_txfm_add_dct_dct_32x32_16bpc, 4, 7, 0, dst, stride, c, eob
     lea                  r3, [rsp+32*3]
     mov                  r4, r6
     lea                  r5, [r6+32*8]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     call .pass2_oddhalf
     call .pass2_evenhalf
     imul                 r2, strideq, 19
@@ -5288,7 +5288,7 @@ cglobal inv_txfm_add_dct_dct_16x64_16bpc, 4, 7, 0, dst, stride, c, eob
     cmp                  r6, r4
     jl .fast_loop
 .pass2:
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mova                 m0, [rsp+32* 2] ; in0
     mova                 m1, [rsp+32* 6] ; in4
     mova                 m2, [rsp+32*10] ; in8
@@ -5339,7 +5339,7 @@ cglobal inv_txfm_add_dct_dct_16x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [rsp+32*25] ; in23
     mova                 m6, [rsp+32*27] ; in25
     mova                 m7, [rsp+32* 9] ; in7
-    lea                 rax, [idct64_mul - 8]
+    lea                  r6, [idct64_mul - 8]
     add                  r4, 32*16
     add                  r5, 32*32
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
@@ -5351,7 +5351,7 @@ cglobal inv_txfm_add_dct_dct_16x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [rsp+32*21] ; in19
     mova                 m6, [rsp+32*31] ; in29
     mova                 m7, [rsp+32* 5] ; in3
-    add                 rax, 8
+    add                  r6, 8
     add                  r4, 32*8
     sub                  r5, 32*8
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
@@ -5445,7 +5445,7 @@ ALIGN function_align
     vpbroadcastd        m11, [pw_1567_3784]
     vpbroadcastd        m12, [pw_m3784_1567]
     vpbroadcastd        m13, [pw_2896_2896]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     lea                  r2, [dstq+r7]
 .main_part2_pass2_loop:
     vpbroadcastd        m14, [pw_m2896_2896]
@@ -5630,7 +5630,7 @@ cglobal inv_txfm_add_dct_dct_32x64_16bpc, 4, 7, 0, dst, stride, c, eob
     cmp                  r6, r4
     jl .fast_loop
 .pass2:
-    lea                 rax, [pw_5 + 128]
+    lea                  r6, [pw_5 + 128]
     mov                 r10, rsp
     lea                  r8, [strideq*4]
     lea                  r9, [strideq*5]
@@ -5687,7 +5687,7 @@ cglobal inv_txfm_add_dct_dct_32x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [r10+32*41] ; in23
     mova                 m6, [r10+32*51] ; in25
     mova                 m7, [r10+32* 9] ; in7
-    lea                 rax, [idct64_mul - 8]
+    lea                  r6, [idct64_mul - 8]
     add                  r4, 32*16
     add                  r5, 32*32
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
@@ -5699,7 +5699,7 @@ cglobal inv_txfm_add_dct_dct_32x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [r10+32*37] ; in19
     mova                 m6, [r10+32*55] ; in29
     mova                 m7, [r10+32* 5] ; in3
-    add                 rax, 8
+    add                  r6, 8
     add                  r4, 32*8
     sub                  r5, 32*8
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
@@ -5855,7 +5855,7 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 0, dst, stride, c, eob
 .pass2:
     lea                  r7, [r6-32*64]
     lea                  r4, [r6-32*32]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     mov                  r5, dstq
 .pass2_loop:
     mova                 m0, [r7-32*4]
@@ -6088,7 +6088,7 @@ cglobal inv_txfm_add_dct_dct_64x32_16bpc, 4, 7, 0, dst, stride, c, eob
 .pass2:
     lea                  r7, [r6-32*32]
     lea                  r5, [r6+32*8]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     imul                 r2, strideq, 19
     lea                  r3, [strideq*3]
     add                  r2, dstq
@@ -6231,7 +6231,7 @@ cglobal inv_txfm_add_dct_dct_64x64_16bpc, 4, 7, 0, dst, stride, c, eob
     jl .fast_loop
 .pass2:
     lea                 r10, [r6-32*32]
-    lea                 rax, [pw_5+128]
+    lea                  r6, [pw_5+128]
     lea                  r8, [strideq*4]
     lea                  r9, [strideq*5]
     lea                  r3, [r9+strideq*1] ; stride*6
@@ -6286,7 +6286,7 @@ cglobal inv_txfm_add_dct_dct_64x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [r10-32*29] ; in23
     mova                 m6, [r10-32* 3] ; in25
     mova                 m7, [r10-32*93] ; in7
-    lea                 rax, [idct64_mul - 8]
+    lea                  r6, [idct64_mul - 8]
     add                  r4, 32*16
     add                  r5, 32*32
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
@@ -6298,7 +6298,7 @@ cglobal inv_txfm_add_dct_dct_64x64_16bpc, 4, 7, 0, dst, stride, c, eob
     mova                 m5, [r10-32*33] ; in19
     mova                 m6, [r10+32* 1] ; in29
     mova                 m7, [r10-32*97] ; in3
-    add                 rax, 8
+    add                  r6, 8
     add                  r4, 32*8
     sub                  r5, 32*8
     call m(inv_txfm_add_dct_dct_16x64_8bpc).main_part1
