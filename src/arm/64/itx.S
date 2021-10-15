@@ -660,7 +660,7 @@ L(itx_4x4_end):
         st1             {v1.s}[0], [x0], x1
         st1             {v1.s}[1], [x0], x1
 
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_4x4 txfm1, txfm2
@@ -897,7 +897,7 @@ function inv_txfm_\variant\()add_8x8_neon
         blr             x5
 
         load_add_store_8x8 x0, x7
-        br              x15
+        ret             x15
 endfunc
 .endm
 
@@ -962,7 +962,7 @@ function inv_txfm_add_8x4_neon
         blr             x5
 
         load_add_store_8x4 x0, x7
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_4x8_neon
@@ -988,7 +988,7 @@ function inv_txfm_add_4x8_neon
         blr             x5
 
         load_add_store_4x8 x0, x7
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_48 w, h, txfm1, txfm2
@@ -1404,7 +1404,7 @@ function inv_txfm_horz\suffix\()_16x8_neon
         st1             {\i}, [x6], #16
 .endr
 
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -1419,7 +1419,7 @@ function inv_txfm_add_vert_8x16_neon
 .endr
         blr             x5
         load_add_store_8x16 x6, x7
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_16x16_neon
@@ -1453,7 +1453,7 @@ function inv_txfm_add_16x16_neon
 .endr
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_16x16 txfm1, txfm2, eob_half
@@ -1553,7 +1553,7 @@ function inv_txfm_\variant\()add_16x4_neon
         add             x6,  x0,  #8
         load_add_store_8x4 x6, x7
 
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_\variant\()add_4x16_neon
@@ -1621,7 +1621,7 @@ function inv_txfm_\variant\()add_4x16_neon
 
         load_add_store_4x16 x0, x6
 
-        br              x15
+        ret             x15
 endfunc
 .endm
 
@@ -1731,7 +1731,7 @@ function inv_txfm_\variant\()add_16x8_neon
         add             x0,  x0,  #8
         load_add_store_8x8 x0, x7
 
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_\variant\()add_8x16_neon
@@ -1804,7 +1804,7 @@ function inv_txfm_\variant\()add_8x16_neon
 
         load_add_store_8x16 x0, x6
 
-        br              x15
+        ret             x15
 endfunc
 .endm
 
@@ -2089,7 +2089,7 @@ function inv_txfm_horz\suffix\()_dct_32x8_neon
         store2          v25.8h,  v17.8h, \shift
         store2          v24.8h,  v16.8h, \shift
 .purgem store2
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -2163,7 +2163,7 @@ function inv_txfm_add_vert_dct_8x32_neon
         combine         v28.8h, v29.8h, v30.8h, v31.8h, sqsub, x9
 .purgem combine
 
-        br              x14
+        ret             x14
 endfunc
 
 const eob_32x32
@@ -2374,7 +2374,7 @@ function inv_txfm_add_dct_dct_32x32_8bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #2048
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_16x32_8bpc_neon, export=1
@@ -2423,7 +2423,7 @@ function inv_txfm_add_dct_dct_16x32_8bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #1024
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x16_8bpc_neon, export=1
@@ -2468,7 +2468,7 @@ function inv_txfm_add_dct_dct_32x16_8bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #1024
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_8x32_8bpc_neon, export=1
@@ -2525,7 +2525,7 @@ function inv_txfm_add_dct_dct_8x32_8bpc_neon, export=1
         bl              inv_txfm_add_vert_dct_8x32_neon
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x8_8bpc_neon, export=1
@@ -2559,7 +2559,7 @@ function inv_txfm_add_dct_dct_32x8_8bpc_neon, export=1
         b.lt            1b
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 function inv_dct64_step1_neon
@@ -2886,7 +2886,7 @@ function inv_txfm_dct\suffix\()_8h_x64_neon, export=1
 
         bl              inv_dct64_step2_neon
 
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -2943,7 +2943,7 @@ function inv_txfm_horz_dct_64x8_neon
 
         cmp             x7,  x8
         b.lt            1b
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_vert_dct_8x64_neon
@@ -2999,7 +2999,7 @@ function inv_txfm_add_vert_dct_8x64_neon
         cmp             x7,  x8
         b.lt            1b
 
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_dct_dct_64x64_8bpc_neon, export=1
@@ -3053,7 +3053,7 @@ function inv_txfm_add_dct_dct_64x64_8bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #64*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_64x32_8bpc_neon, export=1
@@ -3106,7 +3106,7 @@ function inv_txfm_add_dct_dct_64x32_8bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #64*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x64_8bpc_neon, export=1
@@ -3158,7 +3158,7 @@ function inv_txfm_add_dct_dct_32x64_8bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #32*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_64x16_8bpc_neon, export=1
@@ -3212,7 +3212,7 @@ function inv_txfm_add_dct_dct_64x16_8bpc_neon, export=1
 .endr
 
         add             sp,  x4,  #64*16*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_16x64_8bpc_neon, export=1
@@ -3265,5 +3265,5 @@ function inv_txfm_add_dct_dct_16x64_8bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #16*32*2
-        br              x15
+        ret             x15
 endfunc

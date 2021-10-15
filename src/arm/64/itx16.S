@@ -541,7 +541,7 @@ L(itx_4x4_end):
         st1             {v1.d}[0], [x0], x1
         st1             {v1.d}[1], [x0], x1
 
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_4x4 txfm1, txfm2
@@ -784,7 +784,7 @@ function inv_txfm_add_8x8_neon
         blr             x5
 
         load_add_store_8x8 x0, x7
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_8x8 txfm1, txfm2, eob_half
@@ -853,7 +853,7 @@ function inv_txfm_add_8x4_neon
         blr             x5
 
         load_add_store_8x4 x0, x7
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_4x8_neon
@@ -902,7 +902,7 @@ function inv_txfm_add_4x8_neon
         blr             x5
 
         load_add_store_4x8 x0, x7
-        br              x15
+        ret             x15
 endfunc
 
 .macro def_fn_48 w, h, txfm1, txfm2, eob_half
@@ -1282,7 +1282,7 @@ function inv_txfm_horz\suffix\()_16x4_neon
         st1             {\i}, [x6], #16
 .endr
 
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -1296,7 +1296,7 @@ function inv_txfm_add_vert_8x16_neon
 .endr
         blr             x5
         load_add_store_8x16 x6, x7
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_16x16_neon
@@ -1338,7 +1338,7 @@ function inv_txfm_add_16x16_neon
 .endr
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 const eob_16x16
@@ -1423,7 +1423,7 @@ function inv_txfm_add_16x4_neon
         add             x6,  x0,  #16
         load_add_store_8x4 x6, x7
 
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_4x16_neon
@@ -1517,7 +1517,7 @@ function inv_txfm_add_4x16_neon
 
         load_add_store_4x16 x0, x6
 
-        br              x15
+        ret             x15
 endfunc
 
 const eob_4x16
@@ -1698,7 +1698,7 @@ function inv_txfm_add_16x8_neon
         ldp             d12, d13, [sp, #0x20]
         ldp             d10, d11, [sp, #0x10]
         ldp             d8,  d9,  [sp], 0x40
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_8x16_neon
@@ -1839,7 +1839,7 @@ function inv_txfm_add_8x16_neon
         ldp             d10, d11, [sp, #0x10]
         ldp             d8,  d9,  [sp], 0x20
 
-        br              x15
+        ret             x15
 endfunc
 
 const eob_8x16
@@ -2141,7 +2141,7 @@ function inv_txfm_horz\suffix\()_dct_32x4_neon
         store2          v29.4s,  v25.4s,  v21.4s,  v17.4s,  \shift
         store2          v28.4s,  v24.4s,  v20.4s,  v16.4s,  \shift
 .purgem store2
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -2216,7 +2216,7 @@ function inv_txfm_add_vert_dct_8x32_neon
         combine         v28.8h, v29.8h, v30.8h, v31.8h, sqsub, x9
 .purgem combine
 
-        br              x14
+        ret             x14
 endfunc
 
 const eob_32x32
@@ -2533,7 +2533,7 @@ function inv_txfm_add_dct_dct_32x32_16bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #2048
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_16x32_16bpc_neon, export=1
@@ -2582,7 +2582,7 @@ function inv_txfm_add_dct_dct_16x32_16bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #1024
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x16_16bpc_neon, export=1
@@ -2632,7 +2632,7 @@ function inv_txfm_add_dct_dct_32x16_16bpc_neon, export=1
 .endr
 
         add             sp,  sp,  #1024
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_8x32_16bpc_neon, export=1
@@ -2692,7 +2692,7 @@ function inv_txfm_add_dct_dct_8x32_16bpc_neon, export=1
         bl              inv_txfm_add_vert_dct_8x32_neon
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x8_16bpc_neon, export=1
@@ -2743,7 +2743,7 @@ function inv_txfm_add_dct_dct_32x8_16bpc_neon, export=1
         b.lt            1b
 
         add             sp,  sp,  #512
-        br              x15
+        ret             x15
 endfunc
 
 function inv_dct64_step1_neon
@@ -3070,7 +3070,7 @@ function inv_txfm_dct\suffix\()_4s_x64_neon
 
         bl              inv_dct64_step2_neon
 
-        br              x14
+        ret             x14
 endfunc
 .endm
 
@@ -3127,7 +3127,7 @@ function inv_txfm_horz_dct_64x4_neon
 
         cmp             x7,  x8
         b.lt            1b
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_vert_dct_8x64_neon
@@ -3184,7 +3184,7 @@ function inv_txfm_add_vert_dct_8x64_neon
         cmp             x7,  x8
         b.lt            1b
 
-        br              x14
+        ret             x14
 endfunc
 
 function inv_txfm_add_dct_dct_64x64_16bpc_neon, export=1
@@ -3238,7 +3238,7 @@ function inv_txfm_add_dct_dct_64x64_16bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #64*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_64x32_16bpc_neon, export=1
@@ -3291,7 +3291,7 @@ function inv_txfm_add_dct_dct_64x32_16bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #64*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_32x64_16bpc_neon, export=1
@@ -3341,7 +3341,7 @@ function inv_txfm_add_dct_dct_32x64_16bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #32*32*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_64x16_16bpc_neon, export=1
@@ -3395,7 +3395,7 @@ function inv_txfm_add_dct_dct_64x16_16bpc_neon, export=1
 .endr
 
         add             sp,  x4,  #64*16*2
-        br              x15
+        ret             x15
 endfunc
 
 function inv_txfm_add_dct_dct_16x64_16bpc_neon, export=1
@@ -3448,5 +3448,5 @@ function inv_txfm_add_dct_dct_16x64_16bpc_neon, export=1
 .endr
 
         add             sp,  x5,  #16*32*2
-        br              x15
+        ret             x15
 endfunc

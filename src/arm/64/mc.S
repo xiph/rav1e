@@ -1979,7 +1979,7 @@ L(\type\()_8tap_hv):
         b               28b
 
 0:
-        br              x15
+        ret             x15
 
 L(\type\()_8tap_filter_2):
         ld1             {v28.8b},  [\sr2], \s_strd
@@ -2135,7 +2135,7 @@ L(\type\()_8tap_filter_2):
         mov             v22.8b,  v29.8b
         b               48b
 0:
-        br              x15
+        ret             x15
 
 L(\type\()_8tap_filter_4):
         ld1             {v26.8b}, [\sr2], \s_strd
@@ -2343,7 +2343,7 @@ L(\type\()_8tap_filter_4):
 .endif
         b               168b
 0:
-        br              x15
+        ret             x15
 
 L(\type\()_8tap_filter_8_first):
         ld1             {v28.8b, v29.8b},  [\src], \s_strd
@@ -3072,7 +3072,7 @@ function warp_affine_8x8\t\()_8bpc_neon, export=1
         add             w6,  w6,  w4
         b.gt            1b
 
-        br              x15
+        ret             x15
 endfunc
 .endm
 
