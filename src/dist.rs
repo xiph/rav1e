@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The rav1e contributors. All rights reserved
+// Copyright (c) 2019-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -14,12 +14,14 @@ cfg_if::cfg_if! {
     pub use crate::asm::aarch64::dist::*;
     pub use self::rust::get_satd;
     pub use self::rust::get_weighted_sse;
+    pub use self::rust::cdef_dist_kernel;
   } else {
     pub use self::rust::*;
   }
 }
 
 pub(crate) mod rust {
+  use crate::activity::apply_ssim_boost;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::tiling::*;
   use crate::util::*;
@@ -240,6 +242,97 @@ pub(crate) mod rust {
     }
 
     sse
+  }
+
+  /// Number of bits of precision used in `AREA_DIVISORS`
+  const AREA_DIVISOR_BITS: u8 = 14;
+
+  /// Lookup table for 2^`AREA_DIVISOR_BITS` / (1 + x)
+  #[rustfmt::skip]
+  const AREA_DIVISORS: [u16; 64] = [
+    16384, 8192, 5461, 4096, 3277, 2731, 2341, 2048, 1820, 1638, 1489, 1365,
+     1260, 1170, 1092, 1024,  964,  910,  862,  819,  780,  745,  712,  683,
+      655,  630,  607,  585,  565,  546,  529,  512,  496,  482,  468,  455,
+      443,  431,  420,  410,  400,  390,  381,  372,  364,  356,  349,  341,
+      334,  328,  321,  315,  309,  303,  298,  293,  287,  282,  278,  273,
+      269,  264,  260,  256,
+  ];
+
+  /// Computes a distortion metric of the sum of squares weighted by activity.
+  /// w and h should be <= 8.
+  #[inline(never)]
+  pub fn cdef_dist_kernel<T: Pixel>(
+    src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
+    bit_depth: usize, _cpu: CpuFeatureLevel,
+  ) -> u32 {
+    // TODO: Investigate using different constants in ssim boost for block sizes
+    // smaller than 8x8.
+
+    debug_assert!(src.plane_cfg.xdec == 0);
+    debug_assert!(src.plane_cfg.ydec == 0);
+    debug_assert!(dst.plane_cfg.xdec == 0);
+    debug_assert!(dst.plane_cfg.ydec == 0);
+
+    // Limit kernel to 8x8
+    debug_assert!(w <= 8);
+    debug_assert!(h <= 8);
+
+    // Compute the following summations.
+    let mut sum_s: u32 = 0; // sum(src_{i,j})
+    let mut sum_d: u32 = 0; // sum(dst_{i,j})
+    let mut sum_s2: u32 = 0; // sum(src_{i,j}^2)
+    let mut sum_d2: u32 = 0; // sum(dst_{i,j}^2)
+    let mut sum_sd: u32 = 0; // sum(src_{i,j} * dst_{i,j})
+    for j in 0..h {
+      let row1 = &src[j][0..w];
+      let row2 = &dst[j][0..w];
+      for (s, d) in row1.iter().zip(row2) {
+        let s: u32 = u32::cast_from(*s);
+        let d: u32 = u32::cast_from(*d);
+        sum_s += s;
+        sum_d += d;
+
+        sum_s2 += s * s;
+        sum_d2 += d * d;
+        sum_sd += s * d;
+      }
+    }
+
+    // To get the distortion, compute sum of squared error and apply a weight
+    // based on the variance of the two planes.
+    let sse = sum_d2 + sum_s2 - 2 * sum_sd;
+
+    // Convert to 64-bits to avoid overflow when squaring
+    let sum_s = sum_s as u64;
+    let sum_d = sum_d as u64;
+
+    // Calculate the variance (more accurately variance*area) of each plane.
+    // var[iance] = avg(X^2) - avg(X)^2 = sum(X^2) / n - sum(X)^2 / n^2
+    //    (n = # samples i.e. area)
+    // var * n = sum(X^2) - sum(X)^2 / n
+    // When w and h are powers of two, this can be done via shifting.
+    let div = AREA_DIVISORS[w * h - 1] as u64;
+    let div_shift = AREA_DIVISOR_BITS;
+    // Due to rounding, negative values can occur when w or h aren't powers of
+    // two. Saturate to avoid underflow.
+    let mut svar = sum_s2.saturating_sub(
+      ((sum_s * sum_s * div + (1 << div_shift >> 1)) >> div_shift) as u32,
+    );
+    let mut dvar = sum_d2.saturating_sub(
+      ((sum_d * sum_d * div + (1 << div_shift >> 1)) >> div_shift) as u32,
+    );
+
+    // Scale variances up to 8x8 size.
+    //   scaled variance = var * (8x8) / wxh
+    // For 8x8, this is a nop. For powers of 2, this is doable with shifting.
+    // TODO: It should be possible and faster to do this adjustment in ssim boost
+    let scale_shift = AREA_DIVISOR_BITS - 6;
+    svar =
+      ((svar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
+    dvar =
+      ((dvar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
+
+    apply_ssim_boost(sse, svar, dvar, bit_depth)
   }
 }
 
