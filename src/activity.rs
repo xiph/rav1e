@@ -60,7 +60,7 @@ impl ActivityMask {
     &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,
   ) {
     for (dst, &src) in activity_scales.iter_mut().zip(self.variances.iter()) {
-      *dst = ssim_boost(src as i64, src as i64, bit_depth);
+      *dst = ssim_boost(src, src, bit_depth);
     }
   }
 }
