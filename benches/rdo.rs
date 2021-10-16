@@ -16,6 +16,7 @@ fn init_plane_u8(width: usize, height: usize, seed: u8) -> Plane<u8> {
 }
 
 pub fn cdef_dist_wxh_8x8(c: &mut Criterion) {
+  let cpu = CpuFeatureLevel::default();
   let src1 = init_plane_u8(8, 8, 1);
   let src2 = init_plane_u8(8, 8, 2);
 
@@ -28,6 +29,7 @@ pub fn cdef_dist_wxh_8x8(c: &mut Criterion) {
         8,
         8,
         |_, _| DistortionScale::default(),
+        cpu,
       )
     })
   });

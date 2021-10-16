@@ -111,6 +111,7 @@ fn build_nasm_files() {
     "src/x86/sad_sse2.asm",
     "src/x86/sad_avx.asm",
     "src/x86/satd.asm",
+    "src/x86/cdef_dist.asm",
     "src/x86/sse.asm",
     "src/x86/cdef_rav1e.asm",
     "src/x86/cdef_sse.asm",

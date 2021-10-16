@@ -1,5 +1,5 @@
 // Copyright (c) 2001-2016, Alliance for Open Media. All rights reserved
-// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -36,9 +36,7 @@ use crate::predict::{
 use crate::rdo_tables::*;
 use crate::tiling::*;
 use crate::transform::{TxSet, TxSize, TxType, RAV1E_TX_TYPES};
-use crate::util::{
-  init_slice_repeat_mut, Aligned, CastFromPrimitive, ILog, Pixel,
-};
+use crate::util::{init_slice_repeat_mut, Aligned, Pixel};
 use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::Tune;
@@ -139,245 +137,10 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
   (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)).max(0) as u64
 }
 
-/// Number of bits of precision used in `AREA_DIVISORS`
-const AREA_DIVISOR_BITS: u8 = 14;
-
-/// Lookup table for 2^`AREA_DIVISOR_BITS` / (1 + x)
-#[rustfmt::skip]
-const AREA_DIVISORS: [u16; 64] = [
-  16384, 8192, 5461, 4096, 3277, 2731, 2341, 2048, 1820, 1638, 1489, 1365, 1260,
-   1170, 1092, 1024,  964,  910,  862,  819,  780,  745,  712,  683,  655,  630,
-    607,  585,  565,  546,  529,  512,  496,  482,  468,  455,  443,  431,  420,
-    410,  400,  390,  381,  372,  364,  356,  349,  341,  334,  328,  321,  315,
-    309,  303,  298,  293,  287,  282,  278,  273,  269,  264,  260,  256,
-];
-
-/// Computes a distortion metric of the sum of squares weighted by activity.
-/// w and h should be <= 8.
-#[inline(never)]
-fn cdef_dist_kernel<T: Pixel>(
-  src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize,
-) -> RawDistortion {
-  // TODO: Investigate using different constants in ssim boost for block sizes
-  // smaller than 8x8.
-
-  debug_assert!(src1.plane_cfg.xdec == 0);
-  debug_assert!(src1.plane_cfg.ydec == 0);
-  debug_assert!(src2.plane_cfg.xdec == 0);
-  debug_assert!(src2.plane_cfg.ydec == 0);
-
-  // Limit kernel to 8x8
-  debug_assert!(w <= 8);
-  debug_assert!(h <= 8);
-
-  // Compute the following summations.
-  let mut sum_s: u32 = 0; // sum(src1_{i,j})
-  let mut sum_d: u32 = 0; // sum(src2_{i,j})
-  let mut sum_s2: u32 = 0; // sum(src1_{i,j}^2)
-  let mut sum_d2: u32 = 0; // sum(src2_{i,j}^2)
-  let mut sum_sd: u32 = 0; // sum(src1_{i,j} * src2_{i,j})
-  for j in 0..h {
-    let row1 = &src1[j][0..w];
-    let row2 = &src2[j][0..w];
-    for (s, d) in row1.iter().zip(row2) {
-      let s: u32 = u32::cast_from(*s);
-      let d: u32 = u32::cast_from(*d);
-      sum_s += s;
-      sum_d += d;
-
-      sum_s2 += s * s;
-      sum_d2 += d * d;
-      sum_sd += s * d;
-    }
-  }
-
-  // To get the distortion, compute sum of squared error and apply a weight
-  // based on the variance of the two planes.
-  let sse = sum_d2 + sum_s2 - 2 * sum_sd;
-
-  // Convert to 64-bits to avoid overflow when squaring
-  let sum_s = sum_s as u64;
-  let sum_d = sum_d as u64;
-
-  // Calculate the variance (more accurately variance*area) of each plane.
-  // var[iance] = avg(X^2) - avg(X)^2 = sum(X^2) / n - sum(X)^2 / n^2
-  //    (n = # samples i.e. area)
-  // var * n = sum(X^2) - sum(X)^2 / n
-  // When w and h are powers of two, this can be done via shifting.
-  let div = AREA_DIVISORS[w * h - 1] as u64;
-  let div_shift = AREA_DIVISOR_BITS;
-  // Due to rounding, negative values can occur when w or h aren't powers of
-  // two. Saturate to avoid underflow.
-  let mut svar = sum_s2.saturating_sub(
-    ((sum_s * sum_s * div + (1 << div_shift >> 1)) >> div_shift) as u32,
-  );
-  let mut dvar = sum_d2.saturating_sub(
-    ((sum_d * sum_d * div + (1 << div_shift >> 1)) >> div_shift) as u32,
-  );
-
-  // Scale variances up to 8x8 size.
-  //   scaled variance = var * (8x8) / wxh
-  // For 8x8, this is a nop. For powers of 2, this is doable with shifting.
-  // TODO: It should be possible and faster to do this adjustment in ssim boost
-  let scale_shift = AREA_DIVISOR_BITS - 6;
-  svar = ((svar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
-  dvar = ((dvar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
-
-  RawDistortion(apply_ssim_boost(sse, svar, dvar, bit_depth) as u64)
-}
-
-/// rsqrt result stored in fixed point w/ scaling such that:
-///   rsqrt = output.rsqrt_norm / (1 << output.shift)
-struct RsqrtOutput {
-  norm: u16,
-  shift: u8,
-}
-
-/// Fixed point rsqrt for ssim_boost
-fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
-  const INSHIFT: u8 = 16;
-  const OUTSHIFT: u8 = 14;
-
-  let k = ((x.ilog() - 1) >> 1) as i16;
-  /*t is x in the range [0.25, 1) in QINSHIFT, or x*2^(-s).
-  Shift by log2(x) - log2(0.25*(1 << INSHIFT)) to ensure 0.25 lower bound.*/
-  let s: i16 = 2 * k - (INSHIFT as i16 - 2);
-  let t: u16 = if s > 0 { x >> s } else { x << -s } as u16;
-
-  /*We want to express od_rsqrt() in terms of od_rsqrt_norm(), which is
-   defined as (2^OUTSHIFT)/sqrt(t*(2^-INSHIFT)) with t=x*(2^-s).
-  This simplifies to 2^(OUTSHIFT+(INSHIFT/2)+(s/2))/sqrt(x), so the caller
-   needs to shift right by OUTSHIFT + INSHIFT/2 + s/2.*/
-  let rsqrt_shift: u8 = (OUTSHIFT as i16 + ((s + INSHIFT as i16) >> 1)) as u8;
-
-  #[inline(always)]
-  fn mult16_16_q15(a: i32, b: i32) -> i32 {
-    (a * b) >> 15
-  }
-
-  /* Reciprocal sqrt approximation where the input is in the range [0.25,1) in
-  Q16 and the output is in the range (1.0, 2.0] in Q14). */
-
-  /* Range of n is [-16384,32767] ([-0.5,1) in Q15). */
-  let n: i32 = t as i32 - 32768;
-  debug_assert!(n >= -16384);
-
-  /* Get a rough guess for the root.
-  The optimal minimax quadratic approximation (using relative error) is
-   r = 1.437799046117536+n*(-0.823394375837328+n*0.4096419668459485).
-  Coefficients here, and the final result r, are Q14. */
-  let rsqrt: i32 = 23557 + mult16_16_q15(n, -13490 + mult16_16_q15(n, 6711));
-
-  debug_assert!((16384..32768).contains(&rsqrt));
-  RsqrtOutput { norm: rsqrt as u16, shift: rsqrt_shift }
-}
-
-#[inline(always)]
-pub fn ssim_boost(svar: u32, dvar: u32, bit_depth: usize) -> DistortionScale {
-  DistortionScale(apply_ssim_boost(
-    DistortionScale::default().0,
-    svar,
-    dvar,
-    bit_depth,
-  ))
-}
-
-/// Apply ssim boost to a given input
-#[inline(always)]
-fn apply_ssim_boost(
-  input: u32, svar: u32, dvar: u32, bit_depth: usize,
-) -> u32 {
-  let coeff_shift = bit_depth - 8;
-
-  // Scale dvar and svar to lbd range to prevent overflows.
-  let svar = (svar >> (2 * coeff_shift)) as u64;
-  let dvar = (dvar >> (2 * coeff_shift)) as u64;
-
-  // The two constants were tuned for CDEF, but can probably be better tuned
-  //   for use in general RDO
-  const C1: u64 = 4033;
-  const C2: u64 = 16384;
-  const RATIO_SHIFT: u8 = 14;
-  const RATIO: u64 = (((C1 << (RATIO_SHIFT + 1)) / C2) + 1) >> 1;
-
-  //          C1        (svar + dvar + C2)
-  // input * ---- * --------------------------
-  //          C2     sqrt(C1^2 + svar * dvar)
-  let rsqrt = ssim_boost_rsqrt((C1 * C1) + svar * dvar);
-  ((input as u64
-    * (((RATIO * (svar + dvar + C2) as u64) * rsqrt.norm as u64)
-      >> RATIO_SHIFT))
-    >> rsqrt.shift) as u32
-}
-
-#[cfg(test)]
-mod ssim_boost_tests {
-  use super::*;
-  use rand::Rng;
-
-  /// Test to make sure extreme values of ssim boost don't overflow.
-  #[test]
-  fn overflow_test() {
-    // Test variance for 8x8 region with a bit depth of 12
-    let max_pix_diff = (1 << 12) - 1;
-    let max_pix_sse = max_pix_diff * max_pix_diff;
-    let max_variance = max_pix_diff * 8 * 8 / 4;
-    apply_ssim_boost(max_pix_sse * 8 * 8, max_variance, max_variance, 12);
-  }
-
-  /// Floating point reference version of ssim_boost
-  fn reference_ssim_boost(svar: u32, dvar: u32, bit_depth: usize) -> f64 {
-    let coeff_shift = bit_depth - 8;
-    let var_scale = 1f64 / (1 << (2 * coeff_shift)) as f64;
-    let svar = svar as f64 * var_scale;
-    let dvar = dvar as f64 * var_scale;
-    // These constants are from ssim boost and need to be updated if the
-    //  constants in ssim boost change.
-    const C1: f64 = 4033f64;
-    const C2: f64 = 16384f64;
-    const RATIO: f64 = C1 / C2;
-
-    RATIO * (svar + dvar + C2) / f64::sqrt(C1 * C1 + svar * dvar)
-  }
-
-  /// Test that ssim_boost has sufficient accuracy.
-  #[test]
-  fn accuracy_test() {
-    let mut rng = rand::thread_rng();
-
-    let mut max_relative_error = 0f64;
-    let bd = 12;
-
-    // Test different log scale ranges for the variance.
-    // Each scale is tested multiple times with randomized variances.
-    for scale in 0..(bd + 3 * 2 - 2) {
-      for _ in 0..40 {
-        let svar = rng.gen_range(0..(1 << scale));
-        let dvar = rng.gen_range(0..(1 << scale));
-
-        let float = reference_ssim_boost(svar, dvar, 12);
-        let fixed =
-          apply_ssim_boost(1 << 23, svar, dvar, 12) as f64 / (1 << 23) as f64;
-
-        // Compare the two versions
-        max_relative_error =
-          max_relative_error.max(f64::abs(1f64 - fixed / float));
-      }
-    }
-
-    assert!(
-      max_relative_error < 0.05,
-      "SSIM boost error too high. Measured max relative error: {}.",
-      max_relative_error
-    );
-  }
-}
-
 #[allow(unused)]
 pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize, compute_bias: F,
+  bit_depth: usize, compute_bias: F, cpu: CpuFeatureLevel,
 ) -> Distortion {
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
@@ -391,13 +154,14 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
       let kernel_w = (w - x).min(8);
       let area = Area::StartingAt { x: x as isize, y: y as isize };
 
-      let value = cdef_dist_kernel(
+      let value = RawDistortion(cdef_dist_kernel(
         &src1.subregion(area),
         &src2.subregion(area),
         kernel_w,
         kernel_h,
         bit_depth,
-      );
+        cpu,
+      ) as u64);
 
       // cdef is always called on non-subsampled planes, so BLOCK_8X8 is
       // correct here.
@@ -520,6 +284,7 @@ fn compute_distortion<T: Pixel>(
           bsize,
         )
       },
+      fi.cpu_feature_level,
     ),
     Tune::Psnr => sse_wxh(
       &input_region,
@@ -2200,14 +1965,15 @@ fn rdo_loop_plane_error<T: Pixel>(
           // For loop filters, We intentionally use cdef_dist even with
           // `--tune Psnr`. Using SSE instead gives no PSNR gain but has a
           // significant negative impact on other metrics and visual quality.
-          //cdef_dist_wxh_8x8(&src_region, &test_region, fi.sequence.bit_depth)
-          cdef_dist_kernel(
+          RawDistortion(cdef_dist_kernel(
             &src_region,
             &test_region,
             8,
             8,
             fi.sequence.bit_depth,
-          ) * bias
+            fi.cpu_feature_level,
+          ) as u64)
+            * bias
         } else {
           sse_wxh(
             &src_region,
