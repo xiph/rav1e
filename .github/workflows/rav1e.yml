@@ -129,11 +129,11 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/v/vmaf-dmo
-          LIBVMAF_VERSION: 2.2.1-dmo2
+          LIBVMAF_VERSION: 2.3.0-dmo1
           LIBVMAF_SHA256: >-
-            7bc62fc4c399811d64fcec854cc71b4b1795c8170842dd30a2756cd9eec939e8
+            2cceb344173fa86dbe665ade28b5a11c54c8426dd2eb3c1d7e242357b016a857
           LIBVMAF_DEV_SHA256: >-
-            e84d52f2e31037e31be45b35f20ffa886f223cd79a5c8384f936ce81e12c30a7
+            fde58300cffa120ab7693bea3d43e9e3d63305e77bbbd9815ad6047b400524d8
         run: |
           echo "$LINK/libvmaf1_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libvmaf-dev_${LIBVMAF_VERSION}_amd64.deb" >> DEBS
@@ -145,11 +145,11 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: https://www.deb-multimedia.org/pool/main/a/aom-dmo
-          AOM_VERSION: 3.1.3-dmo2
+          AOM_VERSION: 3.2.0-dmo1
           AOM_DEV_SHA256: >-
-            480caa4c995692e15a1dff80dba63d7a3226c0627fae32f66abf4a5cf4c40fac
+            c63acfea515b81c1c261e79a10094dcca5bf51474f673e51e9d575cdf2476a1e
           AOM_LIB_SHA256: >-
-            d6f56b32cc50eec79e5b56779f8f8c7dff02c56c04f93f7556cd62f7bac2b75b
+            dd0b4d9bed079150db74006f18b745c11f6a9103bb005d636514f4c3b8939cec
         run: |
           echo "$LINK/libaom-dev_${AOM_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libaom3_${AOM_VERSION}_amd64.deb" >> DEBS
