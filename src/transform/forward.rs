@@ -74,23 +74,23 @@ pub mod rust {
 
   impl_1d_tx!();
 
-  type TxfmFunc = dyn Fn(&mut [i32]);
+  type TxfmFunc = fn(&mut [i32]);
 
-  fn get_func(t: TxfmType) -> &'static TxfmFunc {
+  fn get_func(t: TxfmType) -> TxfmFunc {
     use self::TxfmType::*;
     match t {
-      DCT4 => &daala_fdct4,
-      DCT8 => &daala_fdct8,
-      DCT16 => &daala_fdct16,
-      DCT32 => &daala_fdct32,
-      DCT64 => &daala_fdct64,
-      ADST4 => &daala_fdst_vii_4,
-      ADST8 => &daala_fdst8,
-      ADST16 => &daala_fdst16,
-      Identity4 => &fidentity,
-      Identity8 => &fidentity,
-      Identity16 => &fidentity,
-      Identity32 => &fidentity,
+      DCT4 => daala_fdct4,
+      DCT8 => daala_fdct8,
+      DCT16 => daala_fdct16,
+      DCT32 => daala_fdct32,
+      DCT64 => daala_fdct64,
+      ADST4 => daala_fdst_vii_4,
+      ADST8 => daala_fdst8,
+      ADST16 => daala_fdst16,
+      Identity4 => fidentity,
+      Identity8 => fidentity,
+      Identity16 => fidentity,
+      Identity32 => fidentity,
       _ => unreachable!(),
     }
   }
