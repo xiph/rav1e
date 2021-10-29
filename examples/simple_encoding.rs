@@ -23,7 +23,14 @@ fn main() {
 
   let mut ctx: Context<u16> = cfg.new_context().unwrap();
 
-  let f = ctx.new_frame();
+  let mut f = ctx.new_frame();
+
+  let pixels = vec![42; enc.width * enc.height];
+
+  for p in &mut f.planes {
+    let stride = (enc.width + p.cfg.xdec) >> p.cfg.xdec;
+    p.copy_from_raw_u8(&pixels, stride, 1);
+  }
 
   let limit = 30;
 
