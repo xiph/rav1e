@@ -393,8 +393,17 @@ fn run() -> Result<(), error::CliError> {
       .saturating_add(1024),
   };
   let mut y4m_dec = match y4m::Decoder::new_with_limits(cli.io.input, limit) {
-    Err(_) => {
-      return Err(CliError::new("Could not input video. Is it a y4m file?"))
+    Err(e) => {
+      return Err(CliError::new(match e {
+        y4m::Error::ParseError(_) => {
+          "Could not input video. Is it a y4m file?"
+        }
+        y4m::Error::UnknownColorspace => {
+          "Unknown colorspace or unsupported bit depth."
+        }
+        y4m::Error::OutOfMemory => "The video's frame size exceeds the limit.",
+        _ => unreachable!(),
+      }))
     }
     Ok(d) => d,
   };
