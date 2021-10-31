@@ -181,10 +181,9 @@ jobs:
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         env:
-          LINK: https://github.com/lu-zero/cargo-c/releases/download
-          CARGO_C_VERSION: 0.8.0
+          LINK: https://github.com/lu-zero/cargo-c/releases/latest/download
         run: |
-          curl -L "$LINK/v$CARGO_C_VERSION/cargo-c-linux.tar.gz" |
+          curl -L "$LINK/cargo-c-linux.tar.gz" |
           tar xz -C $HOME/.cargo/bin
       - name: Install grcov
         if: matrix.conf == 'grcov-coveralls'
@@ -461,7 +460,7 @@ jobs:
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
-          $LINK = "https://github.com/lu-zero/cargo-c/releases/download/v0.8.0"
+          $LINK = "https://github.com/lu-zero/cargo-c/releases/latest/download"
           $CARGO_C_FILE = "cargo-c-windows-msvc"
           curl -LO "$LINK/$CARGO_C_FILE.zip"
           7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
