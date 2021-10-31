@@ -188,10 +188,9 @@ jobs:
       - name: Install grcov
         if: matrix.conf == 'grcov-coveralls'
         env:
-          LINK: https://github.com/mozilla/grcov/releases/download
-          GRCOV_VERSION: 0.7.1
+          LINK: https://github.com/mozilla/grcov/releases/latest/download
         run: |
-          curl -L "$LINK/v$GRCOV_VERSION/grcov-linux-x86_64.tar.bz2" |
+          curl -L "$LINK/grcov-linux-x86_64.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
       - name: Install ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
