@@ -1240,6 +1240,8 @@ ALIGN function_align
     vbroadcasti128       m7, [cq+16* 3]
     vbroadcasti128       m8, [cq+16* 1]
     shufpd               m7, m8, 0x0c ;  3  1
+    vpbroadcastd        m12, [clip_18b_min]
+    vpbroadcastd        m13, [clip_18b_max]
     vpbroadcastd        m11, [pd_2048]
     ITX_MULSUB_2D         1, 0, 8, 9, 10, 11,  201_995,  4091_3973, 1
     ITX_MULSUB_2D         3, 2, 8, 9, 10, 11, 1751_2440, 3703_3290, 1
@@ -1253,6 +1255,8 @@ ALIGN function_align
     paddd                m2, m6     ; t4a  t6a
     psubd                m6, m3, m7 ; t13a t15a
     paddd                m3, m7     ; t5a  t7a
+    REPX    {pmaxsd x, m12}, m0, m1, m2, m3, m4, m5, m6, m8
+    REPX    {pminsd x, m13}, m0, m1, m2, m3, m4, m5, m6, m8
     ITX_MULSUB_2D         8, 4, 7, 9, 10, 11,  799_3406, 4017_2276, 1
     ITX_MULSUB_2D         6, 5, 7, 9, 10, 11, 4017_2276, 10,        1
     psubd                m7, m0, m2 ; t4   t6
@@ -1263,6 +1267,8 @@ ALIGN function_align
     paddd                m4, m6     ; t8a  t10a
     psubd                m6, m8, m5 ; t13a t15a
     paddd                m8, m5     ; t9a  t11a
+    REPX    {pmaxsd x, m12}, m0, m1, m2, m3, m4, m6, m7, m8
+    REPX    {pminsd x, m13}, m0, m1, m2, m3, m4, m6, m7, m8
     punpcklqdq           m5, m3, m7 ; t12a t4
     punpckhqdq           m3, m7     ; t14a t6
     punpckhqdq           m7, m6, m2 ; t15a t7
@@ -1283,6 +1289,8 @@ ALIGN function_align
     paddd                m8, m0     ; out14  -out15
     paddd                m0, m4, m2 ; -out1   out0
     psubd                m4, m2     ; t10  t2a
+    REPX    {pmaxsd x, m12}, m6, m5, m3, m4
+    REPX    {pminsd x, m13}, m6, m5, m3, m4
     REPX    {pmulld x, m10}, m6, m5, m3, m4
     paddd                m6, m11
     paddd                m4, m11
