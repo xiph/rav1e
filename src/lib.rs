@@ -193,6 +193,26 @@ mod rayon {
         RB: Send {
         (oper_a(), oper_b())
       }
+
+      use std::marker::PhantomData;
+
+      pub struct Scope<'scope>{
+        marker: PhantomData<Box<dyn FnOnce(&Scope<'scope>) + Send + Sync + 'scope>>,
+      }
+
+      impl<'scope> Scope<'scope> {
+        pub fn spawn<BODY>(&self, body: BODY)
+          where BODY: FnOnce(&Scope<'scope>) + Send + 'scope
+        {
+          body(self)
+        }
+      }
+
+      pub fn scope<'scope, OP, R>(op: OP) -> R
+        where OP: for<'s> FnOnce(&'s Scope<'scope>) -> R + 'scope + Send, R: Send,
+      {
+        op(&Scope { marker: PhantomData})
+      }
     } else {
       pub use rayon::*;
     }
