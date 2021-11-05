@@ -88,6 +88,24 @@ spel_h_shuf2b: db  1,  2, 17, 18,  5,  6, 21, 22, 17, 18, 33, 34, 21, 22, 37, 38
 spel_shuf2:    db 10, 11, 17, 18, 14, 15, 21, 22, 17, 18, 25, 26, 21, 22, 29, 30
 spel_h_shuf2a: db  0,  1,  2,  3,  2,  3,  4,  5, 16, 17, 18, 19, 18, 19, 20, 21
                db  4,  5,  6,  7,  6,  7,  8,  9, 20, 21, 22, 23, 22, 23, 24, 25
+w_mask_end42x: db  1,  5,  9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61
+               db 65, 69, 73, 77, 81, 85, 89, 93, 97,101,105,109,113,117,121,125
+w_mask_end444: db  0,  2,  4,  6,  8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30
+               db 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62
+               db 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94
+               db 96, 98,100,102,104,106,108,110,112,114,116,118,120,122,124,126
+w_mask_shuf4:  db  0,  2,  8, 10,  4,  6, 12, 14, 16, 18, 24, 26, 20, 22, 28, 30
+               db 32, 34, 40, 42, 36, 38, 44, 46, 48, 50, 56, 58, 52, 54, 60, 62
+               db 64, 66, 72, 74, 68, 70, 76, 78, 80, 82, 88, 90, 84, 86, 92, 94
+               db 96, 98,104,106,100,102,108,110,112,114,120,122,116,118,124,126
+w_mask_shuf8:  db  0,  2, 16, 18,  4,  6, 20, 22,  8, 10, 24, 26, 12, 14, 28, 30
+               db 32, 34, 48, 50, 36, 38, 52, 54, 40, 42, 56, 58, 44, 46, 60, 62
+               db 64, 66, 80, 82, 68, 70, 84, 86, 72, 74, 88, 90, 76, 78, 92, 94
+               db 96, 98,112,114,100,102,116,118,104,106,120,122,108,110,124,126
+w_mask_shuf16: db  0,  2, 32, 34,  4,  6, 36, 38,  8, 10, 40, 42, 12, 14, 44, 46
+               db 16, 18, 48, 50, 20, 22, 52, 54, 24, 26, 56, 58, 28, 30, 60, 62
+               db 64, 66, 96, 98, 68, 70,100,102, 72, 74,104,106, 76, 78,108,110
+               db 80, 82,112,114, 84, 86,116,118, 88, 90,120,122, 92, 94,124,126
 deint_q_shuf:  db  0,  2,  4,  6,  1,  3,  5,  7
 
 prep_hv_shift:    dq  6,  4
@@ -95,10 +113,19 @@ put_bilin_h_rnd:  dw  8,  8, 10, 10
 prep_mul:         dw 16, 16,  4,  4
 put_8tap_h_rnd:   dd 34, 40
 prep_8tap_rnd:    dd 128 - (8192 << 8)
+avg_round:        dw -16400, -16400, -16388, -16388
+avg_shift:        dw  5,  5,  3,  3
+w_avg_round:      dd 128 + (8192 << 4),  32 + (8192 << 4)
+mask_round:       dd 512 + (8192 << 6), 128 + (8192 << 6)
+w_mask_round:     dd 128, 64
+bidir_shift:      dw  6,  6,  4,  4
 
+pb_64:    times 4 db 64
 pw_2:     times 2 dw 2
+pw_64:    times 2 dw 64
 pw_2048:  times 2 dw 2048
 pw_8192:  times 2 dw 8192
+pw_27615: times 2 dw 27615
 pw_32766: times 2 dw 32766
 pd_32:    dd 32
 pd_128:   dd 128
@@ -149,9 +176,26 @@ pd_2176:  dd 2176
     %endif
 %endmacro
 
+%macro BIDIR_JMP_TABLE 2-*
+    %xdefine %1_%2_table (%%table - 2*%3)
+    %xdefine %%base %1_%2_table
+    %xdefine %%prefix mangle(private_prefix %+ _%1_16bpc_%2)
+    %%table:
+    %rep %0 - 2
+        dd %%prefix %+ .w%3 - %%base
+        %rotate 1
+    %endrep
+%endmacro
+
 %xdefine put_avx512icl mangle(private_prefix %+ _put_bilin_16bpc_avx512icl.put)
 %xdefine prep_avx512icl mangle(private_prefix %+ _prep_bilin_16bpc_avx512icl.prep)
 
+BIDIR_JMP_TABLE avg,        avx512icl,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_avg,      avx512icl,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE mask,       avx512icl,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_420, avx512icl,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_422, avx512icl,       4, 8, 16, 32, 64, 128
+BIDIR_JMP_TABLE w_mask_444, avx512icl,       4, 8, 16, 32, 64, 128
 BASE_JMP_TABLE put,         avx512icl,    2, 4, 8, 16, 32, 64, 128
 BASE_JMP_TABLE prep,        avx512icl,       4, 8, 16, 32, 64, 128
 HV_JMP_TABLE   put,  bilin, avx512icl, 7, 2, 4, 8, 16, 32, 64, 128
@@ -3361,5 +3405,780 @@ cglobal prep_8tap_16bpc, 3, 8, 16, tmp, src, stride, w, h, mx, my, stride3
     sub                 r5d, 1<<8
     jg .hv_w32_loop0
     RET
+
+%macro BIDIR_FN 0
+    call .main
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    movq   [dstq          ], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti32x4      xmm0, ym0, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    cmp                  hd, 8
+    jl .w4_end
+    vextracti32x4      xmm0, m0, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq          ], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m0, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    je .w4_end
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq          ], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti32x4      xmm0, ym1, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    vextracti32x4      xmm0, m1, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq          ], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m1, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+.w4_end:
+    RET
+.w8_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w8:
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    vextracti32x4 [dstq+strideq*2], m0, 2
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    sub                  hd, 8
+    jl .w8_end
+    lea                dstq, [dstq+strideq*4]
+    mova          [dstq+strideq*0], xm1
+    vextracti32x4 [dstq+strideq*1], ym1, 1
+    vextracti32x4 [dstq+strideq*2], m1, 2
+    vextracti32x4 [dstq+stride3q ], m1, 3
+    jg .w8_loop
+.w8_end:
+    RET
+.w16_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w16:
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    mova          [dstq+strideq*2], ym1
+    vextracti32x8 [dstq+stride3q ], m1, 1
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+.w32:
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    sub                  hd, 2
+    jg .w32_loop
+    RET
+.w64_loop:
+    call .main
+    add                dstq, strideq
+.w64:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128_loop:
+    call .main
+    add                dstq, strideq
+.w128:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    call .main
+    mova        [dstq+64*2], m0
+    mova        [dstq+64*3], m1
+    dec                  hd
+    jg .w128_loop
+    RET
+%endmacro
+
+%if WIN64
+DECLARE_REG_TMP 5
+%else
+DECLARE_REG_TMP 7
+%endif
+
+cglobal avg_16bpc, 4, 7, 4, dst, stride, tmp1, tmp2, w, h, stride3
+%define base r6-avg_avx512icl_table
+    lea                  r6, [avg_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 t0d, r6m ; pixel_max
+    movsxd               wq, [r6+wq*4]
+    shr                 t0d, 11
+    vpbroadcastd         m2, [base+avg_round+t0*4]
+    vpbroadcastd         m3, [base+avg_shift+t0*4]
+    movifnidn            hd, hm
+    add                  wq, r6
+    BIDIR_FN
+ALIGN function_align
+.main:
+    mova                 m0, [tmp1q+64*0]
+    paddsw               m0, [tmp2q+64*0]
+    mova                 m1, [tmp1q+64*1]
+    paddsw               m1, [tmp2q+64*1]
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    pmaxsw               m0, m2
+    pmaxsw               m1, m2
+    psubsw               m0, m2
+    psubsw               m1, m2
+    vpsrlvw              m0, m3
+    vpsrlvw              m1, m3
+    ret
+
+cglobal w_avg_16bpc, 4, 7, 8, dst, stride, tmp1, tmp2, w, h, stride3
+%define base r6-w_avg_avx512icl_table
+    lea                  r6, [w_avg_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 t0d, r7m ; pixel_max
+    shr                 t0d, 11
+    movsxd               wq, [r6+wq*4]
+    vpbroadcastd         m5, [base+w_avg_round+t0*4]
+    vpbroadcastd         m7, [base+bidir_shift+t0*4]
+    add                  wq, r6
+    mov                 r6d, r6m ; weight
+    lea                 t0d, [r6-16]
+    shl                 r6d, 16
+    sub                 r6d, t0d ; 16-weight, weight
+    movifnidn            hd, hm
+    vpbroadcastd         m6, r6d
+    BIDIR_FN
+ALIGN function_align
+.main:
+    mova                 m3, [tmp1q+64*0]
+    mova                 m1, [tmp2q+64*0]
+    mova                 m0, [tmp1q+64*1]
+    mova                 m4, [tmp2q+64*1]
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    punpcklwd            m2, m1, m3
+    punpckhwd            m1, m3
+    punpcklwd            m3, m4, m0
+    punpckhwd            m4, m0
+    mova                 m0, m5
+    vpdpwssd             m0, m6, m2
+    mova                 m2, m5
+    vpdpwssd             m2, m6, m1
+    mova                 m1, m5
+    vpdpwssd             m1, m6, m3
+    mova                 m3, m5
+    vpdpwssd             m3, m6, m4
+    REPX       {psrad x, 2}, m0, m2, m1, m3
+    packusdw             m0, m2
+    packusdw             m1, m3
+    vpsrlvw              m0, m7
+    vpsrlvw              m1, m7
+    ret
+
+cglobal mask_16bpc, 4, 8, 11, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-mask_avx512icl_table
+    lea                  r7, [mask_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 r6d, r7m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd         m8, [base+pw_64]
+    vpbroadcastd         m9, [base+mask_round+r6*4]
+    vpbroadcastd        m10, [base+bidir_shift+r6*4]
+    mov               maskq, maskmp
+    add                  wq, r7
+    BIDIR_FN
+ALIGN function_align
+.main:
+    pmovzxbw             m1, [maskq+32*0]
+    mova                 m4, [tmp1q+64*0]
+    mova                 m2, [tmp2q+64*0]
+    pmovzxbw             m6, [maskq+32*1]
+    mova                 m5, [tmp1q+64*1]
+    mova                 m3, [tmp2q+64*1]
+    add               maskq, 32*2
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    punpcklwd            m7, m4, m2
+    punpckhwd            m4, m2
+    psubw                m0, m8, m1
+    punpcklwd            m2, m1, m0 ; m, 64-m
+    punpckhwd            m1, m0
+    mova                 m0, m9
+    vpdpwssd             m0, m7, m2
+    mova                 m2, m9
+    vpdpwssd             m2, m4, m1 ; tmp1 * m + tmp2 * (64-m)
+    punpcklwd            m7, m5, m3
+    punpckhwd            m5, m3
+    psubw                m1, m8, m6
+    punpcklwd            m3, m6, m1
+    punpckhwd            m6, m1
+    mova                 m1, m9
+    vpdpwssd             m1, m7, m3
+    mova                 m3, m9
+    vpdpwssd             m3, m5, m6
+    REPX       {psrad x, 4}, m0, m2, m1, m3
+    packusdw             m0, m2
+    packusdw             m1, m3
+    vpsrlvw              m0, m10
+    vpsrlvw              m1, m10
+    ret
+
+cglobal w_mask_420_16bpc, 4, 8, 16, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_420_avx512icl_table
+    lea                  r7, [w_mask_420_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 r6d, r8m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd        m10, [base+pw_27615] ; ((64 - 38) << 10) + 1023 - 32
+    vpbroadcastd        m11, [base+pw_64]
+    vpbroadcastd        m12, [base+mask_round+r6*4]
+    vpbroadcastd        m13, [base+bidir_shift+r6*4]
+    mov                 r6d, r7m ; sign
+    vpbroadcastd        m14, [base+w_mask_round+r6*4]
+    mova               ym15, [w_mask_end42x]
+    mov               maskq, maskmp
+    add                  wq, r7
+    call .main
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    mova                 m4, [w_mask_shuf4]
+    vpermt2b             m2, m4, m3
+    mova                 m3, m14
+    vpdpbusd             m3, m2, [pb_64] {1to16}
+    vpermb               m3, m15, m3
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti32x4      xmm0, ym0, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    mova            [maskq], xm3
+    cmp                  hd, 8
+    jl .w4_end
+    vextracti32x4      xmm0, m0, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m0, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    je .w4_end
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti32x4      xmm0, ym1, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    vextracti32x4      xmm0, m1, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m1, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+.w4_end:
+    RET
+.w8:
+    mova                 m8, [w_mask_shuf8]
+    vpbroadcastd         m9, [pb_64]
+    jmp .w8_start
+.w8_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+    add               maskq, 16
+.w8_start:
+    vpermt2b             m2, m8, m3
+    mova                 m3, m14
+    vpdpbusd             m3, m2, m9
+    vpermb               m3, m15, m3
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    vextracti32x4 [dstq+strideq*2], m0, 2
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    mova            [maskq], xm3
+    sub                  hd, 8
+    jl .w8_end
+    lea                dstq, [dstq+strideq*4]
+    mova          [dstq+strideq*0], xm1
+    vextracti32x4 [dstq+strideq*1], ym1, 1
+    vextracti32x4 [dstq+strideq*2], m1, 2
+    vextracti32x4 [dstq+stride3q ], m1, 3
+    jg .w8_loop
+.w8_end:
+    RET
+.w16:
+    mova                 m8, [w_mask_shuf16]
+    vpbroadcastd         m9, [pb_64]
+    jmp .w16_start
+.w16_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+    add               maskq, 16
+.w16_start:
+    vpermt2b             m2, m8, m3
+    mova                 m3, m14
+    vpdpbusd             m3, m2, m9
+    vpermb               m3, m15, m3
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    mova          [dstq+strideq*2], ym1
+    vextracti32x8 [dstq+stride3q ], m1, 1
+    mova            [maskq], xm3
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+    add               maskq, 32
+.w32:
+    paddw                m2, m3
+    mova                 m8, m14
+    vpdpwssd             m8, m11, m2
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    call .main
+    paddw                m2, m3
+    mova                 m3, m14
+    vpdpwssd             m3, m11, m2
+    vpermt2b             m8, m15, m3
+    mova   [dstq+strideq*2], m0
+    mova   [dstq+stride3q ], m1
+    mova            [maskq], ym8
+    sub                  hd, 4
+    jg .w32_loop
+    RET
+.w64_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+    add               maskq, 32
+.w64:
+    mova                 m8, m2
+    mova                 m9, m3
+    mova [dstq+strideq*0+64*0], m0
+    mova [dstq+strideq*0+64*1], m1
+    call .main
+    paddw                m8, m2
+    paddw                m9, m3
+    mova                 m2, m14
+    vpdpwssd             m2, m11, m8
+    mova                 m3, m14
+    vpdpwssd             m3, m11, m9
+    vpermt2b             m2, m15, m3
+    mova [dstq+strideq*1+64*0], m0
+    mova [dstq+strideq*1+64*1], m1
+    mova            [maskq], ym2
+    sub                  hd, 2
+    jg .w64_loop
+    RET
+.w128_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+    add               maskq, 64
+.w128:
+    mova               m16, m2
+    mova                m8, m3
+    mova [dstq+strideq*0+64*0], m0
+    mova [dstq+strideq*0+64*1], m1
+    call .main
+    mova                m17, m2
+    mova                 m9, m3
+    mova [dstq+strideq*0+64*2], m0
+    mova [dstq+strideq*0+64*3], m1
+    call .main
+    paddw                m2, m16
+    paddw                m3, m8
+    mova                m16, m14
+    vpdpwssd            m16, m11, m2
+    mova                 m8, m14
+    vpdpwssd             m8, m11, m3
+    mova [dstq+strideq*1+64*0], m0
+    mova [dstq+strideq*1+64*1], m1
+    call .main
+    paddw                m2, m17
+    paddw                m3, m9
+    mova                m17, m14
+    vpdpwssd            m17, m11, m2
+    mova                 m9, m14
+    vpdpwssd             m9, m11, m3
+    vpermt2b            m16, m15, m8
+    vpermt2b            m17, m15, m9
+    mova [dstq+strideq*1+64*2], m0
+    mova [dstq+strideq*1+64*3], m1
+    mova       [maskq+32*0], ym16
+    mova       [maskq+32*1], ym17
+    sub                  hd, 2
+    jg .w128_loop
+    vzeroupper
+    RET
+ALIGN function_align
+.main:
+    mova                 m1, [tmp1q+64*0]
+    mova                 m3, [tmp2q+64*0]
+    mova                 m4, [tmp1q+64*1]
+    mova                 m7, [tmp2q+64*1]
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    psubsw               m6, m1, m3
+    punpcklwd            m5, m3, m1
+    pabsw                m6, m6
+    punpckhwd            m3, m1
+    psubusw              m6, m10, m6
+    psrlw                m6, 10      ; 64-m
+    psubw                m2, m11, m6 ; m
+    punpcklwd            m1, m6, m2
+    punpckhwd            m6, m2
+    mova                 m0, m12
+    vpdpwssd             m0, m5, m1
+    mova                 m1, m12
+    vpdpwssd             m1, m3, m6
+    psubsw               m5, m4, m7
+    punpcklwd            m6, m7, m4
+    pabsw                m5, m5
+    punpckhwd            m7, m4
+    psubusw              m5, m10, m5
+    psrlw                m5, 10
+    psubw                m3, m11, m5
+    punpcklwd            m4, m5, m3
+    psrad                m0, 4
+    punpckhwd            m5, m3
+    psrad                m1, 4
+    packusdw             m0, m1
+    mova                 m1, m12
+    vpdpwssd             m1, m6, m4
+    mova                 m4, m12
+    vpdpwssd             m4, m7, m5
+    psrad                m1, 4
+    psrad                m4, 4
+    packusdw             m1, m4
+    vpsrlvw              m0, m13
+    vpsrlvw              m1, m13
+    ret
+
+cglobal w_mask_422_16bpc, 4, 8, 15, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_422_avx512icl_table
+    lea                  r7, [w_mask_422_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 r6d, r8m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd         m8, [base+pw_27615] ; ((64 - 38) << 10) + 1023 - 32
+    vpbroadcastd         m9, [base+pw_64]
+    vpbroadcastd        m10, [base+mask_round+r6*4]
+    vpbroadcastd        m11, [base+bidir_shift+r6*4]
+    mov                 r6d, r7m ; sign
+    vpbroadcastd        m12, [base+w_mask_round+r6*4]
+    mova               ym13, [w_mask_end42x]
+    mov               maskq, maskmp
+    add                  wq, r7
+    paddw               m14, m9, m9 ; pw_128
+    call .main
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti32x4      xmm0, ym0, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    cmp                  hd, 8
+    jl .w4_end
+    vextracti32x4      xmm0, m0, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m0, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    je .w4_end
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti32x4      xmm0, ym1, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    vextracti32x4      xmm0, m1, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m1, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+.w4_end:
+    RET
+.w8_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w8:
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    vextracti32x4 [dstq+strideq*2], m0, 2
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    sub                  hd, 8
+    jl .w8_end
+    lea                dstq, [dstq+strideq*4]
+    mova          [dstq+strideq*0], xm1
+    vextracti32x4 [dstq+strideq*1], ym1, 1
+    vextracti32x4 [dstq+strideq*2], m1, 2
+    vextracti32x4 [dstq+stride3q ], m1, 3
+    jg .w8_loop
+.w8_end:
+    RET
+.w16_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w16:
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    mova          [dstq+strideq*2], ym1
+    vextracti32x8 [dstq+stride3q ], m1, 1
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+.w32:
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    sub                  hd, 2
+    jg .w32_loop
+    RET
+.w64_loop:
+    call .main
+    add                dstq, strideq
+.w64:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128_loop:
+    call .main
+    add                dstq, strideq
+.w128:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    call .main
+    mova        [dstq+64*2], m0
+    mova        [dstq+64*3], m1
+    dec                  hd
+    jg .w128_loop
+    RET
+ALIGN function_align
+.main:
+    mova                 m1, [tmp1q+64*0]
+    mova                 m3, [tmp2q+64*0]
+    mova                 m4, [tmp1q+64*1]
+    mova                 m7, [tmp2q+64*1]
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    psubsw               m6, m1, m3
+    punpcklwd            m5, m3, m1
+    pabsw                m6, m6
+    punpckhwd            m3, m1
+    psubusw              m6, m8, m6
+    psrlw                m6, 10
+    psubw                m2, m9, m6
+    punpcklwd            m1, m6, m2
+    punpckhwd            m6, m2
+    mova                 m0, m10
+    vpdpwssd             m0, m5, m1
+    mova                 m1, m10
+    vpdpwssd             m1, m3, m6
+    psubsw               m5, m4, m7
+    punpcklwd            m6, m7, m4
+    pabsw                m5, m5
+    punpckhwd            m7, m4
+    psubusw              m5, m8, m5
+    psrlw                m5, 10
+    psubw                m3, m9, m5
+    punpcklwd            m4, m5, m3
+    psrad                m0, 4
+    punpckhwd            m5, m3
+    psrad                m1, 4
+    packusdw             m0, m1
+    mova                 m1, m10
+    vpdpwssd             m1, m6, m4
+    mova                 m4, m10
+    vpdpwssd             m4, m7, m5
+    mova                 m5, m12
+    vpdpwssd             m5, m14, m2
+    mova                 m2, m12
+    vpdpwssd             m2, m14, m3
+    psrad                m1, 4
+    psrad                m4, 4
+    packusdw             m1, m4
+    vpermt2b             m5, m13, m2
+    vpsrlvw              m0, m11
+    vpsrlvw              m1, m11
+    mova            [maskq], ym5
+    add               maskq, 32
+    ret
+
+cglobal w_mask_444_16bpc, 4, 8, 13, dst, stride, tmp1, tmp2, w, h, mask, stride3
+%define base r7-w_mask_444_avx512icl_table
+    lea                  r7, [w_mask_444_avx512icl_table]
+    tzcnt                wd, wm
+    mov                 r6d, r8m ; pixel_max
+    movifnidn            hd, hm
+    shr                 r6d, 11
+    movsxd               wq, [r7+wq*4]
+    vpbroadcastd         m8, [base+pw_27615] ; ((64 - 38) << 10) + 1023 - 32
+    vpbroadcastd         m9, [base+pw_64]
+    vpbroadcastd        m10, [base+mask_round+r6*4]
+    mova                m11, [w_mask_end444]
+    vpbroadcastd        m12, [base+bidir_shift+r6*4]
+    mov               maskq, maskmp
+    add                  wq, r7
+    call .main
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    vextracti32x4      xmm0, ym0, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    cmp                  hd, 8
+    jl .w4_end
+    vextracti32x4      xmm0, m0, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m0, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    je .w4_end
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    vextracti32x4      xmm0, ym1, 1
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+    vextracti32x4      xmm0, m1, 2
+    lea                dstq, [dstq+strideq*4]
+    movq   [dstq+strideq*0], xmm0
+    movhps [dstq+strideq*1], xmm0
+    vextracti32x4      xmm0, m1, 3
+    movq   [dstq+strideq*2], xmm0
+    movhps [dstq+stride3q ], xmm0
+.w4_end:
+    RET
+.w8_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w8:
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    vextracti32x4 [dstq+strideq*2], m0, 2
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    sub                  hd, 8
+    jl .w8_end
+    lea                dstq, [dstq+strideq*4]
+    mova          [dstq+strideq*0], xm1
+    vextracti32x4 [dstq+strideq*1], ym1, 1
+    vextracti32x4 [dstq+strideq*2], m1, 2
+    vextracti32x4 [dstq+stride3q ], m1, 3
+    jg .w8_loop
+.w8_end:
+    RET
+.w16_loop:
+    call .main
+    lea                dstq, [dstq+strideq*4]
+.w16:
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    mova          [dstq+strideq*2], ym1
+    vextracti32x8 [dstq+stride3q ], m1, 1
+    sub                  hd, 4
+    jg .w16_loop
+    RET
+.w32_loop:
+    call .main
+    lea                dstq, [dstq+strideq*2]
+.w32:
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    sub                  hd, 2
+    jg .w32_loop
+    RET
+.w64_loop:
+    call .main
+    add                dstq, strideq
+.w64:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    dec                  hd
+    jg .w64_loop
+    RET
+.w128_loop:
+    call .main
+    add                dstq, strideq
+.w128:
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    call .main
+    mova        [dstq+64*2], m0
+    mova        [dstq+64*3], m1
+    dec                  hd
+    jg .w128_loop
+    RET
+ALIGN function_align
+.main:
+    mova                 m1, [tmp1q+64*0]
+    mova                 m3, [tmp2q+64*0]
+    mova                 m4, [tmp1q+64*1]
+    mova                 m7, [tmp2q+64*1]
+    add               tmp1q, 64*2
+    add               tmp2q, 64*2
+    psubsw               m6, m1, m3
+    punpcklwd            m5, m3, m1
+    pabsw                m6, m6
+    punpckhwd            m3, m1
+    psubusw              m6, m8, m6
+    psrlw                m6, 10
+    psubw                m2, m9, m6
+    punpcklwd            m1, m6, m2
+    punpckhwd            m6, m2
+    mova                 m0, m10
+    vpdpwssd             m0, m5, m1
+    mova                 m1, m10
+    vpdpwssd             m1, m3, m6
+    psubsw               m5, m4, m7
+    punpcklwd            m6, m7, m4
+    pabsw                m5, m5
+    punpckhwd            m7, m4
+    psubusw              m5, m8, m5
+    psrlw                m5, 10
+    psubw                m3, m9, m5
+    punpcklwd            m4, m5, m3
+    psrad                m0, 4
+    punpckhwd            m5, m3
+    psrad                m1, 4
+    packusdw             m0, m1
+    mova                 m1, m10
+    vpdpwssd             m1, m6, m4
+    mova                 m4, m10
+    vpdpwssd             m4, m7, m5
+    vpermt2b             m2, m11, m3
+    psrad                m1, 4
+    psrad                m4, 4
+    packusdw             m1, m4
+    vpsrlvw              m0, m12
+    vpsrlvw              m1, m12
+    mova            [maskq], m2
+    add               maskq, 64
+    ret
 
 %endif ; ARCH_X86_64
