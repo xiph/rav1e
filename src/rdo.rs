@@ -720,14 +720,33 @@ pub fn spatiotemporal_scale<T: Pixel>(
   let y1 = (y0 + bsize.height_imp_b()).min(fi.h_in_imp_b);
   let den = (((x1 - x0) * (y1 - y0)) as u64) << DistortionScale::SHIFT;
 
+  // calling this on each slice individually improves autovectorization
+  // compared to using `Iterator::take`
+  #[inline(always)]
+  fn take_slice<T>(slice: &[T], n: usize) -> &[T] {
+    if n >= slice.len() {
+      slice
+    } else {
+      &slice[..n]
+    }
+  }
+
   let mut sum = 0;
   for y in y0..y1 {
-    sum += fi.distortion_scales[y * fi.w_in_imp_b..][x0..x1]
-      .iter()
-      .zip(fi.activity_scales[y * fi.w_in_imp_b..][x0..x1].iter())
-      .take(MAX_SB_IN_IMP_B)
-      .map(|(d, a)| d.0 as u64 * a.0 as u64)
-      .sum::<u64>();
+    sum += take_slice(
+      &fi.distortion_scales[y * fi.w_in_imp_b..][x0..x1],
+      MAX_SB_IN_IMP_B,
+    )
+    .iter()
+    .zip(
+      take_slice(
+        &fi.activity_scales[y * fi.w_in_imp_b..][x0..x1],
+        MAX_SB_IN_IMP_B,
+      )
+      .iter(),
+    )
+    .map(|(d, a)| d.0 as u64 * a.0 as u64)
+    .sum::<u64>();
   }
   DistortionScale(((sum + (den >> 1)) / den) as u32)
 }
