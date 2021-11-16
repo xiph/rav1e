@@ -265,7 +265,8 @@ jobs:
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
-          cargo cbuild
+          cargo fetch
+          cargo cbuild --offline
       - name: Install cargo-fuzz
         if: matrix.conf == 'fuzz'
         run: |
@@ -396,7 +397,8 @@ jobs:
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
-          cargo cbuild --target=${{ matrix.target }}
+          cargo fetch
+          cargo cbuild --target=${{ matrix.target }} --offline
       - name: Stop sccache server
         run: |
           sccache --stop-server
@@ -497,7 +499,8 @@ jobs:
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
-          cargo cbuild
+          cargo fetch
+          cargo cbuild --offline
       - name: Stop sccache server
         run: |
           sccache --stop-server
