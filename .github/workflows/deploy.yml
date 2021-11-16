@@ -62,7 +62,9 @@ jobs:
       run: strip target/release/rav1e.exe
 
     - name: Run cargo-c
-      run:  cargo cinstall --release --destdir="C:\"
+      run: |
+        cargo fetch
+        cargo cinstall --release --destdir="C:\" --offline
 
     - name: Rename cargo-c folder
       run: Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
