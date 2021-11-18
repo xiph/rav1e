@@ -356,7 +356,7 @@ cglobal wiener_filter7_16bpc, 4, 15, 16, -384*12-16, dst, stride, left, lpf, \
     movu            m5, [lpfq+wq+8]
     test         edgeb, 2 ; LR_HAVE_RIGHT
     jnz .h_have_right
-    cmp             wd, -18
+    cmp             wd, -20
     jl .h_have_right
     call .extend_right
 .h_have_right:
@@ -419,7 +419,7 @@ ALIGN function_align
     movu            m5, [lpfq+wq+8]
     test         edgeb, 2 ; LR_HAVE_RIGHT
     jnz .hv_have_right
-    cmp             wd, -18
+    cmp             wd, -20
     jl .hv_have_right
     call .extend_right
 .hv_have_right:
