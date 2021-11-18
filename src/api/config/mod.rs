@@ -314,13 +314,11 @@ impl Config {
       return Err(InvalidRenderHeight(render_height));
     }
 
-    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES
-      || config.rdo_lookahead_frames < 1
-    {
+    if config.rdo_lookahead_frames > MAX_RDO_LOOKAHEAD_FRAMES {
       return Err(InvalidRdoLookaheadFrames {
         actual: config.rdo_lookahead_frames,
         max: MAX_RDO_LOOKAHEAD_FRAMES,
-        min: 1,
+        min: 0,
       });
     }
     if config.max_key_frame_interval > MAX_MAX_KEY_FRAME_INTERVAL {

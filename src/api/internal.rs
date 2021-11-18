@@ -641,34 +641,6 @@ impl<T: Pixel> ContextInner<T> {
       .unwrap();
     }
 
-    // Do not modify the next output frame's FrameInvariants.
-    if self.output_frameno == output_frameno {
-      // We do want to propagate the lookahead_rec_buffer though.
-      let rfs = Arc::new(ReferenceFrame {
-        order_hint: fi.order_hint,
-        width: fi.width as u32,
-        height: fi.height as u32,
-        render_width: fi.render_width,
-        render_height: fi.render_height,
-        // Use the original frame contents.
-        frame: fs.input.clone(),
-        input_hres: fs.input_hres.clone(),
-        input_qres: fs.input_qres.clone(),
-        cdfs: fs.cdfs,
-        frame_me_stats: fs.frame_me_stats.clone(),
-        output_frameno,
-        segmentation: fs.segmentation,
-      });
-      for i in 0..(REF_FRAMES as usize) {
-        if (fi.refresh_frame_flags & (1 << i)) != 0 {
-          fi.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
-          fi.lookahead_rec_buffer.deblock[i] = fs.deblock;
-        }
-      }
-
-      return;
-    }
-
     // Our lookahead_rec_buffer should be filled with correct original frame
     // data from the previous frames. Copy it into rec_buffer because that's
     // what the MV search uses. During the actual encoding rec_buffer is
