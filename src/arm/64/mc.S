@@ -252,8 +252,7 @@ function w_mask_\type\()_8bpc_neon, export=1
         sqrshrun        v22.8b,  v20.8h,  #4
         sqrshrun        v23.8b,  v21.8h,  #4
 .if \type == 444
-        xtn             v18.8b,   v18.8h
-        xtn2            v18.16b,  v19.8h
+        uzp1            v18.16b,  v18.16b, v19.16b      // Same as xtn, xtn2
         sub             v18.16b,  v1.16b,  v18.16b
         st1             {v18.16b}, [x6],  #16
 .elseif \type == 422
@@ -298,8 +297,7 @@ function w_mask_\type\()_8bpc_neon, export=1
         sqrshrun        v22.8b,  v20.8h,  #4
         sqrshrun        v23.8b,  v21.8h,  #4
 .if \type == 444
-        xtn             v18.8b,  v18.8h
-        xtn2            v18.16b, v19.8h
+        uzp1            v18.16b, v18.16b, v19.16b       // Same as xtn, xtn2
         sub             v18.16b, v1.16b,  v18.16b
         st1             {v18.16b}, [x6],  #16
 .elseif \type == 422
@@ -373,10 +371,8 @@ function w_mask_\type\()_8bpc_neon, export=1
         sqrshrun        v26.8b,  v26.8h,  #4
         sqrshrun        v27.8b,  v27.8h,  #4
 .if \type == 444
-        xtn             v20.8b,  v20.8h
-        xtn2            v20.16b, v21.8h
-        xtn             v21.8b,  v22.8h
-        xtn2            v21.16b, v23.8h
+        uzp1            v20.16b, v20.16b, v21.16b       // Same as xtn, xtn2
+        uzp1            v21.16b, v22.16b, v23.16b       // Ditto
         sub             v20.16b, v1.16b,  v20.16b
         sub             v21.16b, v1.16b,  v21.16b
         st1             {v20.16b}, [x6],  #16
