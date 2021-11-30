@@ -1929,10 +1929,10 @@ L(ipred_cfl_splat_w4):
         smull2          v3.4s,   v4.8h,   v1.8h
         smull           v4.4s,   v5.4h,   v1.4h
         smull2          v5.4s,   v5.8h,   v1.8h
-        sshr            v16.4s,  v2.4s,   #31    // sign = diff >> 31
-        sshr            v17.4s,  v3.4s,   #31
-        sshr            v18.4s,  v4.4s,   #31
-        sshr            v19.4s,  v5.4s,   #31
+        cmlt            v16.4s,  v2.4s,   #0     // sign
+        cmlt            v17.4s,  v3.4s,   #0
+        cmlt            v18.4s,  v4.4s,   #0
+        cmlt            v19.4s,  v5.4s,   #0
         add             v2.4s,   v2.4s,   v16.4s // diff + sign
         add             v3.4s,   v3.4s,   v17.4s
         add             v4.4s,   v4.4s,   v18.4s
@@ -1961,10 +1961,10 @@ L(ipred_cfl_splat_w8):
         smull2          v3.4s,   v4.8h,   v1.8h
         smull           v4.4s,   v5.4h,   v1.4h
         smull2          v5.4s,   v5.8h,   v1.8h
-        sshr            v16.4s,  v2.4s,   #31    // sign = diff >> 31
-        sshr            v17.4s,  v3.4s,   #31
-        sshr            v18.4s,  v4.4s,   #31
-        sshr            v19.4s,  v5.4s,   #31
+        cmlt            v16.4s,  v2.4s,   #0     // sign
+        cmlt            v17.4s,  v3.4s,   #0
+        cmlt            v18.4s,  v4.4s,   #0
+        cmlt            v19.4s,  v5.4s,   #0
         add             v2.4s,   v2.4s,   v16.4s // diff + sign
         add             v3.4s,   v3.4s,   v17.4s
         add             v4.4s,   v4.4s,   v18.4s
@@ -2000,14 +2000,14 @@ L(ipred_cfl_splat_w16):
         smull2          v3.4s,   v4.8h,   v1.8h
         smull           v4.4s,   v5.4h,   v1.4h
         smull2          v5.4s,   v5.8h,   v1.8h
-        sshr            v20.4s,  v16.4s,  #31    // sign = diff >> 31
-        sshr            v21.4s,  v17.4s,  #31
-        sshr            v22.4s,  v18.4s,  #31
-        sshr            v23.4s,  v19.4s,  #31
-        sshr            v24.4s,  v2.4s,   #31
-        sshr            v25.4s,  v3.4s,   #31
-        sshr            v26.4s,  v4.4s,   #31
-        sshr            v27.4s,  v5.4s,   #31
+        cmlt            v20.4s,  v16.4s,  #0     // sign
+        cmlt            v21.4s,  v17.4s,  #0
+        cmlt            v22.4s,  v18.4s,  #0
+        cmlt            v23.4s,  v19.4s,  #0
+        cmlt            v24.4s,  v2.4s,   #0
+        cmlt            v25.4s,  v3.4s,   #0
+        cmlt            v26.4s,  v4.4s,   #0
+        cmlt            v27.4s,  v5.4s,   #0
         add             v16.4s,  v16.4s,  v20.4s // diff + sign
         add             v17.4s,  v17.4s,  v21.4s
         add             v18.4s,  v18.4s,  v22.4s

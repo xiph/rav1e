@@ -475,7 +475,7 @@ function cdef_filter\w\suffix\()_edged_8bpc_neon
         // To handle the offset for negative values, use both halving w/ and w/o rounding.
         srhadd          v5.16b,  v1.16b,  v2.16b    // sum >> 1
         shadd           v6.16b,  v1.16b,  v2.16b    // (sum - 1) >> 1
-        sshr            v1.16b,  v5.16b,  #7        // sum < 0
+        cmlt            v1.16b,  v5.16b,  #0        // sum < 0
         bsl             v1.16b,  v6.16b,  v5.16b    // (sum - (sum < 0)) >> 1
 
         srshr           v1.16b,  v1.16b,  #3        // (8 + sum - (sum < 0)) >> 4

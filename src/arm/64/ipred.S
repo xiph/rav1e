@@ -1656,8 +1656,8 @@ L(ipred_cfl_splat_w4):
         ld1             {v2.8h, v3.8h}, [x5], #32
         mul             v2.8h,   v2.8h,   v1.8h  // diff = ac * alpha
         mul             v3.8h,   v3.8h,   v1.8h
-        sshr            v4.8h,   v2.8h,   #15    // sign = diff >> 15
-        sshr            v5.8h,   v3.8h,   #15
+        cmlt            v4.8h,   v2.8h,   #0     // sign
+        cmlt            v5.8h,   v3.8h,   #0
         add             v2.8h,   v2.8h,   v4.8h  // diff + sign
         add             v3.8h,   v3.8h,   v5.8h
         srshr           v2.8h,   v2.8h,   #6     // (diff + sign + 32) >> 6 = apply_sign()
@@ -1680,10 +1680,10 @@ L(ipred_cfl_splat_w8):
         mul             v3.8h,   v3.8h,   v1.8h
         mul             v4.8h,   v4.8h,   v1.8h
         mul             v5.8h,   v5.8h,   v1.8h
-        sshr            v16.8h,  v2.8h,   #15    // sign = diff >> 15
-        sshr            v17.8h,  v3.8h,   #15
-        sshr            v18.8h,  v4.8h,   #15
-        sshr            v19.8h,  v5.8h,   #15
+        cmlt            v16.8h,  v2.8h,   #0     // sign
+        cmlt            v17.8h,  v3.8h,   #0
+        cmlt            v18.8h,  v4.8h,   #0
+        cmlt            v19.8h,  v5.8h,   #0
         add             v2.8h,   v2.8h,   v16.8h // diff + sign
         add             v3.8h,   v3.8h,   v17.8h
         add             v4.8h,   v4.8h,   v18.8h
@@ -1719,10 +1719,10 @@ L(ipred_cfl_splat_w16):
         mul             v3.8h,   v3.8h,   v1.8h
         mul             v4.8h,   v4.8h,   v1.8h
         mul             v5.8h,   v5.8h,   v1.8h
-        sshr            v16.8h,  v2.8h,   #15    // sign = diff >> 15
-        sshr            v17.8h,  v3.8h,   #15
-        sshr            v18.8h,  v4.8h,   #15
-        sshr            v19.8h,  v5.8h,   #15
+        cmlt            v16.8h,  v2.8h,   #0     // sign
+        cmlt            v17.8h,  v3.8h,   #0
+        cmlt            v18.8h,  v4.8h,   #0
+        cmlt            v19.8h,  v5.8h,   #0
         add             v2.8h,   v2.8h,   v16.8h // diff + sign
         add             v3.8h,   v3.8h,   v17.8h
         add             v4.8h,   v4.8h,   v18.8h
