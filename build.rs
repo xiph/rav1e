@@ -126,7 +126,7 @@ fn build_nasm_files() {
     config_include_arg.push_str(&out_dir);
     config_include_arg.push('/');
     let mut nasm = nasm_rs::Build::new();
-    nasm.min_version(2,14,0);
+    nasm.min_version(2, 14, 0);
     for file in asm_files {
       nasm.file(file);
     }
