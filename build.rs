@@ -126,14 +126,18 @@ fn build_nasm_files() {
     config_include_arg.push_str(&out_dir);
     config_include_arg.push('/');
     let mut nasm = nasm_rs::Build::new();
+    nasm.min_version(2, 14, 0);
     for file in asm_files {
       nasm.file(file);
     }
     nasm.flag(&config_include_arg);
     nasm.flag("-Isrc/");
-    let obj = nasm.compile_objects().expect(
-      "NASM build failed. Make sure you have nasm installed. https://nasm.us",
-    );
+    let obj = nasm.compile_objects().unwrap_or_else(|e| {
+      println!("cargo:warning={}", e);
+      panic!("NASM build failed. Make sure you have nasm installed or disable the \"asm\" feature.\n\
+        You can get NASM from https://nasm.us or your system's package manager.\n\nerror: {}", e);
+    });
+
     // cc is better at finding the correct archiver
     let mut cc = cc::Build::new();
     for o in obj {
@@ -226,101 +230,6 @@ fn rustc_version_check() {
   }
 }
 
-#[cfg(feature = "asm")]
-fn is_nasm_new_enough(
-  min_version: Option<(u8, u8, u8)>, nasm_path: &Path,
-) -> Result<(), String> {
-  match get_output(std::process::Command::new(nasm_path).arg("-v")) {
-    Ok(version) => {
-      if version.contains("NASM version 0.") {
-        Err(version)
-      } else if let Some((major, minor, micro)) = min_version {
-        let ver = parse_nasm_version(&version)?;
-        eprintln!("{:?} {:?} {:?}", min_version, version, ver);
-        if major > ver.0
-          || (major == ver.0 && minor > ver.1)
-          || (major == ver.0 && minor == ver.1 && micro > ver.2)
-        {
-          Err(version)
-        } else {
-          Ok(())
-        }
-      } else {
-        Ok(())
-      }
-    }
-    Err(err) => Err(err),
-  }
-}
-
-#[cfg(feature = "asm")]
-fn parse_nasm_version(version_string: &str) -> Result<(u8, u8, u8), String> {
-  // Rust regex lib doesn't support empty expressions in alterations,
-  // so workaround the other way
-  let regex1 =
-    regex::Regex::new(r"(?:NASM version )?(\d+)\.(\d+)\.(\d+)").unwrap();
-  if let Some(captures) = regex1.captures(version_string) {
-    Ok((
-      captures[1].parse().expect("Invalid version component"),
-      captures[2].parse().expect("Invalid version component"),
-      captures[3].parse().expect("Invalid version component"),
-    ))
-  } else {
-    let regex2 = regex::Regex::new(r"(?:NASM version )?(\d+)\.(\d+)").unwrap();
-    let captures = regex2
-      .captures(version_string)
-      .ok_or_else(|| "Unable to parse NASM version string".to_string())?;
-    Ok((
-      captures[1].parse().expect("Invalid version component"),
-      captures[2].parse().expect("Invalid version component"),
-      0,
-    ))
-  }
-}
-
-#[test]
-fn test_parse_nasm_version() {
-  let ver_str = "NASM version 2.14.02 compiled on Jan 22 2019";
-  assert_eq!((2, 14, 2), parse_nasm_version(ver_str));
-  let ver_str = "NASM version 2.14 compiled on Jan 22 2019";
-  assert_eq!((2, 14, 0), parse_nasm_version(ver_str));
-}
-
-#[cfg(feature = "asm")]
-fn is_nasm_installed_check() {
-  let mut cmd = std::process::Command::new("nasm");
-  cmd.arg("-h");
-  match cmd.status() {
-    Ok(_) => (),
-    Err(_) => {
-      panic!(
-        r#"Couldn't find NASM, make sure NASM installed and in PATH or disable "asm" feature"#
-      )
-    }
-  }
-}
-
-#[cfg(feature = "asm")]
-fn nasm_version_check() -> std::path::PathBuf {
-  let nasm_path = std::path::PathBuf::from("nasm");
-  match is_nasm_new_enough(Some((2, 14, 0)), &nasm_path) {
-    Ok(_) => nasm_path,
-    Err(version) => {
-      panic!("This version of NASM is too old: {}", version);
-    }
-  }
-}
-
-#[cfg(feature = "asm")]
-fn get_output(cmd: &mut std::process::Command) -> Result<String, String> {
-  let out = cmd.output().map_err(|e| e.to_string())?;
-  if out.status.success() {
-    Ok(String::from_utf8_lossy(&out.stdout).to_string())
-  } else {
-    Err(String::from_utf8_lossy(&out.stderr).to_string())
-  }
-}
-
 #[allow(unused_variables)]
 fn main() {
   rustc_version_check();
@@ -333,8 +242,6 @@ fn main() {
   {
     if arch == "x86_64" {
       println!("cargo:rustc-cfg={}", "nasm_x86_64");
-      is_nasm_installed_check();
-      nasm_version_check();
       build_nasm_files()
     }
     if arch == "aarch64" {
