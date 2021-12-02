@@ -483,8 +483,8 @@ cglobal idct_4x4_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
     jmp                tx2q
 .pass2:
     IDCT4_1D_PACKED
-    pxor                 m2, m2
-    mova               [cq], ymm2
+    pxor              ymm16, ymm16
+    mova               [cq], ymm16
     ITX4_END              0, 1, 3, 2
 
 INV_TXFM_4X4_FN adst, dct
@@ -504,8 +504,8 @@ cglobal iadst_4x4_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
 .pass2:
     call .main
 .end:
-    pxor                 m2, m2
-    mova               [cq], ymm2
+    pxor              ymm16, ymm16
+    mova               [cq], ymm16
 .end2:
     ITX4_END              0, 1, 2, 3
 ALIGN function_align
@@ -530,8 +530,8 @@ cglobal iflipadst_4x4_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
 .pass2:
     call m(iadst_4x4_internal_8bpc).main
 .end:
-    pxor                 m2, m2
-    mova               [cq], ymm2
+    pxor              ymm16, ymm16
+    mova               [cq], ymm16
 .end2:
     ITX4_END              3, 2, 1, 0
 
