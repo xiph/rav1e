@@ -84,15 +84,24 @@ pub struct SpeedSettings {
   /// Use fine directional intra prediction
   pub fine_directional_intra: bool,
 
-  /// Enable full search in some parts of motion estimation. Allowing full
-  /// search is slower.
-  pub me_allow_full_search: bool,
-
   // NOTE: put enums and basic type fields above
   /// Range of partition sizes that can be used. Larger ranges are slower.
   ///
   /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
   pub partition_range: PartitionRange,
+
+  /// Internal speed settings that shouldn't be public facing
+  pub(crate) internal: InternalSpeedSettings,
+}
+
+/// Speed settings that are hidden from the user.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub(crate) struct InternalSpeedSettings {
+  /// Enable full search in some parts of motion estimation. Allowing full
+  /// search is slower.
+  /// In the future, various motion search settings should be exposed to users.
+  ///   This setting is half baked and needs further work.
+  pub me_allow_full_search: bool,
 }
 
 impl Default for SpeedSettings {
@@ -123,7 +132,7 @@ impl Default for SpeedSettings {
       segmentation: SegmentationLevel::Full,
       enable_inter_tx_split: false,
       fine_directional_intra: false,
-      me_allow_full_search: false,
+      internal: InternalSpeedSettings { me_allow_full_search: false },
     }
   }
 }
@@ -150,6 +159,10 @@ impl SpeedSettings {
   ///        bottom-up encoding with non-square partitions everywhere, full SGR search,
   ///        full segmentation search.
   pub fn from_preset(speed: usize) -> Self {
+    let internal = InternalSpeedSettings {
+      me_allow_full_search: Self::me_allow_full_search_preset(speed),
+    };
+
     SpeedSettings {
       partition_range: Self::partition_range_preset(speed),
       multiref: Self::multiref_preset(speed),
@@ -171,7 +184,7 @@ impl SpeedSettings {
       segmentation: Self::segmentation_preset(speed),
       enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
       fine_directional_intra: Self::fine_directional_intra_preset(speed),
-      me_allow_full_search: Self::me_allow_full_search_preset(speed),
+      internal,
     }
   }
 

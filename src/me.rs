@@ -792,7 +792,9 @@ fn full_pixel_me<T: Pixel>(
       24,
     );
 
-    if !fi.config.speed_settings.me_allow_full_search || best.rd.sad < thresh {
+    if !fi.config.speed_settings.internal.me_allow_full_search
+      || best.rd.sad < thresh
+    {
       return best;
     }
 
