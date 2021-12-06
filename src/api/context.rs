@@ -80,6 +80,7 @@ impl<T: Pixel> Context<T> {
   /// use rav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+  /// # if false {
   /// let cfg = Config::default();
   /// let mut ctx: Context<u8> = cfg.new_context().unwrap();
   /// let f1 = ctx.new_frame();
@@ -96,6 +97,7 @@ impl<T: Pixel> Context<T> {
   /// ctx.send_frame((f2, info))?;
   /// // Flush the encoder, it is equivalent to a call to `flush()`
   /// ctx.send_frame(None)?;
+  /// # }
   /// # Ok(())
   /// # }
   /// ```
@@ -205,6 +207,7 @@ impl<T: Pixel> Context<T> {
   /// use rav1e::prelude::*;
   ///
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+  /// # if false {
   /// let cfg = Config::default();
   /// let mut ctx: Context<u8> = cfg.new_context()?;
   /// let frame = ctx.new_frame();
@@ -220,6 +223,7 @@ impl<T: Pixel> Context<T> {
   ///         Err(err) => Err(err)?,
   ///     }
   /// }
+  /// # }
   /// # Ok(())
   /// # }
   /// ```
@@ -276,6 +280,7 @@ impl<T: Pixel> Context<T> {
   ///     Ok(())
   /// }
   /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+  /// #   if false {
   /// #     let mut enc = EncoderConfig::default();
   /// #     // So it runs faster.
   /// #     enc.width = 16;
@@ -285,8 +290,8 @@ impl<T: Pixel> Context<T> {
   /// #
   /// #     let frames = vec![ctx.new_frame(); 4].into_iter();
   /// #     encode_frames(&mut ctx, frames);
-  /// #
-  /// #     Ok(())
+  /// #   }
+  /// #   Ok(())
   /// # }
   /// ```
   #[inline]
