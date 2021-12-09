@@ -1569,8 +1569,8 @@ pub fn deblock_filter_frame<T: Pixel>(
   crop_w: usize, crop_h: usize, bd: usize, planes: usize,
 ) {
   (&mut tile.planes[..planes]).par_iter_mut().enumerate().for_each(
-    |(pli, mut plane)| {
-      deblock_plane(deblock, &mut plane, pli, blocks, crop_w, crop_h, bd);
+    |(pli, plane)| {
+      deblock_plane(deblock, plane, pli, blocks, crop_w, crop_h, bd);
     },
   );
 }

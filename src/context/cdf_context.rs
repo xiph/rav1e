@@ -731,7 +731,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   pub fn rollback(&mut self, checkpoint: &ContextWriterCheckpoint) {
-    self.fc_log.rollback(&mut self.fc, &checkpoint.fc);
+    self.fc_log.rollback(self.fc, &checkpoint.fc);
     self.bc.rollback(&checkpoint.bc);
     #[cfg(feature = "desync_finder")]
     {
