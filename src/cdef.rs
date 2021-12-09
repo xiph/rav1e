@@ -475,7 +475,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
           let in_stride = in_plane.cfg.stride;
           let in_slice = &in_plane.slice(in_po);
 
-          let mut out_block = &mut out_plane.subregion_mut(Area::BlockRect {
+          let out_block = &mut out_plane.subregion_mut(Area::BlockRect {
             bo: tile_sbo.block_offset(2 * bx, 2 * by).0,
             width: xsize,
             height: ysize,
@@ -532,7 +532,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
               );
 
               cdef_filter_block(
-                &mut out_block,
+                out_block,
                 in_slice.as_ptr(),
                 in_stride as isize,
                 local_pri_strength,
