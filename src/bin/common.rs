@@ -225,7 +225,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .arg(
       Arg::with_name("NO_SCENE_DETECTION")
         .help("Disables scene detection entirely\n\
-            Has a significant speed-to-quality trade-off in full encodes. Experimental for rav1e-by-gop")
+            Has a significant speed-to-quality trade-off in full encodes.\n\
+            Useful for chunked encoding.")
         .long("no-scene-detection")
         .alias("no_scene_detection")
     )
