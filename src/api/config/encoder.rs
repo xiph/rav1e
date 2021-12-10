@@ -249,8 +249,8 @@ impl fmt::Display for EncoderConfig {
       ("prediction_modes", self.speed_settings.prediction_modes.to_string()),
       ("include_near_mvs", self.speed_settings.include_near_mvs.to_string()),
       (
-        "no_scene_detection",
-        self.speed_settings.no_scene_detection.to_string(),
+        "scene_detection_mode",
+        self.speed_settings.scene_detection_mode.to_string(),
       ),
       ("cdef", self.speed_settings.cdef.to_string()),
       ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),

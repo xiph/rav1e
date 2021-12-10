@@ -58,12 +58,10 @@ pub struct SpeedSettings {
   ///
   /// Enabled is slower.
   pub include_near_mvs: bool,
-  /// Disables scene-cut detection.
-  ///
-  /// Enabled is faster.
-  pub no_scene_detection: bool,
-  /// Fast scene detection mode, uses simple SAD instead of encoder cost estimates.
-  pub fast_scene_detection: SceneDetectionSpeed,
+
+  /// Which scene detection mode to use. Standard is slower, but best.
+  pub scene_detection_mode: SceneDetectionSpeed,
+
   /// Enables CDEF.
   pub cdef: bool,
   /// Enables LRF.
@@ -120,8 +118,7 @@ impl Default for SpeedSettings {
       rdo_lookahead_frames: 40,
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
-      no_scene_detection: false,
-      fast_scene_detection: SceneDetectionSpeed::Fast,
+      scene_detection_mode: SceneDetectionSpeed::Fast,
       cdef: true,
       lrf: false,
       sgr_complexity: SGRComplexityLevel::Full,
@@ -169,8 +166,7 @@ impl SpeedSettings {
       rdo_lookahead_frames: Self::rdo_lookahead_frames(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
-      no_scene_detection: Self::no_scene_detection_preset(speed),
-      fast_scene_detection: Self::fast_scene_detection_preset(speed),
+      scene_detection_mode: Self::scene_detection_mode_preset(speed),
       cdef: Self::cdef_preset(speed),
       lrf: Self::lrf_preset(speed),
       sgr_complexity: Self::sgr_complexity_preset(speed),
@@ -260,7 +256,7 @@ impl SpeedSettings {
     false
   }
 
-  const fn fast_scene_detection_preset(speed: usize) -> SceneDetectionSpeed {
+  const fn scene_detection_mode_preset(speed: usize) -> SceneDetectionSpeed {
     if speed <= 9 {
       SceneDetectionSpeed::Standard
     } else {
@@ -351,6 +347,9 @@ pub enum SceneDetectionSpeed {
   Fast,
   /// Scene detection using motion vectors and cost estimates
   Standard,
+  /// Completely disable scene detection and only place keyframes
+  /// at fixed intervals.
+  None,
 }
 
 impl fmt::Display for SceneDetectionSpeed {
@@ -361,6 +360,7 @@ impl fmt::Display for SceneDetectionSpeed {
       match self {
         SceneDetectionSpeed::Fast => "Fast",
         SceneDetectionSpeed::Standard => "Standard",
+        SceneDetectionSpeed::None => "None",
       }
     )
   }

@@ -608,7 +608,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   let mut cfg = EncoderConfig::with_speed_preset(speed);
 
   if matches.occurrences_of("SCENE_CHANGE_DETECTION_SPEED") != 0 {
-    cfg.speed_settings.fast_scene_detection = if scene_detection_speed == 0 {
+    cfg.speed_settings.scene_detection_mode = if scene_detection_speed == 0 {
       SceneDetectionSpeed::Standard
     } else {
       SceneDetectionSpeed::Fast
@@ -753,7 +753,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.low_latency = matches.is_present("LOW_LATENCY");
   // Disables scene_detection
   if matches.is_present("NO_SCENE_DETECTION") {
-    cfg.speed_settings.no_scene_detection = true;
+    cfg.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
   }
 
   Ok(cfg)

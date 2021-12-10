@@ -76,7 +76,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let speed_mode = if encoder_config.low_latency {
       SceneDetectionSpeed::Fast
     } else {
-      encoder_config.speed_settings.fast_scene_detection
+      encoder_config.speed_settings.scene_detection_mode
     };
 
     // Scale factor for fast and medium scene detection
@@ -140,7 +140,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
       return false;
     }
 
-    if self.encoder_config.speed_settings.no_scene_detection {
+    if self.encoder_config.speed_settings.scene_detection_mode
+      == SceneDetectionSpeed::None
+    {
       if let Some(true) = self.handle_min_max_intervals(distance) {
         return true;
       };
