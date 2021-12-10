@@ -32,7 +32,9 @@ fn setup_config(
   enc.bit_depth = bit_depth;
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
-  enc.speed_settings.no_scene_detection = no_scene_detection;
+  if no_scene_detection {
+    enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+  }
   enc.speed_settings.rdo_lookahead_frames = rdo_lookahead_frames;
   if let Some(min_quantizer) = min_quantizer {
     enc.min_quantizer = min_quantizer;
@@ -1939,8 +1941,7 @@ fn log_q_exp_overflow() {
       rdo_tx_decision: false,
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
-      no_scene_detection: true,
-      fast_scene_detection: SceneDetectionSpeed::Fast,
+      scene_detection_mode: SceneDetectionSpeed::None,
       cdef: true,
       lrf: true,
       use_satd_subpel: false,
@@ -2004,8 +2005,7 @@ fn guess_frame_subtypes_assert() {
       rdo_lookahead_frames: 40,
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
-      no_scene_detection: true,
-      fast_scene_detection: SceneDetectionSpeed::Fast,
+      scene_detection_mode: SceneDetectionSpeed::None,
       cdef: true,
       lrf: true,
       use_satd_subpel: false,

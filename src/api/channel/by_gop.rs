@@ -141,7 +141,7 @@ fn workerpool<T: Pixel>(
   let (send_reassemble, recv_reassemble) = unbounded();
 
   // TODO: unpack send_frame in process
-  cfg.enc.speed_settings.no_scene_detection = true;
+  cfg.enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
 
   for _ in 0..workers {
     let (send_workload, recv_workload) = unbounded::<Option<WorkLoad<T>>>();
