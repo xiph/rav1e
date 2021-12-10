@@ -724,10 +724,8 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   // rdo-lookahead-frames
   let maybe_rdo = matches.value_of("RDO_LOOKAHEAD_FRAMES");
   if maybe_rdo.is_some() {
-    cfg.rdo_lookahead_frames =
+    cfg.speed_settings.rdo_lookahead_frames =
       matches.value_of("RDO_LOOKAHEAD_FRAMES").unwrap().parse().unwrap();
-  } else {
-    cfg.rdo_lookahead_frames = SpeedSettings::rdo_lookahead_frames(speed)
   }
 
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();

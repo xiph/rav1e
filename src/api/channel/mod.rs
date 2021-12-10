@@ -227,7 +227,7 @@ impl Config {
     let (mut inner, pool) = self.setup()?;
 
     // TODO: make it user-settable
-    let input_len = self.enc.rdo_lookahead_frames as usize * 2;
+    let input_len = self.enc.speed_settings.rdo_lookahead_frames as usize * 2;
 
     let (send_frame, receive_frame) = bounded(input_len);
     let (send_packet, receive_packet) = unbounded();

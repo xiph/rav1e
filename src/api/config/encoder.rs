@@ -102,8 +102,6 @@ pub struct EncoderConfig {
   /// [`tile_cols`]: #structfield.tile_cols
   /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
-  /// Number of frames to read ahead for the RDO lookahead computation.
-  pub rdo_lookahead_frames: usize,
 
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
@@ -160,7 +158,6 @@ impl EncoderConfig {
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
-      rdo_lookahead_frames: 40,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -230,7 +227,10 @@ impl fmt::Display for EncoderConfig {
       ("min_quantizer", self.min_quantizer.to_string()),
       ("low_latency", self.low_latency.to_string()),
       ("tune", self.tune.to_string()),
-      ("rdo_lookahead_frames", self.rdo_lookahead_frames.to_string()),
+      (
+        "rdo_lookahead_frames",
+        self.speed_settings.rdo_lookahead_frames.to_string(),
+      ),
       ("min_block_size", self.speed_settings.partition_range.min.to_string()),
       ("max_block_size", self.speed_settings.partition_range.max.to_string()),
       (
