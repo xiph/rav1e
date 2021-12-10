@@ -22,20 +22,25 @@ pub struct SpeedSettings {
   ///
   /// Enabled is slower.
   pub multiref: bool,
+
   /// Enables fast deblocking filter.
   pub fast_deblock: bool,
+
   /// Enables reduced transform set.
   ///
   /// Enabled is faster.
   pub reduced_tx_set: bool,
+
   /// Enables using transform-domain distortion instead of pixel-domain.
   ///
   /// Enabled is faster.
   pub tx_domain_distortion: bool,
+
   /// Enables using transform-domain rate estimation.
   ///
   /// Enabled is faster.
   pub tx_domain_rate: bool,
+
   /// Enables bottom-up encoding, rather than top-down.
   ///
   /// Enabled is slower.
@@ -50,10 +55,12 @@ pub struct SpeedSettings {
   ///
   /// Enabled is slower.
   pub rdo_tx_decision: bool,
+
   /// Prediction modes to search.
   ///
   /// Complex settings are slower.
   pub prediction_modes: PredictionModesSetting,
+
   /// Enables searching near motion vectors during RDO.
   ///
   /// Enabled is slower.
@@ -64,14 +71,18 @@ pub struct SpeedSettings {
 
   /// Enables CDEF.
   pub cdef: bool,
+
   /// Enables LRF.
   pub lrf: bool,
+
   /// The amount of search done for self guided restoration.
   pub sgr_complexity: SGRComplexityLevel,
+
   /// Use SATD instead of SAD for subpixel search.
   ///
   /// Enabled is slower.
   pub use_satd_subpel: bool,
+
   /// Use non-square partition type everywhere
   ///
   /// Enabled is slower.
@@ -100,8 +111,7 @@ pub struct SpeedSettings {
 }
 
 impl Default for SpeedSettings {
-  /// This is currently used exclusively for feature testing and comparison.
-  /// It is set to the slowest settings possible.
+  /// The default settings are equivalent to speed 0
   fn default() -> Self {
     SpeedSettings {
       partition_range: PartitionRange::new(
@@ -111,202 +121,100 @@ impl Default for SpeedSettings {
       multiref: true,
       fast_deblock: false,
       reduced_tx_set: false,
-      tx_domain_distortion: false,
+      // TX domain distortion is always faster, with no significant quality change,
+      // although it will be ignored when Tune == Psychovisual.
+      tx_domain_distortion: true,
       tx_domain_rate: false,
       encode_bottomup: true,
       rdo_tx_decision: true,
       rdo_lookahead_frames: 40,
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
-      scene_detection_mode: SceneDetectionSpeed::Fast,
+      scene_detection_mode: SceneDetectionSpeed::Standard,
       cdef: true,
-      lrf: false,
+      lrf: true,
       sgr_complexity: SGRComplexityLevel::Full,
       use_satd_subpel: true,
       non_square_partition: true,
       segmentation: SegmentationLevel::Full,
       enable_inter_tx_split: false,
-      fine_directional_intra: false,
-      me_allow_full_search: false,
+      fine_directional_intra: true,
+      me_allow_full_search: true,
     }
   }
 }
 
 impl SpeedSettings {
   /// Set the speed setting according to a numeric speed preset.
-  ///
-  /// The speed settings vary depending on speed value from 0 to 10.
-  /// - 10 (fastest): fixed block size 32x32, reduced TX set, fast deblock, fast scenechange detection.
-  /// - 9: min block size 32x32, reduced TX set, fast deblock.
-  /// - 8: min block size 8x8, reduced TX set, fast deblock.
-  /// - 7: min block size 8x8, reduced TX set.
-  /// - 6 (default): min block size 8x8, reduced TX set, complex pred modes for keyframes.
-  /// - 5: min block size 8x8, complex pred modes for keyframes, RDO TX decision.
-  /// - 4: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
-  ///        full SGR search.
-  /// - 3: min block size 8x8, complex pred modes for keyframes, RDO TX decision, include near MVs,
-  ///        bottom-up encoding, full SGR search.
-  /// - 2: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        bottom-up encoding, full SGR search.
-  /// - 1: min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        bottom-up encoding with non-square partitions everywhere, full SGR search.
-  /// - 0 (slowest): min block size 4x4, complex pred modes, RDO TX decision, include near MVs,
-  ///        bottom-up encoding with non-square partitions everywhere, full SGR search,
-  ///        full segmentation search.
   pub fn from_preset(speed: usize) -> Self {
-    SpeedSettings {
-      partition_range: Self::partition_range_preset(speed),
-      multiref: Self::multiref_preset(speed),
-      fast_deblock: Self::fast_deblock_preset(speed),
-      reduced_tx_set: Self::reduced_tx_set_preset(speed),
-      tx_domain_distortion: Self::tx_domain_distortion_preset(speed),
-      tx_domain_rate: Self::tx_domain_rate_preset(speed),
-      encode_bottomup: Self::encode_bottomup_preset(speed),
-      rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
-      rdo_lookahead_frames: Self::rdo_lookahead_frames(speed),
-      prediction_modes: Self::prediction_modes_preset(speed),
-      include_near_mvs: Self::include_near_mvs_preset(speed),
-      scene_detection_mode: Self::scene_detection_mode_preset(speed),
-      cdef: Self::cdef_preset(speed),
-      lrf: Self::lrf_preset(speed),
-      sgr_complexity: Self::sgr_complexity_preset(speed),
-      use_satd_subpel: Self::use_satd_subpel(speed),
-      non_square_partition: Self::non_square_partition_preset(speed),
-      segmentation: Self::segmentation_preset(speed),
-      enable_inter_tx_split: Self::enable_inter_tx_split_preset(speed),
-      fine_directional_intra: Self::fine_directional_intra_preset(speed),
-      me_allow_full_search: Self::me_allow_full_search_preset(speed),
+    // The default settings are equivalent to speed 0
+    let mut settings = SpeedSettings::default();
+
+    if speed >= 1 {
+      settings.segmentation = SegmentationLevel::Simple;
     }
-  }
 
-  /// This preset is set this way because 8x8 with reduced TX set is faster but with equivalent
-  /// or better quality compared to 16x16 (to which reduced TX set does not apply).
-  fn partition_range_preset(speed: usize) -> PartitionRange {
-    if speed <= 2 {
-      PartitionRange::new(BlockSize::BLOCK_4X4, BlockSize::BLOCK_64X64)
-    } else if speed <= 8 {
-      PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64)
-    } else if speed <= 9 {
-      PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64)
-    } else {
-      PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32)
+    if speed >= 2 {
+      settings.non_square_partition = false;
     }
-  }
 
-  /// Multiref is enabled automatically if low_latency is false.
-  ///
-  /// If low_latency is true, enabling multiref allows using multiple
-  /// backwards references. low_latency false enables both forward and
-  /// backwards references.
-  const fn multiref_preset(speed: usize) -> bool {
-    speed <= 7
-  }
-
-  const fn fast_deblock_preset(speed: usize) -> bool {
-    speed >= 8
-  }
-
-  const fn reduced_tx_set_preset(speed: usize) -> bool {
-    speed >= 6
-  }
-
-  /// TX domain distortion is always faster, with no significant quality change
-  const fn tx_domain_distortion_preset(_speed: usize) -> bool {
-    true
-  }
-
-  const fn tx_domain_rate_preset(_speed: usize) -> bool {
-    false
-  }
-
-  const fn encode_bottomup_preset(speed: usize) -> bool {
-    speed <= 3
-  }
-
-  /// Set default rdo-lookahead-frames for different speed settings
-  pub fn rdo_lookahead_frames(speed: usize) -> usize {
-    match speed {
-      9..=10 => 10,
-      6..=8 => 20,
-      3..=5 => 30,
-      0..=2 => 40,
-      _ => 40,
+    if speed >= 3 {
+      settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
+      settings.rdo_lookahead_frames = 30;
+      settings.prediction_modes = PredictionModesSetting::ComplexKeyframes;
     }
-  }
 
-  const fn rdo_tx_decision_preset(speed: usize) -> bool {
-    speed <= 5
-  }
-
-  fn prediction_modes_preset(speed: usize) -> PredictionModesSetting {
-    if speed <= 2 {
-      PredictionModesSetting::ComplexAll
-    } else if speed <= 6 {
-      PredictionModesSetting::ComplexKeyframes
-    } else {
-      PredictionModesSetting::Simple
+    if speed >= 4 {
+      settings.encode_bottomup = false;
     }
-  }
 
-  const fn include_near_mvs_preset(speed: usize) -> bool {
-    speed <= 4
-  }
-
-  const fn no_scene_detection_preset(_speed: usize) -> bool {
-    false
-  }
-
-  const fn scene_detection_mode_preset(speed: usize) -> SceneDetectionSpeed {
-    if speed <= 9 {
-      SceneDetectionSpeed::Standard
-    } else {
-      SceneDetectionSpeed::Fast
+    if speed >= 5 {
+      settings.include_near_mvs = false;
+      settings.sgr_complexity = SGRComplexityLevel::Reduced;
     }
-  }
 
-  const fn cdef_preset(_speed: usize) -> bool {
-    true
-  }
-
-  const fn lrf_preset(speed: usize) -> bool {
-    speed <= 9
-  }
-
-  fn sgr_complexity_preset(speed: usize) -> SGRComplexityLevel {
-    if speed <= 4 {
-      SGRComplexityLevel::Full
-    } else {
-      SGRComplexityLevel::Reduced
+    if speed >= 6 {
+      settings.reduced_tx_set = true;
+      settings.rdo_lookahead_frames = 20;
+      settings.rdo_tx_decision = false;
+      settings.me_allow_full_search = false;
     }
-  }
 
-  const fn use_satd_subpel(speed: usize) -> bool {
-    speed <= 9
-  }
-
-  const fn non_square_partition_preset(speed: usize) -> bool {
-    speed <= 1
-  }
-
-  fn segmentation_preset(speed: usize) -> SegmentationLevel {
-    if speed == 0 {
-      SegmentationLevel::Full
-    } else {
-      SegmentationLevel::Simple
+    if speed >= 7 {
+      settings.prediction_modes = PredictionModesSetting::Simple;
     }
-  }
 
-  // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
-  const fn enable_inter_tx_split_preset(speed: usize) -> bool {
-    speed >= 9
-  }
+    if speed >= 8 {
+      // Multiref is enabled automatically if low_latency is false.
+      //
+      // If low_latency is true, enabling multiref allows using multiple
+      // backwards references. low_latency false enables both forward and
+      // backwards references.
+      settings.multiref = false;
+      settings.fast_deblock = true;
+    }
 
-  fn fine_directional_intra_preset(_speed: usize) -> bool {
-    true
-  }
+    if speed >= 9 {
+      // 8x8 is fast enough to use until very high speed levels,
+      // because 8x8 with reduced TX set is faster but with equivalent
+      // or better quality compared to 16x16 (to which reduced TX set does not apply).
+      settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64);
+      settings.rdo_lookahead_frames = 10;
+      // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
+      settings.enable_inter_tx_split = true;
+    }
 
-  const fn me_allow_full_search_preset(speed: usize) -> bool {
-    speed <= 5
+    if speed >= 10 {
+      settings.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32);
+      settings.scene_detection_mode = SceneDetectionSpeed::Fast;
+      settings.lrf = false;
+      settings.use_satd_subpel = false;
+    }
+
+    settings
   }
 }
 
