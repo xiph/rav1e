@@ -167,7 +167,7 @@ impl Arbitrary for ArbitraryConfig {
     enc.tile_cols = Arbitrary::arbitrary(u)?;
     enc.tile_rows = Arbitrary::arbitrary(u)?;
     enc.tiles = Arbitrary::arbitrary(u)?;
-    enc.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
+    enc.speed_settings.rdo_lookahead_frames = Arbitrary::arbitrary(u)?;
     let config = Config::new().with_encoder_config(enc).with_threads(1);
     Ok(Self { config })
   }
@@ -232,7 +232,6 @@ impl Arbitrary for ArbitraryEncoder {
       tile_cols: u.int_in_range(0..=2)?,
       tile_rows: u.int_in_range(0..=2)?,
       tiles: u.int_in_range(0..=16)?,
-      rdo_lookahead_frames: Arbitrary::arbitrary(u)?,
 
       chroma_sampling: *u.choose(&[
         ChromaSampling::Cs420,

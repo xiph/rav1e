@@ -33,7 +33,7 @@ fn setup_config(
   enc.chroma_sampling = chroma_sampling;
   enc.bitrate = bitrate;
   enc.speed_settings.no_scene_detection = no_scene_detection;
-  enc.rdo_lookahead_frames = rdo_lookahead_frames;
+  enc.speed_settings.rdo_lookahead_frames = rdo_lookahead_frames;
   if let Some(min_quantizer) = min_quantizer {
     enc.min_quantizer = min_quantizer;
   }
@@ -1890,7 +1890,7 @@ fn zero_width() {
 #[test]
 fn rdo_lookahead_frames_overflow() {
   let mut enc = EncoderConfig::default();
-  enc.rdo_lookahead_frames = usize::max_value();
+  enc.speed_settings.rdo_lookahead_frames = usize::max_value();
   let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());
@@ -1925,7 +1925,6 @@ fn log_q_exp_overflow() {
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,
-    rdo_lookahead_frames: 40,
     speed_settings: SpeedSettings {
       partition_range: PartitionRange::new(
         BlockSize::BLOCK_64X64,
@@ -1990,7 +1989,6 @@ fn guess_frame_subtypes_assert() {
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,
-    rdo_lookahead_frames: 40,
     speed_settings: SpeedSettings {
       partition_range: PartitionRange::new(
         BlockSize::BLOCK_64X64,
@@ -2003,6 +2001,7 @@ fn guess_frame_subtypes_assert() {
       tx_domain_rate: false,
       encode_bottomup: false,
       rdo_tx_decision: false,
+      rdo_lookahead_frames: 40,
       prediction_modes: PredictionModesSetting::Simple,
       include_near_mvs: false,
       no_scene_detection: true,

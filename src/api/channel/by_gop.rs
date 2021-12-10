@@ -326,7 +326,7 @@ impl Config {
     self.validate()?;
 
     // TODO: make it user-settable
-    let input_len = self.enc.rdo_lookahead_frames as usize * 4;
+    let input_len = self.enc.speed_settings.rdo_lookahead_frames as usize * 4;
     let frame_limit = i32::MAX as u64;
 
     let (send_frame, receive_frame) = bounded(input_len);

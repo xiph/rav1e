@@ -40,6 +40,12 @@ pub struct SpeedSettings {
   ///
   /// Enabled is slower.
   pub encode_bottomup: bool,
+
+  /// The number of lookahead frames to be used for temporal RDO.
+  ///
+  /// Higher is slower.
+  pub rdo_lookahead_frames: usize,
+
   /// Enables searching transform size and type with RDO.
   ///
   /// Enabled is slower.
@@ -111,6 +117,7 @@ impl Default for SpeedSettings {
       tx_domain_rate: false,
       encode_bottomup: true,
       rdo_tx_decision: true,
+      rdo_lookahead_frames: 40,
       prediction_modes: PredictionModesSetting::ComplexAll,
       include_near_mvs: true,
       no_scene_detection: false,
@@ -159,6 +166,7 @@ impl SpeedSettings {
       tx_domain_rate: Self::tx_domain_rate_preset(speed),
       encode_bottomup: Self::encode_bottomup_preset(speed),
       rdo_tx_decision: Self::rdo_tx_decision_preset(speed),
+      rdo_lookahead_frames: Self::rdo_lookahead_frames(speed),
       prediction_modes: Self::prediction_modes_preset(speed),
       include_near_mvs: Self::include_near_mvs_preset(speed),
       no_scene_detection: Self::no_scene_detection_preset(speed),

@@ -694,7 +694,8 @@ unsafe fn option_match(
       enc.reservoir_frame_delay = Some(value.parse().map_err(|_| ())?)
     }
     "rdo_lookahead_frames" => {
-      enc.rdo_lookahead_frames = value.parse().map_err(|_| ())?
+      enc.speed_settings.rdo_lookahead_frames =
+        value.parse().map_err(|_| ())?
     }
     "low_latency" => enc.low_latency = value.parse().map_err(|_| ())?,
     "enable_timing_info" => {
