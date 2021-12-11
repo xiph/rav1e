@@ -160,6 +160,13 @@ impl PartialOrd for BlockSize {
   }
 }
 
+#[cfg(test)]
+impl Default for BlockSize {
+  fn default() -> Self {
+    BlockSize::BLOCK_64X64
+  }
+}
+
 impl BlockSize {
   pub const BLOCK_SIZES_ALL: usize = 22;
   pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
