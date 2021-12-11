@@ -17,6 +17,7 @@ use std::fmt;
 // NOTE: Add Structures at the end.
 /// Contains the speed settings.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct SpeedSettings {
   /// Enables inter-frames to have multiple reference frames.
   ///
