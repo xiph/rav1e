@@ -129,20 +129,15 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
-          AOM0_VERSION: 1.0.0.errata1.ds-1
-          AOM3_VERSION: 3.2.0-1
+          AOM3_VERSION: 3.2.0-2
           AOM_DEV_SHA256: >-
-            10d264f5a1f2be78f0dbe02e6d01aa1a30d79a13a020b689b4a00c655e0a9501
-          AOM_LIB0_SHA256: >-
-            cccbc346d17510d7d3b53979234df6deb82b756243aefd566f193e65f424823b
+            fcea17284e2d8fb4af2f999af2d341345949a8ac611de27d26cf54a7ba58a244
           AOM_LIB3_SHA256: >-
-            ac1f915d3643c844506bfced7e7fc4856affa23d39505629b5ab5698026e4d73
+            d639eb96abe6b56860bb35314b3a2bf984a7500dedda65e1ec498158ac97605c
         run: |
           echo "$LINK/libaom-dev_${AOM3_VERSION}_amd64.deb" >> DEBS
-          echo "$LINK/libaom0_${AOM0_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libaom3_${AOM3_VERSION}_amd64.deb" >> DEBS
           echo "$AOM_DEV_SHA256 libaom-dev_${AOM3_VERSION}_amd64.deb" >> CHECKSUMS
-          echo "$AOM_LIB0_SHA256 libaom0_${AOM0_VERSION}_amd64.deb" >> CHECKSUMS
           echo "$AOM_LIB3_SHA256 libaom3_${AOM3_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add dav1d
         if: >
