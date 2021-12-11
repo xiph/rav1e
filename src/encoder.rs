@@ -2444,7 +2444,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     debug_assert!(is_square);
 
     let mut partition_types = ArrayVec::<PartitionType, 3>::new();
-    if fi.config.speed_settings.partition.non_square_partition
+    if bsize
+      > fi.config.speed_settings.partition.non_square_partition_threshold
       || is_straddle_x
       || is_straddle_y
     {

@@ -1940,7 +1940,7 @@ fn log_q_exp_overflow() {
           BlockSize::BLOCK_64X64,
         ),
         encode_bottomup: false,
-        non_square_partition: false,
+        non_square_partition_threshold: BlockSize::BLOCK_64X64,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: true,
@@ -2015,7 +2015,7 @@ fn guess_frame_subtypes_assert() {
           BlockSize::BLOCK_64X64,
         ),
         encode_bottomup: false,
-        non_square_partition: false,
+        non_square_partition_threshold: BlockSize::BLOCK_64X64,
       },
       transform: TransformSpeedSettings {
         reduced_tx_set: true,
