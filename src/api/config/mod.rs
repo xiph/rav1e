@@ -221,7 +221,7 @@ impl Config {
 
     // FIXME: tx partition for intra not supported for chroma 422
     if chroma_sampling == ChromaSampling::Cs422 {
-      config.speed_settings.rdo_tx_decision = false;
+      config.speed_settings.transform.rdo_tx_decision = false;
     }
 
     let mut inner = ContextInner::new(&config);

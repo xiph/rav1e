@@ -731,7 +731,7 @@ fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
   cfg.tune = matches.value_of("TUNE").unwrap().parse().unwrap();
 
   if cfg.tune == Tune::Psychovisual {
-    cfg.speed_settings.tx_domain_distortion = false;
+    cfg.speed_settings.transform.tx_domain_distortion = false;
   }
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();

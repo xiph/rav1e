@@ -933,8 +933,9 @@ pub fn rdo_tx_size_type<T: Pixel>(
   let mut best_tx_size = tx_size;
   let mut best_rd = std::f64::MAX;
 
-  let do_rdo_tx_size =
-    fi.tx_mode_select && fi.config.speed_settings.rdo_tx_decision && !is_inter;
+  let do_rdo_tx_size = fi.tx_mode_select
+    && fi.config.speed_settings.transform.rdo_tx_decision
+    && !is_inter;
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let mut cw_checkpoint: Option<ContextWriterCheckpoint> = None;
 
@@ -942,7 +943,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
     let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
 
     let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY
-      && fi.config.speed_settings.rdo_tx_decision
+      && fi.config.speed_settings.transform.rdo_tx_decision
       && !is_inter
       && !skip;
 
@@ -1378,7 +1379,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     if mv_stack.len() >= 2 {
       inter_mode_set.push((PredictionMode::GLOBALMV, i));
     }
-    let include_near_mvs = fi.config.speed_settings.include_near_mvs;
+    let include_near_mvs = fi.config.speed_settings.motion.include_near_mvs;
     if include_near_mvs {
       if mv_stack.len() >= 3 {
         inter_mode_set.push((PredictionMode::NEAR1MV, i));
@@ -1426,7 +1427,9 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         ));
         for &x in RAV1E_INTER_COMPOUND_MODES {
           // exclude any NEAR mode based on speed setting
-          if fi.config.speed_settings.include_near_mvs || !x.has_nearmv() {
+          if fi.config.speed_settings.motion.include_near_mvs
+            || !x.has_nearmv()
+          {
             let mv_stack_idx = ref_frames_set.len() - 1;
             // exclude NEAR modes if the mv_stack is too short
             if !(x.has_nearmv() && x.ref_mv_idx() >= mv_stack.len()) {
@@ -1439,7 +1442,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
-  let num_modes_rdo = if fi.config.speed_settings.prediction_modes
+  let num_modes_rdo = if fi.config.speed_settings.prediction.prediction_modes
     >= PredictionModesSetting::ComplexAll
   {
     inter_mode_set.len()
@@ -1569,10 +1572,10 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 
   // Reduce number of prediction modes at higher speed levels
   num_modes_rdo = if (fi.frame_type == FrameType::KEY
-    && fi.config.speed_settings.prediction_modes
+    && fi.config.speed_settings.prediction.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
     || (fi.frame_type.has_inter()
-      && fi.config.speed_settings.prediction_modes
+      && fi.config.speed_settings.prediction.prediction_modes
         >= PredictionModesSetting::ComplexAll)
   {
     7
@@ -1700,7 +1703,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  if fi.config.speed_settings.fine_directional_intra
+  if fi.config.speed_settings.prediction.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode

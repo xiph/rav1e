@@ -27,45 +27,10 @@ pub struct SpeedSettings {
   /// Enables fast deblocking filter.
   pub fast_deblock: bool,
 
-  /// Enables reduced transform set.
-  ///
-  /// Enabled is faster.
-  pub reduced_tx_set: bool,
-
-  /// Enables using transform-domain distortion instead of pixel-domain.
-  ///
-  /// Enabled is faster.
-  pub tx_domain_distortion: bool,
-
-  /// Enables using transform-domain rate estimation.
-  ///
-  /// Enabled is faster.
-  pub tx_domain_rate: bool,
-
-  /// Enables bottom-up encoding, rather than top-down.
-  ///
-  /// Enabled is slower.
-  pub encode_bottomup: bool,
-
   /// The number of lookahead frames to be used for temporal RDO.
   ///
   /// Higher is slower.
   pub rdo_lookahead_frames: usize,
-
-  /// Enables searching transform size and type with RDO.
-  ///
-  /// Enabled is slower.
-  pub rdo_tx_decision: bool,
-
-  /// Prediction modes to search.
-  ///
-  /// Complex settings are slower.
-  pub prediction_modes: PredictionModesSetting,
-
-  /// Enables searching near motion vectors during RDO.
-  ///
-  /// Enabled is slower.
-  pub include_near_mvs: bool,
 
   /// Which scene detection mode to use. Standard is slower, but best.
   pub scene_detection_mode: SceneDetectionSpeed,
@@ -79,68 +44,63 @@ pub struct SpeedSettings {
   /// The amount of search done for self guided restoration.
   pub sgr_complexity: SGRComplexityLevel,
 
-  /// Use SATD instead of SAD for subpixel search.
-  ///
-  /// Enabled is slower.
-  pub use_satd_subpel: bool,
-
-  /// Use non-square partition type everywhere
-  ///
-  /// Enabled is slower.
-  pub non_square_partition: bool,
-
   /// Search level for segmentation.
   ///
   /// Full search is at least twice as slow.
   pub segmentation: SegmentationLevel,
 
-  /// Enable tx split for inter mode block.
-  pub enable_inter_tx_split: bool,
-
-  /// Use fine directional intra prediction
-  pub fine_directional_intra: bool,
-
-  /// Enable full search in some parts of motion estimation. Allowing full
-  /// search is slower.
-  pub me_allow_full_search: bool,
-
   // NOTE: put enums and basic type fields above
-  /// Range of partition sizes that can be used. Larger ranges are slower.
-  ///
-  /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
-  pub partition_range: PartitionRange,
+  /// Speed settings related to partition decision
+  pub partition: PartitionSpeedSettings,
+
+  /// Speed settings related to transform size and type decision
+  pub transform: TransformSpeedSettings,
+
+  /// Speed settings related to intra prediction mode selection
+  pub prediction: PredictionSpeedSettings,
+
+  /// Speed settings related to motion estimation and motion vector selection
+  pub motion: MotionSpeedSettings,
 }
 
 impl Default for SpeedSettings {
   /// The default settings are equivalent to speed 0
   fn default() -> Self {
     SpeedSettings {
-      partition_range: PartitionRange::new(
-        BlockSize::BLOCK_4X4,
-        BlockSize::BLOCK_64X64,
-      ),
       multiref: true,
       fast_deblock: false,
-      reduced_tx_set: false,
-      // TX domain distortion is always faster, with no significant quality change,
-      // although it will be ignored when Tune == Psychovisual.
-      tx_domain_distortion: true,
-      tx_domain_rate: false,
-      encode_bottomup: true,
-      rdo_tx_decision: true,
       rdo_lookahead_frames: 40,
-      prediction_modes: PredictionModesSetting::ComplexAll,
-      include_near_mvs: true,
       scene_detection_mode: SceneDetectionSpeed::Standard,
       cdef: true,
       lrf: true,
       sgr_complexity: SGRComplexityLevel::Full,
-      use_satd_subpel: true,
-      non_square_partition: true,
       segmentation: SegmentationLevel::Full,
-      enable_inter_tx_split: false,
-      fine_directional_intra: true,
-      me_allow_full_search: true,
+      partition: PartitionSpeedSettings {
+        encode_bottomup: true,
+        non_square_partition: true,
+        partition_range: PartitionRange::new(
+          BlockSize::BLOCK_4X4,
+          BlockSize::BLOCK_64X64,
+        ),
+      },
+      transform: TransformSpeedSettings {
+        reduced_tx_set: false,
+        // TX domain distortion is always faster, with no significant quality change,
+        // although it will be ignored when Tune == Psychovisual.
+        tx_domain_distortion: true,
+        tx_domain_rate: false,
+        rdo_tx_decision: true,
+        enable_inter_tx_split: false,
+      },
+      prediction: PredictionSpeedSettings {
+        prediction_modes: PredictionModesSetting::ComplexAll,
+        fine_directional_intra: true,
+      },
+      motion: MotionSpeedSettings {
+        include_near_mvs: true,
+        use_satd_subpel: true,
+        me_allow_full_search: true,
+      },
     }
   }
 }
@@ -156,34 +116,38 @@ impl SpeedSettings {
     }
 
     if speed >= 2 {
-      settings.non_square_partition = false;
+      settings.partition.non_square_partition = false;
     }
 
     if speed >= 3 {
-      settings.partition_range =
-        PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
       settings.rdo_lookahead_frames = 30;
-      settings.prediction_modes = PredictionModesSetting::ComplexKeyframes;
+
+      settings.partition.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
+      settings.prediction.prediction_modes =
+        PredictionModesSetting::ComplexKeyframes;
     }
 
     if speed >= 4 {
-      settings.encode_bottomup = false;
+      settings.partition.encode_bottomup = false;
     }
 
     if speed >= 5 {
-      settings.include_near_mvs = false;
       settings.sgr_complexity = SGRComplexityLevel::Reduced;
+      settings.motion.include_near_mvs = false;
     }
 
     if speed >= 6 {
-      settings.reduced_tx_set = true;
       settings.rdo_lookahead_frames = 20;
-      settings.rdo_tx_decision = false;
-      settings.me_allow_full_search = false;
+
+      settings.transform.rdo_tx_decision = false;
+      settings.transform.reduced_tx_set = true;
+
+      settings.motion.me_allow_full_search = false;
     }
 
     if speed >= 7 {
-      settings.prediction_modes = PredictionModesSetting::Simple;
+      settings.prediction.prediction_modes = PredictionModesSetting::Simple;
     }
 
     if speed >= 8 {
@@ -197,26 +161,110 @@ impl SpeedSettings {
     }
 
     if speed >= 9 {
+      settings.rdo_lookahead_frames = 10;
+
       // 8x8 is fast enough to use until very high speed levels,
       // because 8x8 with reduced TX set is faster but with equivalent
       // or better quality compared to 16x16 (to which reduced TX set does not apply).
-      settings.partition_range =
+      settings.partition.partition_range =
         PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64);
-      settings.rdo_lookahead_frames = 10;
+
       // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
-      settings.enable_inter_tx_split = true;
+      settings.transform.enable_inter_tx_split = true;
     }
 
     if speed >= 10 {
-      settings.partition_range =
-        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32);
       settings.scene_detection_mode = SceneDetectionSpeed::Fast;
       settings.lrf = false;
-      settings.use_satd_subpel = false;
+
+      settings.partition.partition_range =
+        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32);
+
+      settings.motion.use_satd_subpel = false;
     }
 
     settings
   }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
+/// Speed settings related to partition decision
+pub struct TransformSpeedSettings {
+  /// Enables reduced transform set.
+  ///
+  /// Enabled is faster.
+  pub reduced_tx_set: bool,
+
+  /// Enables using transform-domain distortion instead of pixel-domain.
+  ///
+  /// Enabled is faster.
+  pub tx_domain_distortion: bool,
+
+  /// Enables using transform-domain rate estimation.
+  ///
+  /// Enabled is faster.
+  pub tx_domain_rate: bool,
+
+  /// Enables searching transform size and type with RDO.
+  ///
+  /// Enabled is slower.
+  pub rdo_tx_decision: bool,
+
+  /// Enable tx split for inter mode block.
+  pub enable_inter_tx_split: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
+/// Speed settings related to transform size and type decision
+pub struct PartitionSpeedSettings {
+  /// Enables bottom-up encoding, rather than top-down.
+  ///
+  /// Enabled is slower.
+  pub encode_bottomup: bool,
+
+  /// Use non-square partition type everywhere
+  ///
+  /// Enabled is slower.
+  pub non_square_partition: bool,
+
+  /// Range of partition sizes that can be used. Larger ranges are slower.
+  ///
+  /// Must be based on square block sizes, so e.g. 8×4 isn't allowed here.
+  pub partition_range: PartitionRange,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
+/// Speed settings related to intra prediction mode selection
+pub struct MotionSpeedSettings {
+  /// Use SATD instead of SAD for subpixel search.
+  ///
+  /// Enabled is slower.
+  pub use_satd_subpel: bool,
+
+  /// Enables searching near motion vectors during RDO.
+  ///
+  /// Enabled is slower.
+  pub include_near_mvs: bool,
+
+  /// Enable full search in some parts of motion estimation. Allowing full
+  /// search is slower.
+  pub me_allow_full_search: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
+/// Speed settings related to motion estimation and motion vector selection
+pub struct PredictionSpeedSettings {
+  /// Prediction modes to search.
+  ///
+  /// Complex settings are slower.
+  pub prediction_modes: PredictionModesSetting,
+
+  /// Use fine directional intra prediction
+  pub fine_directional_intra: bool,
 }
 
 /// Range of block sizes to use.
@@ -237,6 +285,13 @@ impl PartitionRange {
     assert!(max.is_sqr());
 
     Self { min, max }
+  }
+}
+
+#[cfg(test)]
+impl Default for PartitionRange {
+  fn default() -> Self {
+    PartitionRange::new(BlockSize::BLOCK_4X4, BlockSize::BLOCK_64X64)
   }
 }
 
@@ -307,6 +362,13 @@ impl fmt::Display for PredictionModesSetting {
         PredictionModesSetting::ComplexAll => "Complex-All",
       }
     )
+  }
+}
+
+#[cfg(test)]
+impl Default for PredictionModesSetting {
+  fn default() -> Self {
+    PredictionModesSetting::Simple
   }
 }
 
