@@ -213,7 +213,7 @@ impl EncoderConfig {
     // multiple partition sizes properly. Unfortunately, when tx domain
     // distortion is used, distortion is only known at the tx block level which
     // might be bigger than 8x8. So temporal RDO is always disabled in that case.
-    !self.speed_settings.tx_domain_distortion
+    !self.speed_settings.transform.tx_domain_distortion
   }
 }
 
@@ -231,37 +231,65 @@ impl fmt::Display for EncoderConfig {
         "rdo_lookahead_frames",
         self.speed_settings.rdo_lookahead_frames.to_string(),
       ),
-      ("min_block_size", self.speed_settings.partition_range.min.to_string()),
-      ("max_block_size", self.speed_settings.partition_range.max.to_string()),
       (
         "multiref",
         (!self.low_latency || self.speed_settings.multiref).to_string(),
       ),
       ("fast_deblock", self.speed_settings.fast_deblock.to_string()),
-      ("reduced_tx_set", self.speed_settings.reduced_tx_set.to_string()),
-      (
-        "tx_domain_distortion",
-        self.speed_settings.tx_domain_distortion.to_string(),
-      ),
-      ("tx_domain_rate", self.speed_settings.tx_domain_rate.to_string()),
-      ("encode_bottomup", self.speed_settings.encode_bottomup.to_string()),
-      ("rdo_tx_decision", self.speed_settings.rdo_tx_decision.to_string()),
-      ("prediction_modes", self.speed_settings.prediction_modes.to_string()),
-      ("include_near_mvs", self.speed_settings.include_near_mvs.to_string()),
       (
         "scene_detection_mode",
         self.speed_settings.scene_detection_mode.to_string(),
       ),
       ("cdef", self.speed_settings.cdef.to_string()),
-      ("use_satd_subpel", self.speed_settings.use_satd_subpel.to_string()),
-      (
-        "non_square_partition",
-        self.speed_settings.non_square_partition.to_string(),
-      ),
+      ("lrf", self.speed_settings.lrf.to_string()),
       ("enable_timing_info", self.enable_timing_info.to_string()),
       (
+        "min_block_size",
+        self.speed_settings.partition.partition_range.min.to_string(),
+      ),
+      (
+        "max_block_size",
+        self.speed_settings.partition.partition_range.max.to_string(),
+      ),
+      (
+        "encode_bottomup",
+        self.speed_settings.partition.encode_bottomup.to_string(),
+      ),
+      (
+        "non_square_partition",
+        self.speed_settings.partition.non_square_partition.to_string(),
+      ),
+      (
+        "reduced_tx_set",
+        self.speed_settings.transform.reduced_tx_set.to_string(),
+      ),
+      (
+        "tx_domain_distortion",
+        self.speed_settings.transform.tx_domain_distortion.to_string(),
+      ),
+      (
+        "tx_domain_rate",
+        self.speed_settings.transform.tx_domain_rate.to_string(),
+      ),
+      (
+        "rdo_tx_decision",
+        self.speed_settings.transform.rdo_tx_decision.to_string(),
+      ),
+      (
+        "prediction_modes",
+        self.speed_settings.prediction.prediction_modes.to_string(),
+      ),
+      (
         "fine_directional_intra",
-        self.speed_settings.fine_directional_intra.to_string(),
+        self.speed_settings.prediction.fine_directional_intra.to_string(),
+      ),
+      (
+        "include_near_mvs",
+        self.speed_settings.motion.include_near_mvs.to_string(),
+      ),
+      (
+        "use_satd_subpel",
+        self.speed_settings.motion.use_satd_subpel.to_string(),
       ),
     ];
     write!(

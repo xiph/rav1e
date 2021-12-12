@@ -631,10 +631,10 @@ impl<T: Pixel> FrameInvariants<T> {
     let render_and_frame_size_different =
       render_width != width || render_height != height;
 
-    let use_reduced_tx_set = config.speed_settings.reduced_tx_set;
-    let use_tx_domain_distortion =
-      config.tune == Tune::Psnr && config.speed_settings.tx_domain_distortion;
-    let use_tx_domain_rate = config.speed_settings.tx_domain_rate;
+    let use_reduced_tx_set = config.speed_settings.transform.reduced_tx_set;
+    let use_tx_domain_distortion = config.tune == Tune::Psnr
+      && config.speed_settings.transform.tx_domain_distortion;
+    let use_tx_domain_rate = config.speed_settings.transform.tx_domain_rate;
 
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
@@ -667,7 +667,7 @@ impl<T: Pixel> FrameInvariants<T> {
       use_reduced_tx_set,
       reference_mode: ReferenceMode::SINGLE,
       use_prev_frame_mvs: false,
-      partition_range: config.speed_settings.partition_range,
+      partition_range: config.speed_settings.partition.partition_range,
       globalmv_transformation_type: [GlobalMVMode::IDENTITY;
         INTER_REFS_PER_FRAME],
       num_tg: 1,
@@ -747,7 +747,10 @@ impl<T: Pixel> FrameInvariants<T> {
       activity_mask: Default::default(),
       enable_segmentation: config.speed_settings.segmentation
         != SegmentationLevel::Disabled,
-      enable_inter_txfm_split: config.speed_settings.enable_inter_tx_split,
+      enable_inter_txfm_split: config
+        .speed_settings
+        .transform
+        .enable_inter_tx_split,
       sequence,
       config,
     }
@@ -757,7 +760,7 @@ impl<T: Pixel> FrameInvariants<T> {
     config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
     gop_input_frameno_start: u64,
   ) -> Self {
-    let tx_mode_select = config.speed_settings.rdo_tx_decision;
+    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;
@@ -2441,7 +2444,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     debug_assert!(is_square);
 
     let mut partition_types = ArrayVec::<PartitionType, 3>::new();
-    if fi.config.speed_settings.non_square_partition
+    if fi.config.speed_settings.partition.non_square_partition
       || is_straddle_x
       || is_straddle_y
     {
@@ -3224,7 +3227,7 @@ fn encode_tile<'a, T: Pixel>(
         tile_bo.0.y + BlockSize::BLOCK_64X64.height_mi() > ts.mi_height;
 
       // Encode SuperBlock
-      if fi.config.speed_settings.encode_bottomup
+      if fi.config.speed_settings.partition.encode_bottomup
         || is_straddle_sbx
         || is_straddle_sby
       {

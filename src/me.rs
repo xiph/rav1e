@@ -552,7 +552,7 @@ pub fn motion_estimation<T: Pixel>(
 
       let mut best = MotionSearchResult { mv: best.mv, cost: best.rd.cost };
 
-      let use_satd: bool = fi.config.speed_settings.use_satd_subpel;
+      let use_satd: bool = fi.config.speed_settings.motion.use_satd_subpel;
       if use_satd {
         best.cost = get_fullpel_mv_rd(
           fi,
@@ -792,7 +792,9 @@ fn full_pixel_me<T: Pixel>(
       24,
     );
 
-    if !fi.config.speed_settings.me_allow_full_search || best.rd.sad < thresh {
+    if !fi.config.speed_settings.motion.me_allow_full_search
+      || best.rd.sad < thresh
+    {
       return best;
     }
 

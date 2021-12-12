@@ -1928,24 +1928,36 @@ fn log_q_exp_overflow() {
     tile_rows: 0,
     tiles: 0,
     speed_settings: SpeedSettings {
-      partition_range: PartitionRange::new(
-        BlockSize::BLOCK_64X64,
-        BlockSize::BLOCK_64X64,
-      ),
       multiref: false,
       fast_deblock: true,
-      reduced_tx_set: true,
-      tx_domain_distortion: true,
-      tx_domain_rate: false,
-      encode_bottomup: false,
-      rdo_tx_decision: false,
-      prediction_modes: PredictionModesSetting::Simple,
-      include_near_mvs: false,
+      rdo_lookahead_frames: 40,
       scene_detection_mode: SceneDetectionSpeed::None,
       cdef: true,
       lrf: true,
-      use_satd_subpel: false,
-      non_square_partition: false,
+      partition: PartitionSpeedSettings {
+        partition_range: PartitionRange::new(
+          BlockSize::BLOCK_64X64,
+          BlockSize::BLOCK_64X64,
+        ),
+        encode_bottomup: false,
+        non_square_partition: false,
+      },
+      transform: TransformSpeedSettings {
+        reduced_tx_set: true,
+        tx_domain_distortion: true,
+        tx_domain_rate: false,
+        rdo_tx_decision: false,
+        ..Default::default()
+      },
+      prediction: PredictionSpeedSettings {
+        prediction_modes: PredictionModesSetting::Simple,
+        ..Default::default()
+      },
+      motion: MotionSpeedSettings {
+        include_near_mvs: false,
+        use_satd_subpel: false,
+        ..Default::default()
+      },
       ..Default::default()
     },
   };
@@ -1991,25 +2003,36 @@ fn guess_frame_subtypes_assert() {
     tile_rows: 0,
     tiles: 0,
     speed_settings: SpeedSettings {
-      partition_range: PartitionRange::new(
-        BlockSize::BLOCK_64X64,
-        BlockSize::BLOCK_64X64,
-      ),
       multiref: false,
       fast_deblock: true,
-      reduced_tx_set: true,
-      tx_domain_distortion: true,
-      tx_domain_rate: false,
-      encode_bottomup: false,
-      rdo_tx_decision: false,
       rdo_lookahead_frames: 40,
-      prediction_modes: PredictionModesSetting::Simple,
-      include_near_mvs: false,
       scene_detection_mode: SceneDetectionSpeed::None,
       cdef: true,
       lrf: true,
-      use_satd_subpel: false,
-      non_square_partition: false,
+      partition: PartitionSpeedSettings {
+        partition_range: PartitionRange::new(
+          BlockSize::BLOCK_64X64,
+          BlockSize::BLOCK_64X64,
+        ),
+        encode_bottomup: false,
+        non_square_partition: false,
+      },
+      transform: TransformSpeedSettings {
+        reduced_tx_set: true,
+        tx_domain_distortion: true,
+        tx_domain_rate: false,
+        rdo_tx_decision: false,
+        ..Default::default()
+      },
+      prediction: PredictionSpeedSettings {
+        prediction_modes: PredictionModesSetting::Simple,
+        ..Default::default()
+      },
+      motion: MotionSpeedSettings {
+        include_near_mvs: false,
+        use_satd_subpel: false,
+        ..Default::default()
+      },
       ..Default::default()
     },
   };
