@@ -1,6 +1,6 @@
 [package]
 name = "rav1e"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2018"
 rust-version = "1.51.0"
