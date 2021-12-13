@@ -968,6 +968,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
       tx_size,
       tx_set,
       tx_types,
+      best_rd,
     );
 
     if rd_cost < best_rd {
@@ -1856,7 +1857,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
   mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
-  tx_types: &[TxType],
+  tx_types: &[TxType], cur_best_rd: f64,
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
@@ -1881,6 +1882,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   };
   let need_recon_pixel = tx_size.block_size() != bsize && !is_inter;
 
+  let mut first_iteration = true;
   for &tx_type in tx_types {
     // Skip unsupported transform types
     if av1_tx_used[tx_set as usize][tx_type as usize] == 0 {
@@ -1948,13 +1950,25 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     } else {
       compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, true)
     };
+    cw.rollback(cw_checkpoint.as_ref().unwrap());
+
     let rd = compute_rd_cost(fi, rate, distortion);
+
+    if first_iteration {
+      // We use an optimization to early exit after testing the first
+      // transform type if the cost is higher than the existing best.
+      // The idea is that if this transform size is not better than he
+      // previous size, it is not worth testing remaining modes for this size.
+      if rd > cur_best_rd {
+        break;
+      }
+      first_iteration = false;
+    }
+
     if rd < best_rd {
       best_rd = rd;
       best_type = tx_type;
     }
-
-    cw.rollback(cw_checkpoint.as_ref().unwrap());
   }
 
   assert!(best_rd >= 0_f64);
