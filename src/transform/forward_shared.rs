@@ -162,7 +162,7 @@ macro_rules! store_coeffs {
 
 macro_rules! impl_1d_tx {
 () => {
-  impl_1d_tx! {allow(), }
+  impl_1d_tx! {allow(unused_attributes), }
 };
 
 ($m:meta, $($s:ident),*) => {
