@@ -563,6 +563,7 @@ impl<T: Pixel> Plane<T> {
   pub fn downscale_in_place(&self, scale: usize, in_plane: &mut Plane<T>) {
     let src = self;
     let box_pixels = scale * scale;
+    assert!(box_pixels != 0);
     let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
 
     let data_origin = src.data_origin();
@@ -599,9 +600,15 @@ impl<T: Pixel> Plane<T> {
               let src_row = &data_origin[(src_row_idx * src.cfg.stride)..];
 
               // Iter src col
+              // max value of x is `scale - 1`
+              assert!(src_row.len() > col_idx * scale + (scale - 1));
               for x in 0..scale {
                 let src_col_idx = col_idx * scale + x;
-                sum += u32::cast_from(src_row[src_col_idx]);
+                // SAFETY: we asserted that the length is greater than the max
+                // value of src_col_idx
+                sum += u32::cast_from(unsafe {
+                  *src_row.get_unchecked(src_col_idx)
+                });
               }
             }
 
