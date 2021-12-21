@@ -436,11 +436,17 @@ impl BlockSize {
   }
 
   pub fn is_rect_tx_allowed(self) -> bool {
-    match self {
-      BLOCK_4X4 | BLOCK_8X8 | BLOCK_16X16 | BLOCK_32X32 | BLOCK_64X64
-      | BLOCK_64X128 | BLOCK_128X64 | BLOCK_128X128 => false,
-      _ => true,
-    }
+    !matches!(
+      self,
+      BLOCK_4X4
+        | BLOCK_8X8
+        | BLOCK_16X16
+        | BLOCK_32X32
+        | BLOCK_64X64
+        | BLOCK_64X128
+        | BLOCK_128X64
+        | BLOCK_128X128
+    )
   }
 }
 
