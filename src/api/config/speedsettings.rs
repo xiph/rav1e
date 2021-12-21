@@ -193,7 +193,7 @@ impl SpeedSettings {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
-/// Speed settings related to partition decision
+/// Speed settings related to transform size and type decision
 pub struct TransformSpeedSettings {
   /// Enables reduced transform set.
   ///
@@ -221,7 +221,7 @@ pub struct TransformSpeedSettings {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
-/// Speed settings related to transform size and type decision
+/// Speed settings related to partition decision
 pub struct PartitionSpeedSettings {
   /// Enables bottom-up encoding, rather than top-down.
   ///
@@ -240,7 +240,7 @@ pub struct PartitionSpeedSettings {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
-/// Speed settings related to intra prediction mode selection
+/// Speed settings related to motion estimation and motion vector selection
 pub struct MotionSpeedSettings {
   /// Use SATD instead of SAD for subpixel search.
   ///
@@ -259,7 +259,7 @@ pub struct MotionSpeedSettings {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[cfg_attr(test, derive(Default))]
-/// Speed settings related to motion estimation and motion vector selection
+/// Speed settings related to intra prediction mode selection
 pub struct PredictionSpeedSettings {
   /// Prediction modes to search.
   ///
