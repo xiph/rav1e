@@ -1117,7 +1117,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     tx_size.sqr() <= TxSize::TX_32X32 || tx_type == TxType::DCT_DCT
   );
 
-  let plane_bsize = bsize.subsampled_size(xdec, ydec);
+  let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
 
   debug_assert!(p != 0 || !mode.is_intra() || tx_size.block_size() == plane_bsize || need_recon_pixel,
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
@@ -1350,8 +1350,11 @@ pub fn motion_compensate<T: Pixel>(
   let luma_tile_rect = ts.tile_rect();
   let compound_buffer = &mut ts.inter_compound_buffers;
   for p in 0..num_planes {
-    let plane_bsize =
-      if p == 0 { bsize } else { bsize.subsampled_size(u_xdec, u_ydec) };
+    let plane_bsize = if p == 0 {
+      bsize
+    } else {
+      bsize.subsampled_size(u_xdec, u_ydec).unwrap()
+    };
 
     let rec = &mut ts.rec.planes[p];
     let po = tile_bo.plane_offset(rec.plane_cfg);
@@ -1889,7 +1892,7 @@ pub fn luma_ac<T: Pixel>(
   bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let plane_bsize = bsize.subsampled_size(xdec, ydec);
+  let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
     tile_bo.with_offset(offset.0, offset.1)
@@ -2478,7 +2481,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       w_pre_cdef.rollback(&w_pre_checkpoint);
       w_post_cdef.rollback(&w_post_checkpoint);
 
-      let subsize = bsize.subsize(partition);
+      let subsize = bsize.subsize(partition).unwrap();
       let hbsw = subsize.width_mi(); // Half the block size width in blocks
       let hbsh = subsize.height_mi(); // Half the block size height in blocks
       let mut child_modes = ArrayVec::<PartitionParameters, 4>::new();
@@ -2569,7 +2572,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       w_post_cdef.rollback(&w_post_checkpoint);
 
       assert!(best_partition != PartitionType::PARTITION_NONE || !must_split);
-      let subsize = bsize.subsize(best_partition);
+      let subsize = bsize.subsize(best_partition).unwrap();
 
       if bsize >= BlockSize::BLOCK_8X8 {
         let w: &mut W =
@@ -2615,7 +2618,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   {
     cw.bc.update_partition_context(
       tile_bo,
-      bsize.subsize(best_partition),
+      bsize.subsize(best_partition).unwrap(),
       bsize,
     );
   }
@@ -2702,8 +2705,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       && partition < PartitionType::PARTITION_INVALID
   );
 
-  let subsize = bsize.subsize(partition);
-  debug_assert!(subsize != BlockSize::BLOCK_INVALID);
+  let subsize = bsize.subsize(partition).unwrap();
 
   if bsize >= BlockSize::BLOCK_8X8 && is_square {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
@@ -2870,9 +2872,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
       if !rdo_output.part_modes.is_empty() {
         debug_assert!(can_split && !must_split);
-        // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
-        assert!(subsize != BlockSize::BLOCK_INVALID);
 
+        // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         for mode in rdo_output.part_modes {
           use std::iter::once;
           // Each block is subjected to a new splitting decision

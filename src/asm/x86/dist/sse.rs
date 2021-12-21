@@ -109,8 +109,8 @@ pub fn get_weighted_sse<T: Pixel>(
   }
 
   let dist = match (bsize_opt, T::type_enum()) {
-    (None, _) => call_rust(),
-    (Some(bsize), PixelType::U8) => {
+    (Err(_), _) => call_rust(),
+    (Ok(bsize), PixelType::U8) => {
       match SSE_FNS[cpu.as_index()][to_index(bsize)] {
         Some(func) => unsafe {
           (func)(
@@ -125,7 +125,7 @@ pub fn get_weighted_sse<T: Pixel>(
         None => call_rust(),
       }
     }
-    (Some(bsize), PixelType::U16) => {
+    (Ok(bsize), PixelType::U16) => {
       match SSE_HBD_FNS[cpu.as_index()][to_index(bsize)] {
         Some(func) => unsafe {
           (func)(
