@@ -109,7 +109,7 @@ impl Default for PartitionParameters {
     PartitionParameters {
       rd_cost: std::f64::MAX,
       bo: TileBlockOffset::default(),
-      bsize: BlockSize::BLOCK_INVALID,
+      bsize: BlockSize::BLOCK_32X32,
       pred_mode_luma: PredictionMode::default(),
       pred_mode_chroma: PredictionMode::default(),
       pred_cfl_params: CFLParams::default(),
@@ -1761,7 +1761,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 ) -> Option<CFLParams> {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
-  debug_assert!(bsize.subsampled_size(xdec, ydec) == uv_tx_size.block_size());
+  debug_assert!(
+    bsize.subsampled_size(xdec, ydec).unwrap() == uv_tx_size.block_size()
+  );
 
   let frame_bo = ts.to_frame_block_offset(tile_bo);
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
@@ -2025,9 +2027,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   child_modes: &mut ArrayVec<PartitionParameters, 4>,
 ) -> Option<f64> {
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
-  let subsize = bsize.subsize(partition);
-
-  debug_assert!(subsize != BlockSize::BLOCK_INVALID);
+  let subsize = bsize.subsize(partition).unwrap();
 
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };

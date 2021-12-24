@@ -472,8 +472,11 @@ impl<'a> BlockContext<'a> {
       let xdec2 = if plane == 0 { 0 } else { xdec };
       let ydec2 = if plane == 0 { 0 } else { ydec };
 
-      let plane_bsize =
-        if plane == 0 { bsize } else { bsize.subsampled_size(xdec2, ydec2) };
+      let plane_bsize = if plane == 0 {
+        bsize
+      } else {
+        bsize.subsampled_size(xdec2, ydec2).unwrap()
+      };
       let bw = plane_bsize.width_mi();
       let bh = plane_bsize.height_mi();
 

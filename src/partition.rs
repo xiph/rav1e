@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 
 use crate::serialize::{Deserialize, Serialize};
+use thiserror::Error;
 
 use self::BlockSize::*;
 use self::TxSize::*;
@@ -62,6 +63,7 @@ impl RefType {
 
 use self::RefType::*;
 use std::fmt;
+use std::fmt::Display;
 
 pub const ALL_INTER_REFS: [RefType; 7] = [
   LAST_FRAME,
@@ -141,7 +143,15 @@ pub enum BlockSize {
   BLOCK_32X8,
   BLOCK_16X64,
   BLOCK_64X16,
-  BLOCK_INVALID,
+}
+
+#[derive(Debug, Error, Copy, Clone)]
+pub struct InvalidBlockSize;
+
+impl Display for InvalidBlockSize {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("invalid block size")
+  }
 }
 
 impl PartialOrd for BlockSize {
@@ -172,35 +182,36 @@ impl BlockSize {
   pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
 
   #[inline]
-  pub fn from_width_and_height_opt(w: usize, h: usize) -> Option<BlockSize> {
+  pub fn from_width_and_height_opt(
+    w: usize, h: usize,
+  ) -> Result<BlockSize, InvalidBlockSize> {
     match (w, h) {
-      (4, 4) => Some(BLOCK_4X4),
-      (4, 8) => Some(BLOCK_4X8),
-      (8, 4) => Some(BLOCK_8X4),
-      (8, 8) => Some(BLOCK_8X8),
-      (8, 16) => Some(BLOCK_8X16),
-      (16, 8) => Some(BLOCK_16X8),
-      (16, 16) => Some(BLOCK_16X16),
-      (16, 32) => Some(BLOCK_16X32),
-      (32, 16) => Some(BLOCK_32X16),
-      (32, 32) => Some(BLOCK_32X32),
-      (32, 64) => Some(BLOCK_32X64),
-      (64, 32) => Some(BLOCK_64X32),
-      (64, 64) => Some(BLOCK_64X64),
-      (64, 128) => Some(BLOCK_64X128),
-      (128, 64) => Some(BLOCK_128X64),
-      (128, 128) => Some(BLOCK_128X128),
-      (4, 16) => Some(BLOCK_4X16),
-      (16, 4) => Some(BLOCK_16X4),
-      (8, 32) => Some(BLOCK_8X32),
-      (32, 8) => Some(BLOCK_32X8),
-      (16, 64) => Some(BLOCK_16X64),
-      (64, 16) => Some(BLOCK_64X16),
-      _ => None,
+      (4, 4) => Ok(BLOCK_4X4),
+      (4, 8) => Ok(BLOCK_4X8),
+      (8, 4) => Ok(BLOCK_8X4),
+      (8, 8) => Ok(BLOCK_8X8),
+      (8, 16) => Ok(BLOCK_8X16),
+      (16, 8) => Ok(BLOCK_16X8),
+      (16, 16) => Ok(BLOCK_16X16),
+      (16, 32) => Ok(BLOCK_16X32),
+      (32, 16) => Ok(BLOCK_32X16),
+      (32, 32) => Ok(BLOCK_32X32),
+      (32, 64) => Ok(BLOCK_32X64),
+      (64, 32) => Ok(BLOCK_64X32),
+      (64, 64) => Ok(BLOCK_64X64),
+      (64, 128) => Ok(BLOCK_64X128),
+      (128, 64) => Ok(BLOCK_128X64),
+      (128, 128) => Ok(BLOCK_128X128),
+      (4, 16) => Ok(BLOCK_4X16),
+      (16, 4) => Ok(BLOCK_16X4),
+      (8, 32) => Ok(BLOCK_8X32),
+      (32, 8) => Ok(BLOCK_32X8),
+      (16, 64) => Ok(BLOCK_16X64),
+      (64, 16) => Ok(BLOCK_64X16),
+      _ => Err(InvalidBlockSize),
     }
   }
 
-  #[inline]
   pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
     Self::from_width_and_height_opt(w, h).unwrap()
   }
@@ -225,7 +236,6 @@ impl BlockSize {
       BLOCK_32X8 | BLOCK_32X16 | BLOCK_32X32 | BLOCK_32X64 => 5,
       BLOCK_64X16 | BLOCK_64X32 | BLOCK_64X64 | BLOCK_64X128 => 6,
       BLOCK_128X64 | BLOCK_128X128 => 7,
-      BLOCK_INVALID => unreachable!(),
     }
   }
 
@@ -259,7 +269,6 @@ impl BlockSize {
       BLOCK_8X32 | BLOCK_16X32 | BLOCK_32X32 | BLOCK_64X32 => 5,
       BLOCK_16X64 | BLOCK_32X64 | BLOCK_64X64 | BLOCK_128X64 => 6,
       BLOCK_64X128 | BLOCK_128X128 => 7,
-      BLOCK_INVALID => unreachable!(),
     }
   }
 
@@ -300,15 +309,16 @@ impl BlockSize {
       BLOCK_32X8 => TX_32X8,
       BLOCK_16X64 => TX_16X64,
       BLOCK_64X16 => TX_64X16,
-      BLOCK_INVALID => unreachable!(),
       _ => TX_64X64,
     }
   }
 
   /// Source: Subsampled_Size (AV1 specification section 5.11.38)
   #[inline]
-  pub fn subsampled_size(self, xdec: usize, ydec: usize) -> BlockSize {
-    match (xdec, ydec) {
+  pub fn subsampled_size(
+    self, xdec: usize, ydec: usize,
+  ) -> Result<BlockSize, InvalidBlockSize> {
+    Ok(match (xdec, ydec) {
       (0, 0) /* 4:4:4 */ => self,
       (1, 0) /* 4:2:2 */ => match self {
         BLOCK_4X4 | BLOCK_8X4 => BLOCK_4X4,
@@ -324,7 +334,7 @@ impl BlockSize {
         BLOCK_64X64 => BLOCK_32X64,
         BLOCK_128X64 => BLOCK_64X64,
         BLOCK_128X128 => BLOCK_64X128,
-        _ => BLOCK_INVALID
+        _ => return Err(InvalidBlockSize),
       },
       (1, 1) /* 4:2:0 */ => match self {
         BLOCK_4X4 | BLOCK_4X8 | BLOCK_8X4 | BLOCK_8X8 => BLOCK_4X4,
@@ -344,18 +354,16 @@ impl BlockSize {
         BLOCK_64X128 => BLOCK_32X64,
         BLOCK_128X64 => BLOCK_64X32,
         BLOCK_128X128 => BLOCK_64X64,
-        _ => BLOCK_INVALID
       },
-      _ => unreachable!()
-    }
+      _ => return Err(InvalidBlockSize),
+    })
   }
 
   #[inline]
   pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
-    let plane_bsize = self.subsampled_size(xdec, ydec);
-    if plane_bsize == BLOCK_INVALID {
-      panic!("invalid block size for this subsampling mode");
-    }
+    let plane_bsize = self
+      .subsampled_size(xdec, ydec)
+      .expect("invalid block size for this subsampling mode");
 
     let chroma_tx_size = max_txsize_rect_lookup[plane_bsize as usize];
 
@@ -380,10 +388,12 @@ impl BlockSize {
     (offset_x, offset_y)
   }
 
-  pub fn subsize(self, partition: PartitionType) -> BlockSize {
+  pub fn subsize(
+    self, partition: PartitionType,
+  ) -> Result<BlockSize, InvalidBlockSize> {
     use PartitionType::*;
 
-    match partition {
+    Ok(match partition {
       PARTITION_NONE => self,
       PARTITION_SPLIT => match self {
         BLOCK_8X8 => BLOCK_4X4,
@@ -391,7 +401,7 @@ impl BlockSize {
         BLOCK_32X32 => BLOCK_16X16,
         BLOCK_64X64 => BLOCK_32X32,
         BLOCK_128X128 => BLOCK_64X64,
-        _ => BLOCK_INVALID,
+        _ => return Err(InvalidBlockSize),
       },
       PARTITION_HORZ | PARTITION_HORZ_A | PARTITION_HORZ_B => match self {
         BLOCK_8X8 => BLOCK_8X4,
@@ -399,7 +409,7 @@ impl BlockSize {
         BLOCK_32X32 => BLOCK_32X16,
         BLOCK_64X64 => BLOCK_64X32,
         BLOCK_128X128 => BLOCK_128X64,
-        _ => BLOCK_INVALID,
+        _ => return Err(InvalidBlockSize),
       },
       PARTITION_VERT | PARTITION_VERT_A | PARTITION_VERT_B => match self {
         BLOCK_8X8 => BLOCK_4X8,
@@ -407,31 +417,36 @@ impl BlockSize {
         BLOCK_32X32 => BLOCK_16X32,
         BLOCK_64X64 => BLOCK_32X64,
         BLOCK_128X128 => BLOCK_64X128,
-        _ => BLOCK_INVALID,
+        _ => return Err(InvalidBlockSize),
       },
       PARTITION_HORZ_4 => match self {
         BLOCK_16X16 => BLOCK_16X4,
         BLOCK_32X32 => BLOCK_32X8,
         BLOCK_64X64 => BLOCK_64X16,
-        _ => BLOCK_INVALID,
+        _ => return Err(InvalidBlockSize),
       },
       PARTITION_VERT_4 => match self {
         BLOCK_16X16 => BLOCK_4X16,
         BLOCK_32X32 => BLOCK_8X32,
         BLOCK_64X64 => BLOCK_16X64,
-        _ => BLOCK_INVALID,
+        _ => return Err(InvalidBlockSize),
       },
-      _ => BLOCK_INVALID,
-    }
+      _ => return Err(InvalidBlockSize),
+    })
   }
 
   pub fn is_rect_tx_allowed(self) -> bool {
-    match self {
-      BLOCK_4X4 | BLOCK_8X8 | BLOCK_16X16 | BLOCK_32X32 | BLOCK_64X64
-      | BLOCK_64X128 | BLOCK_128X64 | BLOCK_128X128 => false,
-      BLOCK_INVALID => unreachable!(),
-      _ => true,
-    }
+    !matches!(
+      self,
+      BLOCK_4X4
+        | BLOCK_8X8
+        | BLOCK_16X16
+        | BLOCK_32X32
+        | BLOCK_64X64
+        | BLOCK_64X128
+        | BLOCK_128X64
+        | BLOCK_128X128
+    )
   }
 }
 
@@ -463,7 +478,6 @@ impl fmt::Display for BlockSize {
         BlockSize::BLOCK_32X8 => "32x8",
         BlockSize::BLOCK_16X64 => "16x64",
         BlockSize::BLOCK_64X16 => "64x16",
-        BlockSize::BLOCK_INVALID => "Invalid",
       }
     )
   }
