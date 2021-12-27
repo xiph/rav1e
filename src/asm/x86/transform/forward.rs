@@ -14,6 +14,8 @@ use crate::transform::*;
 use crate::util::*;
 use std::mem::MaybeUninit;
 
+use arrayref::{array_mut_ref, array_ref};
+
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
@@ -135,18 +137,16 @@ impl TxOperations for I32X8 {
 impl_1d_tx!(target_feature(enable = "avx2"), unsafe);
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_8x8_avx2(
-  input: (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8),
-) -> (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8) {
+unsafe fn transpose_8x8_avx2(input: &[I32X8; 8], into: &mut [I32X8; 8]) {
   let stage1 = (
-    _mm256_unpacklo_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpackhi_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpacklo_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpackhi_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpacklo_epi32(input.4.vec(), input.5.vec()),
-    _mm256_unpackhi_epi32(input.4.vec(), input.5.vec()),
-    _mm256_unpacklo_epi32(input.6.vec(), input.7.vec()),
-    _mm256_unpackhi_epi32(input.6.vec(), input.7.vec()),
+    _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpacklo_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpackhi_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpacklo_epi32(input[4].vec(), input[5].vec()),
+    _mm256_unpackhi_epi32(input[4].vec(), input[5].vec()),
+    _mm256_unpacklo_epi32(input[6].vec(), input[7].vec()),
+    _mm256_unpackhi_epi32(input[6].vec(), input[7].vec()),
   );
 
   let stage2 = (
@@ -163,33 +163,29 @@ unsafe fn transpose_8x8_avx2(
   #[allow(clippy::identity_op)]
   const LO: i32 = (2 << 4) | 0;
   const HI: i32 = (3 << 4) | 1;
-  (
-    I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, HI)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, HI)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, HI)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, HI)),
-  )
+  into[0] = I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, LO));
+  into[1] = I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, LO));
+  into[2] = I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, LO));
+  into[3] = I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, LO));
+  into[4] = I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, HI));
+  into[5] = I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, HI));
+  into[6] = I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, HI));
+  into[7] = I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, HI));
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_8x4_avx2(
-  input: (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8),
-) -> (I32X8, I32X8, I32X8, I32X8) {
+unsafe fn transpose_8x4_avx2(input: &[I32X8; 8], into: &mut [I32X8; 4]) {
   // Last 8 are empty
   let stage1 = (
     //0101
-    _mm256_unpacklo_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpackhi_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpacklo_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpackhi_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpacklo_epi32(input.4.vec(), input.5.vec()),
-    _mm256_unpackhi_epi32(input.4.vec(), input.5.vec()),
-    _mm256_unpacklo_epi32(input.6.vec(), input.7.vec()),
-    _mm256_unpackhi_epi32(input.6.vec(), input.7.vec()),
+    _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpacklo_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpackhi_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpacklo_epi32(input[4].vec(), input[5].vec()),
+    _mm256_unpackhi_epi32(input[4].vec(), input[5].vec()),
+    _mm256_unpacklo_epi32(input[6].vec(), input[7].vec()),
+    _mm256_unpackhi_epi32(input[6].vec(), input[7].vec()),
   );
 
   let stage2 = (
@@ -205,25 +201,21 @@ unsafe fn transpose_8x4_avx2(
 
   #[allow(clippy::identity_op)]
   const LO: i32 = (2 << 4) | 0;
-  (
-    I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, LO)),
-    I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, LO)),
-  )
+  into[0] = I32X8::new(_mm256_permute2x128_si256(stage2.0, stage2.4, LO));
+  into[1] = I32X8::new(_mm256_permute2x128_si256(stage2.1, stage2.5, LO));
+  into[2] = I32X8::new(_mm256_permute2x128_si256(stage2.2, stage2.6, LO));
+  into[3] = I32X8::new(_mm256_permute2x128_si256(stage2.3, stage2.7, LO));
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_4x8_avx2(
-  input: (I32X8, I32X8, I32X8, I32X8),
-) -> (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8) {
+unsafe fn transpose_4x8_avx2(input: &[I32X8; 4], into: &mut [I32X8; 8]) {
   let stage1 = (
     // 0101
-    _mm256_unpacklo_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpackhi_epi32(input.0.vec(), input.1.vec()),
+    _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
     // 2323
-    _mm256_unpacklo_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpackhi_epi32(input.2.vec(), input.3.vec()),
+    _mm256_unpacklo_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpackhi_epi32(input[2].vec(), input[3].vec()),
   );
 
   let stage2 = (
@@ -234,35 +226,33 @@ unsafe fn transpose_4x8_avx2(
     _mm256_unpackhi_epi64(stage1.1, stage1.3),
   );
 
-  (
-    I32X8::new(stage2.0),
-    I32X8::new(stage2.1),
-    I32X8::new(stage2.2),
-    I32X8::new(stage2.3),
-    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.0, 1))),
-    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.1, 1))),
-    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.2, 1))),
-    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.3, 1))),
-  )
+  into[0] = I32X8::new(stage2.0);
+  into[1] = I32X8::new(stage2.1);
+  into[2] = I32X8::new(stage2.2);
+  into[3] = I32X8::new(stage2.3);
+  into[4] =
+    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.0, 1)));
+  into[5] =
+    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.1, 1)));
+  into[6] =
+    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.2, 1)));
+  into[7] =
+    I32X8::new(_mm256_castsi128_si256(_mm256_extractf128_si256(stage2.3, 1)));
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn transpose_4x4_avx2(
-  input: (I32X8, I32X8, I32X8, I32X8),
-) -> (I32X8, I32X8, I32X8, I32X8) {
+unsafe fn transpose_4x4_avx2(input: &[I32X8; 4], into: &mut [I32X8; 4]) {
   let stage1 = (
-    _mm256_unpacklo_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpackhi_epi32(input.0.vec(), input.1.vec()),
-    _mm256_unpacklo_epi32(input.2.vec(), input.3.vec()),
-    _mm256_unpackhi_epi32(input.2.vec(), input.3.vec()),
+    _mm256_unpacklo_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpackhi_epi32(input[0].vec(), input[1].vec()),
+    _mm256_unpacklo_epi32(input[2].vec(), input[3].vec()),
+    _mm256_unpackhi_epi32(input[2].vec(), input[3].vec()),
   );
 
-  (
-    I32X8::new(_mm256_unpacklo_epi64(stage1.0, stage1.2)),
-    I32X8::new(_mm256_unpackhi_epi64(stage1.0, stage1.2)),
-    I32X8::new(_mm256_unpacklo_epi64(stage1.1, stage1.3)),
-    I32X8::new(_mm256_unpackhi_epi64(stage1.1, stage1.3)),
-  )
+  into[0] = I32X8::new(_mm256_unpacklo_epi64(stage1.0, stage1.2));
+  into[1] = I32X8::new(_mm256_unpackhi_epi64(stage1.0, stage1.2));
+  into[2] = I32X8::new(_mm256_unpacklo_epi64(stage1.1, stage1.3));
+  into[3] = I32X8::new(_mm256_unpackhi_epi64(stage1.1, stage1.3));
 }
 
 #[target_feature(enable = "avx2")]
@@ -282,27 +272,27 @@ unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
 
 #[target_feature(enable = "avx2")]
 #[inline]
-unsafe fn round_shift_array_avx2(arr: &mut [I32X8], size: usize, bit: i8) {
+unsafe fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
+  if arr.len() % 4 != 0 {
+    std::hint::unreachable_unchecked();
+  }
+
   if bit == 0 {
     return;
   }
   if bit > 0 {
     let shift = bit as u8;
-    for i in (0..size).step_by(4) {
-      let s = &mut arr[i..i + 4];
-      s[0] = shift_right(s[0], shift);
-      s[1] = shift_right(s[1], shift);
-      s[2] = shift_right(s[2], shift);
-      s[3] = shift_right(s[3], shift);
+    for s in arr.chunks_exact_mut(4) {
+      for chunk in s {
+        *chunk = shift_right(*chunk, shift);
+      }
     }
   } else {
     let shift = (-bit) as u8;
-    for i in (0..size).step_by(4) {
-      let s = &mut arr[i..i + 4];
-      s[0] = shift_left(s[0], shift);
-      s[1] = shift_left(s[1], shift);
-      s[2] = shift_left(s[2], shift);
-      s[3] = shift_left(s[3], shift);
+    for s in arr.chunks_exact_mut(4) {
+      for chunk in s {
+        *chunk = shift_left(*chunk, shift);
+      }
     }
   }
 }
@@ -388,76 +378,40 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
     let col_coeffs = assume_slice_init_mut(tx_in);
 
     txfm_func_col(col_coeffs);
-    round_shift_array_avx2(col_coeffs, txfm_size_row, -cfg.shift[1]);
+    round_shift_array_avx2(col_coeffs, -cfg.shift[1]);
 
     // Transpose the array. Select the appropriate method to do so.
     match (row_class, col_class) {
       (SizeClass1D::X8UP, SizeClass1D::X8UP) => {
         for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = &mut buf[..8];
+          let buf = array_mut_ref!(buf, 0, 8);
           let input = &col_coeffs[rg..];
-          let input = &input[..8];
-          let transposed = transpose_8x8_avx2((
-            input[0], input[1], input[2], input[3], input[4], input[5],
-            input[6], input[7],
-          ));
-
-          buf[0] = transposed.0;
-          buf[1] = transposed.1;
-          buf[2] = transposed.2;
-          buf[3] = transposed.3;
-          buf[4] = transposed.4;
-          buf[5] = transposed.5;
-          buf[6] = transposed.6;
-          buf[7] = transposed.7;
+          let input = array_ref!(input, 0, 8);
+          transpose_8x8_avx2(input, buf);
         }
       }
       (SizeClass1D::X8UP, SizeClass1D::X4) => {
         for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = &mut buf[..4];
+          let buf = array_mut_ref!(buf, 0, 4);
           let input = &col_coeffs[rg..];
-          let input = &input[..8];
-          let transposed = transpose_8x4_avx2((
-            input[0], input[1], input[2], input[3], input[4], input[5],
-            input[6], input[7],
-          ));
-
-          buf[0] = transposed.0;
-          buf[1] = transposed.1;
-          buf[2] = transposed.2;
-          buf[3] = transposed.3;
+          let input = array_ref!(input, 0, 8);
+          transpose_8x4_avx2(input, buf);
         }
       }
       (SizeClass1D::X4, SizeClass1D::X8UP) => {
         // Don't need to loop over rows
         let buf = &mut buf[cg..];
-        let buf = &mut buf[..8];
-        let input = &col_coeffs[..4];
-        let transposed =
-          transpose_4x8_avx2((input[0], input[1], input[2], input[3]));
-
-        buf[0] = transposed.0;
-        buf[1] = transposed.1;
-        buf[2] = transposed.2;
-        buf[3] = transposed.3;
-        buf[4] = transposed.4;
-        buf[5] = transposed.5;
-        buf[6] = transposed.6;
-        buf[7] = transposed.7;
+        let buf = array_mut_ref!(buf, 0, 8);
+        let input = array_ref!(col_coeffs, 0, 4);
+        transpose_4x8_avx2(input, buf);
       }
       (SizeClass1D::X4, SizeClass1D::X4) => {
         // Don't need to loop over rows
-        let buf = &mut buf[..4];
-        let input = &col_coeffs[..4];
-        let transposed =
-          transpose_4x4_avx2((input[0], input[1], input[2], input[3]));
-
-        buf[0] = transposed.0;
-        buf[1] = transposed.1;
-        buf[2] = transposed.2;
-        buf[3] = transposed.3;
+        let buf = array_mut_ref!(buf, 0, 4);
+        let input = array_ref!(col_coeffs, 0, 4);
+        transpose_4x4_avx2(input, buf);
       }
     }
   }
@@ -471,7 +425,7 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
     }
 
     txfm_func_row(row_coeffs);
-    round_shift_array_avx2(row_coeffs, txfm_size_col, -cfg.shift[2]);
+    round_shift_array_avx2(row_coeffs, -cfg.shift[2]);
 
     // Write out the coefficients using the correct method for transforms of
     // this size.

@@ -319,13 +319,13 @@ pub fn av1_round_shift_array(arr: &mut [i32], size: usize, bit: i8) {
   }
   if bit > 0 {
     let bit = bit as usize;
-    for i in arr.iter_mut().take(size) {
+    arr.iter_mut().take(size).for_each(|i| {
       *i = round_shift(*i, bit);
-    }
+    })
   } else {
-    for i in arr.iter_mut().take(size) {
+    arr.iter_mut().take(size).for_each(|i| {
       *i <<= -bit;
-    }
+    })
   }
 }
 
