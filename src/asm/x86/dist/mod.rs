@@ -122,37 +122,44 @@ pub(crate) const fn to_index(bsize: BlockSize) -> usize {
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_sad<T: Pixel>(
-  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> u32 {
-  let call_rust = || -> u32 { rust::get_sad(dst, src, bsize, bit_depth, cpu) };
+  let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
+
+  let call_rust = || -> u32 { rust::get_sad(dst, src, w, h, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
 
-  let dist = match T::type_enum() {
-    PixelType::U8 => match SAD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_rust(),
-    },
-    PixelType::U16 => match SAD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_rust(),
-    },
+  let dist = match (bsize_opt, T::type_enum()) {
+    (Err(_), _) => call_rust(),
+    (Ok(bsize), PixelType::U8) => {
+      match SAD_FNS[cpu.as_index()][to_index(bsize)] {
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        },
+        None => call_rust(),
+      }
+    }
+    (Ok(bsize), PixelType::U16) => {
+      match SAD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        },
+        None => call_rust(),
+      }
+    }
   };
 
   #[cfg(feature = "check_asm")]
@@ -164,39 +171,45 @@ pub fn get_sad<T: Pixel>(
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_satd<T: Pixel>(
-  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bsize: BlockSize,
+  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, cpu: CpuFeatureLevel,
 ) -> u32 {
-  let call_rust =
-    || -> u32 { rust::get_satd(dst, src, bsize, bit_depth, cpu) };
+  let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
+
+  let call_rust = || -> u32 { rust::get_satd(dst, src, w, h, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
 
-  let dist = match T::type_enum() {
-    PixelType::U8 => match SATD_FNS[cpu.as_index()][to_index(bsize)] {
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          T::to_asm_stride(src.plane_cfg.stride),
-          dst.data_ptr() as *const _,
-          T::to_asm_stride(dst.plane_cfg.stride),
-        )
-      },
-      None => call_rust(),
-    },
-    PixelType::U16 => match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
-      // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
-      Some(func) => unsafe {
-        (func)(
-          src.data_ptr() as *const _,
-          src.plane_cfg.stride as isize,
-          dst.data_ptr() as *const _,
-          dst.plane_cfg.stride as isize,
-        )
-      },
-      None => call_rust(),
-    },
+  let dist = match (bsize_opt, T::type_enum()) {
+    (Err(_), _) => call_rust(),
+    (Ok(bsize), PixelType::U8) => {
+      match SATD_FNS[cpu.as_index()][to_index(bsize)] {
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        },
+        None => call_rust(),
+      }
+    }
+    (Ok(bsize), PixelType::U16) => {
+      match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            src.plane_cfg.stride as isize,
+            dst.data_ptr() as *const _,
+            dst.plane_cfg.stride as isize,
+          )
+        },
+        None => call_rust(),
+      }
+    }
   };
 
   #[cfg(feature = "check_asm")]
@@ -492,7 +505,6 @@ mod test {
               return;
             }
 
-            let bsize = BlockSize::[<BLOCK_ $W X $H>];
             if $BD > 8 {
               // dynamic allocation: test
               let mut src = Plane::from_slice(&[0u16; $W * $H], $W);
@@ -502,8 +514,8 @@ mod test {
                 *s = random::<u8>() as u16 * $BD / 8;
                 *d = random::<u8>() as u16 * $BD / 8;
               }
-              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::RUST);
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             } else {
@@ -515,8 +527,8 @@ mod test {
                 *s = random::<u8>();
                 *d = random::<u8>();
               }
-              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), bsize, $BD, CpuFeatureLevel::RUST);
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             }

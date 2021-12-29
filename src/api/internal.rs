@@ -853,7 +853,8 @@ impl<T: Pixel> ContextInner<T> {
             let inter_cost = get_satd(
               &region_org,
               &region_ref,
-              bsize,
+              bsize.width(),
+              bsize.height(),
               bit_depth,
               fi.cpu_feature_level,
             ) as f32;

@@ -92,7 +92,8 @@ fn new_plane<T: Pixel>(
 type DistFn<T> = fn(
   plane_org: &PlaneRegion<'_, T>,
   plane_ref: &PlaneRegion<'_, T>,
-  bsize: BlockSize,
+  w: usize,
+  h: usize,
   bit_depth: usize,
   cpu: CpuFeatureLevel,
 ) -> u32;
@@ -110,8 +111,12 @@ fn run_dist_bench<T: Pixel>(
   let plane_org = input_plane.as_region();
   let plane_ref = rec_plane.as_region();
 
+  let blk_w = bs.width();
+  let blk_h = bs.width();
+
   b.iter(|| {
-    let _ = black_box(func(&plane_org, &plane_ref, bs, bit_depth, cpu));
+    let _ =
+      black_box(func(&plane_org, &plane_ref, blk_w, blk_h, bit_depth, cpu));
   })
 }
 

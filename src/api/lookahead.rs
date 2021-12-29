@@ -104,7 +104,8 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       let intra_cost = get_satd(
         &plane_org,
         &plane_after_prediction_region,
-        bsize,
+        bsize.width(),
+        bsize.height(),
         bit_depth,
         cpu_feature_level,
       );
@@ -227,7 +228,8 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
       inter_costs.push(get_satd(
         &region_org,
         &region_ref,
-        bsize,
+        bsize.width(),
+        bsize.height(),
         bit_depth,
         fi.cpu_feature_level,
       ));
