@@ -21,30 +21,30 @@ cfg_if::cfg_if! {
 
 pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
-  use crate::partition::BlockSize;
   use crate::tiling::*;
   use crate::util::*;
 
   use crate::encoder::IMPORTANCE_BLOCK_SIZE;
   use crate::rdo::{DistortionScale, RawDistortion};
-  use simd_helpers::cold_for_target_arch;
 
-  #[cold_for_target_arch("x86_64")]
+  /// Compute the sum of absolute differences over a block.
+  /// w and h can be at most 128, the size of the largest block.
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
+    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
-    let blk_w = bsize.width();
-    let blk_h = bsize.height();
+    assert!(w <= 128 && h <= 128);
+    assert!(plane_org.rect().width >= w && plane_org.rect().height >= h);
+    assert!(plane_ref.rect().width >= w && plane_ref.rect().height >= h);
 
     let mut sum: u32 = 0;
 
     for (slice_org, slice_ref) in
-      plane_org.rows_iter().take(blk_h).zip(plane_ref.rows_iter())
+      plane_org.rows_iter().take(h).zip(plane_ref.rows_iter())
     {
       sum += slice_org
         .iter()
-        .take(blk_w)
+        .take(w)
         .zip(slice_ref)
         .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).abs() as u32)
         .sum::<u32>();
@@ -124,35 +124,48 @@ pub(crate) mod rust {
     hadamard2d(data, (8, 8));
   }
 
-  /// Sum of absolute transformed differences
-  /// Use the sum of 4x4 and 8x8 hadamard transforms for the transform. 4x* and
-  /// *x4 blocks use 4x4 and all others use 8x8.
-  #[cold_for_target_arch("x86_64")]
+  /// Sum of absolute transformed differences over a block.
+  /// w and h can be at most 128, the size of the largest block.
+  /// Use the sum of 4x4 and 8x8 hadamard transforms for the transform, but
+  /// revert to sad on edges when these transforms do not fit into w and h.
+  /// 4x4 transforms instead of 8x8 transforms when width or height < 8.
   pub fn get_satd<T: Pixel>(
-    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
-    bsize: BlockSize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
+    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
-    let blk_w = bsize.width();
-    let blk_h = bsize.height();
+    assert!(w <= 128 && h <= 128);
+    assert!(plane_org.rect().width >= w && plane_org.rect().height >= h);
+    assert!(plane_ref.rect().width >= w && plane_ref.rect().height >= h);
 
     // Size of hadamard transform should be 4x4 or 8x8
     // 4x* and *x4 use 4x4 and all other use 8x8
-    let size: usize = blk_w.min(blk_h).min(8);
+    let size: usize = w.min(h).min(8);
     let tx2d = if size == 4 { hadamard4x4 } else { hadamard8x8 };
 
     let mut sum: u64 = 0;
 
     // Loop over chunks the size of the chosen transform
-    for chunk_y in (0..blk_h).step_by(size) {
-      for chunk_x in (0..blk_w).step_by(size) {
+    for chunk_y in (0..h).step_by(size) {
+      let chunk_h = (h - chunk_y).min(size);
+      for chunk_x in (0..w).step_by(size) {
+        let chunk_w = (w - chunk_x).min(size);
         let chunk_area: Area = Area::Rect {
           x: chunk_x as isize,
           y: chunk_y as isize,
-          width: size,
-          height: size,
+          width: chunk_w,
+          height: chunk_h,
         };
         let chunk_org = plane_org.subregion(chunk_area);
         let chunk_ref = plane_ref.subregion(chunk_area);
+
+        // Revert to sad on edge blocks (frame edges)
+        if chunk_w != size || chunk_h != size {
+          sum += get_sad(
+            &chunk_org, &chunk_ref, chunk_w, chunk_h, _bit_depth, _cpu,
+          ) as u64;
+          continue;
+        }
+
         let buf: &mut [i32] = &mut [0; 8 * 8][..size * size];
 
         // Move the difference of the transforms to a buffer
@@ -235,8 +248,6 @@ pub mod test {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::*;
-  use crate::partition::BlockSize;
-  use crate::partition::BlockSize::*;
   use crate::tiling::Area;
   use crate::util::Pixel;
 
@@ -279,46 +290,47 @@ pub mod test {
   // Regression and validation test for SAD computation
   fn get_sad_same_inner<T: Pixel>() {
     // dynamic allocation: test
-    let blocks: Vec<(BlockSize, u32)> = vec![
-      (BLOCK_4X4, 1912),
-      (BLOCK_4X8, 4296),
-      (BLOCK_8X4, 3496),
-      (BLOCK_8X8, 7824),
-      (BLOCK_8X16, 16592),
-      (BLOCK_16X8, 14416),
-      (BLOCK_16X16, 31136),
-      (BLOCK_16X32, 60064),
-      (BLOCK_32X16, 59552),
-      (BLOCK_32X32, 120128),
-      (BLOCK_32X64, 186688),
-      (BLOCK_64X32, 250176),
-      (BLOCK_64X64, 438912),
-      (BLOCK_64X128, 654272),
-      (BLOCK_128X64, 1016768),
-      (BLOCK_128X128, 1689792),
-      (BLOCK_4X16, 8680),
-      (BLOCK_16X4, 6664),
-      (BLOCK_8X32, 31056),
-      (BLOCK_32X8, 27600),
-      (BLOCK_16X64, 93344),
-      (BLOCK_64X16, 116384),
+    let blocks: Vec<(usize, usize, u32)> = vec![
+      (4, 4, 1912),
+      (4, 8, 4296),
+      (8, 4, 3496),
+      (8, 8, 7824),
+      (8, 16, 16592),
+      (16, 8, 14416),
+      (16, 16, 31136),
+      (16, 32, 60064),
+      (32, 16, 59552),
+      (32, 32, 120128),
+      (32, 64, 186688),
+      (64, 32, 250176),
+      (64, 64, 438912),
+      (64, 128, 654272),
+      (128, 64, 1016768),
+      (128, 128, 1689792),
+      (4, 16, 8680),
+      (16, 4, 6664),
+      (8, 32, 31056),
+      (32, 8, 27600),
+      (16, 64, 93344),
+      (64, 16, 116384),
     ];
 
     let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
-    for block in blocks {
+    for (w, h, distortion) in blocks {
       let area = Area::StartingAt { x: 32, y: 40 };
 
       let input_region = input_plane.region(area);
       let rec_region = rec_plane.region(area);
 
       assert_eq!(
-        block.1,
+        distortion,
         get_sad(
           &input_region,
           &rec_region,
-          block.0,
+          w,
+          h,
           bit_depth,
           CpuFeatureLevel::default()
         )
@@ -337,46 +349,47 @@ pub mod test {
   }
 
   fn get_satd_same_inner<T: Pixel>() {
-    let blocks: Vec<(BlockSize, u32)> = vec![
-      (BLOCK_4X4, 1408),
-      (BLOCK_4X8, 2016),
-      (BLOCK_8X4, 1816),
-      (BLOCK_8X8, 3984),
-      (BLOCK_8X16, 5136),
-      (BLOCK_16X8, 4864),
-      (BLOCK_16X16, 9984),
-      (BLOCK_16X32, 13824),
-      (BLOCK_32X16, 13760),
-      (BLOCK_32X32, 27952),
-      (BLOCK_32X64, 37168),
-      (BLOCK_64X32, 45104),
-      (BLOCK_64X64, 84176),
-      (BLOCK_64X128, 127920),
-      (BLOCK_128X64, 173680),
-      (BLOCK_128X128, 321456),
-      (BLOCK_4X16, 3136),
-      (BLOCK_16X4, 2632),
-      (BLOCK_8X32, 7056),
-      (BLOCK_32X8, 6624),
-      (BLOCK_16X64, 18432),
-      (BLOCK_64X16, 21312),
+    let blocks: Vec<(usize, usize, u32)> = vec![
+      (4, 4, 1408),
+      (4, 8, 2016),
+      (8, 4, 1816),
+      (8, 8, 3984),
+      (8, 16, 5136),
+      (16, 8, 4864),
+      (16, 16, 9984),
+      (16, 32, 13824),
+      (32, 16, 13760),
+      (32, 32, 27952),
+      (32, 64, 37168),
+      (64, 32, 45104),
+      (64, 64, 84176),
+      (64, 128, 127920),
+      (128, 64, 173680),
+      (128, 128, 321456),
+      (4, 16, 3136),
+      (16, 4, 2632),
+      (8, 32, 7056),
+      (32, 8, 6624),
+      (16, 64, 18432),
+      (64, 16, 21312),
     ];
 
     let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
-    for block in blocks {
+    for (w, h, distortion) in blocks {
       let area = Area::StartingAt { x: 32, y: 40 };
 
       let input_region = input_plane.region(area);
       let rec_region = rec_plane.region(area);
 
       assert_eq!(
-        block.1,
+        distortion,
         get_satd(
           &input_region,
           &rec_region,
-          block.0,
+          w,
+          h,
           bit_depth,
           CpuFeatureLevel::default()
         )

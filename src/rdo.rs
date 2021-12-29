@@ -1522,7 +1522,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       let satd = get_satd(
         &plane_org,
         &plane_ref,
-        bsize,
+        bsize.width(),
+        bsize.height(),
         fi.sequence.bit_depth,
         fi.cpu_feature_level,
       );
@@ -1667,7 +1668,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
         satds_all[luma_mode as usize] = get_satd(
           &plane_org,
           &plane_ref,
-          tx_size.block_size(),
+          tx_size.width(),
+          tx_size.height(),
           fi.sequence.bit_depth,
           fi.cpu_feature_level,
         );
