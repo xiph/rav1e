@@ -139,70 +139,86 @@ pub fn estimate_rate(qindex: u8, ts: TxSize, fast_distortion: u64) -> u64 {
   (y0 + (((fast_distortion as i64 - x0) * slope) >> 8)).max(0) as u64
 }
 
-// The microbenchmarks perform better with inlining turned off
+/// Number of bits of precision used in `AREA_DIVISORS`
+const AREA_DIVISOR_BITS: u8 = 14;
+
+/// Lookup table for 2^`AREA_DIVISOR_BITS` / (1 + x)
+#[rustfmt::skip]
+const AREA_DIVISORS: [u16; 64] = [
+  16384, 8192, 5461, 4096, 3277, 2731, 2341, 2048, 1820, 1638, 1489, 1365, 1260,
+   1170, 1092, 1024,  964,  910,  862,  819,  780,  745,  712,  683,  655,  630,
+    607,  585,  565,  546,  529,  512,  496,  482,  468,  455,  443,  431,  420,
+    410,  400,  390,  381,  372,  364,  356,  349,  341,  334,  328,  321,  315,
+    309,  303,  298,  293,  287,  282,  278,  273,  269,  264,  260,  256,
+];
+
+/// Computes a distortion metric of the sum of squares weighted by activity.
+/// w and h should be <= 8.
 #[inline(never)]
-fn cdef_dist_wxh_8x8<T: Pixel>(
-  src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, bit_depth: usize,
+fn cdef_dist_kernel<T: Pixel>(
+  src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
+  bit_depth: usize,
 ) -> RawDistortion {
+  // TODO: Investigate using different constants in ssim boost for block sizes
+  // smaller than 8x8.
+
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
   debug_assert!(src2.plane_cfg.xdec == 0);
   debug_assert!(src2.plane_cfg.ydec == 0);
 
-  // Sum into columns to improve auto-vectorization
-  let mut sum_s_cols: [u16; 8] = [0; 8];
-  let mut sum_d_cols: [u16; 8] = [0; 8];
-  let mut sum_s2_cols: [u32; 8] = [0; 8];
-  let mut sum_d2_cols: [u32; 8] = [0; 8];
-  let mut sum_sd_cols: [u32; 8] = [0; 8];
+  // Limit kernel to 8x8
+  debug_assert!(w <= 8);
+  debug_assert!(h <= 8);
 
-  // Check upfront that 8 rows are available.
-  let _row1 = &src1[7];
-  let _row2 = &src2[7];
+  // Compute the following summations.
+  let mut sum_s: u32 = 0; // sum(src1_{i,j})
+  let mut sum_d: u32 = 0; // sum(src2_{i,j})
+  let mut sum_s2: u32 = 0; // sum(src1_{i,j}^2)
+  let mut sum_d2: u32 = 0; // sum(src2_{i,j}^2)
+  let mut sum_sd: u32 = 0; // sum(src1_{i,j} * src2_{i,j})
+  for j in 0..h {
+    let row1 = &src1[j][0..w];
+    let row2 = &src2[j][0..w];
+    for (s, d) in row1.iter().zip(row2) {
+      let s: u32 = u32::cast_from(*s);
+      let d: u32 = u32::cast_from(*d);
+      sum_s += s;
+      sum_d += d;
 
-  for j in 0..8 {
-    let row1 = &src1[j][0..8];
-    let row2 = &src2[j][0..8];
-    for (sum_s, sum_d, sum_s2, sum_d2, sum_sd, s, d) in izip!(
-      &mut sum_s_cols,
-      &mut sum_d_cols,
-      &mut sum_s2_cols,
-      &mut sum_d2_cols,
-      &mut sum_sd_cols,
-      row1,
-      row2
-    ) {
-      // Don't convert directly to u32 to allow better vectorization
-      let s: u16 = u16::cast_from(*s);
-      let d: u16 = u16::cast_from(*d);
-      *sum_s += s;
-      *sum_d += d;
-
-      // Convert to u32 to avoid overflows when multiplying
-      let s: u32 = s as u32;
-      let d: u32 = d as u32;
-
-      *sum_s2 += s * s;
-      *sum_d2 += d * d;
-      *sum_sd += s * d;
+      sum_s2 += s * s;
+      sum_d2 += d * d;
+      sum_sd += s * d;
     }
   }
 
-  // Sum together the sum of columns
-  let sum_s: u32 = sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>();
-  let sum_d: u32 = sum_d_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>();
-  let sum_s2: u32 = sum_s2_cols.iter().sum::<u32>();
-  let sum_d2: u32 = sum_d2_cols.iter().sum::<u32>();
-  let sum_sd: u32 = sum_sd_cols.iter().sum::<u32>();
+  // To get the distortion, compute sum of squared error and apply a weight
+  // based on the variance of the two planes.
+  let sse = sum_d2 + sum_s2 - 2 * sum_sd;
 
   // Convert to 64-bits to avoid overflow when squaring
-  let sum_s: u64 = sum_s as u64;
-  let sum_d: u64 = sum_d as u64;
+  let sum_s = sum_s as u64;
+  let sum_d = sum_d as u64;
 
-  // Use sums to calculate distortion
-  let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6) as u32;
-  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6) as u32;
-  let sse = sum_d2 + sum_s2 - 2 * sum_sd;
+  // Calculate the variance (more accurately variance*area) of each plane.
+  // var[iance] = avg(X^2) - avg(X)^2 = sum(X^2) / n - sum(X)^2 / n^2
+  //    (n = # samples i.e. area)
+  // var * n = sum(X^2) - sum(X)^2 / n
+  // When w and h are powers of two, this can be done via shifting.
+  let div = AREA_DIVISORS[w * h - 1] as u64;
+  let div_shift = AREA_DIVISOR_BITS;
+  let mut svar = sum_s2
+    - ((sum_s * sum_s * div + (1 << div_shift >> 1)) >> div_shift) as u32;
+  let mut dvar = sum_d2
+    - ((sum_d * sum_d * div + (1 << div_shift >> 1)) >> div_shift) as u32;
+
+  // Scale variances up to 8x8 size.
+  //   scaled variance = var * (8x8) / wxh
+  // For 8x8, this is a nop. For powers of 2, this is doable with shifting.
+  // TODO: It should be possible and faster to do this adjustment in ssim boost
+  let scale_shift = AREA_DIVISOR_BITS - 6;
+  svar = ((svar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
+  dvar = ((dvar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
 
   RawDistortion(apply_ssim_boost(sse, svar, dvar, bit_depth) as u64)
 }
@@ -359,20 +375,23 @@ pub fn cdef_dist_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, compute_bias: F,
 ) -> Distortion {
-  assert!(w & 0x7 == 0);
-  assert!(h & 0x7 == 0);
   debug_assert!(src1.plane_cfg.xdec == 0);
   debug_assert!(src1.plane_cfg.ydec == 0);
   debug_assert!(src2.plane_cfg.xdec == 0);
   debug_assert!(src2.plane_cfg.ydec == 0);
 
   let mut sum = Distortion::zero();
-  for j in 0isize..h as isize / 8 {
-    for i in 0isize..w as isize / 8 {
-      let area = Area::StartingAt { x: i * 8, y: j * 8 };
-      let value = cdef_dist_wxh_8x8(
+  for y in (0..h).step_by(8) {
+    for x in (0..w).step_by(8) {
+      let kernel_h = (h - y).min(8);
+      let kernel_w = (w - x).min(8);
+      let area = Area::StartingAt { x: x as isize, y: y as isize };
+
+      let value = cdef_dist_kernel(
         &src1.subregion(area),
         &src2.subregion(area),
+        kernel_w,
+        kernel_h,
         bit_depth,
       );
 
@@ -484,71 +503,21 @@ fn compute_distortion<T: Pixel>(
   }
 
   let mut distortion = match fi.config.tune {
-    Tune::Psychovisual if bsize.width() >= 8 && bsize.height() >= 8 => {
-      let w8 = visible_w & !7;
-      let h8 = visible_h & !7;
-      let mut sum = Distortion(0);
-      if w8 > 0 && h8 > 0 {
-        sum += cdef_dist_wxh(
-          &input_region,
-          &rec_region,
-          w8,
-          h8,
-          fi.sequence.bit_depth,
-          |bias_area, bsize| {
-            distortion_scale(
-              fi,
-              input_region.subregion(bias_area).frame_block_offset(),
-              bsize,
-            )
-          },
-        );
-      }
-      if visible_w > w8 && h8 > 0 {
-        let area = Area::StartingAt { x: w8 as isize, y: 0 };
-        sum += sse_wxh(
-          &input_region.subregion(area),
-          &rec_region.subregion(area),
-          visible_w - w8,
-          h8,
-          |bias_area, bsize| {
-            spatiotemporal_scale(
-              fi,
-              input_region
-                .subregion(area)
-                .subregion(bias_area)
-                .frame_block_offset(),
-              bsize,
-            )
-          },
-          fi.sequence.bit_depth,
-          fi.cpu_feature_level,
-        );
-      }
-      if visible_h > h8 && visible_w > 0 {
-        let area = Area::StartingAt { x: 0, y: h8 as isize };
-        sum += sse_wxh(
-          &input_region.subregion(area),
-          &rec_region.subregion(area),
-          visible_w,
-          visible_h - h8,
-          |bias_area, bsize| {
-            spatiotemporal_scale(
-              fi,
-              input_region
-                .subregion(area)
-                .subregion(bias_area)
-                .frame_block_offset(),
-              bsize,
-            )
-          },
-          fi.sequence.bit_depth,
-          fi.cpu_feature_level,
-        );
-      }
-      sum
-    }
-    Tune::Psnr | Tune::Psychovisual => sse_wxh(
+    Tune::Psychovisual => cdef_dist_wxh(
+      &input_region,
+      &rec_region,
+      visible_w,
+      visible_h,
+      fi.sequence.bit_depth,
+      |bias_area, bsize| {
+        distortion_scale(
+          fi,
+          input_region.subregion(bias_area).frame_block_offset(),
+          bsize,
+        )
+      },
+    ),
+    Tune::Psnr => sse_wxh(
       &input_region,
       &rec_region,
       visible_w,
@@ -2227,8 +2196,14 @@ fn rdo_loop_plane_error<T: Pixel>(
           // For loop filters, We intentionally use cdef_dist even with
           // `--tune Psnr`. Using SSE instead gives no PSNR gain but has a
           // significant negative impact on other metrics and visual quality.
-          cdef_dist_wxh_8x8(&src_region, &test_region, fi.sequence.bit_depth)
-            * bias
+          //cdef_dist_wxh_8x8(&src_region, &test_region, fi.sequence.bit_depth)
+          cdef_dist_kernel(
+            &src_region,
+            &test_region,
+            8,
+            8,
+            fi.sequence.bit_depth,
+          ) * bias
         } else {
           sse_wxh(
             &src_region,
