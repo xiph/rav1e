@@ -11,7 +11,8 @@ use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
-use clap::{App, AppSettings, Arg, ArgMatches, Shell, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches};
+use clap_complete::{generate, Shell};
 use rav1e::prelude::*;
 use rav1e::version;
 use scan_fmt::scan_fmt;
@@ -90,13 +91,12 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
     .setting(AppSettings::SubcommandsNegateReqs)
-    .setting(AppSettings::ColoredHelp)
-    .arg(Arg::with_name("FULLHELP")
+    .arg(Arg::new("FULLHELP")
       .help("Prints more detailed help information")
       .long("fullhelp"))
     // THREADS
     .arg(
-      Arg::with_name("THREADS")
+      Arg::new("THREADS")
         .help("Set the threadpool size")
         .long("threads")
         .takes_value(true)
@@ -104,79 +104,79 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     // INPUT/OUTPUT
     .arg(
-      Arg::with_name("INPUT")
+      Arg::new("INPUT")
         .help("Uncompressed YUV4MPEG2 video input")
-        .required_unless("FULLHELP")
+        .required_unless_present("FULLHELP")
         .index(1)
     )
     .arg(
-      Arg::with_name("OUTPUT")
+      Arg::new("OUTPUT")
         .help("Compressed AV1 in IVF video output")
-        .short("o")
+        .short('o')
         .long("output")
-        .required_unless("FULLHELP")
+        .required_unless_present("FULLHELP")
         .takes_value(true)
     )
     // ENCODING SETTINGS
     .arg(
-      Arg::with_name("FIRST_PASS")
+      Arg::new("FIRST_PASS")
         .help("Perform the first pass of a two-pass encode, saving the pass data to the specified file for future passes")
         .long("first-pass")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("SECOND_PASS")
+      Arg::new("SECOND_PASS")
         .help("Perform the second pass of a two-pass encode, reading the pass data saved from a previous pass from the specified file")
         .long("second-pass")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("LIMIT")
+      Arg::new("LIMIT")
         .help("Maximum number of frames to encode")
-        .short("l")
+        .short('l')
         .long("limit")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("SKIP")
+      Arg::new("SKIP")
         .help("Skip n number of frames and encode")
         .long("skip")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("QP")
+      Arg::new("QP")
         .help("Quantizer (0-255), smaller values are higher quality [default: 100]")
         .long("quantizer")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("MINQP")
+      Arg::new("MINQP")
         .help("Minimum quantizer (0-255) to use in bitrate mode [default: 0]")
         .long("min-quantizer")
         .alias("min_quantizer")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("BITRATE")
+      Arg::new("BITRATE")
         .help("Bitrate (kbps)")
-        .short("b")
+        .short('b')
         .long("bitrate")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("SPEED")
+      Arg::new("SPEED")
         .help("Speed level (0 is best quality, 10 is fastest)\n\
         Speeds 10 and 0 are extremes and are generally not recommended")
-        .long_help(&speed_long_help)
-        .short("s")
+        .long_help(speed_long_help.as_str())
+        .short('s')
         .long("speed")
         .takes_value(true)
         .default_value("6")
     )
     .arg(
-      Arg::with_name("SCENE_CHANGE_DETECTION_SPEED")
+      Arg::new("SCENE_CHANGE_DETECTION_SPEED")
         .help("Speed level for scene-change detection, 0: best quality, 1: fastest mode\n\
           [default:  0 for s0-s9, 1 for s10]")
         .long("scd_speed")
@@ -184,31 +184,31 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .default_value("1")
     )
     .arg(
-      Arg::with_name("MIN_KEYFRAME_INTERVAL")
+      Arg::new("MIN_KEYFRAME_INTERVAL")
         .help("Minimum interval between keyframes")
-        .short("i")
+        .short('i')
         .long("min-keyint")
         .takes_value(true)
         .default_value("12")
     )
     .arg(
-      Arg::with_name("KEYFRAME_INTERVAL")
+      Arg::new("KEYFRAME_INTERVAL")
         .help("Maximum interval between keyframes. When set to 0, disables fixed-interval keyframes.")
-        .short("I")
+        .short('I')
         .long("keyint")
         .takes_value(true)
         .default_value("240")
     )
     .arg(
-      Arg::with_name("SWITCH_FRAME_INTERVAL")
+      Arg::new("SWITCH_FRAME_INTERVAL")
         .help("Maximum interval between switch frames. When set to 0, disables switch frames.")
-        .short("S")
+        .short('S')
         .long("switch-frame-interval")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("RESERVOIR_FRAME_DELAY")
+      Arg::new("RESERVOIR_FRAME_DELAY")
         .help("Number of frames over which rate control should distribute the reservoir [default: min(240, 1.5x keyint)]\n\
          A minimum value of 12 is enforced.")
         .long("reservoir-frame-delay")
@@ -216,14 +216,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("LOW_LATENCY")
+      Arg::new("LOW_LATENCY")
         .help("Low latency mode; disables frame reordering\n\
             Has a significant speed-to-quality trade-off")
         .long("low-latency")
         .alias("low_latency")
     )
     .arg(
-      Arg::with_name("NO_SCENE_DETECTION")
+      Arg::new("NO_SCENE_DETECTION")
         .help("Disables scene detection entirely\n\
             Has a significant speed-to-quality trade-off in full encodes.\n\
             Useful for chunked encoding.")
@@ -231,36 +231,36 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .alias("no_scene_detection")
     )
     .arg(
-      Arg::with_name("RDO_LOOKAHEAD_FRAMES")
+      Arg::new("RDO_LOOKAHEAD_FRAMES")
         .help("Number of frames encoder should lookahead for RDO purposes\n\
         [default value for speed levels: 10,9 - 10; 8,7,6 - 20; 5,4,3 - 30; 2,1,0 - 40]\n")
         .long("rdo-lookahead-frames")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("TUNE")
+      Arg::new("TUNE")
         .help("Quality tuning")
         .long("tune")
-        .possible_values(&Tune::variants())
+        .possible_values(Tune::variants())
         .default_value("Psychovisual")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("TILE_ROWS")
+      Arg::new("TILE_ROWS")
         .help("Number of tile rows. Must be a power of 2. rav1e may override this based on video resolution.")
         .long("tile-rows")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("TILE_COLS")
+      Arg::new("TILE_COLS")
         .help("Number of tile columns. Must be a power of 2. rav1e may override this based on video resolution.")
         .long("tile-cols")
         .takes_value(true)
         .default_value("0")
     )
     .arg(
-      Arg::with_name("TILES")
+      Arg::new("TILES")
         .help("Number of tiles. Tile-cols and tile-rows are overridden\n\
                so that the video has at least this many tiles.")
         .long("tiles")
@@ -269,63 +269,63 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     // MASTERING
     .arg(
-      Arg::with_name("PIXEL_RANGE")
+      Arg::new("PIXEL_RANGE")
         .help("Pixel range")
         .long("range")
-        .possible_values(&PixelRange::variants())
+        .possible_values(PixelRange::variants())
         .default_value("limited")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("COLOR_PRIMARIES")
+      Arg::new("COLOR_PRIMARIES")
         .help("Color primaries used to describe color parameters")
         .long("primaries")
-        .possible_values(&ColorPrimaries::variants())
+        .possible_values(ColorPrimaries::variants())
         .default_value("unspecified")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("TRANSFER_CHARACTERISTICS")
+      Arg::new("TRANSFER_CHARACTERISTICS")
         .help("Transfer characteristics used to describe color parameters")
         .long("transfer")
-        .possible_values(&TransferCharacteristics::variants())
+        .possible_values(TransferCharacteristics::variants())
         .default_value("unspecified")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("MATRIX_COEFFICIENTS")
+      Arg::new("MATRIX_COEFFICIENTS")
         .help("Matrix coefficients used to describe color parameters")
         .long("matrix")
-        .possible_values(&MatrixCoefficients::variants())
+        .possible_values(MatrixCoefficients::variants())
         .default_value("unspecified")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("MASTERING_DISPLAY")
+      Arg::new("MASTERING_DISPLAY")
         .help("Mastering display primaries in the form of G(x,y)B(x,y)R(x,y)WP(x,y)L(max,min)")
         .long("mastering-display")
         .alias("mastering_display")
         .default_value("unspecified")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     .arg(
-      Arg::with_name("CONTENT_LIGHT")
+      Arg::new("CONTENT_LIGHT")
         .help("Content light level used to describe content luminosity (cll,fall)")
         .long("content-light")
         .alias("content_light")
         .default_value("0,0")
-        .case_insensitive(true)
+        .ignore_case(true)
     )
     // TIMING INFO
     .arg(
-      Arg::with_name("FRAME_RATE")
+      Arg::new("FRAME_RATE")
         .help("Constant frame rate to set at the output (inferred from input when omitted)")
         .long("frame-rate")
         .alias("frame_rate")
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("TIME_SCALE")
+      Arg::new("TIME_SCALE")
         .help("The time scale associated with the frame rate if provided (ignored otherwise)")
         .long("time-scale")
         .alias("time_scale")
@@ -334,70 +334,70 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     )
     // STILL PICTURE
     .arg(
-      Arg::with_name("STILL_PICTURE")
+      Arg::new("STILL_PICTURE")
         .help("Still picture mode")
         .long("still-picture")
         .alias("still_picture")
     )
     // DEBUGGING
     .arg(
-      Arg::with_name("BENCHMARK")
+      Arg::new("BENCHMARK")
         .help("Provide a benchmark report at the end of the encoding")
         .long("benchmark")
     )
     .arg(
-      Arg::with_name("VERBOSE")
+      Arg::new("VERBOSE")
         .help("Verbose logging; outputs info for every frame")
         .long("verbose")
-        .short("v")
+        .short('v')
     )
     .arg(
-      Arg::with_name("QUIET")
+      Arg::new("QUIET")
         .help("Do not output any status message")
         .long("quiet")
-        .short("q")
+        .short('q')
     )
     .arg(
-      Arg::with_name("PSNR")
+      Arg::new("PSNR")
         .help("Calculate and display PSNR metrics")
         .long("psnr")
     )
     .arg(
-      Arg::with_name("METRICS")
+      Arg::new("METRICS")
         .help("Calculate and display several metrics including PSNR, SSIM, CIEDE2000 etc")
         .long("metrics")
     )
     .arg(
-      Arg::with_name("RECONSTRUCTION")
+      Arg::new("RECONSTRUCTION")
         .help("Outputs a Y4M file containing the output from the decoder")
         .long("reconstruction")
-        .short("r")
+        .short('r')
         .takes_value(true)
     )
     .arg(
-      Arg::with_name("OVERWRITE")
+      Arg::new("OVERWRITE")
         .help("Overwrite output file.")
-        .short("y")
+        .short('y')
     )
-    .subcommand(SubCommand::with_name("advanced")
+    .subcommand(App::new("advanced")
                 .setting(AppSettings::Hidden)
                 .about("Advanced features")
-                .arg(Arg::with_name("SHELL")
+                .arg(Arg::new("SHELL")
                      .help("Output to stdout the completion definition for the shell")
-                     .short("c")
+                     .short('c')
                      .long("completion")
                      .takes_value(true)
-                     .possible_values(&Shell::variants())
+                     .possible_values(Shell::possible_values().collect::<Vec<_>>())
                 )
-                .arg(Arg::with_name("SAVE_CONFIG")
+                .arg(Arg::new("SAVE_CONFIG")
                      .help("Save the current configuration in a toml file")
-                     .short("s")
+                     .short('s')
                      .long("save_config")
                      .takes_value(true)
                 )
-                .arg(Arg::with_name("LOAD_CONFIG")
+                .arg(Arg::new("LOAD_CONFIG")
                      .help("Load the encoder configuration from a toml file")
-                     .short("l")
+                     .short('l')
                      .long("load_config")
                      .takes_value(true)
                 )
@@ -405,7 +405,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
 
   if cfg!(feature = "unstable") {
     app = app.arg(
-      Arg::with_name("SLOTS")
+      Arg::new("SLOTS")
         .help("Maximum number of GOPs that can be encoded in parallel")
         .long("parallel_gops")
         .long("slots")
@@ -430,9 +430,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
   let mut enc = None;
 
   if let Some(matches) = matches.subcommand_matches("advanced") {
-    if let Some(shell) = matches.value_of("SHELL").map(|v| v.parse().unwrap())
+    if let Some(shell) =
+      matches.value_of("SHELL").map(|v| v.parse::<Shell>().unwrap())
     {
-      app.gen_completions_to("rav1e", shell, &mut std::io::stdout());
+      let name = app.get_name().to_string();
+      generate(shell, &mut app, name, &mut std::io::stdout());
       std::process::exit(0);
     }
 
@@ -537,7 +539,7 @@ pub trait MatchGet {
   fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>>;
 }
 
-impl MatchGet for ArgMatches<'_> {
+impl MatchGet for ArgMatches {
   fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>> {
     self
       .value_of(name)
@@ -545,7 +547,7 @@ impl MatchGet for ArgMatches<'_> {
   }
 }
 
-fn parse_config(matches: &ArgMatches<'_>) -> Result<EncoderConfig, CliError> {
+fn parse_config(matches: &ArgMatches) -> Result<EncoderConfig, CliError> {
   let maybe_quantizer = matches.value_of_int("QP");
   let maybe_bitrate = matches.value_of_int("BITRATE");
   let quantizer = maybe_quantizer.unwrap_or_else(|| {
