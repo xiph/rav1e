@@ -195,9 +195,13 @@ fn cdef_dist_wxh_8x8<T: Pixel>(
   let sum_d2: u32 = sum_d2_cols.iter().sum::<u32>();
   let sum_sd: u32 = sum_sd_cols.iter().sum::<u32>();
 
+  // Convert to 64-bits to avoid overflow when squaring
+  let sum_s: u64 = sum_s as u64;
+  let sum_d: u64 = sum_d as u64;
+
   // Use sums to calculate distortion
-  let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6);
-  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6);
+  let svar = sum_s2 - ((sum_s * sum_s + 32) >> 6) as u32;
+  let dvar = sum_d2 - ((sum_d * sum_d + 32) >> 6) as u32;
   let sse = sum_d2 + sum_s2 - 2 * sum_sd;
 
   RawDistortion(apply_ssim_boost(sse, svar, dvar, bit_depth) as u64)
