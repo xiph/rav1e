@@ -396,13 +396,17 @@ fn run() -> Result<(), error::CliError> {
     Err(e) => {
       return Err(CliError::new(match e {
         y4m::Error::ParseError(_) => {
-          "Could not input video. Is it a y4m file?"
+          "Could not parse input video. Is it a y4m file?"
+        }
+        y4m::Error::IoError(_) => {
+          "Could not read input file. Check that the path is correct and you have read permissions."
         }
         y4m::Error::UnknownColorspace => {
           "Unknown colorspace or unsupported bit depth."
         }
         y4m::Error::OutOfMemory => "The video's frame size exceeds the limit.",
-        _ => unreachable!(),
+        y4m::Error::EOF => "Unexpected end of input.",
+        y4m::Error::BadInput => "Bad y4m input parameters provided.",
       }))
     }
     Ok(d) => d,
