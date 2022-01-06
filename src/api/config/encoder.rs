@@ -31,6 +31,13 @@ pub struct EncoderConfig {
   pub height: usize,
   /// Sample aspect ratio (for anamorphic video).
   pub sample_aspect_ratio: Rational,
+  /// Maximum width of the frames in pixels (for seq header)
+  /// 0 means to use the width setting instead.
+  /// Used for multiple renditions when switch frames are in use.
+  /// Set all renditions to have identical max_width / max_height.
+  pub max_width: usize,
+  /// Maximum height of the frames in pixels (for seq header)
+  pub max_height: usize,
   /// Video time base.
   pub time_base: Rational,
 
@@ -131,7 +138,8 @@ impl EncoderConfig {
       height: 480,
       sample_aspect_ratio: Rational { num: 1, den: 1 },
       time_base: Rational { num: 1, den: 30 },
-
+      max_width: 0,
+      max_height: 0,
       bit_depth: 8,
       chroma_sampling: ChromaSampling::Cs420,
       chroma_sample_position: ChromaSamplePosition::Unknown,

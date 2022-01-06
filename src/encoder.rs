@@ -187,8 +187,12 @@ pub struct Sequence {
 
 impl Sequence {
   pub fn new(config: &EncoderConfig) -> Sequence {
-    let width_bits = 32 - (config.width as u32).leading_zeros();
-    let height_bits = 32 - (config.height as u32).leading_zeros();
+    let max_width =
+      if config.max_width > 0 { config.max_width } else { config.width };
+    let max_height =
+      if config.max_height > 0 { config.max_height } else { config.height };
+    let width_bits = 32 - (max_width as u32).leading_zeros();
+    let height_bits = 32 - (max_height as u32).leading_zeros();
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
 
@@ -277,8 +281,8 @@ impl Sequence {
       color_description: config.color_description,
       mastering_display: config.mastering_display,
       content_light: config.content_light,
-      max_frame_width: config.width as u32,
-      max_frame_height: config.height as u32,
+      max_frame_width: max_width as u32,
+      max_frame_height: max_height as u32,
       frame_id_numbers_present_flag: false,
       frame_id_length: FRAME_ID_LENGTH,
       delta_frame_id_length: DELTA_FRAME_ID_LENGTH,
