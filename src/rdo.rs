@@ -207,10 +207,14 @@ fn cdef_dist_kernel<T: Pixel>(
   // When w and h are powers of two, this can be done via shifting.
   let div = AREA_DIVISORS[w * h - 1] as u64;
   let div_shift = AREA_DIVISOR_BITS;
-  let mut svar = sum_s2
-    - ((sum_s * sum_s * div + (1 << div_shift >> 1)) >> div_shift) as u32;
-  let mut dvar = sum_d2
-    - ((sum_d * sum_d * div + (1 << div_shift >> 1)) >> div_shift) as u32;
+  // Due to rounding, negative values can occur when w or h aren't powers of
+  // two. Saturate to avoid underflow.
+  let mut svar = sum_s2.saturating_sub(
+    ((sum_s * sum_s * div + (1 << div_shift >> 1)) >> div_shift) as u32,
+  );
+  let mut dvar = sum_d2.saturating_sub(
+    ((sum_d * sum_d * div + (1 << div_shift >> 1)) >> div_shift) as u32,
+  );
 
   // Scale variances up to 8x8 size.
   //   scaled variance = var * (8x8) / wxh
