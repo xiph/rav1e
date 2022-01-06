@@ -136,6 +136,8 @@ pub enum EncoderStatus {
   /// was provided in the second pass of a 2-pass encode to encode the next
   /// frame.
   NotReady = -2,
+  /// Immediate exit requested
+  ImmediateExit = -3,
 }
 
 impl EncoderStatus {
@@ -149,6 +151,7 @@ impl EncoderStatus {
       Encoded => "A Frame had been encoded but not emitted yet\0".as_ptr(),
       Failure => "Generic fatal error\0".as_ptr(),
       NotReady => "First-pass stats data not retrieved or not enough second-pass data provided\0".as_ptr(),
+      ImmediateExit => "Immediate exit requested\0".as_ptr(),
     }
   }
 }
@@ -164,6 +167,7 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
         rav1e::EncoderStatus::Encoded => EncoderStatus::Encoded,
         rav1e::EncoderStatus::Failure => EncoderStatus::Failure,
         rav1e::EncoderStatus::NotReady => EncoderStatus::NotReady,
+        rav1e::EncoderStatus::ImmediateExit => EncoderStatus::ImmediateExit,
       },
     }
   }

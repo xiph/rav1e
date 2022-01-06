@@ -25,6 +25,9 @@ pub use rate::{RateControlConfig, RateControlSummary};
 mod speedsettings;
 pub use speedsettings::*;
 
+mod progress;
+pub use progress::*;
+
 pub use crate::tiling::TilingInfo;
 
 /// Enumeration of possible invalid configuration errors.
@@ -131,6 +134,8 @@ pub struct Config {
   #[cfg(feature = "unstable")]
   /// Number of parallel encoding slots
   pub(crate) slots: usize,
+  /// Granular progress callback called when a macroblock is processed.
+  pub(crate) progress: Option<Arc<dyn GranularProgress>>,
 }
 
 impl Config {
@@ -185,6 +190,14 @@ impl Config {
     self.slots = slots;
     self
   }
+
+  /// Set a granular progress callback
+  pub fn with_granular_progress(
+    mut self, progress: Arc<dyn GranularProgress>,
+  ) -> Self {
+    self.progress = Some(progress);
+    self
+  }
 }
 
 fn check_tile_log2(n: usize) -> bool {
@@ -234,6 +247,10 @@ impl Config {
     if let Some(ref s) = self.rate_control.summary {
       inner.rc_state.init_second_pass();
       inner.rc_state.setup_second_pass(s);
+    }
+
+    if let Some(ref progress) = self.progress {
+      inner.progress = Arc::clone(progress);
     }
 
     Ok(inner)

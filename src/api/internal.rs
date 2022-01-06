@@ -35,6 +35,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::{DefaultProgress, GranularProgress};
+
 /// The set of options that controls frame re-ordering and reference picture
 ///  selection.
 /// The options stored here are invariant over the whole encode.
@@ -257,6 +259,9 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_output_frameno: u64,
   /// Optional opaque to be sent back to the user
   opaque_q: BTreeMap<u64, Opaque>,
+
+  /// Progress callback
+  pub(crate) progress: Arc<dyn GranularProgress>,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -309,6 +314,7 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_frame: 1,
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
+      progress: Arc::new(DefaultProgress {}) as Arc<dyn GranularProgress>,
     }
   }
 
@@ -1190,8 +1196,13 @@ impl<T: Pixel> ContextInner<T> {
 
       if self.rc_state.needs_trial_encode(fti) {
         let mut trial_fs = frame_data.fs.clone();
-        let data =
-          encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
+        let data = encode_frame(
+          &frame_data.fi,
+          &mut trial_fs,
+          &self.inter_cfg,
+          self.progress.as_ref(),
+        )
+        .ok_or(EncoderStatus::ImmediateExit)?;
         self.rc_state.update_state(
           (data.len() * 8) as i64,
           fti,
@@ -1209,8 +1220,14 @@ impl<T: Pixel> ContextInner<T> {
         frame_data.fi.set_quantizers(&qps);
       }
 
-      let data =
-        encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+      let data = encode_frame(
+        &frame_data.fi,
+        &mut frame_data.fs,
+        &self.inter_cfg,
+        self.progress.as_ref(),
+      )
+      .ok_or(EncoderStatus::ImmediateExit)?;
+
       let enc_stats = frame_data.fs.enc_stats.clone();
       self.maybe_prev_log_base_q = Some(qps.log_base_q);
       // TODO: Add support for dropping frames.

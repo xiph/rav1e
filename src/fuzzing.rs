@@ -202,6 +202,9 @@ fn encode_frames(
       Err(EncoderStatus::Failure) => {
         return Err(EncoderStatus::Failure);
       }
+      Err(EncoderStatus::ImmediateExit) => {
+        unreachable!();
+      }
     }
   }
 

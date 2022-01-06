@@ -270,6 +270,10 @@ impl<T: Pixel> Context<T> {
   ///             Err(EncoderStatus::Failure) => {
   ///                 return Err(EncoderStatus::Failure);
   ///             },
+  ///             Err(EncoderStatus::ImmediateExit) => {
+  ///                 // We did not set a callback to exit immediately
+  ///                 unreachable!();
+  ///             }
   ///         }
   ///     }
   ///

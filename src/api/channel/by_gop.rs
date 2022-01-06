@@ -163,6 +163,7 @@ fn workerpool<T: Pixel>(
                       wl.send.send(p).unwrap();
                     }
                     Err(EncoderStatus::Encoded) => {}
+                    Err(EncoderStatus::ImmediateExit) => break,
                     _ => todo!("Error management {:?}", r),
                   }
                 }
@@ -178,6 +179,7 @@ fn workerpool<T: Pixel>(
                 Ok(p) => wl.send.send(p).unwrap(),
                 Err(EncoderStatus::LimitReached) => break,
                 Err(EncoderStatus::Encoded) => {}
+                Err(EncoderStatus::ImmediateExit) => break,
                 _ => todo!("Error management"),
               }
             }
