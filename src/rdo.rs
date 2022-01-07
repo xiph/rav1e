@@ -2066,6 +2066,102 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   // improve at the reconstruction stage.
   let mut best_lrf_cost = [[-1.0; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
 
+  // sub-setted region of the TileBlocks for our working frame area.
+  // Note that the size of this subset is what signals CDEF as to the
+  // actual coded size.
+  let mut tileblocks_subset = cw.bc.blocks.subregion_mut(
+    base_sbo.block_offset(0, 0).0.x,
+    base_sbo.block_offset(0, 0).0.y,
+    sb_w << SUPERBLOCK_TO_BLOCK_SHIFT,
+    sb_h << SUPERBLOCK_TO_BLOCK_SHIFT,
+  );
+
+  // cdef doesn't run on superblocks that are completely skipped.
+  // Determine which super blocks are marked as skipped so we can avoid running
+  // them. If all blocks are skipped, we can avoid some of the overhead related
+  // to setting up for cdef.
+  let mut cdef_skip = [true; MAX_SB_SIZE * MAX_SB_SIZE];
+  let mut cdef_skip_all = true;
+  if fi.sequence.enable_cdef {
+    for sby in 0..sb_h {
+      for sbx in 0..sb_w {
+        let blocks = tileblocks_subset.subregion(16 * sbx, 16 * sby, 16, 16);
+        let mut skip = true;
+        for y in 0..blocks.rows() {
+          for block in blocks[y].iter() {
+            skip &= block.skip;
+          }
+        }
+        cdef_skip[sby * MAX_SB_SIZE + sbx] = skip;
+        cdef_skip_all &= skip;
+      }
+    }
+  }
+
+  // Unlike cdef, loop restoration will run regardless of whether blocks are
+  // skipped or not. At the same time, the most significant improvement will
+  // generally be from un-skipped blocks, so lru is only performed if there are
+  // un-skipped blocks.
+  // This should be the same as `cdef_skip_all`, except when cdef is disabled.
+  let mut lru_skip_all = true;
+  let mut lru_skip = [[true; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
+  if fi.sequence.enable_restoration {
+    if fi.config.speed_settings.lru_on_skip {
+      lru_skip_all = false;
+      lru_skip = [[false; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
+    } else {
+      for pli in 0..planes {
+        // width, in sb, of an LRU in this plane
+        let lru_sb_w = 1 << ts.restoration.planes[pli].rp_cfg.sb_h_shift;
+        // height, in sb, of an LRU in this plane
+        let lru_sb_h = 1 << ts.restoration.planes[pli].rp_cfg.sb_v_shift;
+        for lru_y in 0..lru_h[pli] {
+          // number of LRUs vertically
+          for lru_x in 0..lru_w[pli] {
+            // number of LRUs horizontally
+
+            let loop_sbo = TileSuperBlockOffset(SuperBlockOffset {
+              x: lru_x * lru_sb_w,
+              y: lru_y * lru_sb_h,
+            });
+
+            if !ts.restoration.has_restoration_unit(
+              base_sbo + loop_sbo,
+              pli,
+              false,
+            ) {
+              continue;
+            }
+
+            let start = loop_sbo.block_offset(0, 0).0;
+            let size = TileSuperBlockOffset(SuperBlockOffset {
+              x: lru_sb_w,
+              y: lru_sb_h,
+            })
+            .block_offset(0, 0)
+            .0;
+
+            let blocks =
+              tileblocks_subset.subregion(start.x, start.y, size.x, size.y);
+            let mut skip = true;
+            for y in 0..blocks.rows() {
+              for block in blocks[y].iter() {
+                skip &= block.skip;
+              }
+            }
+            lru_skip[lru_y * MAX_LRU_SIZE + lru_x][pli] = skip;
+            lru_skip_all &= skip;
+          }
+        }
+      }
+    }
+  }
+
+  // Return early if all blocks are skipped for lru and cdef.
+  if lru_skip_all && cdef_skip_all {
+    return;
+  }
+
   // Loop filter RDO is an iterative process and we need temporary
   // scratch data to hold the results of deblocking, cdef, and the
   // loop reconstruction filter so that each can be partially updated
@@ -2080,16 +2176,6 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
       height: (pixel_h + 7) >> 3 << 3,
     })
     .scratch_copy();
-
-  // sub-setted region of the TileBlocks for our working frame area.
-  // Note that the size of this subset is what signals CDEF as to the
-  // actual coded size.
-  let mut tileblocks_subset = cw.bc.blocks.subregion_mut(
-    base_sbo.block_offset(0, 0).0.x,
-    base_sbo.block_offset(0, 0).0.y,
-    sb_w << SUPERBLOCK_TO_BLOCK_SHIFT,
-    sb_h << SUPERBLOCK_TO_BLOCK_SHIFT,
-  );
 
   // const, no need to copy, just need the subregion (but do zero the
   // origin to match the other copies/new backing frames).
@@ -2135,8 +2221,8 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   }
 
   let mut cdef_work =
-    if fi.sequence.enable_cdef { Some(rec_subset.clone()) } else { None };
-  let mut lrf_work = if fi.sequence.enable_restoration {
+    if !cdef_skip_all { Some(rec_subset.clone()) } else { None };
+  let mut lrf_work = if !lru_skip_all {
     Some(Frame {
       planes: {
         let new_plane = |pli: usize| {
@@ -2184,6 +2270,11 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
     {
       for sby in 0..sb_h {
         for sbx in 0..sb_w {
+          // determine whether this superblock can be skipped
+          if cdef_skip[sby * MAX_SB_SIZE + sbx] {
+            continue;
+          }
+
           let prev_best_index = best_index[sby * sb_w + sbx];
           let mut best_cost = -1.;
           let mut best_new_index = -1i8;
@@ -2397,6 +2488,12 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
           // number of LRUs vertically
           for lru_x in 0..lru_w[pli] {
             // number of LRUs horizontally
+
+            // determine whether this lru should be skipped
+            if lru_skip[lru_y * MAX_LRU_SIZE + lru_x][pli] {
+              continue;
+            }
+
             let loop_sbo = TileSuperBlockOffset(SuperBlockOffset {
               x: lru_x * lru_sb_w,
               y: lru_y * lru_sb_h,

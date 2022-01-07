@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -41,6 +41,10 @@ pub struct SpeedSettings {
   /// Enables LRF.
   pub lrf: bool,
 
+  /// Enable searching loop restoration units when no transforms have been coded
+  /// restoration unit.
+  pub lru_on_skip: bool,
+
   /// The amount of search done for self guided restoration.
   pub sgr_complexity: SGRComplexityLevel,
 
@@ -73,6 +77,7 @@ impl Default for SpeedSettings {
       scene_detection_mode: SceneDetectionSpeed::Standard,
       cdef: true,
       lrf: true,
+      lru_on_skip: true,
       sgr_complexity: SGRComplexityLevel::Full,
       segmentation: SegmentationLevel::Full,
       partition: PartitionSpeedSettings {
@@ -112,6 +117,7 @@ impl SpeedSettings {
     let mut settings = SpeedSettings::default();
 
     if speed >= 1 {
+      settings.lru_on_skip = false;
       settings.segmentation = SegmentationLevel::Simple;
     }
 
