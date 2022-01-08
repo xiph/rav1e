@@ -144,12 +144,12 @@ pub(crate) mod rust {
 
   // SAFETY: The length of data must be 16.
   unsafe fn hadamard4x4(data: &mut [i32]) {
-    hadamard2d::<{ 4 * 4 }, 4, 4>(std::mem::transmute(data.as_mut_ptr()));
+    hadamard2d::<{ 4 * 4 }, 4, 4>(&mut *(data.as_mut_ptr() as *mut [i32; 16]));
   }
 
   // SAFETY: The length of data must be 64.
   unsafe fn hadamard8x8(data: &mut [i32]) {
-    hadamard2d::<{ 8 * 8 }, 8, 8>(std::mem::transmute(data.as_mut_ptr()));
+    hadamard2d::<{ 8 * 8 }, 8, 8>(&mut *(data.as_mut_ptr() as *mut [i32; 64]));
   }
 
   /// Sum of absolute transformed differences over a block.
