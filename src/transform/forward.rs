@@ -91,7 +91,6 @@ pub mod rust {
       Identity8 => fidentity,
       Identity16 => fidentity,
       Identity32 => fidentity,
-      _ => unreachable!(),
     }
   }
 

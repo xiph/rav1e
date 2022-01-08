@@ -39,7 +39,6 @@ fn get_func_i32x8(t: TxfmType) -> TxfmFuncI32X8 {
     Identity8 => fidentity,
     Identity16 => fidentity,
     Identity32 => fidentity,
-    _ => unreachable!(),
   }
 }
 
