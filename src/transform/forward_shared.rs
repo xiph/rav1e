@@ -75,27 +75,31 @@ pub enum TxfmType {
   Identity8,
   Identity16,
   Identity32,
-  Invalid,
 }
 
 impl TxfmType {
   const TX_TYPES_1D: usize = 4;
-  const AV1_TXFM_TYPE_LS: [[TxfmType; Self::TX_TYPES_1D]; 5] = [
-    [TxfmType::DCT4, TxfmType::ADST4, TxfmType::ADST4, TxfmType::Identity4],
-    [TxfmType::DCT8, TxfmType::ADST8, TxfmType::ADST8, TxfmType::Identity8],
+  const AV1_TXFM_TYPE_LS: [[Option<TxfmType>; Self::TX_TYPES_1D]; 5] = [
     [
-      TxfmType::DCT16,
-      TxfmType::ADST16,
-      TxfmType::ADST16,
-      TxfmType::Identity16,
+      Some(TxfmType::DCT4),
+      Some(TxfmType::ADST4),
+      Some(TxfmType::ADST4),
+      Some(TxfmType::Identity4),
     ],
     [
-      TxfmType::DCT32,
-      TxfmType::Invalid,
-      TxfmType::Invalid,
-      TxfmType::Identity32,
+      Some(TxfmType::DCT8),
+      Some(TxfmType::ADST8),
+      Some(TxfmType::ADST8),
+      Some(TxfmType::Identity8),
     ],
-    [TxfmType::DCT64, TxfmType::Invalid, TxfmType::Invalid, TxfmType::Invalid],
+    [
+      Some(TxfmType::DCT16),
+      Some(TxfmType::ADST16),
+      Some(TxfmType::ADST16),
+      Some(TxfmType::Identity16),
+    ],
+    [Some(TxfmType::DCT32), None, None, Some(TxfmType::Identity32)],
+    [Some(TxfmType::DCT64), None, None, None],
   ];
 }
 
@@ -118,11 +122,9 @@ impl Txfm2DFlipCfg {
     let txw_idx = tx_size.width_index();
     let txh_idx = tx_size.height_index();
     let txfm_type_col =
-      TxfmType::AV1_TXFM_TYPE_LS[txh_idx][tx_type_1d_col as usize];
+      TxfmType::AV1_TXFM_TYPE_LS[txh_idx][tx_type_1d_col as usize].unwrap();
     let txfm_type_row =
-      TxfmType::AV1_TXFM_TYPE_LS[txw_idx][tx_type_1d_row as usize];
-    assert_ne!(txfm_type_col, TxfmType::Invalid);
-    assert_ne!(txfm_type_row, TxfmType::Invalid);
+      TxfmType::AV1_TXFM_TYPE_LS[txw_idx][tx_type_1d_row as usize].unwrap();
     let (ud_flip, lr_flip) = Self::get_flip_cfg(tx_type);
 
     Txfm2DFlipCfg {
