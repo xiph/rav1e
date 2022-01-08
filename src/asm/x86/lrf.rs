@@ -158,7 +158,7 @@ static X_BY_XPLUS1: [u32; 256] = [
 ];
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn sgrproj_box_ab_8_avx2(
   r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
@@ -169,7 +169,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
 
   // Using an integral image, compute the sum of a square region
   #[inline]
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   unsafe fn get_integral_square_avx2(
     iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
   ) -> __m256i {
@@ -234,7 +234,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
   _mm256_storeu_si256(bf.as_mut_ptr().add(x) as *mut _, b);
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
@@ -293,7 +293,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   }
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
   iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
@@ -353,7 +353,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
 }
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
   f: &mut [u32], x: usize, y: usize, cdeffed: &PlaneSlice<T>,
 ) {
@@ -374,7 +374,7 @@ unsafe fn sgrproj_box_f_r0_8_avx2<T: Pixel>(
   );
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
   f: &mut [u32], y: usize, w: usize, cdeffed: &PlaneSlice<T>,
 ) {
@@ -396,7 +396,7 @@ pub(crate) unsafe fn sgrproj_box_f_r0_avx2<T: Pixel>(
 }
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], x: usize, y: usize,
   cdeffed: &PlaneSlice<T>,
@@ -496,7 +496,7 @@ unsafe fn sgrproj_box_f_r1_8_avx2<T: Pixel>(
   );
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
   af: &[&[u32]; 3], bf: &[&[u32]; 3], f: &mut [u32], y: usize, w: usize,
   cdeffed: &PlaneSlice<T>,
@@ -519,7 +519,7 @@ pub(crate) unsafe fn sgrproj_box_f_r1_avx2<T: Pixel>(
 }
 
 #[inline]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
   x: usize, y: usize, cdeffed: &PlaneSlice<T>,
@@ -618,7 +618,7 @@ unsafe fn sgrproj_box_f_r2_8_avx2<T: Pixel>(
   );
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 pub(crate) unsafe fn sgrproj_box_f_r2_avx2<T: Pixel>(
   af: &[&[u32]; 2], bf: &[&[u32]; 2], f0: &mut [u32], f1: &mut [u32],
   y: usize, w: usize, cdeffed: &PlaneSlice<T>,

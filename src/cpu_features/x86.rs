@@ -62,7 +62,10 @@ impl Default for CpuFeatureLevel {
       CpuFeatureLevel::AVX512ICL
     } else if avx512_detected() {
       CpuFeatureLevel::AVX512
-    } else if is_x86_feature_detected!("avx2") {
+    } else if is_x86_feature_detected!("avx2")
+      && is_x86_feature_detected!("bmi1")
+      && is_x86_feature_detected!("bmi2")
+    {
       CpuFeatureLevel::AVX2
     } else if is_x86_feature_detected!("sse4.1") {
       CpuFeatureLevel::SSE4_1

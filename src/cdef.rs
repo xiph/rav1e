@@ -59,20 +59,57 @@ pub(crate) mod rust {
   ///
   /// # Arguments
   ///
-  /// * `elems` - A non-empty slice of integers
-  ///
-  /// # Panics
-  ///
-  /// Panics if `elems` is empty
+  /// * `elems` - A slice of 8 `i32`s
   #[inline]
-  fn first_max_element(elems: &[i32]) -> (usize, i32) {
-    // In case of a tie, the first element must be selected.
-    let (max_idx, max_value) = elems
-      .iter()
-      .enumerate()
-      .max_by_key(|&(i, v)| (v, -(i as isize)))
-      .unwrap();
-    (max_idx, *max_value)
+  fn first_max_element(
+    elems: &[i32; 8], cpu: CpuFeatureLevel,
+  ) -> (usize, i32) {
+    // Same as `first_max_element`, but implemented with AVX2 intrinsics
+    #[inline]
+    #[cfg(nasm_x86_64)]
+    #[target_feature(enable = "avx2,bmi1,bmi2")]
+    unsafe fn first_max_element_avx2(elems: &[i32; 8]) -> (usize, i32) {
+      #[cfg(target_arch = "x86")]
+      use std::arch::x86::*;
+      #[cfg(target_arch = "x86_64")]
+      use std::arch::x86_64::*;
+
+      // the compiler autovectorizes this
+      let max_val = *elems.iter().max().unwrap();
+
+      let cmp = _mm256_cmpeq_epi32(
+        _mm256_loadu_si256(elems as *const i32 as *const _),
+        _mm256_set1_epi32(max_val),
+      );
+      // this intrinsic is supposed to be for floating point, but it works
+      // fine on integer data as well
+      let mask = _mm256_movemask_ps(std::mem::transmute(cmp));
+
+      (mask.trailing_zeros() as usize, max_val)
+    }
+
+    #[inline]
+    fn first_max_element(elems: &[i32; 8]) -> (usize, i32) {
+      // In case of a tie, the first element must be selected.
+      let (max_idx, max_value) = elems
+        .iter()
+        .enumerate()
+        .max_by_key(|&(i, v)| (v, -(i as isize)))
+        .unwrap();
+      (max_idx, *max_value)
+    }
+
+    #[cfg(nasm_x86_64)]
+    if cpu >= CpuFeatureLevel::AVX2 {
+      let result = unsafe { first_max_element_avx2(elems) };
+
+      #[cfg(feature = "check_asm")]
+      assert_eq!(result, first_max_element(elems));
+
+      return result;
+    }
+
+    first_max_element(elems)
   }
 
   // Detect direction. 0 means 45-degree up-right, 2 is horizontal, and so on.
@@ -84,7 +121,7 @@ pub(crate) mod rust {
   // http://jmvalin.ca/notes/intra_paint.pdf
   pub fn cdef_find_dir<T: Pixel>(
     img: &PlaneSlice<'_, T>, var: &mut u32, coeff_shift: usize,
-    _cpu: CpuFeatureLevel,
+    cpu: CpuFeatureLevel,
   ) -> i32 {
     let mut cost: [i32; 8] = [0; 8];
     let mut partial: [[i32; 15]; 8] = [[0; 15]; 8];
@@ -133,7 +170,7 @@ pub(crate) mod rust {
       }
     }
 
-    let (best_dir, best_cost) = first_max_element(&cost);
+    let (best_dir, best_cost) = first_max_element(&cost, cpu);
     // Difference between the optimal variance and the variance along the
     // orthogonal direction. Again, the sum(x^2) terms cancel out.
     // We'd normally divide by 840, but dividing by 1024 is close enough
@@ -305,9 +342,18 @@ pub(crate) mod rust {
 
     #[test]
     fn check_max_element() {
-      assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 6, 6]), (6, 6));
-      assert_eq!(first_max_element(&[-1, -1, 1, 2, 3, 4, 7, 6]), (6, 7));
-      assert_eq!(first_max_element(&[0, 0]), (0, 0));
+      assert_eq!(
+        first_max_element(&[-1, -1, 1, 2, 3, 4, 6, 6], CpuFeatureLevel::RUST),
+        (6, 6)
+      );
+      assert_eq!(
+        first_max_element(&[-1, -1, 1, 2, 3, 4, 7, 6], CpuFeatureLevel::RUST),
+        (6, 7)
+      );
+      assert_eq!(
+        first_max_element(&[0, 0, 0, 0, 0, 0, 0, 0], CpuFeatureLevel::RUST),
+        (0, 0)
+      );
     }
   }
 }

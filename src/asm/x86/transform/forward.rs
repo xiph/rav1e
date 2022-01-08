@@ -63,13 +63,13 @@ struct I32X8 {
 }
 
 impl I32X8 {
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   const unsafe fn vec(self) -> __m256i {
     self.data
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   const unsafe fn new(a: __m256i) -> I32X8 {
     I32X8 { data: a }
@@ -77,13 +77,13 @@ impl I32X8 {
 }
 
 impl TxOperations for I32X8 {
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn zero() -> Self {
     I32X8::new(_mm256_setzero_si256())
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn tx_mul(self, mul: (i32, i32)) -> Self {
     I32X8::new(_mm256_srav_epi32(
@@ -95,7 +95,7 @@ impl TxOperations for I32X8 {
     ))
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn rshift1(self) -> Self {
     I32X8::new(_mm256_srai_epi32(
@@ -107,34 +107,34 @@ impl TxOperations for I32X8 {
     ))
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn add(self, b: Self) -> Self {
     I32X8::new(_mm256_add_epi32(self.vec(), b.vec()))
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn sub(self, b: Self) -> Self {
     I32X8::new(_mm256_sub_epi32(self.vec(), b.vec()))
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn add_avg(self, b: Self) -> Self {
     I32X8::new(_mm256_srai_epi32(_mm256_add_epi32(self.vec(), b.vec()), 1))
   }
 
-  #[target_feature(enable = "avx2")]
+  #[target_feature(enable = "avx2,bmi1,bmi2")]
   #[inline]
   unsafe fn sub_avg(self, b: Self) -> Self {
     I32X8::new(_mm256_srai_epi32(_mm256_sub_epi32(self.vec(), b.vec()), 1))
   }
 }
 
-impl_1d_tx!(target_feature(enable = "avx2"), unsafe);
+impl_1d_tx!(target_feature(enable = "avx2,bmi1,bmi2"), unsafe);
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn transpose_8x8_avx2(
   input: (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8),
 ) -> (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8) {
@@ -175,7 +175,7 @@ unsafe fn transpose_8x8_avx2(
   )
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn transpose_8x4_avx2(
   input: (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8),
 ) -> (I32X8, I32X8, I32X8, I32X8) {
@@ -213,7 +213,7 @@ unsafe fn transpose_8x4_avx2(
   )
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn transpose_4x8_avx2(
   input: (I32X8, I32X8, I32X8, I32X8),
 ) -> (I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8, I32X8) {
@@ -246,7 +246,7 @@ unsafe fn transpose_4x8_avx2(
   )
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn transpose_4x4_avx2(
   input: (I32X8, I32X8, I32X8, I32X8),
 ) -> (I32X8, I32X8, I32X8, I32X8) {
@@ -265,13 +265,13 @@ unsafe fn transpose_4x4_avx2(
   )
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 #[inline]
 unsafe fn shift_left(a: I32X8, shift: u8) -> I32X8 {
   I32X8::new(_mm256_sllv_epi32(a.vec(), _mm256_set1_epi32(shift as i32)))
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 #[inline]
 unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
   I32X8::new(_mm256_srav_epi32(
@@ -280,7 +280,7 @@ unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
   ))
 }
 
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 #[inline]
 unsafe fn round_shift_array_avx2(arr: &mut [I32X8], size: usize, bit: i8) {
   if bit == 0 {
@@ -328,7 +328,7 @@ impl SizeClass1D {
 }
 
 #[allow(clippy::identity_op, clippy::erasing_op)]
-#[target_feature(enable = "avx2")]
+#[target_feature(enable = "avx2,bmi1,bmi2")]
 unsafe fn forward_transform_avx2<T: Coefficient>(
   input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
   tx_type: TxType, bd: usize,
@@ -355,7 +355,7 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
   // Columns
   for cg in (0..txfm_size_col).step_by(8) {
     let shift = cfg.shift[0] as u8;
-    #[target_feature(enable = "avx2")]
+    #[target_feature(enable = "avx2,bmi1,bmi2")]
     #[inline]
     unsafe fn load_columns(input_ptr: *const i16, shift: u8) -> I32X8 {
       // TODO: load 64-bits for x4 wide columns
