@@ -339,12 +339,8 @@ fn copy_vertical<T: Pixel>(
 }
 
 #[inline]
-fn stride_sse(a: &[i32], b: &[i32]) -> i64 {
-  let mut acc: i32 = 0;
-  for (a, b) in a.iter().take(b.len()).zip(b) {
-    acc += (*a - *b) * (*a - *b)
-  }
-  acc as i64
+fn stride_sse<const LEN: usize>(a: &[i32; LEN], b: &[i32; LEN]) -> i64 {
+  a.iter().zip(b).map(|(a, b)| (a - b) * (a - b)).sum::<i32>() as i64
 }
 
 #[inline]
