@@ -490,7 +490,7 @@ fn get_subset_predictors<T: Pixel>(
   // Undo normalization to 128x128 block size
   let min_sad = min_sad
     >> (MAX_MIB_SIZE_LOG2 * 2
-      - (bsize.width_mi_log2() + bsize.height_mi_log2() + ssdec as usize * 2));
+      - (bsize.width_mi_log2() + bsize.height_mi_log2()));
 
   let dec_mv = |mv: MotionVector| MotionVector {
     col: mv.col >> ssdec,
