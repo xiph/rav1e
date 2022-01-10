@@ -1108,7 +1108,15 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       pmv[1] = mv_stack[1].this_mv;
     }
 
-    let res = motion_estimation(fi, ts, bsize, tile_bo, ref_frames[0], pmv);
+    let res = motion_estimation(
+      fi,
+      ts,
+      bsize.width(),
+      bsize.height(),
+      tile_bo,
+      ref_frames[0],
+      pmv,
+    );
     let b_me = res.0;
 
     mvs_from_me.push([b_me, MotionVector::default()]);
