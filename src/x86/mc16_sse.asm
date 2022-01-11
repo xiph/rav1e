@@ -289,7 +289,8 @@ cglobal put_bilin_16bpc, 4, 7, 0, dst, ds, src, ss, w, h, mxy
     sub                  wd, 8
     jg .h_w16
     je .h_w8
-    jp .h_w4
+    cmp                  wd, -4
+    je .h_w4
 .h_w2:
     movq                 m1, [srcq+ssq*0]
     movhps               m1, [srcq+ssq*1]
