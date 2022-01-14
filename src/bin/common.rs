@@ -28,7 +28,7 @@ pub struct EncoderIO {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub enum Verbose {
+pub enum Verboseness {
   Quiet,
   Normal,
   Verbose,
@@ -41,7 +41,7 @@ pub struct CliOptions {
   pub color_range_specified: bool,
   pub override_time_base: bool,
   pub skip: usize,
-  pub verbose: Verbose,
+  pub verbose: Verboseness,
   pub benchmark: bool,
   pub threads: usize,
   pub metrics_enabled: MetricsEnabled,
@@ -489,11 +489,11 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
   let enc = enc.map_or_else(|| parse_config(&matches), Ok)?;
 
   let verbose = if matches.is_present("QUIET") {
-    Verbose::Quiet
+    Verboseness::Quiet
   } else if matches.is_present("VERBOSE") {
-    Verbose::Verbose
+    Verboseness::Verbose
   } else {
-    Verbose::Normal
+    Verboseness::Normal
   };
 
   let metrics_enabled = if matches.is_present("METRICS") {

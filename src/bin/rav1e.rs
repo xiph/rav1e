@@ -176,28 +176,24 @@ fn process_frame<T: Pixel, D: Decoder>(
         y4m_details.chroma_sampling,
         metrics_cli,
       ));
-      (Ok(Some(frame_summaries)), true)
+      Ok((Some(frame_summaries), true))
     }
     Err(EncoderStatus::NeedMoreData) => {
       source.read_frame(ctx, y4m_details)?;
-      (Ok(Some(frame_summaries)), false)
+      Ok((Some(frame_summaries), false))
     }
     Err(EncoderStatus::EnoughData) => {
-      unreachable!();
+      unreachable!()
     }
-    Err(EncoderStatus::LimitReached) => (Ok(None), true),
+    Err(EncoderStatus::LimitReached) => Ok((None, true)),
     Err(e @ EncoderStatus::Failure) => {
-      (Err(e.context("Failed to encode video")), false)
+      Err(e.context("Failed to encode video"))
     }
     Err(e @ EncoderStatus::NotReady) => {
-      (Err(e.context("Mismanaged handling of two-pass stats data")), false)
+      Err(e.context("Mismanaged handling of two-pass stats data"))
     }
-    Err(EncoderStatus::Encoded) => (Ok(Some(frame_summaries)), true),
-  };
-
-  if ret.is_err() {
-    return ret;
-  }
+    Err(EncoderStatus::Encoded) => Ok((Some(frame_summaries), true)),
+  }?;
 
   // Save first pass data from pass 1.
   if let Some(passfile) = pass1file.as_mut() {
@@ -234,11 +230,11 @@ fn process_frame<T: Pixel, D: Decoder>(
     }
   }
 
-  ret
+  Ok(ret)
 }
 
 fn do_encode<T: Pixel, D: Decoder>(
-  cfg: Config, verbose: Verbose, mut progress: ProgressInfo,
+  cfg: Config, verbose: Verboseness, mut progress: ProgressInfo,
   output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
   mut pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write + Send>>>,
@@ -270,10 +266,10 @@ fn do_encode<T: Pixel, D: Decoder>(
     y4m_enc.as_mut(),
     metrics_enabled,
   )? {
-    if verbose != Verbose::Quiet {
+    if verbose != Verboseness::Quiet {
       for frame in frame_info {
         progress.add_frame(frame.clone());
-        if verbose == Verbose::Verbose {
+        if verbose == Verboseness::Verbose {
           info!("{} - {}", frame, progress);
         } else {
           // Print a one-line progress indicator that overrides itself with every update
@@ -284,12 +280,12 @@ fn do_encode<T: Pixel, D: Decoder>(
       output.flush().unwrap();
     }
   }
-  if verbose != Verbose::Quiet {
-    if verbose == Verbose::Verbose {
+  if verbose != Verboseness::Quiet {
+    if verbose == Verboseness::Verbose {
       // Clear out the temporary progress indicator
       eprint!("\r");
     }
-    progress.print_summary(verbose == Verbose::Verbose);
+    progress.print_summary(verbose == Verboseness::Verbose);
   }
   Ok(())
 }
@@ -508,7 +504,7 @@ fn run() -> Result<(), error::CliError> {
 
   let tiling =
     cfg.tiling_info().map_err(|e| e.context("Invalid configuration"))?;
-  if cli.verbose != Verbose::Quiet {
+  if cli.verbose != Verboseness::Quiet {
     info!("CPU Feature Level: {}", CpuFeatureLevel::default());
 
     info!(
