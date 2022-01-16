@@ -340,21 +340,20 @@ ALIGN function_align
 %macro IDCT4_1D_PACKED_WORD 6 ; dst/src[1-2], tmp[1-3], rnd
     vpbroadcastd        m%5, [pw_m3784_1567]
     punpckhwd           m%3, m%2, m%1
-    psubw               m%4, m%1, m%2
-    paddw               m%1, m%2
-    vpbroadcastd        m%2, [pw_1567_3784]
-    punpcklqdq          m%1, m%4
-    vpbroadcastd        m%4, [pw_2896x8]
+    vpbroadcastd        m%4, [pw_1567_3784]
+    punpcklwd           m%2, m%1
+    vpbroadcastd        m%1, [pw_m2896_2896]
     pmaddwd             m%5, m%3
-    pmaddwd             m%3, m%2
-    pmulhrsw            m%1, m%4      ; t0 t1
-    paddd               m%5, m%6
-    paddd               m%3, m%6
-    psrad               m%5, 12
-    psrad               m%3, 12
+    pmaddwd             m%3, m%4
+    vpbroadcastd        m%4, [pw_2896_2896]
+    pmaddwd             m%1, m%2
+    pmaddwd             m%2, m%4
+    REPX     {paddd x, m%6}, m%5, m%3, m%1, m%2
+    REPX     {psrad x, 12 }, m%5, m%3, m%1, m%2
     packssdw            m%3, m%5      ; t3 t2
-    psubsw              m%2, m%1, m%3 ; out3 out2
-    paddsw              m%1, m%3      ; out0 out1
+    packssdw            m%2, m%1      ; t0 t1
+    paddsw              m%1, m%2, m%3 ; out0 out1
+    psubsw              m%2, m%3      ; out3 out2
 %endmacro
 
 INV_TXFM_4X4_FN dct, dct
