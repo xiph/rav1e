@@ -8550,7 +8550,7 @@ cglobal resize_16bpc, 0, 6, 8, 6*16, dst, dst_stride, src, src_stride, \
     pshufd              m5, m5, q0000
     mova [rsp+16*3*ARCH_X86_32], m4
 %if ARCH_X86_64
- DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, h, x, picptr
+ DEFINE_ARGS dst, dst_stride, src, src_stride, dst_w, h, x
     LEA                 r7, $$
  %define base r7-$$
 %else
