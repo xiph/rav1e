@@ -11,7 +11,7 @@ use crate::me::estimate_tile_motion;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
-use crate::tiling::{Area, TileRect};
+use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
 use rust_hawktracer::*;
@@ -145,25 +145,21 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      let mut count = 0i64;
-      let mut histogram_org_sum = 0i64;
-      let iter_org = region_org.rows_iter();
-      for row in iter_org {
-        for pixel in row {
-          let cur = u16::cast_from(*pixel);
-          histogram_org_sum += cur as i64;
-          count += 1;
-        }
-      }
+      let sum_8x8_block = |region: &PlaneRegion<T>| {
+        region
+          .rows_iter()
+          .map(|row| {
+            // 16-bit precision is sufficient for an 8px row, as IMPORTANCE_BLOCK_SIZE * (2^12 - 1) < 2^16 - 1,
+            // so overflow is not possible
+            row.iter().map(|pixel| u16::cast_from(*pixel)).sum::<u16>() as i64
+          })
+          .sum::<i64>()
+      };
 
-      let mut histogram_ref_sum = 0i64;
-      let iter_ref = region_ref.rows_iter();
-      for row in iter_ref {
-        for pixel in row {
-          let cur = u16::cast_from(*pixel);
-          histogram_ref_sum += cur as i64;
-        }
-      }
+      let histogram_org_sum = sum_8x8_block(&region_org);
+      let histogram_ref_sum = sum_8x8_block(&region_ref);
+
+      let count = (IMPORTANCE_BLOCK_SIZE * IMPORTANCE_BLOCK_SIZE) as i64;
 
       let mean = (((histogram_org_sum + count / 2) / count)
         - ((histogram_ref_sum + count / 2) / count))
