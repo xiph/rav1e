@@ -2,11 +2,10 @@
 name = "ivf"
 version = "0.1.1"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
-edition = "2018"
+edition = "2021"
 description = "Simple ivf muxer"
 license = "BSD-2-Clause"
 homepage = "https://github.com/xiph/rav1e"
 
 [dependencies]
 bitstream-io = "1"
-
