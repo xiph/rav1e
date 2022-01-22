@@ -44,7 +44,7 @@ jobs:
       matrix:
         conf:
           - beta-build
-          - 1.54.0-tests
+          - 1.56.0-tests
           - aom-tests
           - dav1d-tests
           - no-asm-tests
@@ -59,8 +59,8 @@ jobs:
         include:
           - conf: beta-build
             toolchain: beta
-          - conf: 1.54.0-tests
-            toolchain: 1.54.0
+          - conf: 1.56.0-tests
+            toolchain: 1.56.0
           - conf: aom-tests
             toolchain: stable
           - conf: dav1d-tests
@@ -125,7 +125,7 @@ jobs:
           echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add aom
         if: >
-          matrix.conf == '1.54.0-tests' || matrix.conf == 'aom-tests' ||
+          matrix.conf == '1.56.0-tests' || matrix.conf == 'aom-tests' ||
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
@@ -141,7 +141,7 @@ jobs:
           echo "$AOM_LIB3_SHA256 libaom3_${AOM3_VERSION}_amd64.deb" >> CHECKSUMS
       - name: Add dav1d
         if: >
-          matrix.conf == '1.54.0-tests' || matrix.conf == 'dav1d-tests' ||
+          matrix.conf == '1.56.0-tests' || matrix.conf == 'dav1d-tests' ||
           matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
         env:
           LINK: http://debian-archive.trafficmanager.net/debian/pool/main/d/dav1d
@@ -216,8 +216,8 @@ jobs:
       - name: Start sccache server
         run: |
           sccache --start-server
-      - name: Run 1.54.0 tests
-        if: matrix.toolchain == '1.54.0' && matrix.conf == '1.54.0-tests'
+      - name: Run 1.56.0 tests
+        if: matrix.toolchain == '1.56.0' && matrix.conf == '1.56.0-tests'
         run: |
           cargo test --workspace --verbose \
                      --features=decode_test,decode_test_dav1d,quick_test,capi

@@ -220,7 +220,7 @@ fn build_asm_files() {
 fn rustc_version_check() {
   // This should match the version in the CI
   // Make sure to updated README.md when this changes.
-  const REQUIRED_VERSION: &str = "1.54.0";
+  const REQUIRED_VERSION: &str = "1.56.0";
   if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
     eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
     exit(1);
