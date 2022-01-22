@@ -120,12 +120,13 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
 #[hawktracer(estimate_importance_block_difference)]
 pub(crate) fn estimate_importance_block_difference<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>,
-) -> Box<[u32]> {
+) -> f64 {
   let plane_org = &frame.planes[0];
   let plane_ref = &ref_frame.planes[0];
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
-  let mut inter_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
+
+  let mut imp_block_costs = 0;
 
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
@@ -165,10 +166,11 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
         - ((histogram_ref_sum + count / 2) / count))
         .abs();
 
-      inter_costs.push(mean as u32);
+      imp_block_costs += mean as u64;
     });
   });
-  inter_costs.into_boxed_slice()
+
+  imp_block_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
 }
 
 #[hawktracer(estimate_inter_costs)]
