@@ -177,7 +177,7 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Arc<Sequence>,
-) -> Box<[u32]> {
+) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
   let inter_cfg = InterConfig::new(&config);
@@ -194,12 +194,13 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   let plane_ref = &ref_frame.planes[0];
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
-  let mut inter_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
   let stats = &fs.frame_me_stats[0];
   let bsize = BlockSize::from_width_and_height(
     IMPORTANCE_BLOCK_SIZE,
     IMPORTANCE_BLOCK_SIZE,
   );
+
+  let mut inter_costs = 0;
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
       let mv = stats[y * 2][x * 2].mv;
@@ -223,17 +224,17 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      inter_costs.push(get_satd(
+      inter_costs += get_satd(
         &region_org,
         &region_ref,
         bsize.width(),
         bsize.height(),
         bit_depth,
         fi.cpu_feature_level,
-      ));
+      ) as u64;
     });
   });
-  inter_costs.into_boxed_slice()
+  inter_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
 }
 
 #[hawktracer(compute_motion_vectors)]

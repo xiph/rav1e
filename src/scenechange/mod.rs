@@ -449,17 +449,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
           / intra_costs.len() as f64
       });
       s.spawn(|_| {
-        let inter_costs = estimate_inter_costs(
+        mv_inter_cost = estimate_inter_costs(
           frame2_inter_ref,
           frame1,
           self.bit_depth,
           self.encoder_config,
           self.sequence.clone(),
         );
-
-        mv_inter_cost =
-          inter_costs.iter().map(|&cost| cost as u64).sum::<u64>() as f64
-            / inter_costs.len() as f64
       });
       s.spawn(|_| {
         imp_block_cost =
