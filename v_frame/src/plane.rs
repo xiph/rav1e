@@ -776,6 +776,24 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     self.plane.data[new_y * self.plane.cfg.stride + new_x]
   }
 
+  /// Checks if `add_y` and `add_x` lies in the allocated bounds of the
+  /// underlying plane.
+  pub fn accessible(&self, add_x: usize, add_y: usize) -> bool {
+    let y =
+      (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
+    let x =
+      (self.x + add_x as isize + self.plane.cfg.xorigin as isize) as usize;
+    y < self.plane.cfg.alloc_height && x < self.plane.cfg.stride
+  }
+
+  /// Checks if -`sub_x` and -`sub_y` lies in the allocated bounds of the
+  /// underlying plane.
+  pub fn accessible_neg(&self, sub_x: usize, sub_y: usize) -> bool {
+    let y = self.y - sub_y as isize + self.plane.cfg.yorigin as isize;
+    let x = self.x - sub_x as isize + self.plane.cfg.xorigin as isize;
+    y >= 0 && x >= 0
+  }
+
   pub fn row(&self, y: usize) -> &[T] {
     let y = (self.y + y as isize + self.plane.cfg.yorigin as isize) as usize;
     let x = (self.x + self.plane.cfg.xorigin as isize) as usize;
