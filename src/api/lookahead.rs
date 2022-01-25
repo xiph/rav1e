@@ -11,7 +11,7 @@ use crate::me::estimate_tile_motion;
 use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
-use crate::tiling::{Area, TileRect};
+use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
 use crate::{Frame, Pixel};
 use rust_hawktracer::*;
@@ -120,12 +120,13 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
 #[hawktracer(estimate_importance_block_difference)]
 pub(crate) fn estimate_importance_block_difference<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>,
-) -> Box<[u32]> {
+) -> f64 {
   let plane_org = &frame.planes[0];
   let plane_ref = &ref_frame.planes[0];
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
-  let mut inter_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
+
+  let mut imp_block_costs = 0;
 
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
@@ -145,41 +146,38 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      let mut count = 0i64;
-      let mut histogram_org_sum = 0i64;
-      let iter_org = region_org.rows_iter();
-      for row in iter_org {
-        for pixel in row {
-          let cur = u16::cast_from(*pixel);
-          histogram_org_sum += cur as i64;
-          count += 1;
-        }
-      }
+      let sum_8x8_block = |region: &PlaneRegion<T>| {
+        region
+          .rows_iter()
+          .map(|row| {
+            // 16-bit precision is sufficient for an 8px row, as IMPORTANCE_BLOCK_SIZE * (2^12 - 1) < 2^16 - 1,
+            // so overflow is not possible
+            row.iter().map(|pixel| u16::cast_from(*pixel)).sum::<u16>() as i64
+          })
+          .sum::<i64>()
+      };
 
-      let mut histogram_ref_sum = 0i64;
-      let iter_ref = region_ref.rows_iter();
-      for row in iter_ref {
-        for pixel in row {
-          let cur = u16::cast_from(*pixel);
-          histogram_ref_sum += cur as i64;
-        }
-      }
+      let histogram_org_sum = sum_8x8_block(&region_org);
+      let histogram_ref_sum = sum_8x8_block(&region_ref);
+
+      let count = (IMPORTANCE_BLOCK_SIZE * IMPORTANCE_BLOCK_SIZE) as i64;
 
       let mean = (((histogram_org_sum + count / 2) / count)
         - ((histogram_ref_sum + count / 2) / count))
         .abs();
 
-      inter_costs.push(mean as u32);
+      imp_block_costs += mean as u64;
     });
   });
-  inter_costs.into_boxed_slice()
+
+  imp_block_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
 }
 
 #[hawktracer(estimate_inter_costs)]
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Arc<Sequence>,
-) -> Box<[u32]> {
+) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
   let inter_cfg = InterConfig::new(&config);
@@ -196,12 +194,13 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   let plane_ref = &ref_frame.planes[0];
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
-  let mut inter_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
   let stats = &fs.frame_me_stats[0];
   let bsize = BlockSize::from_width_and_height(
     IMPORTANCE_BLOCK_SIZE,
     IMPORTANCE_BLOCK_SIZE,
   );
+
+  let mut inter_costs = 0;
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
       let mv = stats[y * 2][x * 2].mv;
@@ -225,17 +224,17 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      inter_costs.push(get_satd(
+      inter_costs += get_satd(
         &region_org,
         &region_ref,
         bsize.width(),
         bsize.height(),
         bit_depth,
         fi.cpu_feature_level,
-      ));
+      ) as u64;
     });
   });
-  inter_costs.into_boxed_slice()
+  inter_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
 }
 
 #[hawktracer(compute_motion_vectors)]
