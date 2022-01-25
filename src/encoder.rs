@@ -418,6 +418,32 @@ impl<T: Pixel> FrameState<T> {
     )
   }
 
+  pub fn new_with_frame_and_me_stats_and_rec(
+    fi: &FrameInvariants<T>, frame: Arc<Frame<T>>,
+    me_stats: Arc<[FrameMEStats; REF_FRAMES]>, rec: Arc<Frame<T>>,
+  ) -> Self {
+    let rs = RestorationState::new(fi, &frame);
+
+    let hres = frame.planes[0].downsampled(fi.width, fi.height);
+    let qres = hres.downsampled(fi.width, fi.height);
+
+    Self {
+      sb_size_log2: fi.sb_size_log2(),
+      input: frame,
+      input_hres: Arc::new(hres),
+      input_qres: Arc::new(qres),
+      rec,
+      cdfs: CDFContext::new(0),
+      context_update_tile_id: 0,
+      max_tile_size_bytes: 0,
+      deblock: Default::default(),
+      segmentation: Default::default(),
+      restoration: rs,
+      frame_me_stats: me_stats,
+      enc_stats: Default::default(),
+    }
+  }
+
   pub fn new_with_frame(
     fi: &FrameInvariants<T>, frame: Arc<Frame<T>>,
   ) -> Self {

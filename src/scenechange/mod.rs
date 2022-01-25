@@ -12,11 +12,14 @@ use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
+use crate::me::FrameMEStats;
+use crate::partition::REF_FRAMES;
 use crate::sad_row;
 use crate::util::Pixel;
 use rust_hawktracer::*;
 use std::sync::Arc;
 use std::{cmp, u64};
+use v_frame::math::Fixed;
 
 // The fast implementation is based on a Python implementation at
 // https://pyscenedetect.readthedocs.io/en/latest/reference/detection-methods/.
@@ -46,6 +49,8 @@ pub struct SceneChangeDetector<T: Pixel> {
     // if it should be assumed that the data is uninitialized.
     bool,
   )>,
+  /// Buffer for FrameMEStats for cost scenecut
+  frame_me_stats_buffer: Option<Arc<[FrameMEStats; REF_FRAMES]>>,
   /// Frame buffer for holding references to source frames.
   ///
   /// Useful for not copying data into the downscaled frame buffer
@@ -103,6 +108,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       speed_mode,
       scale_factor,
       downscaled_frame_buffer: None,
+      frame_me_stats_buffer: None,
       frame_ref_buffer: None,
       lookahead_offset,
       deque_offset,
@@ -428,7 +434,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// and use all three metrics.
   #[hawktracer(cost_scenecut)]
   fn cost_scenecut(
-    &self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
+    &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
   ) -> ScenecutResult {
     let frame2_inter_ref = Arc::clone(&frame2);
     let frame1_imp_ref = Arc::clone(&frame1);
@@ -437,6 +443,19 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let mut intra_cost = 0.0;
     let mut mv_inter_cost = 0.0;
     let mut imp_block_cost = 0.0;
+
+    let cols = 2 * self.encoder_config.width.align_power_of_two_and_shift(3);
+    let rows = 2 * self.encoder_config.height.align_power_of_two_and_shift(3);
+
+    let buffer = if let Some(buffer) = &self.frame_me_stats_buffer {
+      Arc::clone(buffer)
+    } else {
+      let frame_me_stats = FrameMEStats::new_arc_array(cols, rows);
+      let clone = Arc::clone(&frame_me_stats);
+      self.frame_me_stats_buffer = Some(frame_me_stats);
+      clone
+    };
+
     crate::rayon::scope(|s| {
       s.spawn(|_| {
         let intra_costs = estimate_intra_costs(
@@ -455,6 +474,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
           self.bit_depth,
           self.encoder_config,
           self.sequence.clone(),
+          buffer,
         );
       });
       s.spawn(|_| {
