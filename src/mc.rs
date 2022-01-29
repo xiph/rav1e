@@ -68,6 +68,15 @@ impl ops::Mul<u16> for MotionVector {
   }
 }
 
+impl ops::Shr<u8> for MotionVector {
+  type Output = MotionVector;
+
+  #[inline]
+  fn shr(self, rhs: u8) -> MotionVector {
+    MotionVector { row: self.row >> rhs, col: self.col >> rhs }
+  }
+}
+
 impl ops::Shl<u8> for MotionVector {
   type Output = MotionVector;
 
