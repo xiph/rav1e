@@ -173,6 +173,8 @@ pub fn estimate_tile_motion<T: Pixel>(
   inter_cfg: &InterConfig,
 ) {
   let init_size = MIB_SIZE_LOG2;
+
+  let mut prev_ssdec: Option<u8> = None;
   for mv_size_in_b_log2 in (2..=init_size).rev() {
     let init = mv_size_in_b_log2 == init_size;
 
@@ -182,6 +184,14 @@ pub fn estimate_tile_motion<T: Pixel>(
       1 => 1,
       _ => 0,
     };
+
+    let new_subsampling =
+      if let Some(prev) = prev_ssdec { prev != ssdec } else { false };
+    prev_ssdec = Some(ssdec);
+
+    // 0.5 and 0.125 are a fudge factors
+    let lambda = (fi.me_lambda * 256.0 / (1 << (2 * ssdec)) as f64
+      * if ssdec == 0 { 0.5 } else { 0.125 }) as u32;
 
     for sby in 0..ts.sb_height {
       for sbx in 0..ts.sb_width {
@@ -193,15 +203,31 @@ pub fn estimate_tile_motion<T: Pixel>(
           }
           tested_frames_flags |= frame_flag;
 
+          let tile_bo =
+            TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby })
+              .block_offset(0, 0);
+
+          if new_subsampling {
+            refine_subsampled_sb_motion(
+              fi,
+              ts,
+              ref_frame,
+              mv_size_in_b_log2 + 1,
+              tile_bo,
+              ssdec,
+              lambda,
+            );
+          }
+
           estimate_sb_motion(
             fi,
             ts,
             ref_frame,
             mv_size_in_b_log2,
-            TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby })
-              .block_offset(0, 0),
+            tile_bo,
             init,
             ssdec,
+            lambda,
           );
         }
       }
@@ -212,16 +238,15 @@ pub fn estimate_tile_motion<T: Pixel>(
 fn estimate_sb_motion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, ref_frame: RefType,
   mv_size_in_b_log2: usize, tile_bo: TileBlockOffset, init: bool, ssdec: u8,
+  lambda: u32,
 ) {
-  let unit_size = SB_SIZE;
   let pix_offset = tile_bo.to_luma_plane_offset();
-  let sb_h: usize = unit_size.min(ts.height - pix_offset.y as usize);
-  let sb_w: usize = unit_size.min(ts.width - pix_offset.x as usize);
+  let sb_h: usize = SB_SIZE.min(ts.height - pix_offset.y as usize);
+  let sb_w: usize = SB_SIZE.min(ts.width - pix_offset.x as usize);
 
   let mv_size = MI_SIZE << mv_size_in_b_log2;
 
-  // Process in blocks, excluding regions that cannot fit evenly into a block.
-  // Will either process starting at the first block or only on the edges.
+  // Process in blocks, cropping at edges.
   for y in (0..sb_h).step_by(mv_size) {
     for x in (0..sb_w).step_by(mv_size) {
       let corner: MVSamplingMode = if init {
@@ -246,9 +271,49 @@ fn estimate_sb_motion<T: Pixel>(
       // Run motion estimation.
       // Note that the initial search (init) instructs the called function to
       // perform a more extensive search.
-      if let Some(results) =
-        estimate_motion(fi, ts, w, h, sub_bo, ref_frame, corner, init, ssdec)
-      {
+      if let Some(results) = estimate_motion(
+        fi, ts, w, h, sub_bo, ref_frame, corner, init, ssdec, lambda,
+      ) {
+        // normalize sad to 128x128 block
+        let sad = (((results.rd.sad as u64) << (MAX_SB_SIZE_LOG2 * 2))
+          / (w * h) as u64) as u32;
+        save_me_stats(
+          ts,
+          mv_size_in_b_log2,
+          sub_bo,
+          ref_frame,
+          MEStats { mv: results.mv, normalized_sad: sad },
+        );
+      }
+    }
+  }
+}
+
+fn refine_subsampled_sb_motion<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>, ref_frame: RefType,
+  mv_size_in_b_log2: usize, tile_bo: TileBlockOffset, ssdec: u8, lambda: u32,
+) {
+  let pix_offset = tile_bo.to_luma_plane_offset();
+  let sb_h: usize = SB_SIZE.min(ts.height - pix_offset.y as usize);
+  let sb_w: usize = SB_SIZE.min(ts.width - pix_offset.x as usize);
+
+  let mv_size = MI_SIZE << mv_size_in_b_log2;
+
+  // Process in blocks, cropping at edges.
+  for y in (0..sb_h).step_by(mv_size) {
+    for x in (0..sb_w).step_by(mv_size) {
+      let sub_bo = tile_bo
+        .with_offset(x as isize >> MI_SIZE_LOG2, y as isize >> MI_SIZE_LOG2);
+
+      // Clamp to frame edge, rounding up in the case of subsampling.
+      // The rounding makes some assumptions about how subsampling is done.
+      let w = mv_size.min(sb_w - x + (1 << ssdec) - 1) >> ssdec;
+      let h = mv_size.min(sb_h - y + (1 << ssdec) - 1) >> ssdec;
+
+      // Refine the existing motion estimate
+      if let Some(results) = refine_subsampled_motion_estimate(
+        fi, ts, w, h, sub_bo, ref_frame, ssdec, lambda,
+      ) {
         // normalize sad to 128x128 block
         let sad = (((results.rd.sad as u64) << (MAX_SB_SIZE_LOG2 * 2))
           / (w * h) as u64) as u32;
@@ -558,7 +623,7 @@ pub fn motion_estimation<T: Pixel>(
 fn estimate_motion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, w: usize, h: usize,
   tile_bo: TileBlockOffset, ref_frame: RefType, corner: MVSamplingMode,
-  extensive_search: bool, ssdec: u8,
+  extensive_search: bool, ssdec: u8, lambda: u32,
 ) -> Option<FullpelSearchResult> {
   if let Some(ref rec) =
     fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
@@ -568,11 +633,6 @@ fn estimate_motion<T: Pixel>(
       get_mv_range(fi.w_in_b, fi.h_in_b, frame_bo, w << ssdec, h << ssdec);
 
     let global_mv = [MotionVector { row: 0, col: 0 }; 2];
-
-    // TODO: Move lambda setup elsewhere
-    // 0.5 and 0.125 are a fudge factors
-    let lambda = (fi.me_lambda * 256.0 / (1 << (2 * ssdec)) as f64
-      * if ssdec == 0 { 0.5 } else { 0.125 }) as u32;
 
     let po = frame_bo.to_luma_plane_offset();
     let (mvx_min, mvx_max, mvy_min, mvy_max) =
@@ -613,10 +673,66 @@ fn estimate_motion<T: Pixel>(
     );
 
     // Scale motion vectors to full res size
-    results.mv = MotionVector {
-      col: results.mv.col << ssdec,
-      row: results.mv.row << ssdec,
+    results.mv = results.mv << ssdec;
+
+    Some(results)
+  } else {
+    None
+  }
+}
+
+/// Refine motion estimation that was computed one level of subsampling up.
+fn refine_subsampled_motion_estimate<T: Pixel>(
+  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, w: usize, h: usize,
+  tile_bo: TileBlockOffset, ref_frame: RefType, ssdec: u8, lambda: u32,
+) -> Option<FullpelSearchResult> {
+  if let Some(ref rec) =
+    fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
+  {
+    let frame_bo = ts.to_frame_block_offset(tile_bo);
+    let (mvx_min, mvx_max, mvy_min, mvy_max) =
+      get_mv_range(fi.w_in_b, fi.h_in_b, frame_bo, w << ssdec, h << ssdec);
+
+    let pmv = [MotionVector { row: 0, col: 0 }; 2];
+
+    let po = frame_bo.to_luma_plane_offset();
+    let (mvx_min, mvx_max, mvy_min, mvy_max) =
+      (mvx_min >> ssdec, mvx_max >> ssdec, mvy_min >> ssdec, mvy_max >> ssdec);
+    let po = PlaneOffset { x: po.x >> ssdec, y: po.y >> ssdec };
+    let p_ref = match ssdec {
+      0 => &rec.frame.planes[0],
+      1 => &rec.input_hres,
+      2 => &rec.input_qres,
+      _ => unimplemented!(),
     };
+
+    let org_region = &match ssdec {
+      0 => ts.input_tile.planes[0]
+        .subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
+      1 => ts.input_hres.region(Area::StartingAt { x: po.x, y: po.y }),
+      2 => ts.input_qres.region(Area::StartingAt { x: po.x, y: po.y }),
+      _ => unimplemented!(),
+    };
+
+    let mv =
+      ts.me_stats[ref_frame.to_index()][tile_bo.0.y][tile_bo.0.x].mv >> ssdec;
+
+    // Given a motion vector at 0 at higher subsampling:
+    // |  -1   |   0   |   1   |
+    // then the vectors at -1 to 2 should be tested at the current subsampling.
+    //      |-------------|
+    // | -2 -1 |  0  1 |  2  3 |
+    // This corresponds to a 4x4 full search.
+    let x_lo = po.x + (mv.col as isize / 8 - 1).max(mvx_min / 8);
+    let x_hi = po.x + (mv.col as isize / 8 + 2).min(mvx_max / 8);
+    let y_lo = po.y + (mv.row as isize / 8 - 1).max(mvy_min / 8);
+    let y_hi = po.y + (mv.row as isize / 8 + 2).min(mvy_max / 8);
+    let mut results = full_search(
+      fi, x_lo, x_hi, y_lo, y_hi, w, h, org_region, p_ref, po, 1, lambda, pmv,
+    );
+
+    // Scale motion vectors to full res size
+    results.mv = results.mv << ssdec;
 
     Some(results)
   } else {
