@@ -55,12 +55,16 @@ impl FrameMEStats {
     }
   }
   pub fn new_arc_array(cols: usize, rows: usize) -> Arc<[Self; REF_FRAMES]> {
-    let stats = (0..REF_FRAMES)
-      .map(|_| FrameMEStats::new(cols, rows))
-      .collect::<ArrayVec<_, REF_FRAMES>>()
-      .into_inner()
-      .unwrap();
-    Arc::new(stats)
+    Arc::new([
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+      FrameMEStats::new(cols, rows),
+    ])
   }
 }
 

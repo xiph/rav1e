@@ -6,9 +6,10 @@ use crate::dist::get_satd;
 use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
+use crate::frame::FrameAlloc;
 use crate::frame::{AsRegion, PlaneOffset};
-use crate::me::estimate_tile_motion;
-use crate::partition::{get_intra_edges, BlockSize};
+use crate::me::{estimate_tile_motion, FrameMEStats};
+use crate::partition::{get_intra_edges, BlockSize, REF_FRAMES};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
 use crate::tiling::{Area, PlaneRegion, TileRect};
@@ -16,7 +17,7 @@ use crate::transform::TxSize;
 use crate::{Frame, Pixel};
 use rust_hawktracer::*;
 use std::sync::Arc;
-use v_frame::pixel::CastFromPrimitive;
+use v_frame::pixel::{CastFromPrimitive, ChromaSampling};
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
 pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
@@ -177,6 +178,7 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Arc<Sequence>,
+  buffer: Arc<[FrameMEStats; REF_FRAMES]>,
 ) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
@@ -186,7 +188,13 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
     FrameInvariants::new_inter_frame(&last_fi, &inter_cfg, 0, 1, 2, false);
 
   // Compute the motion vectors.
-  let mut fs = FrameState::new_with_frame(&fi, frame.clone());
+  let mut fs = FrameState::new_with_frame_and_me_stats_and_rec(
+    &fi,
+    Arc::clone(&frame),
+    buffer,
+    // We do not use this field, so we can avoid the expensive allocation
+    Arc::new(Frame::new(0, 0, ChromaSampling::Cs400)),
+  );
   compute_motion_vectors(&mut fi, &mut fs, &inter_cfg);
 
   // Estimate inter costs
