@@ -6,7 +6,6 @@ use crate::dist::get_satd;
 use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
-use crate::frame::FrameAlloc;
 use crate::frame::{AsRegion, PlaneOffset};
 use crate::me::{estimate_tile_motion, FrameMEStats};
 use crate::partition::{get_intra_edges, BlockSize, REF_FRAMES};
@@ -14,10 +13,12 @@ use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
-use crate::{Frame, Pixel};
+use crate::Pixel;
 use rust_hawktracer::*;
 use std::sync::Arc;
-use v_frame::pixel::{CastFromPrimitive, ChromaSampling};
+use v_frame::frame::Frame;
+use v_frame::pixel::CastFromPrimitive;
+use v_frame::plane::Plane;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
 pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
@@ -193,7 +194,13 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
     Arc::clone(&frame),
     buffer,
     // We do not use this field, so we can avoid the expensive allocation
-    Arc::new(Frame::new(0, 0, ChromaSampling::Cs400)),
+    Arc::new(Frame {
+      planes: [
+        Plane::new(0, 0, 0, 0, 0, 0),
+        Plane::new(0, 0, 0, 0, 0, 0),
+        Plane::new(0, 0, 0, 0, 0, 0),
+      ],
+    }),
   );
   compute_motion_vectors(&mut fi, &mut fs, &inter_cfg);
 
