@@ -21,3 +21,4 @@ noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 wasm-bindgen = { version = "0.2.63", optional = true }
 rust_hawktracer = "0.7.0"
+new_debug_unreachable = "1.0.4"

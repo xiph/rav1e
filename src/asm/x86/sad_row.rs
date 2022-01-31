@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use debug_unreachable::debug_unreachable;
+
 use crate::cpu_features::CpuFeatureLevel;
 use crate::sad_row::*;
 use crate::util::{Pixel, PixelType};
@@ -17,14 +19,13 @@ use std::arch::x86::*;
 use std::arch::x86_64::*;
 
 use std::arch::asm;
-use std::hint::unreachable_unchecked;
 use std::mem;
 
 /// SAFETY: src and dst must be the same length
 #[inline(always)]
 unsafe fn sad_scalar(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
-    unreachable_unchecked()
+    debug_unreachable!()
   }
 
   let mut sum = 0;
@@ -48,7 +49,7 @@ unsafe fn sad_scalar(src: &[u8], dst: &[u8]) -> i64 {
 #[target_feature(enable = "sse2")]
 unsafe fn sad_below32_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
-    unreachable_unchecked()
+    debug_unreachable!()
   }
 
   let mut offset = 0;
@@ -81,7 +82,7 @@ unsafe fn sad_below32_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
 #[target_feature(enable = "avx2")]
 unsafe fn sad_8bpc_avx2(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
-    unreachable_unchecked()
+    debug_unreachable!()
   }
 
   let src_chunks = src.chunks_exact(32);
@@ -115,7 +116,7 @@ unsafe fn sad_8bpc_avx2(src: &[u8], dst: &[u8]) -> i64 {
 #[target_feature(enable = "sse2")]
 unsafe fn sad_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
-    unreachable_unchecked()
+    debug_unreachable!()
   }
 
   let src_chunks = src.chunks_exact(16);

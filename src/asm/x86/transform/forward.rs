@@ -15,6 +15,7 @@ use crate::util::*;
 use std::mem::MaybeUninit;
 
 use arrayref::{array_mut_ref, array_ref};
+use debug_unreachable::debug_unreachable;
 
 #[cfg(target_arch = "x86")]
 use std::arch::x86::*;
@@ -273,7 +274,7 @@ unsafe fn shift_right(a: I32X8, shift: u8) -> I32X8 {
 #[inline]
 unsafe fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
   if arr.len() % 4 != 0 {
-    std::hint::unreachable_unchecked();
+    debug_unreachable!();
   }
 
   if bit == 0 {

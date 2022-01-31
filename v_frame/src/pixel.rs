@@ -87,6 +87,7 @@ impl_cast_from_pixel_to_primitive!(i32);
 impl_cast_from_pixel_to_primitive!(u32);
 
 /// Types that can be used as pixel types.
+#[derive(PartialEq, Eq)]
 pub enum PixelType {
   /// 8 bits per pixel, stored in a `u8`.
   U8,
