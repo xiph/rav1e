@@ -418,7 +418,13 @@ impl<T: Pixel> FrameState<T> {
     )
   }
 
-  /// Does not create qres or hres versions of `frame`
+  /// Similar to [`FrameState::new_with_frame`], but takes an `me_stats`
+  /// and `rec` to enable reusing the same underlying allocations to create
+  /// a `FrameState`
+  ///
+  /// This function primarily exists for [`estimate_inter_costs`], and so
+  /// it does not create hres or qres versions of `frame` as downscaling is
+  /// somewhat expensive and are not needed for [`estimate_inter_costs`].
   pub fn new_with_frame_and_me_stats_and_rec(
     fi: &FrameInvariants<T>, frame: Arc<Frame<T>>,
     me_stats: Arc<[FrameMEStats; REF_FRAMES]>, rec: Arc<Frame<T>>,
