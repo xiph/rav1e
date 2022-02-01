@@ -522,9 +522,8 @@ fn detect_scale_factor(
 ) -> usize {
   let small_edge =
     cmp::min(sequence.max_frame_height, sequence.max_frame_width) as usize;
-  let scale_factor;
-  if speed_mode == SceneDetectionSpeed::Fast {
-    scale_factor = match small_edge {
+  let scale_factor = if speed_mode == SceneDetectionSpeed::Fast {
+    match small_edge {
       0..=240 => 1,
       241..=480 => 2,
       481..=720 => 4,
@@ -532,24 +531,21 @@ fn detect_scale_factor(
       1081..=1600 => 16,
       1601..=usize::MAX => 32,
       _ => 1,
-    } as usize
+    }
   } else {
-    scale_factor = match small_edge {
-      0..=1600 => 1,
-      1601..=2160 => 2,
-      2161..=usize::MAX => 4,
-      _ => 1,
-    } as usize
+    1
   };
 
-  debug!(
-    "Scene detection scale factor {}, [{},{}] -> [{},{}]",
-    scale_factor,
-    sequence.max_frame_width,
-    sequence.max_frame_height,
-    sequence.max_frame_width as usize / scale_factor,
-    sequence.max_frame_height as usize / scale_factor
-  );
+  if scale_factor != 1 {
+    debug!(
+      "Scene detection scale factor {}, [{},{}] -> [{},{}]",
+      scale_factor,
+      sequence.max_frame_width,
+      sequence.max_frame_height,
+      sequence.max_frame_width as usize / scale_factor,
+      sequence.max_frame_height as usize / scale_factor
+    );
+  }
   scale_factor
 }
 
