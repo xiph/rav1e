@@ -38,6 +38,10 @@ smooth_perm:   db  1,  2,  5,  6,  9, 10, 13, 14, 17, 18, 21, 22, 25, 26, 29, 30
                db 33, 34, 37, 38, 41, 42, 45, 46, 49, 50, 53, 54, 57, 58, 61, 62
                db 65, 66, 69, 70, 73, 74, 77, 78, 81, 82, 85, 86, 89, 90, 93, 94
                db 97, 98,101,102,105,106,109,110,113,114,117,118,121,122,125,126
+pal_pred_perm: db  0, 32,  1, 33,  2, 34,  3, 35,  4, 36,  5, 37,  6, 38,  7, 39
+               db  8, 40,  9, 41, 10, 42, 11, 43, 12, 44, 13, 45, 14, 46, 15, 47
+               db 16, 48, 17, 49, 18, 50, 19, 51, 20, 52, 21, 53, 22, 54, 23, 55
+               db 24, 56, 25, 57, 26, 58, 27, 59, 28, 60, 29, 61, 30, 62, 31, 63
 pw_1:          times 2 dw  1
 
 %macro JMP_TABLE 3-*
@@ -54,6 +58,7 @@ JMP_TABLE ipred_paeth_16bpc,      avx512icl, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_16bpc,     avx512icl, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_h_16bpc,   avx512icl, w4, w8, w16, w32, w64
 JMP_TABLE ipred_smooth_v_16bpc,   avx512icl, w4, w8, w16, w32, w64
+JMP_TABLE pal_pred_16bpc,         avx512icl, w4, w8, w16, w32, w64
 
 cextern smooth_weights_1d_16bpc
 cextern smooth_weights_2d_16bpc
@@ -596,6 +601,80 @@ cglobal ipred_smooth_16bpc, 3, 7, 16, dst, stride, tl, w, h, v_weights, stride3
     add               dstq, strideq
     sub                 hd, 1*2
     jg .w64_loop
+    RET
+
+cglobal pal_pred_16bpc, 4, 7, 4, dst, stride, pal, idx, w, h, stride3
+    lea                  r6, [pal_pred_16bpc_avx512icl_table]
+    tzcnt                wd, wm
+    mova                 m2, [pal_pred_perm]
+    movsxd               wq, [r6+wq*4]
+    mova                xm3, [palq]
+    movifnidn            hd, hm
+    add                  wq, r6
+    lea            stride3q, [strideq*3]
+    jmp                  wq
+.w4:
+    pmovzxbw            ym0, [idxq]
+    add                idxq, 16
+    vpermw              ym0, ym0, ym3
+    vextracti32x4      xmm1, ym0, 1
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    movq   [dstq+strideq*2], xmm1
+    movhps [dstq+stride3q ], xmm1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w4
+    RET
+.w8:
+    pmovzxbw             m0, [idxq]
+    add                idxq, 32
+    vpermw               m0, m0, m3
+    mova          [dstq+strideq*0], xm0
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    vextracti32x4 [dstq+strideq*2], m0, 2
+    vextracti32x4 [dstq+stride3q ], m0, 3
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w8
+    RET
+.w16:
+    vpermb               m1, m2, [idxq]
+    add                idxq, 64
+    vpermw               m0, m1, m3
+    psrlw                m1, 8
+    vpermw               m1, m1, m3
+    mova          [dstq+strideq*0], ym0
+    vextracti32x8 [dstq+strideq*1], m0, 1
+    mova          [dstq+strideq*2], ym1
+    vextracti32x8 [dstq+stride3q ], m1, 1
+    lea                dstq, [dstq+strideq*4]
+    sub                  hd, 4
+    jg .w16
+    RET
+.w32:
+    vpermb               m1, m2, [idxq]
+    add                idxq, 64
+    vpermw               m0, m1, m3
+    psrlw                m1, 8
+    vpermw               m1, m1, m3
+    mova   [dstq+strideq*0], m0
+    mova   [dstq+strideq*1], m1
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jg .w32
+    RET
+.w64:
+    vpermb               m1, m2, [idxq]
+    add                idxq, 64
+    vpermw               m0, m1, m3
+    psrlw                m1, 8
+    vpermw               m1, m1, m3
+    mova        [dstq+64*0], m0
+    mova        [dstq+64*1], m1
+    add                dstq, strideq
+    dec                  hd
+    jg .w64
     RET
 
 %endif
