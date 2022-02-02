@@ -42,7 +42,21 @@ pal_pred_perm: db  0, 32,  1, 33,  2, 34,  3, 35,  4, 36,  5, 37,  6, 38,  7, 39
                db  8, 40,  9, 41, 10, 42, 11, 43, 12, 44, 13, 45, 14, 46, 15, 47
                db 16, 48, 17, 49, 18, 50, 19, 51, 20, 52, 21, 53, 22, 54, 23, 55
                db 24, 56, 25, 57, 26, 58, 27, 59, 28, 60, 29, 61, 30, 62, 31, 63
+filter_permA:  times 4 db  6,  7,  8,  9, 14, 15,  4,  5
+               times 4 db 10, 11, 12, 13,  2,  3, -1, -1
+filter_permB:  times 4 db 22, 23, 24, 25, 30, 31,  6,  7
+               times 4 db 26, 27, 28, 29, 14, 15, -1, -1
+filter_permC:          dd  8 ; dq  8, 10,  1, 11,  0,  9
 pw_1:          times 2 dw  1
+                       dd 10
+filter_rnd:            dd 32
+                       dd  1
+                       dd  8
+                       dd 11
+filter_shift:  times 2 dw  6
+                       dd  0
+               times 2 dw  4
+                       dd  9
 
 %macro JMP_TABLE 3-*
     %xdefine %1_%2_table (%%table - 2*4)
@@ -62,6 +76,7 @@ JMP_TABLE pal_pred_16bpc,         avx512icl, w4, w8, w16, w32, w64
 
 cextern smooth_weights_1d_16bpc
 cextern smooth_weights_2d_16bpc
+cextern filter_intra_taps
 
 SECTION .text
 
@@ -676,5 +691,151 @@ cglobal pal_pred_16bpc, 4, 7, 4, dst, stride, pal, idx, w, h, stride3
     dec                  hd
     jg .w64
     RET
+
+; The ipred_filter SIMD processes 4x2 blocks in the following order which
+; increases parallelism compared to doing things row by row.
+;     w4     w8       w16             w32
+;     1     1 2     1 2 5 6     1 2 5 6 9 a d e
+;     2     2 3     2 3 6 7     2 3 6 7 a b e f
+;     3     3 4     3 4 7 8     3 4 7 8 b c f g
+;     4     4 5     4 5 8 9     4 5 8 9 c d g h
+
+cglobal ipred_filter_16bpc, 4, 7, 14, dst, stride, tl, w, h, filter, top
+%define base r6-$$
+    lea                  r6, [$$]
+%ifidn filterd, filterm
+    movzx           filterd, filterb
+%else
+    movzx           filterd, byte filterm
+%endif
+    shl             filterd, 6
+    movifnidn            hd, hm
+    movu                xm0, [tlq-6]
+    pmovsxbw             m7, [base+filter_intra_taps+filterq+32*0]
+    pmovsxbw             m8, [base+filter_intra_taps+filterq+32*1]
+    mov                 r5d, r8m ; bitdepth_max
+    movsldup             m9, [base+filter_permA]
+    movshdup            m10, [base+filter_permA]
+    shr                 r5d, 11  ; is_12bpc
+    jnz .12bpc
+    psllw                m7, 2   ; upshift multipliers so that packusdw
+    psllw                m8, 2   ; will perform clipping for free
+.12bpc:
+    vpbroadcastd         m5, [base+filter_rnd+r5*8]
+    vpbroadcastd         m6, [base+filter_shift+r5*8]
+    sub                  wd, 8
+    jl .w4
+.w8:
+    call .main4
+    movsldup            m11, [filter_permB]
+    lea                 r5d, [hq*2+2]
+    movshdup            m12, [filter_permB]
+    lea                topq, [tlq+2]
+    mova                m13, [filter_permC]
+    sub                  hd, 4
+    vinserti32x4        ym0, [topq], 1 ; a0 b0   t0 t1
+    sub                 tlq, r5
+%if WIN64
+    push                 r7
+    push                 r8
+%endif
+    mov                  r7, dstq
+    mov                 r8d, hd
+.w8_loop:
+    movlps              xm4, xm0, [tlq+hq*2]
+    call .main8
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jge .w8_loop
+    test                 wd, wd
+    jz .end
+    mov                 r2d, 0x0d
+    kmovb                k1, r2d
+    lea                  r2, [strideq*3]
+.w16:
+    movd               xmm0, [r7+strideq*1+12]
+    vpblendd           xmm0, [topq+8], 0x0e ; t1 t2
+    pinsrw              xm4, xmm0, [r7+strideq*0+14], 2
+    call .main8
+    add                  r7, 16
+    vinserti32x4        ym0, [topq+16], 1   ; a2 b2   t2 t3
+    mov                  hd, r8d
+    mov                dstq, r7
+    add                topq, 16
+.w16_loop:
+    movd               xmm1, [dstq+strideq*2-4]
+    punpcklwd           xm4, xmm1, xmm0
+    movd               xmm0, [dstq+r2-4]
+    shufps          xm4{k1}, xmm0, xm0, q3210
+    call .main8
+    lea                dstq, [dstq+strideq*2]
+    sub                  hd, 2
+    jge .w16_loop
+    sub                  wd, 8
+    jg .w16
+.end:
+    vpermb               m2, m11, m0
+    mova                ym1, ym5
+    vpdpwssd             m1, m2, m7
+    vpermb               m2, m12, m0
+    vpdpwssd             m1, m2, m8
+%if WIN64
+    pop                  r8
+    pop                  r7
+%endif
+    vextracti32x8       ym2, m1, 1
+    paddd               ym1, ym2
+    packusdw            ym1, ym1
+    vpsrlvw             ym1, ym6
+    vpermt2q             m0, m13, m1
+    vextracti32x4 [dstq+strideq*0], m0, 2
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    RET
+.w4_loop:
+    movlps              xm0, [tlq-10]
+    lea                dstq, [dstq+strideq*2]
+    sub                 tlq, 4
+.w4:
+    call .main4
+    movq   [dstq+strideq*0], xm0
+    movhps [dstq+strideq*1], xm0
+    sub                  hd, 2
+    jg .w4_loop
+    RET
+ALIGN function_align
+.main4:
+    vpermb               m2, m9, m0
+    mova                ym1, ym5
+    vpdpwssd             m1, m2, m7
+    vpermb               m0, m10, m0
+    vpdpwssd             m1, m0, m8
+    vextracti32x8       ym0, m1, 1
+    paddd               ym0, ym1
+    vextracti32x4       xm1, ym0, 1
+    packusdw            xm0, xm1     ; clip
+    vpsrlvw             xm0, xm6
+    ret
+ALIGN function_align
+.main8:
+    vpermb               m3, m11, m0
+    mova                ym2, ym5
+    vpdpwssd             m2, m3, m7
+    vpermb               m3, m9, m4
+    mova                ym1, ym5
+    vpdpwssd             m1, m3, m7
+    vpermb               m3, m12, m0
+    vpdpwssd             m2, m3, m8
+    vpermb               m3, m10, m4
+    vpdpwssd             m1, m3, m8
+    vextracti32x8       ym4, m2, 1
+    vextracti32x8       ym3, m1, 1
+    paddd               ym2, ym4
+    paddd               ym1, ym3
+    packusdw            ym1, ym2     ; clip
+    vpsrlvw             ym1, ym6
+    vpermt2q             m0, m13, m1 ; c0 d0   b0 b1   a0 a1
+    vextracti32x4 [dstq+strideq*0], m0, 2
+    vextracti32x4 [dstq+strideq*1], ym0, 1
+    ret
 
 %endif

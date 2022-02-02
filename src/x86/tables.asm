@@ -132,7 +132,7 @@ const mc_subpel_filters, db  0,   1,  -3,  63,   4,  -1,   0,   0, ; REGULAR
                          db  0,   0,   0,   8,  56,   0,   0,   0,
                          db  0,   0,   0,   4,  60,   0,   0,   0
 
-align 16, db 0
+align 64, db 0
 const filter_intra_taps, db  -6,  10,  -5,   2,  -3,   1,  -3,   1, ; 0
                          db  -4,   6,  -3,   2,  -3,   2,  -3,   1,
                          db   0,   0,  10,   0,   1,  10,   1,   2,
