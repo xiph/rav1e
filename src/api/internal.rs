@@ -767,11 +767,19 @@ impl<T: Pixel> ContextInner<T> {
       .get_mut(&output_frameno)
       .unwrap()
       .fi
-      .lookahead_intra_costs = estimate_intra_costs(
-      &*self.frame_q[&fi.input_frameno].as_ref().unwrap(),
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
-    );
+      .lookahead_intra_costs = self
+      .keyframe_detector
+      .intra_costs
+      .remove(&fi.input_frameno)
+      .unwrap_or_else(|| {
+        // We use the cached values from scenechange if available,
+        // otherwise we need to calculate them here.
+        estimate_intra_costs(
+          &*self.frame_q[&fi.input_frameno].as_ref().unwrap(),
+          fi.sequence.bit_depth,
+          fi.cpu_feature_level,
+        )
+      });
   }
 
   #[hawktracer(compute_keyframe_placement)]
