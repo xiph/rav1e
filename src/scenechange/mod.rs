@@ -17,6 +17,7 @@ use crate::partition::REF_FRAMES;
 use crate::sad_row;
 use crate::util::Pixel;
 use rust_hawktracer::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::{cmp, u64};
 use v_frame::math::Fixed;
@@ -70,6 +71,9 @@ pub struct SceneChangeDetector<T: Pixel> {
   cpu_feature_level: CpuFeatureLevel,
   encoder_config: EncoderConfig,
   sequence: Arc<Sequence>,
+  /// Calculated intra costs for each input frame.
+  /// These are cached for reuse later in rav1e.
+  pub(crate) intra_costs: BTreeMap<u64, Box<[u32]>>,
 }
 
 impl<T: Pixel> SceneChangeDetector<T> {
@@ -118,6 +122,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       cpu_feature_level,
       encoder_config,
       sequence,
+      intra_costs: BTreeMap::new(),
     }
   }
 
@@ -155,7 +160,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       return false;
     }
 
-    // Initiallization of score deque
+    // Initialization of score deque
     // based on frame set length
     if self.deque_offset > 0
       && frame_set.len() > self.deque_offset + 1
@@ -177,7 +182,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       self.run_comparison(
         frame_set[self.deque_offset].clone(),
         frame_set[self.deque_offset + 1].clone(),
-        input_frameno,
+        input_frameno + self.deque_offset as u64,
       );
     } else {
       self.deque_offset -= 1;
@@ -226,7 +231,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       self.run_comparison(
         frame_set[x].clone(),
         frame_set[x + 1].clone(),
-        input_frameno,
+        input_frameno + x as u64,
       );
     }
   }
@@ -240,7 +245,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let mut result = if self.speed_mode == SceneDetectionSpeed::Fast {
       self.fast_scenecut(frame1, frame2)
     } else {
-      self.cost_scenecut(frame1, frame2)
+      self.cost_scenecut(frame1, frame2, input_frameno)
     };
 
     // Subtract the highest metric value of surrounding frames from the current one
@@ -435,6 +440,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   #[hawktracer(cost_scenecut)]
   fn cost_scenecut(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
+    input_frameno: u64,
   ) -> ScenecutResult {
     let frame2_inter_ref = Arc::clone(&frame2);
     let frame1_imp_ref = Arc::clone(&frame1);
@@ -458,14 +464,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     crate::rayon::scope(|s| {
       s.spawn(|_| {
-        let intra_costs = estimate_intra_costs(
-          &*frame2,
-          self.bit_depth,
-          self.cpu_feature_level,
-        );
+        let intra_costs =
+          self.intra_costs.entry(input_frameno).or_insert_with(|| {
+            estimate_intra_costs(
+              &*frame2,
+              self.bit_depth,
+              self.cpu_feature_level,
+            )
+          });
         intra_cost = intra_costs.iter().map(|&cost| cost as u64).sum::<u64>()
           as f64
-          / intra_costs.len() as f64
+          / intra_costs.len() as f64;
       });
       s.spawn(|_| {
         mv_inter_cost = estimate_inter_costs(
