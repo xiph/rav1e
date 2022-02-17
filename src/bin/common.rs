@@ -11,7 +11,7 @@ use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
-use clap::{App, AppSettings, Arg, ArgMatches};
+use clap::{AppSettings, Arg, ArgMatches, Command};
 use clap_complete::{generate, Shell};
 use rav1e::prelude::*;
 use rav1e::version;
@@ -85,12 +85,12 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
   let ver_short = format!("{} ({})", version::short(), profile);
   let ver_long = format!("{} ({})", version::full(), profile);
   let speed_long_help = build_speed_long_help();
-  let mut app = App::new("rav1e")
+  let mut app = Command::new("rav1e")
     .version(ver_short.as_str())
     .long_version(ver_long.as_str())
     .about("AV1 video encoder")
     .setting(AppSettings::DeriveDisplayOrder)
-    .setting(AppSettings::SubcommandsNegateReqs)
+    .subcommand_negates_reqs(true)
     .arg(Arg::new("FULLHELP")
       .help("Prints more detailed help information")
       .long("fullhelp"))
@@ -379,8 +379,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Overwrite output file.")
         .short('y')
     )
-    .subcommand(App::new("advanced")
-                .setting(AppSettings::Hidden)
+    .subcommand(Command::new("advanced")
+                .hide(true)
                 .about("Advanced features")
                 .arg(Arg::new("SHELL")
                      .help("Output to stdout the completion definition for the shell")
