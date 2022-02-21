@@ -98,14 +98,6 @@ cextern gaussian_sequence
 
 SECTION .text
 
-%macro REPX 2-*
-    %xdefine %%f(x) %1
-%rep %0 - 1
-    %rotate 1
-    %%f(%1)
-%endrep
-%endmacro
-
 INIT_YMM avx2
 cglobal generate_grain_y_8bpc, 2, 9, 8, buf, fg_data
 %define base r4-generate_grain_y_8bpc_avx2_table

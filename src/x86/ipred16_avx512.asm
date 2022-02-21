@@ -80,14 +80,6 @@ cextern filter_intra_taps
 
 SECTION .text
 
-%macro REPX 2-*
-    %xdefine %%f(x) %1
-%rep %0 - 1
-    %rotate 1
-    %%f(%1)
-%endrep
-%endmacro
-
 %macro PAETH 3 ; top, signed_ldiff, ldiff
     paddw               m0, m%2, m2
     psubw               m1, m0, m3  ; tldiff

@@ -90,14 +90,6 @@ cextern gaussian_sequence
 
 SECTION .text
 
-%macro REPX 2-*
-    %xdefine %%f(x) %1
-%rep %0 - 1
-    %rotate 1
-    %%f(%1)
-%endrep
-%endmacro
-
 %if ARCH_X86_32
 %define PIC_ptr(a) base+a
 %else

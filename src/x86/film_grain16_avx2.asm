@@ -105,14 +105,6 @@ cextern gaussian_sequence
 
 SECTION .text
 
-%macro REPX 2-*
-    %xdefine %%f(x) %1
-%rep %0 - 1
-    %rotate 1
-    %%f(%1)
-%endrep
-%endmacro
-
 %define m(x) mangle(private_prefix %+ _ %+ x %+ SUFFIX)
 
 INIT_YMM avx2
