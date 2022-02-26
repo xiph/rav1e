@@ -322,7 +322,7 @@ impl Sequence {
   }
 
   pub fn get_skip_mode_allowed<T: Pixel>(
-    &self, fi: &FrameInvariants<T>, inter_cfg: &InterConfig,
+    &self, fi: &BaseInvariants<T>, inter_cfg: &InterConfig,
     reference_select: bool,
   ) -> bool {
     if fi.intra_only || !reference_select || !self.enable_order_hint {
@@ -412,9 +412,14 @@ pub struct FrameState<T: Pixel> {
 impl<T: Pixel> FrameState<T> {
   pub fn new(fi: &FrameInvariants<T>) -> Self {
     // TODO(negge): Use fi.cfg.chroma_sampling when we store VideoDetails in FrameInvariants
+    let base = fi.base().unwrap();
     FrameState::new_with_frame(
       fi,
-      Arc::new(Frame::new(fi.width, fi.height, fi.sequence.chroma_sampling)),
+      Arc::new(Frame::new(
+        base.width,
+        base.height,
+        base.sequence.chroma_sampling,
+      )),
     )
   }
 
@@ -435,7 +440,7 @@ impl<T: Pixel> FrameState<T> {
     let qres = Plane::new(0, 0, 0, 0, 0, 0);
 
     Self {
-      sb_size_log2: fi.sb_size_log2(),
+      sb_size_log2: fi.base().unwrap().sb_size_log2(),
       input: frame,
       input_hres: Arc::new(hres),
       input_qres: Arc::new(qres),
@@ -458,18 +463,19 @@ impl<T: Pixel> FrameState<T> {
     let luma_width = frame.planes[0].cfg.width;
     let luma_height = frame.planes[0].cfg.height;
 
-    let hres = frame.planes[0].downsampled(fi.width, fi.height);
-    let qres = hres.downsampled(fi.width, fi.height);
+    let base = fi.base().unwrap();
+    let hres = frame.planes[0].downsampled(base.width, base.height);
+    let qres = hres.downsampled(base.width, base.height);
 
     Self {
-      sb_size_log2: fi.sb_size_log2(),
+      sb_size_log2: base.sb_size_log2(),
       input: frame,
       input_hres: Arc::new(hres),
       input_qres: Arc::new(qres),
       rec: Arc::new(Frame::new(
         luma_width,
         luma_height,
-        fi.sequence.chroma_sampling,
+        base.sequence.chroma_sampling,
       )),
       cdfs: CDFContext::new(0),
       context_update_tile_id: 0,
@@ -477,7 +483,7 @@ impl<T: Pixel> FrameState<T> {
       deblock: Default::default(),
       segmentation: Default::default(),
       restoration: rs,
-      frame_me_stats: FrameMEStats::new_arc_array(fi.w_in_b, fi.h_in_b),
+      frame_me_stats: FrameMEStats::new_arc_array(base.w_in_b, base.h_in_b),
       enc_stats: Default::default(),
     }
   }
@@ -531,9 +537,16 @@ pub struct SegmentationState {
 }
 
 // Frame Invariants are invariant inside a frame
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct FrameInvariants<T: Pixel> {
+pub enum FrameInvariants<T: Pixel> {
+  CodedFrame { base: BaseInvariants<T>, lookahead: Box<LookaheadData<T>> },
+  ShowExistingFrame { base: BaseInvariants<T> },
+  Placeholder,
+}
+
+/// These are fields that are needed for both Show and Show Existing frames.
+#[derive(Debug, Clone)]
+pub struct BaseInvariants<T: Pixel> {
   pub sequence: Arc<Sequence>,
   pub config: Arc<EncoderConfig>,
   pub width: usize,
@@ -554,7 +567,6 @@ pub struct FrameInvariants<T: Pixel> {
   pub intra_only: bool,
   pub allow_high_precision_mv: bool,
   pub frame_type: FrameType,
-  pub show_existing_frame: bool,
   pub frame_to_show_map_idx: u32,
   pub use_reduced_tx_set: bool,
   pub reference_mode: ReferenceMode,
@@ -600,10 +612,14 @@ pub struct FrameInvariants<T: Pixel> {
   pub tx_mode_select: bool,
   pub enable_inter_txfm_split: bool,
   pub default_filter: FilterMode,
-  /// If true, this `FrameInvariants` corresponds to an invalid frame and
-  /// should be ignored. Invalid frames occur when a subgop is prematurely
-  /// ended, for example, by a key frame or the end of the video.
-  pub invalid: bool,
+  /// Target CPU feature level.
+  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
+  pub enable_segmentation: bool,
+}
+
+/// These are fields that are only needed on Show frames.
+#[derive(Debug, Clone)]
+pub struct LookaheadData<T: Pixel> {
   /// Motion vectors to the _original_ reference frames (not reconstructed).
   /// Used for lookahead purposes.
   ///
@@ -630,11 +646,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub distortion_scales: Box<[DistortionScale]>,
   /// Pre-computed activity_scale.
   pub activity_scales: Box<[DistortionScale]>,
-
-  /// Target CPU feature level.
-  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
   pub activity_mask: ActivityMask,
-  pub enable_segmentation: bool,
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -649,13 +661,274 @@ pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 }
 
 impl<T: Pixel> FrameInvariants<T> {
-  #[allow(clippy::erasing_op, clippy::identity_op)]
-  pub fn new(config: Arc<EncoderConfig>, sequence: Arc<Sequence>) -> Self {
-    assert!(
-      sequence.bit_depth <= mem::size_of::<T>() * 8,
-      "bit depth cannot fit into u8"
-    );
+  pub fn new_key_frame(
+    config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
+    gop_input_frameno_start: u64,
+  ) -> Self {
+    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision;
+    let mut base = BaseInvariants::new(config, sequence);
+    base.input_frameno = gop_input_frameno_start;
+    base.tx_mode_select = tx_mode_select;
+    let lookahead = Box::new(LookaheadData::new(&base));
+    FrameInvariants::CodedFrame { base, lookahead }
+  }
 
+  /// Returns the created FrameInvariants along with a bool indicating success.
+  /// This interface provides simpler usage, because we always need the produced
+  /// FrameInvariants regardless of success or failure.
+  pub(crate) fn new_inter_frame(
+    previous_fi: &Self, inter_cfg: &InterConfig, gop_input_frameno_start: u64,
+    output_frameno_in_gop: u64, next_keyframe_input_frameno: u64,
+    error_resilient: bool,
+  ) -> Self {
+    let input_frameno = inter_cfg
+      .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
+    if input_frameno >= next_keyframe_input_frameno {
+      return FrameInvariants::Placeholder;
+    }
+
+    assert!(
+      matches!(previous_fi, FrameInvariants::CodedFrame { .. }),
+      "new_inter_frame previous_fi should be set by calling `get_previous_display_fi`"
+    );
+    let mut base = (*previous_fi.base().unwrap()).clone();
+    base.input_frameno = input_frameno;
+    base.idx_in_group_output =
+      inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
+    base.tx_mode_select = base.enable_inter_txfm_split;
+
+    base.order_hint = inter_cfg
+      .get_order_hint(output_frameno_in_gop, base.idx_in_group_output);
+
+    base.pyramid_level = inter_cfg.get_level(base.idx_in_group_output);
+
+    base.frame_type = if (inter_cfg.switch_frame_interval > 0)
+      && (output_frameno_in_gop % inter_cfg.switch_frame_interval == 0)
+      && (base.pyramid_level == 0)
+    {
+      FrameType::SWITCH
+    } else {
+      FrameType::INTER
+    };
+    base.error_resilient = if base.frame_type == FrameType::SWITCH {
+      true
+    } else {
+      error_resilient
+    };
+
+    base.frame_size_override_flag = if base.frame_type == FrameType::SWITCH {
+      true
+    } else if base.sequence.reduced_still_picture_hdr {
+      false
+    } else if base.frame_type == FrameType::INTER
+      && !base.error_resilient
+      && base.render_and_frame_size_different
+    {
+      // force frame_size_with_refs() code path if render size != frame size
+      true
+    } else {
+      base.width as u32 != base.sequence.max_frame_width
+        || base.height as u32 != base.sequence.max_frame_height
+    };
+
+    // this is the slot that the current frame is going to be saved into
+    let slot_idx = inter_cfg.get_slot_idx(base.pyramid_level, base.order_hint);
+    base.frame_to_show_map_idx = slot_idx;
+    base.show_frame = inter_cfg.get_show_frame(base.idx_in_group_output);
+    let show_existing_frame =
+      inter_cfg.get_show_existing_frame(base.idx_in_group_output);
+
+    base.intra_only = false;
+    base.force_integer_mv = 0; // note: should be 1 if base.intra_only is true
+
+    let second_ref_frame =
+      if base.idx_in_group_output == 0 { LAST2_FRAME } else { ALTREF_FRAME };
+    let ref_in_previous_group = LAST3_FRAME;
+    base.refresh_frame_flags = if base.frame_type == FrameType::SWITCH {
+      ALL_REF_FRAMES_MASK
+    } else {
+      1 << slot_idx
+    };
+    // reuse probability estimates from previous frames only in top level frames
+    base.primary_ref_frame =
+      if base.error_resilient || (base.pyramid_level > 2) {
+        PRIMARY_REF_NONE
+      } else {
+        (ref_in_previous_group.to_index()) as u32
+      };
+
+    if base.pyramid_level == 0 {
+      // level 0 has no forward references
+      // default to last P frame
+      base.ref_frames = [
+        // calculations done relative to the slot_idx for this frame.
+        // the last four frames can be found by subtracting from the current slot_idx
+        // add 4 to prevent underflow
+        // TODO: maybe use order_hint here like in get_slot_idx?
+        // this is the previous P frame
+        (slot_idx + 4 - 1) as u8 % 4
+          ; INTER_REFS_PER_FRAME];
+      if inter_cfg.multiref {
+        // use the second-previous p frame as a second reference frame
+        base.ref_frames[second_ref_frame.to_index()] =
+          (slot_idx + 4 - 2) as u8 % 4;
+      }
+    } else {
+      debug_assert!(inter_cfg.multiref);
+
+      // fill in defaults
+      // default to backwards reference in lower level
+      base.ref_frames = [{
+        let oh = base.order_hint
+          - (inter_cfg.group_input_len as u32 >> base.pyramid_level);
+        let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+        if lvl1 == 0 {
+          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+        } else {
+          3 + lvl1 as u8
+        }
+      }; INTER_REFS_PER_FRAME];
+      // use forward reference in lower level as a second reference frame
+      base.ref_frames[second_ref_frame.to_index()] = {
+        let oh = base.order_hint
+          + (inter_cfg.group_input_len as u32 >> base.pyramid_level);
+        let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+        if lvl2 == 0 {
+          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+        } else {
+          3 + lvl2 as u8
+        }
+      };
+      // use a reference to the previous frame in the same level
+      // (horizontally) as a third reference
+      base.ref_frames[ref_in_previous_group.to_index()] = slot_idx as u8;
+    }
+
+    base.reference_mode =
+      if inter_cfg.multiref && base.idx_in_group_output != 0 {
+        ReferenceMode::SELECT
+      } else {
+        ReferenceMode::SINGLE
+      };
+    base.me_range_scale =
+      (inter_cfg.group_input_len >> base.pyramid_level) as u8;
+    base.set_ref_frame_sign_bias();
+
+    if show_existing_frame {
+      FrameInvariants::ShowExistingFrame { base }
+    } else {
+      FrameInvariants::CodedFrame {
+        base,
+        lookahead: Box::new(
+          (*previous_fi.lookahead().expect(
+            "new_inter_frame should be called with get_previous_display_fi",
+          ))
+          .clone(),
+        ),
+      }
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn is_frame(&self) -> bool {
+    matches!(
+      self,
+      FrameInvariants::CodedFrame { .. }
+        | FrameInvariants::ShowExistingFrame { .. }
+    )
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn is_coded_frame(&self) -> bool {
+    matches!(self, FrameInvariants::CodedFrame { .. })
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn is_show_existing_frame(&self) -> bool {
+    self.is_frame() && !self.is_coded_frame()
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn base(&self) -> Option<&BaseInvariants<T>> {
+    match self {
+      FrameInvariants::CodedFrame { ref base, .. }
+      | FrameInvariants::ShowExistingFrame { ref base } => Some(base),
+      _ => None,
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn lookahead(&self) -> Option<&LookaheadData<T>> {
+    match self {
+      FrameInvariants::CodedFrame { ref lookahead, .. } => Some(lookahead),
+      _ => None,
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn parts(&mut self) -> Option<(&BaseInvariants<T>, &LookaheadData<T>)> {
+    match self {
+      FrameInvariants::CodedFrame { ref base, ref lookahead, .. } => {
+        Some((base, lookahead))
+      }
+      _ => None,
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn base_mut(&mut self) -> Option<&mut BaseInvariants<T>> {
+    match self {
+      FrameInvariants::CodedFrame { ref mut base, .. }
+      | FrameInvariants::ShowExistingFrame { ref mut base } => Some(base),
+      _ => None,
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn lookahead_mut(&mut self) -> Option<&mut LookaheadData<T>> {
+    match self {
+      FrameInvariants::CodedFrame { ref mut lookahead, .. } => Some(lookahead),
+      _ => None,
+    }
+  }
+
+  #[inline(always)]
+  #[must_use]
+  pub fn parts_mut(
+    &mut self,
+  ) -> Option<(&mut BaseInvariants<T>, &mut LookaheadData<T>)> {
+    match self {
+      FrameInvariants::CodedFrame { ref mut base, ref mut lookahead } => {
+        Some((base, lookahead))
+      }
+      _ => None,
+    }
+  }
+}
+
+impl<T: Pixel> fmt::Display for FrameInvariants<T> {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if let Some(base) = self.base() {
+      write!(f, "Input Frame {} - {}", base.input_frameno, base.frame_type)
+    } else {
+      write!(f, "Placeholder Frame")
+    }
+  }
+}
+
+impl<T> BaseInvariants<T>
+where
+  T: Pixel,
+{
+  pub fn new(config: Arc<EncoderConfig>, sequence: Arc<Sequence>) -> Self {
     let (width, height) = (config.width, config.height);
     let frame_size_override_flag = width as u32 != sequence.max_frame_width
       || height as u32 != sequence.max_frame_height;
@@ -669,12 +942,10 @@ impl<T: Pixel> FrameInvariants<T> {
       && config.speed_settings.transform.tx_domain_distortion;
     let use_tx_domain_rate = config.speed_settings.transform.tx_domain_rate;
 
-    let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
-    let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
-
-    // Width and height are padded to 8×8 block size.
-    let w_in_imp_b = w_in_b / 2;
-    let h_in_imp_b = h_in_b / 2;
+    // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
+    let w_in_b = 2 * config.width.align_power_of_two_and_shift(3);
+    // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
+    let h_in_b = 2 * config.height.align_power_of_two_and_shift(3);
 
     Self {
       width,
@@ -695,7 +966,6 @@ impl<T: Pixel> FrameInvariants<T> {
       intra_only: true,
       allow_high_precision_mv: false,
       frame_type: FrameType::KEY,
-      show_existing_frame: false,
       frame_to_show_map_idx: 0,
       use_reduced_tx_set,
       reference_mode: ReferenceMode::SINGLE,
@@ -720,8 +990,8 @@ impl<T: Pixel> FrameInvariants<T> {
       cdef_damping: 3,
       cdef_bits: 0,
       cdef_y_strengths: [
-        0 * 4 + 0,
-        1 * 4 + 0,
+        0,
+        4,
         2 * 4 + 1,
         3 * 4 + 1,
         5 * 4 + 2,
@@ -730,8 +1000,8 @@ impl<T: Pixel> FrameInvariants<T> {
         13 * 4 + 3,
       ],
       cdef_uv_strengths: [
-        0 * 4 + 0,
-        1 * 4 + 0,
+        0,
+        4,
         2 * 4 + 1,
         3 * 4 + 1,
         5 * 4 + 2,
@@ -757,27 +1027,7 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_early_exit: true,
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
-      invalid: false,
-      lookahead_me_stats: None,
-      lookahead_rec_buffer: ReferenceFramesSet::new(),
-      w_in_imp_b,
-      h_in_imp_b,
-      // This is never used before it is assigned
-      lookahead_intra_costs: Box::new([]),
-      // dynamic allocation: once per frame
-      block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
-      distortion_scales: vec![
-        DistortionScale::default();
-        w_in_imp_b * h_in_imp_b
-      ]
-      .into_boxed_slice(),
-      activity_scales: vec![
-        DistortionScale::default();
-        w_in_imp_b * h_in_imp_b
-      ]
-      .into_boxed_slice(),
       cpu_feature_level: Default::default(),
-      activity_mask: Default::default(),
       enable_segmentation: config.speed_settings.segmentation
         != SegmentationLevel::Disabled,
       enable_inter_txfm_split: config
@@ -787,158 +1037,6 @@ impl<T: Pixel> FrameInvariants<T> {
       sequence,
       config,
     }
-  }
-
-  pub fn new_key_frame(
-    config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
-    gop_input_frameno_start: u64,
-  ) -> Self {
-    let tx_mode_select = config.speed_settings.transform.rdo_tx_decision;
-    let mut fi = Self::new(config, sequence);
-    fi.input_frameno = gop_input_frameno_start;
-    fi.tx_mode_select = tx_mode_select;
-    fi
-  }
-
-  /// Returns the created FrameInvariants along with a bool indicating success.
-  /// This interface provides simpler usage, because we always need the produced
-  /// FrameInvariants regardless of success or failure.
-  pub(crate) fn new_inter_frame(
-    previous_fi: &Self, inter_cfg: &InterConfig, gop_input_frameno_start: u64,
-    output_frameno_in_gop: u64, next_keyframe_input_frameno: u64,
-    error_resilient: bool,
-  ) -> Self {
-    let mut fi = previous_fi.clone();
-    fi.intra_only = false;
-    fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
-    fi.idx_in_group_output =
-      inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
-    fi.tx_mode_select = fi.enable_inter_txfm_split;
-
-    fi.order_hint =
-      inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
-    let input_frameno = inter_cfg
-      .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
-    if input_frameno >= next_keyframe_input_frameno {
-      fi.frame_type = FrameType::INTER;
-      fi.show_existing_frame = false;
-      fi.show_frame = false;
-      fi.invalid = true;
-      return fi;
-    } else {
-      fi.invalid = false;
-    }
-
-    fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
-
-    fi.frame_type = if (inter_cfg.switch_frame_interval > 0)
-      && (output_frameno_in_gop % inter_cfg.switch_frame_interval == 0)
-      && (fi.pyramid_level == 0)
-    {
-      FrameType::SWITCH
-    } else {
-      FrameType::INTER
-    };
-    fi.error_resilient =
-      if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
-
-    fi.frame_size_override_flag = if fi.frame_type == FrameType::SWITCH {
-      true
-    } else if fi.sequence.reduced_still_picture_hdr {
-      false
-    } else if fi.frame_type == FrameType::INTER
-      && !fi.error_resilient
-      && fi.render_and_frame_size_different
-    {
-      // force frame_size_with_refs() code path if render size != frame size
-      true
-    } else {
-      fi.width as u32 != fi.sequence.max_frame_width
-        || fi.height as u32 != fi.sequence.max_frame_height
-    };
-
-    // this is the slot that the current frame is going to be saved into
-    let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
-    fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
-    fi.show_existing_frame =
-      inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
-    fi.frame_to_show_map_idx = slot_idx;
-    fi.refresh_frame_flags = if fi.frame_type == FrameType::SWITCH {
-      ALL_REF_FRAMES_MASK
-    } else if fi.show_existing_frame {
-      0
-    } else {
-      1 << slot_idx
-    };
-
-    let second_ref_frame =
-      if fi.idx_in_group_output == 0 { LAST2_FRAME } else { ALTREF_FRAME };
-    let ref_in_previous_group = LAST3_FRAME;
-
-    // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if fi.error_resilient || (fi.pyramid_level > 2) {
-      PRIMARY_REF_NONE
-    } else {
-      (ref_in_previous_group.to_index()) as u32
-    };
-
-    if fi.pyramid_level == 0 {
-      // level 0 has no forward references
-      // default to last P frame
-      fi.ref_frames = [
-        // calculations done relative to the slot_idx for this frame.
-        // the last four frames can be found by subtracting from the current slot_idx
-        // add 4 to prevent underflow
-        // TODO: maybe use order_hint here like in get_slot_idx?
-        // this is the previous P frame
-        (slot_idx + 4 - 1) as u8 % 4
-          ; INTER_REFS_PER_FRAME];
-      if inter_cfg.multiref {
-        // use the second-previous p frame as a second reference frame
-        fi.ref_frames[second_ref_frame.to_index()] =
-          (slot_idx + 4 - 2) as u8 % 4;
-      }
-    } else {
-      debug_assert!(inter_cfg.multiref);
-
-      // fill in defaults
-      // default to backwards reference in lower level
-      fi.ref_frames = [{
-        let oh = fi.order_hint
-          - (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
-        let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
-        if lvl1 == 0 {
-          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
-        } else {
-          3 + lvl1 as u8
-        }
-      }; INTER_REFS_PER_FRAME];
-      // use forward reference in lower level as a second reference frame
-      fi.ref_frames[second_ref_frame.to_index()] = {
-        let oh = fi.order_hint
-          + (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
-        let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
-        if lvl2 == 0 {
-          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
-        } else {
-          3 + lvl2 as u8
-        }
-      };
-      // use a reference to the previous frame in the same level
-      // (horizontally) as a third reference
-      fi.ref_frames[ref_in_previous_group.to_index()] = slot_idx as u8;
-    }
-
-    fi.set_ref_frame_sign_bias();
-
-    fi.reference_mode = if inter_cfg.multiref && fi.idx_in_group_output != 0 {
-      ReferenceMode::SELECT
-    } else {
-      ReferenceMode::SINGLE
-    };
-    fi.input_frameno = input_frameno;
-    fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
-    fi
   }
 
   pub fn set_ref_frame_sign_bias(&mut self) {
@@ -1015,9 +1113,41 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 }
 
-impl<T: Pixel> fmt::Display for FrameInvariants<T> {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Input Frame {} - {}", self.input_frameno, self.frame_type)
+impl<T> LookaheadData<T>
+where
+  T: Pixel,
+{
+  pub fn new(base: &BaseInvariants<T>) -> Self {
+    assert!(
+      base.sequence.bit_depth <= mem::size_of::<T>() * 8,
+      "bit depth cannot fit into u8"
+    );
+
+    // Width and height are padded to 8×8 block size.
+    let w_in_imp_b = base.w_in_b / 2;
+    let h_in_imp_b = base.h_in_b / 2;
+
+    Self {
+      lookahead_me_stats: None,
+      lookahead_rec_buffer: ReferenceFramesSet::new(),
+      w_in_imp_b,
+      h_in_imp_b,
+      // This is never used before it is assigned
+      lookahead_intra_costs: Box::new([]),
+      // dynamic allocation: once per frame
+      block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
+      distortion_scales: vec![
+        DistortionScale::default();
+        w_in_imp_b * h_in_imp_b
+      ]
+      .into_boxed_slice(),
+      activity_scales: vec![
+        DistortionScale::default();
+        w_in_imp_b * h_in_imp_b
+      ]
+      .into_boxed_slice(),
+      activity_mask: Default::default(),
+    }
   }
 }
 
@@ -1027,7 +1157,7 @@ pub fn write_temporal_delimiter(packet: &mut dyn io::Write) -> io::Result<()> {
 }
 
 fn write_key_frame_obus<T: Pixel>(
-  packet: &mut dyn io::Write, fi: &FrameInvariants<T>, obu_extension: u32,
+  packet: &mut dyn io::Write, fi: &BaseInvariants<T>, obu_extension: u32,
 ) -> io::Result<()> {
   let mut buf1 = Vec::new();
   let mut buf2 = Vec::new();
@@ -1091,7 +1221,7 @@ fn diff<T: Pixel>(
 }
 
 fn get_qidx<T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
+  fi: &BaseInvariants<T>, ts: &TileStateMut<'_, T>, cw: &ContextWriter,
   tile_bo: TileBlockOffset,
 ) -> u8 {
   let mut qidx = fi.base_q_idx;
@@ -1156,8 +1286,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     "mode.is_intra()={:#?}, plane={:#?}, tx_size.block_size()={:#?}, plane_bsize={:#?}, need_recon_pixel={:#?}",
     mode.is_intra(), p, tx_size.block_size(), plane_bsize, need_recon_pixel);
 
+  let base_fi = fi.base().unwrap();
   let ief_params = if mode.is_directional()
-    && fi.sequence.enable_intra_edge_filter
+    && base_fi.sequence.enable_intra_edge_filter
   {
     let (plane_xdec, plane_ydec) = if p == 0 { (0, 0) } else { (xdec, ydec) };
     let above_block_info =
@@ -1173,7 +1304,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let rec = &mut ts.rec.planes[p];
 
   if mode.is_intra() {
-    let bit_depth = fi.sequence.bit_depth;
+    let bit_depth = base_fi.sequence.bit_depth;
     let edge_buf = get_intra_edges(
       &rec.as_const(),
       tile_partition_bo,
@@ -1184,7 +1315,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       tx_size,
       bit_depth,
       Some(mode),
-      fi.sequence.enable_intra_edge_filter,
+      base_fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
 
@@ -1197,7 +1328,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       pred_intra_param,
       ief_params,
       &edge_buf,
-      fi.cpu_feature_level,
+      base_fi.cpu_feature_level,
     );
   }
 
@@ -1222,8 +1353,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
 
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
-    (fi.width + xdec) >> xdec,
-    (fi.height + ydec) >> ydec,
+    (base_fi.width + xdec) >> xdec,
+    (base_fi.height + ydec) >> ydec,
     tx_size.block_size(),
     (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
@@ -1247,20 +1378,24 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     tx_size.width(),
     tx_size,
     tx_type,
-    fi.sequence.bit_depth,
-    fi.cpu_feature_level,
+    base_fi.sequence.bit_depth,
+    base_fi.cpu_feature_level,
   );
 
   let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
   let has_coeff = if need_recon_pixel || rdo_type.needs_coeff_rate() {
-    debug_assert!((((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4);
-    debug_assert!((((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec) >= 4);
+    debug_assert!(
+      (((base_fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec) >= 4
+    );
+    debug_assert!(
+      (((base_fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec) >= 4
+    );
     let frame_clipped_txw: usize =
-      (((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec)
+      (((base_fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2) >> xdec)
         .min(tx_size.width());
     let frame_clipped_txh: usize =
-      (((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec)
+      (((base_fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2) >> ydec)
         .min(tx_size.height());
 
     cw.write_coeffs_lv_map(
@@ -1275,7 +1410,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       plane_bsize,
       xdec,
       ydec,
-      fi.use_reduced_tx_set,
+      base_fi.use_reduced_tx_set,
       frame_clipped_txw,
       frame_clipped_txh,
     )
@@ -1290,21 +1425,21 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     eob,
     rcoeffs,
     tx_size,
-    fi.sequence.bit_depth,
-    fi.dc_delta_q[p],
-    fi.ac_delta_q[p],
-    fi.cpu_feature_level,
+    base_fi.sequence.bit_depth,
+    base_fi.dc_delta_q[p],
+    base_fi.ac_delta_q[p],
+    base_fi.cpu_feature_level,
   );
 
-  if !fi.use_tx_domain_distortion || need_recon_pixel {
+  if !base_fi.use_tx_domain_distortion || need_recon_pixel {
     inverse_transform_add(
       rcoeffs,
       &mut rec.subregion_mut(area),
       eob,
       tx_size,
       tx_type,
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
+      base_fi.sequence.bit_depth,
+      base_fi.cpu_feature_level,
     );
   }
 
@@ -1341,12 +1476,12 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       if rdo_type == RDOType::TxDistEstRate {
         // look up rate and distortion in table
         let estimated_rate =
-          estimate_rate(fi.base_q_idx, tx_size, raw_tx_dist);
+          estimate_rate(base_fi.base_q_idx, tx_size, raw_tx_dist);
         w.add_bits_frac(estimated_rate as u32);
       }
 
       let bias = distortion_scale(fi, ts.to_frame_block_offset(tx_bo), bsize);
-      RawDistortion::new(raw_tx_dist) * bias * fi.dist_scale[p]
+      RawDistortion::new(raw_tx_dist) * bias * base_fi.dist_scale[p]
     } else {
       ScaledDistortion::zero()
     };
@@ -1362,6 +1497,7 @@ pub fn motion_compensate<T: Pixel>(
 ) {
   debug_assert!(!luma_mode.is_intra());
 
+  let base_fi = fi.base().unwrap();
   let PlaneConfig { xdec: u_xdec, ydec: u_ydec, .. } = ts.input.planes[1].cfg;
 
   // Inter mode prediction can take place once for a whole partition,
@@ -1373,7 +1509,7 @@ pub fn motion_compensate<T: Pixel>(
         bsize,
         u_xdec,
         u_ydec,
-        fi.sequence.chroma_sampling,
+        base_fi.sequence.chroma_sampling,
       ) {
       2
     } else {
@@ -1414,7 +1550,7 @@ pub fn motion_compensate<T: Pixel>(
 
       if some_use_intra {
         luma_mode.predict_inter(
-          fi,
+          base_fi,
           tile_rect,
           p,
           po,
@@ -1442,7 +1578,7 @@ pub fn motion_compensate<T: Pixel>(
           let po3 = PlaneOffset { x: po.x + 2, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po,
@@ -1454,7 +1590,7 @@ pub fn motion_compensate<T: Pixel>(
             compound_buffer,
           );
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po1,
@@ -1466,7 +1602,7 @@ pub fn motion_compensate<T: Pixel>(
             compound_buffer,
           );
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po2,
@@ -1478,7 +1614,7 @@ pub fn motion_compensate<T: Pixel>(
             compound_buffer,
           );
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po3,
@@ -1494,7 +1630,7 @@ pub fn motion_compensate<T: Pixel>(
           let mv1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].mv;
           let rf1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].ref_frames;
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po,
@@ -1508,7 +1644,7 @@ pub fn motion_compensate<T: Pixel>(
           let po3 = PlaneOffset { x: po.x, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po3,
@@ -1524,7 +1660,7 @@ pub fn motion_compensate<T: Pixel>(
           let mv2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].mv;
           let rf2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].ref_frames;
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po,
@@ -1538,7 +1674,7 @@ pub fn motion_compensate<T: Pixel>(
           let po3 = PlaneOffset { x: po.x + 2, y: po.y };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
           luma_mode.predict_inter(
-            fi,
+            base_fi,
             tile_rect,
             p,
             po3,
@@ -1553,7 +1689,7 @@ pub fn motion_compensate<T: Pixel>(
       }
     } else {
       luma_mode.predict_inter(
-        fi,
+        base_fi,
         tile_rect,
         p,
         po,
@@ -1627,13 +1763,17 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
   rdo_type: RDOType, need_recon_pixel: bool, record_stats: bool,
 ) -> (bool, ScaledDistortion) {
-  let planes =
-    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+  let base_fi = fi.base().unwrap();
+  let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+    1
+  } else {
+    3
+  };
   let is_inter = !luma_mode.is_intra();
   if is_inter {
     assert!(luma_mode == chroma_mode);
   };
-  let sb_size = if fi.sequence.use_128x128_superblock {
+  let sb_size = if base_fi.sequence.use_128x128_superblock {
     BlockSize::BLOCK_128X128
   } else {
     BlockSize::BLOCK_64X64
@@ -1645,7 +1785,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       bsize,
       xdec,
       ydec,
-      fi.sequence.chroma_sampling,
+      base_fi.sequence.chroma_sampling,
     );
   }
   cw.bc.blocks.set_block_size(tile_bo, bsize);
@@ -1668,11 +1808,11 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
   cw.bc.code_deltas = false;
 
-  if fi.frame_type.has_inter() {
+  if base_fi.frame_type.has_inter() {
     cw.write_is_inter(w, tile_bo, is_inter);
     if is_inter {
       cw.fill_neighbours_ref_counts(tile_bo);
-      cw.write_ref_frames(w, fi, tile_bo);
+      cw.write_ref_frames(w, base_fi.reference_mode, tile_bo);
 
       if luma_mode.is_compound() {
         cw.write_compound_mode(w, luma_mode, mode_context);
@@ -1708,9 +1848,9 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         [MotionVector::default(); 2]
       };
 
-      let mv_precision = if fi.force_integer_mv != 0 {
+      let mv_precision = if base_fi.force_integer_mv != 0 {
         MvSubpelPrecision::MV_SUBPEL_NONE
-      } else if fi.allow_high_precision_mv {
+      } else if base_fi.allow_high_precision_mv {
         MvSubpelPrecision::MV_SUBPEL_HIGH_PRECISION
       } else {
         MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION
@@ -1773,7 +1913,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
     if luma_mode.is_directional() && bsize >= BlockSize::BLOCK_8X8 {
       cw.write_angle_delta(w, angle_delta.y, luma_mode);
     }
-    if has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling) {
+    if has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling)
+    {
       cw.write_intra_uv_mode(w, chroma_mode, luma_mode, bsize);
       if chroma_mode.is_cfl() {
         assert!(bsize.cfl_allowed());
@@ -1784,7 +1925,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       }
     }
 
-    if fi.allow_screen_content_tools > 0
+    if base_fi.allow_screen_content_tools > 0
       && bsize >= BlockSize::BLOCK_8X8
       && bsize.width() <= 64
       && bsize.height() <= 64
@@ -1798,11 +1939,11 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         chroma_mode,
         xdec,
         ydec,
-        fi.sequence.chroma_sampling,
+        base_fi.sequence.chroma_sampling,
       );
     }
 
-    if fi.sequence.enable_filter_intra
+    if base_fi.sequence.enable_filter_intra
       && luma_mode == PredictionMode::DC_PRED
       && bsize.width() <= 32
       && bsize.height() <= 32
@@ -1812,7 +1953,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 
   // write tx_size here
-  if fi.tx_mode_select {
+  if base_fi.tx_mode_select {
     if bsize > BlockSize::BLOCK_4X4 && (!is_inter || !skip) {
       if !is_inter {
         cw.write_tx_size_intra(w, tile_bo, bsize, tx_size);
@@ -1820,7 +1961,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       } else {
         // write var_tx_size
         // if here, bsize > BLOCK_4X4 && is_inter && !skip && !Lossless
-        debug_assert!(fi.tx_mode_select);
+        debug_assert!(base_fi.tx_mode_select);
         debug_assert!(bsize > BlockSize::BLOCK_4X4);
         debug_assert!(is_inter);
         debug_assert!(!skip);
@@ -1830,7 +1971,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
         //TODO: "&& tx_size.block_size() < bsize" will be replaced with tx-split info for a partition
         //  once it is available.
         let txfm_split =
-          fi.enable_inter_txfm_split && tx_size.block_size() < bsize;
+          base_fi.enable_inter_txfm_split && tx_size.block_size() < bsize;
 
         // TODO: Revise write_tx_size_inter() for txfm_split = true
         cw.write_tx_size_inter(
@@ -1861,7 +2002,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
     }
   }
 
-  if fi.sequence.enable_intra_edge_filter {
+  if base_fi.sequence.enable_intra_edge_filter {
     for y in 0..bsize.height_mi() {
       if tile_bo.0.y + y >= ts.mi_height {
         continue;
@@ -1922,7 +2063,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
 
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
+  bsize: BlockSize, tx_size: TxSize, fi: &BaseInvariants<T>,
 ) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
@@ -1998,9 +2139,11 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   tx_type: TxType, skip: bool, cfl: CFLParams, luma_only: bool,
   rdo_type: RDOType, need_recon_pixel: bool,
 ) -> (bool, ScaledDistortion) {
+  let base_fi = fi.base().unwrap();
+
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
-  let qidx = get_qidx(fi, ts, cw, tile_bo);
+  let qidx = get_qidx(base_fi, ts, cw, tile_bo);
   assert_ne!(qidx, 0); // lossless is not yet supported
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
@@ -2008,14 +2151,14 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
   let do_chroma =
-    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+    has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling);
 
   ts.qc.update(
     qidx,
     tx_size,
     luma_mode.is_intra(),
-    fi.sequence.bit_depth,
-    fi.dc_delta_q[0],
+    base_fi.sequence.bit_depth,
+    base_fi.dc_delta_q[0],
     0,
   );
 
@@ -2058,7 +2201,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
 
   if !do_chroma
     || luma_only
-    || fi.sequence.chroma_sampling == ChromaSampling::Cs400
+    || base_fi.sequence.chroma_sampling == ChromaSampling::Cs400
   {
     return (partition_has_coeff, tx_dist);
   };
@@ -2067,7 +2210,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
     bsize,
     xdec,
     ydec,
-    fi.sequence.chroma_sampling
+    base_fi.sequence.chroma_sampling
   ));
 
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
@@ -2084,7 +2227,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   bh_uv /= uv_tx_size.height_mi();
 
   if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
+    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, base_fi);
   }
 
   let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
@@ -2098,9 +2241,9 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
       qidx,
       uv_tx_size,
       true,
-      fi.sequence.bit_depth,
-      fi.dc_delta_q[p],
-      fi.ac_delta_q[p],
+      base_fi.sequence.bit_depth,
+      base_fi.dc_delta_q[p],
+      base_fi.ac_delta_q[p],
     );
     let alpha = cfl.alpha(p - 1);
     for by in 0..bh_uv {
@@ -2160,9 +2303,12 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   if skip {
     return (false, ScaledDistortion::zero());
   }
+
+  let base_fi = fi.base().unwrap();
+
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
-  let qidx = get_qidx(fi, ts, cw, tile_bo);
+  let qidx = get_qidx(base_fi, ts, cw, tile_bo);
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let ac = &[0i16; 0];
@@ -2173,8 +2319,8 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     qidx,
     tx_size,
     luma_mode.is_intra(),
-    fi.sequence.bit_depth,
-    fi.dc_delta_q[0],
+    base_fi.sequence.bit_depth,
+    base_fi.dc_delta_q[0],
     0,
   );
 
@@ -2219,9 +2365,9 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     }
   }
 
-  if !has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling)
+  if !has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling)
     || luma_only
-    || fi.sequence.chroma_sampling == ChromaSampling::Cs400
+    || base_fi.sequence.chroma_sampling == ChromaSampling::Cs400
   {
     return (partition_has_coeff, tx_dist);
   };
@@ -2230,7 +2376,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
     bsize,
     xdec,
     ydec,
-    fi.sequence.chroma_sampling
+    base_fi.sequence.chroma_sampling
   ));
 
   let max_tx_size = max_txsize_rect_lookup[bsize as usize];
@@ -2259,9 +2405,9 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
       qidx,
       uv_tx_size,
       false,
-      fi.sequence.bit_depth,
-      fi.dc_delta_q[p],
-      fi.ac_delta_q[p],
+      base_fi.sequence.bit_depth,
+      base_fi.dc_delta_q[p],
+      base_fi.ac_delta_q[p],
     );
 
     for by in 0..bh_uv {
@@ -2313,6 +2459,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   bsize: BlockSize, tile_bo: TileBlockOffset,
   mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
 ) {
+  let base_fi = fi.base().unwrap();
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
   let cfl = mode_decision.pred_cfl_params;
@@ -2327,8 +2474,14 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
 
   let mut mv_stack = ArrayVec::<CandidateMV, 9>::new();
   let is_compound = ref_frames[1] != NONE_FRAME;
-  let mode_context =
-    cw.find_mvrefs(tile_bo, ref_frames, &mut mv_stack, bsize, fi, is_compound);
+  let mode_context = cw.find_mvrefs(
+    tile_bo,
+    ref_frames,
+    &mut mv_stack,
+    bsize,
+    base_fi,
+    is_compound,
+  );
 
   let (tx_size, tx_type) = if !mode_decision.skip && !mode_decision.has_coeff {
     skip = true;
@@ -2340,7 +2493,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   };
 
   cdef_coded = encode_block_pre_cdef(
-    &fi.sequence,
+    &base_fi.sequence,
     ts,
     cw,
     if cdef_coded { w_post_cdef } else { w_pre_cdef },
@@ -2398,26 +2551,29 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   let is_straddle_x = tile_bo.0.x + bsize.width_mi() > ts.mi_width;
   let is_straddle_y = tile_bo.0.y + bsize.height_mi() > ts.mi_height;
 
-  // TODO: Update for 128x128 superblocks
-  assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
+  let base_fi = fi.base().unwrap();
 
-  let must_split =
-    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+  // TODO: Update for 128x128 superblocks
+  assert!(base_fi.partition_range.max <= BlockSize::BLOCK_64X64);
+
+  let must_split = is_square
+    && (bsize > base_fi.partition_range.max || !has_cols || !has_rows);
 
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-    if fi.frame_type.has_inter() &&
-      fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
+    if base_fi.frame_type.has_inter() &&
+      base_fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
       bsize <= BlockSize::BLOCK_8X8 {
       false
     } else {
-      (bsize > fi.partition_range.min && is_square) || must_split
+      (bsize > base_fi.partition_range.min && is_square) || must_split
     };
 
   assert!(bsize >= BlockSize::BLOCK_8X8 || !can_split);
 
   let mut best_partition = PartitionType::PARTITION_INVALID;
 
-  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+  let cw_checkpoint =
+    cw.checkpoint(&tile_bo, base_fi.sequence.chroma_sampling);
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
@@ -2427,7 +2583,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
       let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
       let tell = w.tell_frac();
       cw.write_partition(w, tile_bo, PartitionType::PARTITION_NONE, bsize);
-      compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
+      compute_rd_cost(base_fi, w.tell_frac() - tell, ScaledDistortion::zero())
     } else {
       0.0
     };
@@ -2476,14 +2632,16 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
     let mut partition_types = ArrayVec::<PartitionType, 3>::new();
     if bsize
-      > fi.config.speed_settings.partition.non_square_partition_threshold
+      > base_fi.config.speed_settings.partition.non_square_partition_threshold
       || is_straddle_x
       || is_straddle_y
     {
       if has_cols {
         partition_types.push(PartitionType::PARTITION_HORZ);
       }
-      if !(fi.sequence.chroma_sampling == ChromaSampling::Cs422) && has_rows {
+      if !(base_fi.sequence.chroma_sampling == ChromaSampling::Cs422)
+        && has_rows
+      {
         partition_types.push(PartitionType::PARTITION_VERT);
       }
     }
@@ -2520,8 +2678,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
         let tell = w.tell_frac();
         cw.write_partition(w, tile_bo, partition, bsize);
-        rd_cost =
-          compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero());
+        rd_cost = compute_rd_cost(
+          base_fi,
+          w.tell_frac() - tell,
+          ScaledDistortion::zero(),
+        );
       }
 
       let four_partitions = [
@@ -2566,7 +2727,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         if cost != std::f64::MAX {
           rd_cost += cost;
           if !must_split
-            && fi.enable_early_exit
+            && base_fi.enable_early_exit
             && (rd_cost >= best_rd || rd_cost >= ref_rd_cost)
           {
             assert!(cost != std::f64::MAX);
@@ -2675,19 +2836,21 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
-  // TODO: Update for 128x128 superblocks
-  assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
+  let base_fi = fi.base().unwrap();
 
-  let must_split =
-    is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
+  // TODO: Update for 128x128 superblocks
+  assert!(base_fi.partition_range.max <= BlockSize::BLOCK_64X64);
+
+  let must_split = is_square
+    && (bsize > base_fi.partition_range.max || !has_cols || !has_rows);
 
   let can_split = // FIXME: sub-8x8 inter blocks not supported for non-4:2:0 sampling
-    if fi.frame_type.has_inter() &&
-      fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
+    if base_fi.frame_type.has_inter() &&
+      base_fi.sequence.chroma_sampling != ChromaSampling::Cs420 &&
       bsize <= BlockSize::BLOCK_8X8 {
       false
     } else {
-      (bsize > fi.partition_range.min && is_square) || must_split
+      (bsize > base_fi.partition_range.min && is_square) || must_split
     };
 
   let mut rdo_output =
@@ -2777,7 +2940,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         ref_frames,
         &mut mv_stack,
         bsize,
-        fi,
+        base_fi,
         is_compound,
       );
 
@@ -2866,7 +3029,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
       // FIXME: every final block that has gone through the RDO decision process is encoded twice
       cdef_coded = encode_block_pre_cdef(
-        &fi.sequence,
+        &base_fi.sequence,
         ts,
         cw,
         if cdef_coded { w_post_cdef } else { w_pre_cdef },
@@ -2969,29 +3132,36 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
 }
 
-fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
-  let cdf = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+fn get_initial_cdfcontext<T: Pixel>(
+  base_fi: &BaseInvariants<T>,
+) -> CDFContext {
+  let cdf = if base_fi.primary_ref_frame == PRIMARY_REF_NONE {
     None
   } else {
-    let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
-    let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
+    let ref_frame_idx =
+      base_fi.ref_frames[base_fi.primary_ref_frame as usize] as usize;
+    let ref_frame = base_fi.rec_buffer.frames[ref_frame_idx].as_ref();
     ref_frame.map(|rec| rec.cdfs)
   };
 
   // return the retrieved instance if any, a new one otherwise
-  cdf.unwrap_or_else(|| CDFContext::new(fi.base_q_idx))
+  cdf.unwrap_or_else(|| CDFContext::new(base_fi.base_q_idx))
 }
 
 #[hawktracer(encode_tile_group)]
 fn encode_tile_group<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  let planes =
-    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
-  let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-  let ti = &fi.sequence.tiling;
+  let base_fi = fi.base().unwrap();
+  let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+    1
+  } else {
+    3
+  };
+  let mut blocks = FrameBlocks::new(base_fi.w_in_b, base_fi.h_in_b);
+  let ti = &base_fi.sequence.tiling;
 
-  let initial_cdf = get_initial_cdfcontext(fi);
+  let initial_cdf = get_initial_cdfcontext(base_fi);
   // dynamic allocation: once per frame
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
 
@@ -3021,12 +3191,12 @@ fn encode_tile_group<T: Pixel>(
     let ts = &mut fs.as_tile_state_mut();
     let rec = &mut ts.rec;
     levels = deblock_filter_optimize(
-      fi,
+      base_fi,
       &rec.as_const(),
       &ts.input.as_tile(),
       &blocks.as_tile_blocks(),
-      fi.width,
-      fi.height,
+      base_fi.width,
+      base_fi.height,
     );
   }
   fs.deblock.levels = levels;
@@ -3038,23 +3208,28 @@ fn encode_tile_group<T: Pixel>(
       ts.deblock,
       rec,
       &blocks.as_tile_blocks(),
-      fi.width,
-      fi.height,
-      fi.sequence.bit_depth,
+      base_fi.width,
+      base_fi.height,
+      base_fi.sequence.bit_depth,
       planes,
     );
   }
 
-  if fi.sequence.enable_restoration {
+  if base_fi.sequence.enable_restoration {
     // Until the loop filters are better pipelined, we'll need to keep
     // around a copy of both the deblocked and cdeffed frame.
     let deblocked_frame = (*fs.rec).clone();
 
     /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
+    if base_fi.sequence.enable_cdef {
       let ts = &mut fs.as_tile_state_mut();
       let rec = &mut ts.rec;
-      cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      cdef_filter_tile(
+        base_fi,
+        &deblocked_frame,
+        &blocks.as_tile_blocks(),
+        rec,
+      );
     }
     /* TODO: Don't apply if lossless */
     fs.restoration.lrf_filter_frame(
@@ -3064,11 +3239,16 @@ fn encode_tile_group<T: Pixel>(
     );
   } else {
     /* TODO: Don't apply if lossless */
-    if fi.sequence.enable_cdef {
+    if base_fi.sequence.enable_cdef {
       let deblocked_frame = (*fs.rec).clone();
       let ts = &mut fs.as_tile_state_mut();
       let rec = &mut ts.rec;
-      cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      cdef_filter_tile(
+        base_fi,
+        &deblocked_frame,
+        &blocks.as_tile_blocks(),
+        rec,
+      );
     }
   }
 
@@ -3079,7 +3259,7 @@ fn encode_tile_group<T: Pixel>(
     .max_by_key(|&(_, len)| len)
     .unwrap();
 
-  if !fi.disable_frame_end_update_cdf {
+  if !base_fi.disable_frame_end_update_cdf {
     // use the biggest tile (in bytes) for CDF update
     fs.context_update_tile_id = idx_max;
     fs.cdfs = cdfs[idx_max];
@@ -3130,8 +3310,9 @@ fn check_lf_queue<T: Pixel>(
   last_lru_rdoed: &mut [i32; 3], last_lru_coded: &mut [i32; 3],
   deblock_p: bool,
 ) {
+  let base_fi = fi.base().unwrap();
   let mut check_queue = true;
-  let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+  let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
     1
   } else {
     MAX_PLANES
@@ -3148,7 +3329,7 @@ fn check_lf_queue<T: Pixel>(
       }
       if check_queue {
         // yes, this entry is ready
-        if qe.cdef_coded || fi.sequence.enable_restoration {
+        if qe.cdef_coded || base_fi.sequence.enable_restoration {
           // only RDO once for a given LRU.
 
           // One quirk worth noting: LRUs in different planes
@@ -3186,7 +3367,7 @@ fn check_lf_queue<T: Pixel>(
           }
         }
         // write LRF information
-        if !fi.allow_intrabc && fi.sequence.enable_restoration {
+        if !base_fi.allow_intrabc && base_fi.sequence.enable_restoration {
           // TODO: also disallow if lossless
           for pli in 0..planes {
             if qe.lru_index[pli] != -1
@@ -3202,7 +3383,7 @@ fn check_lf_queue<T: Pixel>(
         // Now code CDEF into the middle of the block
         if qe.cdef_coded {
           let cdef_index = cw.bc.blocks.get_cdef(qe.sbo);
-          cw.write_cdef(w, cdef_index, fi.cdef_bits);
+          cw.write_cdef(w, cdef_index, base_fi.cdef_bits);
           // Code queued symbols that come after the CDEF index
           qe.w_post_cdef.replay(w);
         }
@@ -3220,9 +3401,14 @@ fn encode_tile<'a, T: Pixel>(
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
 ) -> Vec<u8> {
+  let base_fi = fi.base().unwrap();
+
   let mut w = WriterEncoder::new();
-  let planes =
-    if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+  let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+    1
+  } else {
+    3
+  };
 
   let bc = BlockContext::new(blocks);
   let mut cw = ContextWriter::new(fc, bc);
@@ -3249,7 +3435,7 @@ fn encode_tile<'a, T: Pixel>(
 
       let tile_bo = tile_sbo.block_offset(0, 0);
       cw.bc.cdef_coded = false;
-      cw.bc.code_deltas = fi.delta_q_present;
+      cw.bc.code_deltas = base_fi.delta_q_present;
 
       let is_straddle_sbx =
         tile_bo.0.x + BlockSize::BLOCK_64X64.width_mi() > ts.mi_width;
@@ -3257,7 +3443,7 @@ fn encode_tile<'a, T: Pixel>(
         tile_bo.0.y + BlockSize::BLOCK_64X64.height_mi() > ts.mi_height;
 
       // Encode SuperBlock
-      if fi.config.speed_settings.partition.encode_bottomup
+      if base_fi.config.speed_settings.partition.encode_bottomup
         || is_straddle_sbx
         || is_straddle_sby
       {
@@ -3299,7 +3485,7 @@ fn encode_tile<'a, T: Pixel>(
               as i32;
             sbs_qe.lru_index[pli] = lru_index;
             if ts.restoration.planes[pli]
-              .restoration_unit_last_sb_for_rdo(fi, ts.sbo, tile_sbo)
+              .restoration_unit_last_sb_for_rdo(base_fi, ts.sbo, tile_sbo)
             {
               last_lru_ready[pli] = lru_index;
               check_queue = true;
@@ -3313,7 +3499,7 @@ fn encode_tile<'a, T: Pixel>(
         }
         sbs_q.push_back(sbs_qe);
 
-        if check_queue && !fi.sequence.enable_delayed_loopfilter_rdo {
+        if check_queue && !base_fi.sequence.enable_delayed_loopfilter_rdo {
           check_lf_queue(
             fi,
             ts,
@@ -3330,16 +3516,16 @@ fn encode_tile<'a, T: Pixel>(
     }
   }
 
-  if fi.sequence.enable_delayed_loopfilter_rdo {
+  if base_fi.sequence.enable_delayed_loopfilter_rdo {
     // Solve deblocking for just this tile
     /* TODO: Don't apply if lossless */
     let deblock_levels = deblock_filter_optimize(
-      fi,
+      base_fi,
       &ts.rec.as_const(),
       &ts.input_tile,
       &cw.bc.blocks.as_const(),
-      fi.width,
-      fi.height,
+      base_fi.width,
+      base_fi.height,
     );
 
     if deblock_levels[0] != 0 || deblock_levels[1] != 0 {
@@ -3363,9 +3549,9 @@ fn encode_tile<'a, T: Pixel>(
         &deblock_copy,
         &mut ts.rec,
         &cw.bc.blocks.as_const(),
-        fi.width,
-        fi.height,
-        fi.sequence.bit_depth,
+        base_fi.width,
+        base_fi.height,
+        base_fi.sequence.bit_depth,
         planes,
       );
 
@@ -3435,13 +3621,16 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 pub fn encode_show_existing_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  debug_assert!(fi.show_existing_frame);
+  debug_assert!(fi.is_show_existing_frame());
+
+  let base_fi = fi.base().unwrap();
+
   let obu_extension = 0;
 
   let mut packet = Vec::new();
 
-  if fi.frame_type == FrameType::KEY {
-    write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
+  if base_fi.frame_type == FrameType::KEY {
+    write_key_frame_obus(&mut packet, base_fi, obu_extension).unwrap();
   }
 
   let mut buf1 = Vec::new();
@@ -3468,11 +3657,14 @@ pub fn encode_show_existing_frame<T: Pixel>(
   packet.write_all(&buf2).unwrap();
   buf2.clear();
 
-  let map_idx = fi.frame_to_show_map_idx as usize;
-  if let Some(ref rec) = fi.rec_buffer.frames[map_idx] {
+  let map_idx = base_fi.frame_to_show_map_idx as usize;
+  if let Some(ref rec) = base_fi.rec_buffer.frames[map_idx] {
     let fs_rec = Arc::get_mut(&mut fs.rec).unwrap();
-    let planes =
-      if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
+    let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+      1
+    } else {
+      3
+    };
     for p in 0..planes {
       fs_rec.planes[p].data.copy_from_slice(&rec.frame.planes[p].data);
     }
@@ -3481,13 +3673,14 @@ pub fn encode_show_existing_frame<T: Pixel>(
 }
 
 fn get_initial_segmentation<T: Pixel>(
-  fi: &FrameInvariants<T>,
+  base_fi: &BaseInvariants<T>,
 ) -> SegmentationState {
-  let segmentation = if fi.primary_ref_frame == PRIMARY_REF_NONE {
+  let segmentation = if base_fi.primary_ref_frame == PRIMARY_REF_NONE {
     None
   } else {
-    let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
-    let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
+    let ref_frame_idx =
+      base_fi.ref_frames[base_fi.primary_ref_frame as usize] as usize;
+    let ref_frame = base_fi.rec_buffer.frames[ref_frame_idx].as_ref();
     ref_frame.map(|rec| rec.segmentation)
   };
 
@@ -3498,20 +3691,20 @@ fn get_initial_segmentation<T: Pixel>(
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  debug_assert!(!fi.show_existing_frame);
-  debug_assert!(!fi.invalid);
+  debug_assert!(fi.is_coded_frame());
   let obu_extension = 0;
 
   let mut packet = Vec::new();
 
-  if fi.enable_segmentation {
-    fs.segmentation = get_initial_segmentation(fi);
-    segmentation_optimize(fi, fs);
+  let base_fi = fi.base().unwrap();
+  if base_fi.enable_segmentation {
+    fs.segmentation = get_initial_segmentation(base_fi);
+    segmentation_optimize(base_fi, fs);
   }
   let tile_group = encode_tile_group(fi, fs, inter_cfg);
 
-  if fi.frame_type == FrameType::KEY {
-    write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
+  if base_fi.frame_type == FrameType::KEY {
+    write_key_frame_obus(&mut packet, base_fi, obu_extension).unwrap();
   }
 
   let mut buf1 = Vec::new();
@@ -3543,7 +3736,7 @@ pub fn encode_frame<T: Pixel>(
 }
 
 pub fn update_rec_buffer<T: Pixel>(
-  output_frameno: u64, fi: &mut FrameInvariants<T>, fs: &FrameState<T>,
+  output_frameno: u64, fi: &mut BaseInvariants<T>, fs: &FrameState<T>,
 ) {
   let rfs = Arc::new(ReferenceFrame {
     order_hint: fi.order_hint,

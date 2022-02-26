@@ -13,7 +13,6 @@
 
 use crate::color::ChromaSampling;
 use crate::ec::{Writer, OD_BITRES};
-use crate::encoder::FrameInvariants;
 use crate::entropymode::*;
 use crate::frame::*;
 use crate::header::ReferenceMode;

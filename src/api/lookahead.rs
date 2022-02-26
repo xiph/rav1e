@@ -215,6 +215,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
     IMPORTANCE_BLOCK_SIZE,
   );
 
+  let cpu_feature_level = fi.base().unwrap().cpu_feature_level;
   let mut inter_costs = 0;
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
@@ -245,7 +246,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
         bsize.width(),
         bsize.height(),
         bit_depth,
-        fi.cpu_feature_level,
+        cpu_feature_level,
       ) as u64;
     });
   });
@@ -256,8 +257,10 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
 pub(crate) fn compute_motion_vectors<T: Pixel>(
   fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) {
-  let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
-  fi.sequence
+  let base_fi = fi.base().unwrap();
+  let mut blocks = FrameBlocks::new(base_fi.w_in_b, base_fi.h_in_b);
+  base_fi
+    .sequence
     .tiling
     .tile_iter_mut(fs, &mut blocks)
     .collect::<Vec<_>>()

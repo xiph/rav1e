@@ -278,7 +278,7 @@ fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
 fn get_frame_invariants<T: Pixel>(
   ctx: Context<T>,
 ) -> impl Iterator<Item = FrameInvariants<T>> {
-  ctx.inner.frame_data.into_iter().map(|(_, v)| v.fi)
+  ctx.inner.frame_invariants.into_iter().map(|(_, fi)| fi)
 }
 
 #[interpolate_test(0, 0)]
@@ -307,9 +307,8 @@ fn output_frameno_low_latency_minus(missing: u64) {
   send_frames(&mut ctx, limit, 0);
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -317,29 +316,29 @@ fn output_frameno_low_latency_minus(missing: u64) {
     match missing {
       0 => {
         &[
-          (0, true), // I-frame
-          (1, true), // P-frame
-          (2, true), // P-frame
-          (3, true), // P-frame
-          (4, true), // P-frame
-          (5, true), // I-frame
-          (6, true), // P-frame
-          (7, true), // P-frame
-          (8, true), // P-frame
-          (9, true), // P-frame
+          Some(0), // I-frame
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       1 => {
         &[
-          (0, true), // I-frame
-          (1, true), // P-frame
-          (2, true), // P-frame
-          (3, true), // P-frame
-          (4, true), // P-frame
-          (5, true), // I-frame
-          (6, true), // P-frame
-          (7, true), // P-frame
-          (8, true), // P-frame
+          Some(0), // I-frame
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          Some(6),
+          Some(7),
+          Some(8),
         ][..]
       }
       _ => unreachable!(),
@@ -373,22 +372,22 @@ fn switch_frame_interval() {
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, fi.frame_type))
+    .map(|fi| fi.base().map(|fi| (fi.input_frameno, fi.frame_type)))
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, FrameType::KEY),
-      (1, FrameType::INTER),
-      (2, FrameType::SWITCH),
-      (3, FrameType::INTER),
-      (4, FrameType::SWITCH),
-      (5, FrameType::KEY),
-      (6, FrameType::INTER),
-      (7, FrameType::SWITCH),
-      (8, FrameType::INTER),
-      (9, FrameType::SWITCH),
+      Some((0, FrameType::KEY)),
+      Some((1, FrameType::INTER)),
+      Some((2, FrameType::SWITCH)),
+      Some((3, FrameType::INTER)),
+      Some((4, FrameType::SWITCH)),
+      Some((5, FrameType::KEY)),
+      Some((6, FrameType::INTER)),
+      Some((7, FrameType::SWITCH)),
+      Some((8, FrameType::INTER)),
+      Some((9, FrameType::SWITCH)),
     ][..]
   );
 }
@@ -416,10 +415,10 @@ fn minimum_frame_delay() {
   send_frames(&mut ctx, limit, 0);
 
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, fi.frame_type))
+    .map(|fi| fi.base().map(|fi| (fi.input_frameno, fi.frame_type)))
     .collect::<Vec<_>>();
 
-  assert_eq!(&data[..], &[(0, FrameType::KEY),][..]);
+  assert_eq!(&data[..], &[Some((0, FrameType::KEY))][..]);
 }
 
 #[interpolate_test(0, 0)]
@@ -448,10 +447,8 @@ fn pyramid_level_low_latency_minus(missing: u64) {
   send_frames(&mut ctx, limit, 0);
   ctx.flush();
 
-  // data[output_frameno] = pyramid_level
-
   assert!(get_frame_invariants(ctx)
-    .map(|fi| fi.pyramid_level)
+    .map(|fi| fi.base().unwrap().pyramid_level)
     .all(|pyramid_level| pyramid_level == 0));
 }
 
@@ -488,9 +485,8 @@ fn output_frameno_reorder_minus(missing: u64) {
   send_frames(&mut ctx, limit, 0);
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -498,86 +494,86 @@ fn output_frameno_reorder_minus(missing: u64) {
     match missing {
       0 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
-          (5, true), // I-frame
-          (9, true), // P-frame
-          (7, true), // B0-frame
-          (6, true), // B1-frame (first)
-          (7, true), // B0-frame (show existing)
-          (8, true), // B1-frame (second)
-          (9, true), // P-frame (show existing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          Some(9),
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (8, true),  // B1-frame (second)
-          (8, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          None, // Last frame (missing)
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (7, false), // 2nd last (missing)
-          (7, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          Some(7),
+          Some(6),
+          Some(7),
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (5, false), // 3rd last (missing)
-          (6, true),  // B1-frame (first)
-          (6, false), // 3rd last (missing)
-          (6, false), // 2nd last (missing)
-          (6, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          None,    // 3rd last (missing)
+          Some(6),
+          None, // 3rd last (missing)
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       4 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
-          (5, true), // I-frame
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -618,95 +614,95 @@ fn pyramid_level_reorder_minus(missing: u64) {
   send_frames(&mut ctx, limit, 0);
   ctx.flush();
 
-  // data[output_frameno] = pyramid_level
-  let data =
-    get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
+  let data = get_frame_invariants(ctx)
+    .map(|fi| fi.base().map(|fi| fi.pyramid_level))
+    .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     match missing {
       0 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
         ][..]
       }
       1 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          2, // Last frame (missing)
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0), // I-frame
+          None,    // Last frame (missing)
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          None, // Last frame (missing)
         ][..]
       }
       2 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          1, // 2nd last (missing)
-          1, // Last frame (missing)
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0), // I-frame
+          None,    // Last frame (missing)
+          Some(1),
+          Some(2),
+          Some(1),
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       3 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          0, // 3rd last (missing)
-          2, // B1-frame (first)
-          2, // 3rd last (missing)
-          2, // 2nd last (missing)
-          2, // Last frame (missing)
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0), // I-frame
+          None,    // Last frame (missing)
+          None,    // 3rd last (missing)
+          Some(2),
+          None, // 3rd last (missing)
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       4 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0), // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -747,10 +743,8 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
   send_frames(&mut ctx, limit, scene_change_at);
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno < 5)
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -758,63 +752,108 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
     match scene_change_at {
       0 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(9),
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       1 => {
         &[
-          (0, true), // I-frame
-          (1, true), // I-frame
-          (3, true), // B0-frame
-          (2, true), // B1-frame (first)
-          (3, true), // B0-frame (show existing)
-          (4, true), // B1-frame (second)
+          Some(0), // I-frame
+          Some(1), // I-frame
+          Some(5),
+          Some(3),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(6),
+          None,
+          Some(8),
+          Some(7),
+          Some(8),
+          Some(9),
+          None,
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
+          Some(0), // I-frame
+          None,
+          None,
+          Some(1),
+          None,
+          None,
+          None,
+          Some(2), // I-frame
+          Some(6),
+          Some(4),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(6),
+          Some(7),
+          None,
+          Some(9),
+          Some(8),
+          Some(9),
+          None,
+          None,
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (4, true),  // B1-frame (first)
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          None,
+          None,
+          Some(3), // I-frame
+          Some(7),
+          Some(5),
+          Some(4),
+          Some(5),
+          Some(6),
+          Some(7),
+          Some(8),
+          None,
+          None,
+          Some(9),
+          None,
+          None,
+          None,
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          None,
+          Some(4), // I-frame
+          Some(8),
+          Some(6),
+          Some(5),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       _ => unreachable!(),
@@ -855,10 +894,8 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
   send_frames(&mut ctx, limit, scene_change_at);
   ctx.flush();
 
-  // data[output_frameno] = pyramid_level
   let data = get_frame_invariants(ctx)
-    .filter(|fi| fi.input_frameno < 5)
-    .map(|fi| fi.pyramid_level)
+    .map(|fi| fi.base().map(|fi| fi.pyramid_level))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -866,63 +903,108 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
     match scene_change_at {
       0 => {
         &[
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0),
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
         ][..]
       }
       1 => {
         &[
-          0, // I-frame
-          0, // I-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
+          Some(0), // I-frame
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0),
+          None,
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          None,
         ][..]
       }
       2 => {
         &[
-          0, // I-frame
-          0, // Missing
-          0, // Missing
-          2, // B1-frame (first)
-          2, // Missing
-          2, // Missing
-          2, // Missing
-          0, // I-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
+          Some(0), // I-frame
+          None,
+          None,
+          Some(2),
+          None,
+          None,
+          None,
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0),
+          None,
+          Some(1),
+          Some(2),
+          Some(1),
+          None,
+          None,
         ][..]
       }
       3 => {
         &[
-          0, // I-frame
-          0, // Missing
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          1, // Missing
-          1, // Missing
-          0, // I-frame
-          2, // B1-frame (first)
+          Some(0), // I-frame
+          None,
+          Some(1),
+          Some(2),
+          Some(1),
+          None,
+          None,
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0),
+          None,
+          None,
+          Some(2),
+          None,
+          None,
+          None,
         ][..]
       }
       4 => {
         &[
-          0, // I-frame
-          0, // Missing
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          2, // Missing
-          0, // I-frame
+          Some(0), // I-frame
+          None,
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          None,
+          Some(0), // I-frame
+          Some(0),
+          Some(1),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(0),
+          Some(0),
         ][..]
       }
       _ => unreachable!(),
@@ -965,9 +1047,8 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
   }
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -975,86 +1056,86 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
     match missing {
       0 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
-          (5, true), // I-frame
-          (9, true), // P-frame
-          (7, true), // B0-frame
-          (6, true), // B1-frame (first)
-          (7, true), // B0-frame (show existing)
-          (8, true), // B1-frame (second)
-          (9, true), // P-frame (show existing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          Some(9),
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (8, true),  // B1-frame (second)
-          (8, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          None, // Last frame (missing)
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (7, false), // 2nd last (missing)
-          (7, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          Some(7),
+          Some(6),
+          Some(7),
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (5, false), // 3rd last (missing)
-          (6, true),  // B1-frame (first)
-          (6, false), // 3rd last (missing)
-          (6, false), // 2nd last (missing)
-          (6, false), // Last frame (missing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
+          None,    // Last frame (missing)
+          None,    // 3rd last (missing)
+          Some(6),
+          None, // 3rd last (missing)
+          None, // 2nd last (missing)
+          None, // Last frame (missing)
         ][..]
       }
       4 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
-          (5, true), // I-frame
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5), // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -1097,10 +1178,8 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
   }
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno < 5)
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -1108,63 +1187,108 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
     match scene_change_at {
       0 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(9),
+          Some(7),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       1 => {
         &[
-          (0, true), // I-frame
-          (1, true), // I-frame
-          (3, true), // B0-frame
-          (2, true), // B1-frame (first)
-          (3, true), // B0-frame (show existing)
-          (4, true), // B1-frame (second)
+          Some(0), // I-frame
+          Some(1), // I-frame
+          Some(5),
+          Some(3),
+          Some(2),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(6),
+          None,
+          Some(8),
+          Some(7),
+          Some(8),
+          Some(9),
+          None,
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
+          Some(0), // I-frame
+          None,
+          None,
+          Some(1),
+          None,
+          None,
+          None,
+          Some(2), // I-frame
+          Some(6),
+          Some(4),
+          Some(3),
+          Some(4),
+          Some(5),
+          Some(6),
+          Some(7),
+          None,
+          Some(9),
+          Some(8),
+          Some(9),
+          None,
+          None,
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (4, true),  // B1-frame (first)
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          None,
+          None,
+          Some(3), // I-frame
+          Some(7),
+          Some(5),
+          Some(4),
+          Some(5),
+          Some(6),
+          Some(7),
+          Some(8),
+          None,
+          None,
+          Some(9),
+          None,
+          None,
+          None,
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          None,
+          Some(4),
+          Some(8),
+          Some(6),
+          Some(5),
+          Some(6),
+          Some(7),
+          Some(8),
+          Some(9),
         ][..]
       }
       _ => unreachable!(),
@@ -1256,9 +1380,8 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
   }
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -1266,73 +1389,73 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
     match kf_at {
       0 => {
         &[
-          (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          Some(0), // I-frame
+          Some(4),
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          Some(4),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (1, true),  // I-frame
-          (1, false), // Missing
-          (3, true),  // B0-frame
-          (2, true),  // B1-frame (first)
-          (3, true),  // B0-frame (show existing)
-          (4, true),  // B1-frame (second)
-          (4, false), // Missing
+          Some(0), // I-frame
+          Some(1), // I-frame
+          None,
+          Some(3),
+          Some(2),
+          Some(3),
+          Some(4),
+          None,
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (2, false), // Missing
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
-          (4, false), // Missing
-          (4, false), // Missing
+          Some(0), // I-frame
+          None,
+          None,
+          Some(1),
+          None,
+          None,
+          None,
+          Some(2), // I-frame
+          None,
+          Some(4),
+          Some(3),
+          Some(4),
+          None,
+          None,
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (3, false), // Missing
-          (3, false), // Missing
-          (4, true),  // B1-frame (first)
-          (4, false), // Missing
-          (4, false), // Missing
-          (4, false), // Missing
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          None,
+          None,
+          Some(3), // I-frame
+          None,
+          None,
+          Some(4),
+          None,
+          None,
+          None,
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          Some(0), // I-frame
+          None,
+          Some(2),
+          Some(1),
+          Some(2),
+          Some(3),
+          None,
+          Some(4), // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -1376,21 +1499,20 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
   }
   ctx.flush();
 
-  // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true), // I-frame
-      (4, true), // P-frame
-      (2, true), // B0-frame
-      (1, true), // B1-frame (first)
-      (2, true), // B0-frame (show existing)
-      (3, true), // B1-frame (second)
-      (4, true), // P-frame (show existing)
+      Some(0), // I-frame
+      Some(4),
+      Some(2),
+      Some(1),
+      Some(2),
+      Some(3),
+      Some(4),
     ]
   );
 }
@@ -1432,25 +1554,25 @@ fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true),  // I-frame
-      (4, true),  // P-frame
-      (2, true),  // B0-frame
-      (1, true),  // B1-frame (first)
-      (2, true),  // B0-frame (show existing)
-      (3, true),  // B1-frame (second)
-      (4, true),  // P-frame (show existing)
-      (4, false), // invalid
-      (6, true),  // B0-frame
-      (5, true),  // B1-frame (first)
-      (6, true),  // B0-frame (show existing)
-      (7, true),  // B1-frame (second)
-      (7, false), // invalid
+      Some(0), // I-frame
+      Some(4),
+      Some(2),
+      Some(1),
+      Some(2),
+      Some(3),
+      Some(4),
+      None, // invalid
+      Some(6),
+      Some(5),
+      Some(6),
+      Some(7),
+      None, // invalid
     ]
   );
 }
@@ -1496,28 +1618,38 @@ fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno <= 7)
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true),  // I-frame
-      (0, false), // invalid
-      (0, false), // invalid
-      (1, true),  // B1-frame (first)
-      (1, false), // invalid
-      (1, false), // invalid
-      (1, false), // invalid
-      (2, true),  // I-frame
-      (6, true),  // P-frame
-      (4, true),  // B0-frame
-      (3, true),  // B1-frame (first)
-      (4, true),  // B0-frame (show existing)
-      (5, true),  // B1-frame (second)
-      (6, true),  // P-frame (show existing)
-      (7, true),  // I-frame
+      Some(0), // I-frame
+      None,    // invalid
+      None,    // invalid
+      Some(1),
+      None,    // invalid
+      None,    // invalid
+      None,    // invalid
+      Some(2), // I-frame
+      Some(6),
+      Some(4),
+      Some(3),
+      Some(4),
+      Some(5),
+      Some(6),
+      Some(10),
+      Some(8),
+      Some(7),
+      Some(8),
+      Some(9),
+      Some(10),
+      None,
+      None,
+      Some(11),
+      None,
+      None,
+      None,
     ]
   );
 }
@@ -1561,24 +1693,32 @@ fn output_frameno_scene_change_after_multiple_flashes() {
   ctx.flush();
 
   let data = get_frame_invariants(ctx)
-    .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno <= 7)
+    .map(|fi| fi.base().map(|fi| fi.input_frameno))
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true), // I-frame
-      (4, true), // P-frame
-      (2, true), // B0-frame
-      (1, true), // B1-frame (first)
-      (2, true), // B0-frame (show existing)
-      (3, true), // B1-frame (second)
-      (4, true), // P-frame (show existing),
-      (5, true), // P-frame
-      (7, true), // B0-frame
-      (6, true), // B1-frame (first)
-      (7, true), // B0-frame (show existing)
+      Some(0), // I-frame
+      Some(4),
+      Some(2),
+      Some(1),
+      Some(2),
+      Some(3),
+      Some(4),
+      Some(5),
+      Some(9),
+      Some(7),
+      Some(6),
+      Some(7),
+      Some(8),
+      Some(9),
+      None,
+      None,
+      Some(10),
+      None,
+      None,
+      None,
     ]
   );
 }
@@ -1780,12 +1920,12 @@ fn lookahead_size_properly_bounded(
     let input = ctx.new_frame();
     let _ = ctx.send_frame(input);
     pre_receive_frame_q_lens[i] = ctx.inner.frame_q.len();
-    pre_receive_fi_lens[i] = ctx.inner.frame_data.len();
+    pre_receive_fi_lens[i] = ctx.inner.frame_invariants.len();
     while ctx.receive_packet().is_ok() {
       // Receive packets until lookahead consumed, due to pyramids receiving frames in groups
     }
     post_receive_frame_q_lens[i] = ctx.inner.frame_q.len();
-    post_receive_fi_lens[i] = ctx.inner.frame_data.len();
+    post_receive_fi_lens[i] = ctx.inner.frame_invariants.len();
   }
 
   assert_eq!(
@@ -2073,11 +2213,11 @@ fn min_quantizer_bounds_correctly() {
 
   for i in 0..limit {
     ctx.inner.encode_packet(i).unwrap();
-    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    let frame_data = ctx.inner.frame_invariants.get(&i).unwrap();
     if i == 0 {
-      assert_eq!(79, frame_data.fi.base_q_idx);
+      assert_eq!(79, frame_data.base().unwrap().base_q_idx);
     } else {
-      assert_eq!(103, frame_data.fi.base_q_idx);
+      assert_eq!(103, frame_data.base().unwrap().base_q_idx);
     }
   }
 
@@ -2104,11 +2244,11 @@ fn min_quantizer_bounds_correctly() {
 
   for i in 0..limit {
     ctx.inner.encode_packet(i).unwrap();
-    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    let frame_data = ctx.inner.frame_invariants.get(&i).unwrap();
     if i == 0 {
-      assert!(frame_data.fi.base_q_idx > 79);
+      assert!(frame_data.base().unwrap().base_q_idx > 79);
     } else {
-      assert!(frame_data.fi.base_q_idx > 103);
+      assert!(frame_data.base().unwrap().base_q_idx > 103);
     }
   }
 }
@@ -2138,11 +2278,11 @@ fn max_quantizer_bounds_correctly() {
 
   for i in 0..limit {
     ctx.inner.encode_packet(i).unwrap();
-    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    let frame_data = ctx.inner.frame_invariants.get(&i).unwrap();
     if i == 0 {
-      assert_eq!(102, frame_data.fi.base_q_idx);
+      assert_eq!(102, frame_data.base().unwrap().base_q_idx);
     } else {
-      assert_eq!(123, frame_data.fi.base_q_idx);
+      assert_eq!(123, frame_data.base().unwrap().base_q_idx);
     }
   }
 
@@ -2169,11 +2309,11 @@ fn max_quantizer_bounds_correctly() {
 
   for i in 0..limit {
     ctx.inner.encode_packet(i).unwrap();
-    let frame_data = ctx.inner.frame_data.get(&i).unwrap();
+    let frame_data = ctx.inner.frame_invariants.get(&i).unwrap();
     if i == 0 {
-      assert!(frame_data.fi.base_q_idx < 102);
+      assert!(frame_data.base().unwrap().base_q_idx < 102);
     } else {
-      assert!(frame_data.fi.base_q_idx < 123);
+      assert!(frame_data.base().unwrap().base_q_idx < 123);
     }
   }
 }

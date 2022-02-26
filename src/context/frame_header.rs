@@ -61,8 +61,8 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
-  pub fn write_ref_frames<T: Pixel, W: Writer>(
-    &mut self, w: &mut W, fi: &FrameInvariants<T>, bo: TileBlockOffset,
+  pub fn write_ref_frames<W: Writer>(
+    &mut self, w: &mut W, reference_mode: ReferenceMode, bo: TileBlockOffset,
   ) {
     let rf = self.bc.blocks[bo].ref_frames;
     let sz = self.bc.blocks[bo].n4_w.min(self.bc.blocks[bo].n4_h);
@@ -70,7 +70,7 @@ impl<'a> ContextWriter<'a> {
     /* TODO: Handle multiple references */
     let comp_mode = self.bc.blocks[bo].has_second_ref();
 
-    if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+    if reference_mode != ReferenceMode::SINGLE && sz >= 2 {
       let ctx = self.get_comp_mode_ctx(bo);
       let cdf = &mut self.fc.comp_mode_cdf[ctx];
       symbol_with_update!(self, w, comp_mode as u32, cdf, 2);

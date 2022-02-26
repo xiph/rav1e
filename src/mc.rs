@@ -105,6 +105,12 @@ pub enum FilterMode {
   SWITCHABLE = 4,
 }
 
+impl Default for FilterMode {
+  fn default() -> Self {
+    FilterMode::REGULAR
+  }
+}
+
 pub const SUBPEL_FILTER_SIZE: usize = 8;
 
 const SUBPEL_FILTERS: [[[i32; SUBPEL_FILTER_SIZE]; 16]; 6] = [

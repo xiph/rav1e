@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use crate::BaseInvariants;
 
 use crate::predict::PredictionMode;
 
@@ -908,7 +909,7 @@ impl<'a> ContextWriter<'a> {
 
   fn add_extra_mv_candidate<T: Pixel>(
     blk: &Block, ref_frames: [RefType; 2],
-    mv_stack: &mut ArrayVec<CandidateMV, 9>, fi: &FrameInvariants<T>,
+    mv_stack: &mut ArrayVec<CandidateMV, 9>, fi: &BaseInvariants<T>,
     is_compound: bool, ref_id_count: &mut [usize; 2],
     ref_id_mvs: &mut [[MotionVector; 2]; 2], ref_diff_count: &mut [usize; 2],
     ref_diff_mvs: &mut [[MotionVector; 2]; 2],
@@ -1122,7 +1123,7 @@ impl<'a> ContextWriter<'a> {
   fn setup_mvref_list<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,
-    fi: &FrameInvariants<T>, is_compound: bool,
+    fi: &BaseInvariants<T>, is_compound: bool,
   ) -> usize {
     let (_rf, _rf_num) = (INTRA_FRAME, 1);
 
@@ -1418,7 +1419,7 @@ impl<'a> ContextWriter<'a> {
   pub fn find_mvrefs<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,
-    fi: &FrameInvariants<T>, is_compound: bool,
+    fi: &BaseInvariants<T>, is_compound: bool,
   ) -> usize {
     assert!(ref_frames[0] != NONE_FRAME);
     if ref_frames[0] != NONE_FRAME {

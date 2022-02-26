@@ -352,9 +352,13 @@ pub mod test {
     // These tests are all assuming SB-sized LRUs, so set that.
     sequence.enable_large_lru = false;
     let frame_rate = config.frame_rate();
-    let fi = FrameInvariants::new(config, Arc::new(sequence));
+    let base_fi = BaseInvariants::new(config, Arc::new(sequence));
+    let fb = FrameBlocks::new(base_fi.w_in_b, base_fi.h_in_b);
+    let fi = FrameInvariants::CodedFrame {
+      lookahead: Box::new(LookaheadData::new(&base_fi)),
+      base: base_fi,
+    };
     let fs = FrameState::new(&fi);
-    let fb = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
 
     (fi, fs, fb, frame_rate)
   }
@@ -367,9 +371,9 @@ pub mod test {
     {
       // 2x2 tiles
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         1,
         1,
@@ -391,9 +395,9 @@ pub mod test {
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         2,
         2,
@@ -437,9 +441,9 @@ pub mod test {
 
     // 4x4 tiles requested, will actually get 3x3 tiles
     let ti = TilingInfo::from_target_tiles(
-      fi.sb_size_log2(),
-      fi.width,
-      fi.height,
+      fi.base().unwrap().sb_size_log2(),
+      fi.base().unwrap().width,
+      fi.base().unwrap().height,
       frame_rate,
       2,
       2,
@@ -514,9 +518,9 @@ pub mod test {
 
     // 4x4 tiles requested, will actually get 3x3 tiles
     let ti = TilingInfo::from_target_tiles(
-      fi.sb_size_log2(),
-      fi.width,
-      fi.height,
+      fi.base().unwrap().sb_size_log2(),
+      fi.base().unwrap().width,
+      fi.base().unwrap().height,
       frame_rate,
       2,
       2,
@@ -553,9 +557,9 @@ pub mod test {
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         2,
         2,
@@ -617,9 +621,9 @@ pub mod test {
     let (fi, mut fs, mut fb, frame_rate) = setup(64, 80);
 
     let ti = TilingInfo::from_target_tiles(
-      fi.sb_size_log2(),
-      fi.width,
-      fi.height,
+      fi.base().unwrap().sb_size_log2(),
+      fi.base().unwrap().width,
+      fi.base().unwrap().height,
       frame_rate,
       2,
       2,
@@ -656,9 +660,9 @@ pub mod test {
     {
       // 2x2 tiles, each one containing 2×2 restoration units (1 super-block per restoration unit)
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         1,
         1,
@@ -717,9 +721,9 @@ pub mod test {
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         2,
         2,
@@ -760,9 +764,9 @@ pub mod test {
     {
       // 4x4 tiles requested, will actually get 3x3 tiles
       let ti = TilingInfo::from_target_tiles(
-        fi.sb_size_log2(),
-        fi.width,
-        fi.height,
+        fi.base().unwrap().sb_size_log2(),
+        fi.base().unwrap().width,
+        fi.base().unwrap().height,
         frame_rate,
         2,
         2,

@@ -204,23 +204,9 @@ impl InterConfig {
   }
 }
 
-// Thin wrapper for frame-related data
-// that gets cached and reused throughout the life of a frame.
-#[derive(Clone)]
-pub(crate) struct FrameData<T: Pixel> {
-  pub(crate) fi: FrameInvariants<T>,
-  pub(crate) fs: FrameState<T>,
-}
-
-impl<T: Pixel> FrameData<T> {
-  pub(crate) fn new(fi: FrameInvariants<T>, frame: Arc<Frame<T>>) -> Self {
-    let fs = FrameState::new_with_frame(&fi, frame);
-    FrameData { fi, fs }
-  }
-}
-
 type FrameQueue<T> = BTreeMap<u64, Option<Arc<Frame<T>>>>;
-type FrameDataQueue<T> = BTreeMap<u64, FrameData<T>>;
+type FrameInvariantsQueue<T> = BTreeMap<u64, FrameInvariants<T>>;
+type FrameStateQueue<T> = BTreeMap<u64, FrameState<T>>;
 
 // the fields pub(super) are accessed only by the tests
 pub(crate) struct ContextInner<T: Pixel> {
@@ -231,8 +217,10 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(super) frames_processed: u64,
   /// Maps *input_frameno* to frames
   pub(super) frame_q: FrameQueue<T>,
-  /// Maps *output_frameno* to frame data
-  pub(super) frame_data: FrameDataQueue<T>,
+  /// Maps *output_frameno* to frame invariants
+  pub(super) frame_invariants: FrameInvariantsQueue<T>,
+  /// Maps *output_frameno* to frame invariants
+  pub(super) frame_states: FrameStateQueue<T>,
   /// A list of the input_frameno for keyframes in this encode.
   /// Needed so that we don't need to keep all of the frame_invariants in
   ///  memory for the whole life of the encode.
@@ -280,7 +268,8 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
-      frame_data: BTreeMap::new(),
+      frame_invariants: BTreeMap::new(),
+      frame_states: BTreeMap::new(),
       keyframes,
       keyframes_forced: BTreeSet::new(),
       packet_data,
@@ -384,6 +373,34 @@ impl<T: Pixel> ContextInner<T> {
     Ok(())
   }
 
+  fn get_previous_fi(
+    &self, output_frameno: u64,
+  ) -> (&u64, &FrameInvariants<T>) {
+    self
+      .frame_invariants
+      .iter()
+      .rfind(|(fno, fi)| **fno < output_frameno && fi.is_frame())
+      .unwrap()
+  }
+
+  fn get_previous_display_fi(
+    &self, output_frameno: u64,
+  ) -> (&u64, &FrameInvariants<T>) {
+    self
+      .frame_invariants
+      .iter()
+      .rfind(|(fno, fi)| **fno < output_frameno && fi.is_coded_frame())
+      .unwrap()
+  }
+
+  fn get_next_output_frameno(&self, output_frameno: u64) -> Option<u64> {
+    self
+      .frame_invariants
+      .iter()
+      .find(|(fno, fi)| **fno >= output_frameno && fi.is_frame())
+      .map(|(fno, _)| *fno)
+  }
+
   /// Indicates whether more frames need to be read into the frame queue
   /// in order for frame queue lookahead to be full.
   fn needs_more_frame_q_lookahead(&self, input_frameno: u64) -> bool {
@@ -396,7 +413,7 @@ impl<T: Pixel> ContextInner<T> {
   /// Indicates whether more frames need to be processed into FrameInvariants
   /// in order for FI lookahead to be full.
   pub fn needs_more_fi_lookahead(&self) -> bool {
-    let ready_frames = self.get_rdo_lookahead_frames().count();
+    let ready_frames = self.get_rdo_lookahead_output_framenos().count();
     ready_frames < self.config.speed_settings.rdo_lookahead_frames + 1
       && self.needs_more_frames(self.next_lookahead_frame)
   }
@@ -405,16 +422,16 @@ impl<T: Pixel> ContextInner<T> {
     self.limit.map(|limit| frame_count < limit).unwrap_or(true)
   }
 
-  fn get_rdo_lookahead_frames(
+  fn get_rdo_lookahead_output_framenos(
     &self,
-  ) -> impl Iterator<Item = (&u64, &FrameData<T>)> {
+  ) -> impl Iterator<Item = u64> + '_ {
     self
-      .frame_data
+      .frame_invariants
       .iter()
-      .skip_while(move |(&output_frameno, _)| {
-        output_frameno < self.output_frameno
+      .filter(|(output_frameno, data)| {
+        **output_frameno >= self.output_frameno && data.is_coded_frame()
       })
-      .filter(|(_, data)| !data.fi.invalid && !data.fi.show_existing_frame)
+      .map(|(frameno, _)| *frameno)
       .take(self.config.speed_settings.rdo_lookahead_frames + 1)
   }
 
@@ -442,9 +459,16 @@ impl<T: Pixel> ContextInner<T> {
   ) -> Result<(), EncoderStatus> {
     let fi = self.build_frame_properties(output_frameno)?;
 
-    let frame =
-      self.frame_q.get(&fi.input_frameno).as_ref().unwrap().as_ref().unwrap();
-    self.frame_data.insert(output_frameno, FrameData::new(fi, frame.clone()));
+    if fi.is_frame() {
+      let base = fi.base().unwrap();
+      let frame = Arc::clone(
+        self.frame_q.get(&base.input_frameno).unwrap().as_ref().unwrap(),
+      );
+      self
+        .frame_states
+        .insert(output_frameno, FrameState::new_with_frame(&fi, frame));
+    }
+    self.frame_invariants.insert(output_frameno, fi);
 
     Ok(())
   }
@@ -499,7 +523,7 @@ impl<T: Pixel> ContextInner<T> {
         false,
       );
       let prev_input_frameno =
-        self.frame_data[&(output_frameno - 1)].fi.input_frameno;
+        self.get_previous_fi(output_frameno).1.base().unwrap().input_frameno;
       if input_frameno >= next_keyframe_input_frameno {
         if !self.inter_cfg.reorder
           || ((output_frameno_in_gop - 1) % self.inter_cfg.group_output_len
@@ -521,16 +545,7 @@ impl<T: Pixel> ContextInner<T> {
           *self.gop_input_frameno_start.get_mut(&output_frameno).unwrap() =
             next_keyframe_input_frameno;
         } else {
-          let fi = FrameInvariants::new_inter_frame(
-            &self.frame_data[&(output_frameno - 1)].fi,
-            &self.inter_cfg,
-            self.gop_input_frameno_start[&output_frameno],
-            output_frameno_in_gop,
-            next_keyframe_input_frameno,
-            self.config.error_resilient,
-          );
-          assert!(fi.invalid);
-          return Ok(fi);
+          return Ok(FrameInvariants::Placeholder);
         }
       }
     }
@@ -563,7 +578,6 @@ impl<T: Pixel> ContextInner<T> {
         self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
       );
-      assert!(!fi.invalid);
       Ok(fi)
     } else {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
@@ -571,14 +585,13 @@ impl<T: Pixel> ContextInner<T> {
         false,
       );
       let fi = FrameInvariants::new_inter_frame(
-        &self.frame_data[&(output_frameno - 1)].fi,
+        self.get_previous_display_fi(output_frameno).1,
         &self.inter_cfg,
         self.gop_input_frameno_start[&output_frameno],
         output_frameno_in_gop,
         next_keyframe_input_frameno,
         self.config.error_resilient,
       );
-      assert!(!fi.invalid);
       Ok(fi)
     }
   }
@@ -593,9 +606,18 @@ impl<T: Pixel> ContextInner<T> {
   /// computed.
   #[hawktracer(compute_lookahead_motion_vectors)]
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
+    let fi = self.frame_invariants.get(&output_frameno).unwrap();
+
+    // We're only interested in valid frames which are not show-existing-frame.
+    // Those two don't modify the rec_buffer so there's no need to do anything
+    // special about it either, it'll propagate on its own.
+    if !fi.is_coded_frame() {
+      return;
+    }
+
+    let base = fi.base().unwrap();
     let qps = {
-      let frame_data = self.frame_data.get(&output_frameno).unwrap();
-      let fti = frame_data.fi.get_frame_subtype();
+      let fti = base.get_frame_subtype();
       self.rc_state.select_qi(
         self,
         output_frameno,
@@ -603,22 +625,13 @@ impl<T: Pixel> ContextInner<T> {
         self.maybe_prev_log_base_q,
       )
     };
-    let frame_data = self.frame_data.get_mut(&output_frameno).unwrap();
-    let fs = &mut frame_data.fs;
-    let fi = &mut frame_data.fi;
-
-    // We're only interested in valid frames which are not show-existing-frame.
-    // Those two don't modify the rec_buffer so there's no need to do anything
-    // special about it either, it'll propagate on its own.
-    if fi.invalid || fi.show_existing_frame {
-      return;
-    }
 
     #[cfg(feature = "dump_lookahead_data")]
     {
+      let fs = self.frame_states.get(&output_frameno).unwrap();
       let data_location = Self::build_dump_properties();
       let plane = &fs.input_qres;
-      let mut file_name = format!("{:010}-qres", fi.input_frameno);
+      let mut file_name = format!("{:010}-qres", base.input_frameno);
       let buf: Vec<_> = plane.iter().map(|p| p.as_()).collect();
       image::GrayImage::from_vec(
         plane.cfg.width as u32,
@@ -629,7 +642,7 @@ impl<T: Pixel> ContextInner<T> {
       .save(data_location.join(file_name).with_extension("png"))
       .unwrap();
       let plane = &fs.input_hres;
-      file_name = format!("{:010}-hres", fi.input_frameno);
+      file_name = format!("{:010}-hres", base.input_frameno);
       let buf: Vec<_> = plane.iter().map(|p| p.as_()).collect();
       image::GrayImage::from_vec(
         plane.cfg.width as u32,
@@ -641,15 +654,18 @@ impl<T: Pixel> ContextInner<T> {
       .unwrap();
     }
 
+    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
+    let (base, lookahead) = fi.parts_mut().unwrap();
+    let fs = self.frame_states.get(&output_frameno).unwrap();
     // Do not modify the next output frame's FrameInvariants.
     if self.output_frameno == output_frameno {
       // We do want to propagate the lookahead_rec_buffer though.
       let rfs = Arc::new(ReferenceFrame {
-        order_hint: fi.order_hint,
-        width: fi.width as u32,
-        height: fi.height as u32,
-        render_width: fi.render_width,
-        render_height: fi.render_height,
+        order_hint: base.order_hint,
+        width: base.width as u32,
+        height: base.height as u32,
+        render_width: base.render_width,
+        render_height: base.render_height,
         // Use the original frame contents.
         frame: fs.input.clone(),
         input_hres: fs.input_hres.clone(),
@@ -659,10 +675,11 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno,
         segmentation: fs.segmentation,
       });
+      let refresh_frame_flags = base.refresh_frame_flags;
       for i in 0..(REF_FRAMES as usize) {
-        if (fi.refresh_frame_flags & (1 << i)) != 0 {
-          fi.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
-          fi.lookahead_rec_buffer.deblock[i] = fs.deblock;
+        if (refresh_frame_flags & (1 << i)) != 0 {
+          lookahead.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
+          lookahead.lookahead_rec_buffer.deblock[i] = fs.deblock;
         }
       }
 
@@ -673,11 +690,12 @@ impl<T: Pixel> ContextInner<T> {
     // data from the previous frames. Copy it into rec_buffer because that's
     // what the MV search uses. During the actual encoding rec_buffer is
     // overwritten with its correct values anyway.
-    fi.rec_buffer = fi.lookahead_rec_buffer.clone();
+    base.rec_buffer = lookahead.lookahead_rec_buffer.clone();
 
     // Estimate lambda with rate-control dry-run
-    fi.set_quantizers(&qps);
+    base.set_quantizers(&qps);
 
+    let fs = self.frame_states.get_mut(&output_frameno).unwrap();
     // TODO: as in the encoding code, key frames will have no references.
     // However, for block importance purposes we want key frames to act as
     // P-frames in this instance.
@@ -685,17 +703,19 @@ impl<T: Pixel> ContextInner<T> {
     // Compute the motion vectors.
     compute_motion_vectors(fi, fs, &self.inter_cfg);
 
+    let (base, lookahead) = fi.parts_mut().unwrap();
+
     // Save the motion vectors to FrameInvariants.
-    fi.lookahead_me_stats = Some(fs.frame_me_stats.clone());
+    lookahead.lookahead_me_stats = Some(fs.frame_me_stats.clone());
 
     #[cfg(feature = "dump_lookahead_data")]
     {
       use crate::partition::RefType::*;
       let data_location = Self::build_dump_properties();
-      let file_name = format!("{:010}-mvs", fi.input_frameno);
+      let file_name = format!("{:010}-mvs", base.input_frameno);
       let second_ref_frame = if !self.inter_cfg.multiref {
         LAST_FRAME // make second_ref_frame match first
-      } else if fi.idx_in_group_output == 0 {
+      } else if base.idx_in_group_output == 0 {
         LAST2_FRAME
       } else {
         ALTREF_FRAME
@@ -728,11 +748,11 @@ impl<T: Pixel> ContextInner<T> {
     // Set lookahead_rec_buffer on this FrameInvariants for future
     // FrameInvariants to pick it up.
     let rfs = Arc::new(ReferenceFrame {
-      order_hint: fi.order_hint,
-      width: fi.width as u32,
-      height: fi.height as u32,
-      render_width: fi.render_width,
-      render_height: fi.render_height,
+      order_hint: base.order_hint,
+      width: base.width as u32,
+      height: base.height as u32,
+      render_width: base.render_width,
+      render_height: base.render_height,
       // Use the original frame contents.
       frame: fs.input.clone(),
       input_hres: fs.input_hres.clone(),
@@ -742,10 +762,11 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno,
       segmentation: fs.segmentation,
     });
+    let refresh_frame_flags = base.refresh_frame_flags;
     for i in 0..(REF_FRAMES as usize) {
-      if (fi.refresh_frame_flags & (1 << i)) != 0 {
-        fi.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
-        fi.lookahead_rec_buffer.deblock[i] = fs.deblock;
+      if (refresh_frame_flags & (1 << i)) != 0 {
+        lookahead.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
+        lookahead.lookahead_rec_buffer.deblock[i] = fs.deblock;
       }
     }
   }
@@ -754,30 +775,25 @@ impl<T: Pixel> ContextInner<T> {
   /// `lookahead_intra_costs` on the `FrameInvariants`.
   #[hawktracer(compute_lookahead_intra_costs)]
   fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
-    let frame_data = self.frame_data.get(&output_frameno).unwrap();
-    let fi = &frame_data.fi;
+    let fi = self.frame_invariants.get_mut(&output_frameno).unwrap();
 
     // We're only interested in valid frames which are not show-existing-frame.
-    if fi.invalid || fi.show_existing_frame {
+    if !fi.is_coded_frame() {
       return;
     }
 
-    self
-      .frame_data
-      .get_mut(&output_frameno)
-      .unwrap()
-      .fi
-      .lookahead_intra_costs = self
+    let base = fi.base().unwrap();
+    fi.lookahead_mut().unwrap().lookahead_intra_costs = self
       .keyframe_detector
       .intra_costs
-      .remove(&fi.input_frameno)
+      .remove(&base.input_frameno)
       .unwrap_or_else(|| {
         // We use the cached values from scenechange if available,
         // otherwise we need to calculate them here.
         estimate_intra_costs(
-          &*self.frame_q[&fi.input_frameno].as_ref().unwrap(),
-          fi.sequence.bit_depth,
-          fi.cpu_feature_level,
+          &*self.frame_q[&base.input_frameno].as_ref().unwrap(),
+          base.sequence.bit_depth,
+          base.cpu_feature_level,
         )
       });
   }
@@ -819,12 +835,15 @@ impl<T: Pixel> ContextInner<T> {
     bsize: BlockSize, len: usize,
     reference_frame_block_importances: &mut [f32],
   ) {
+    let base = fi.base().unwrap();
+    let lookahead = fi.lookahead().unwrap();
+
     let plane_org = &frame.planes[0];
     let plane_ref = &reference_frame.planes[0];
     let lookahead_intra_costs_lines =
-      fi.lookahead_intra_costs.par_chunks_exact(fi.w_in_imp_b);
+      lookahead.lookahead_intra_costs.par_chunks_exact(lookahead.w_in_imp_b);
     let block_importances_lines =
-      fi.block_importances.par_chunks_exact(fi.w_in_imp_b);
+      lookahead.block_importances.par_chunks_exact(lookahead.w_in_imp_b);
 
     let costs: Vec<_> = lookahead_intra_costs_lines
       .zip(block_importances_lines)
@@ -864,7 +883,7 @@ impl<T: Pixel> ContextInner<T> {
               bsize.width(),
               bsize.height(),
               bit_depth,
-              fi.cpu_feature_level,
+              base.cpu_feature_level,
             ) as f32;
 
             let intra_cost = intra_cost as f32;
@@ -896,11 +915,11 @@ impl<T: Pixel> ContextInner<T> {
             // (possible on right and bottom edges)?
             if x >= 0
               && y >= 0
-              && (x as usize) < fi.w_in_imp_b
-              && (y as usize) < fi.h_in_imp_b
+              && (x as usize) < lookahead.w_in_imp_b
+              && (y as usize) < lookahead.h_in_imp_b
             {
               reference_frame_block_importances
-                [y as usize * fi.w_in_imp_b + x as usize] +=
+                [y as usize * lookahead.w_in_imp_b + x as usize] +=
                 propagate_amount * fraction;
             }
           };
@@ -974,24 +993,23 @@ impl<T: Pixel> ContextInner<T> {
   /// Computes the block importances for the current output frame.
   #[hawktracer(compute_block_importances)]
   fn compute_block_importances(&mut self) {
-    // SEF don't need block importances.
-    if self.frame_data[&self.output_frameno].fi.show_existing_frame {
+    // Get a list of output_framenos that we want to propagate through.
+    let output_framenos =
+      self.get_rdo_lookahead_output_framenos().collect::<Vec<_>>();
+
+    // The first one should be the current output frame.
+    // If it's not, that means the current output frame
+    // is not a coded frame, and we don't need block importances.
+    if output_framenos.is_empty() || output_framenos[0] != self.output_frameno
+    {
       return;
     }
 
-    // Get a list of output_framenos that we want to propagate through.
-    let output_framenos = self
-      .get_rdo_lookahead_frames()
-      .map(|(&output_frameno, _)| output_frameno)
-      .collect::<Vec<_>>();
-
-    // The first one should be the current output frame.
-    assert_eq!(output_framenos[0], self.output_frameno);
-
     // First, initialize them all with zeros.
-    for output_frameno in output_framenos.iter() {
-      let fi = &mut self.frame_data.get_mut(output_frameno).unwrap().fi;
-      for x in fi.block_importances.iter_mut() {
+    for frameno in output_framenos.iter() {
+      let fi = self.frame_invariants.get_mut(frameno).unwrap();
+      let lookahead = fi.lookahead_mut().unwrap();
+      for x in lookahead.block_importances.iter_mut() {
         *x = 0.;
       }
     }
@@ -1004,44 +1022,41 @@ impl<T: Pixel> ContextInner<T> {
       IMPORTANCE_BLOCK_SIZE,
     );
 
-    for &output_frameno in output_framenos.iter().skip(1).rev() {
+    for cur_output_frameno in output_framenos.iter().skip(1).rev() {
+      let base_fi =
+        self.frame_invariants.get(cur_output_frameno).unwrap().base().unwrap();
+      let input_frameno = base_fi.input_frameno;
+
       // TODO: see comment above about key frames not having references.
-      if self.frame_data.get(&output_frameno).unwrap().fi.frame_type
-        == FrameType::KEY
-      {
+      if base_fi.frame_type == FrameType::KEY {
         continue;
       }
 
-      // Remove fi from the map temporarily and put it back in in the end of
-      // the iteration. This is required because we need to mutably borrow
-      // referenced fis from the map, and that wouldn't be possible if this was
-      // an active borrow.
-      //
-      // Performance note: Contrary to intuition,
-      // removing the data and re-inserting it at the end
-      // is more performant because it avoids a very expensive clone.
-      let output_frame_data = self.frame_data.remove(&output_frameno).unwrap();
-      let fi = &output_frame_data.fi;
-
-      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+      let frame = Arc::clone(self.frame_q[&input_frameno].as_ref().unwrap());
+      // Frustratingly, we have to remove the current FI here, and reinsert it after,
+      // to make the borrow checker happy.
+      let cur_fi = self.frame_invariants.remove(cur_output_frameno).unwrap();
+      let base_fi = cur_fi.base().unwrap();
+      let lookahead = cur_fi.lookahead().unwrap();
 
       // There can be at most 3 of these.
       let mut unique_indices = ArrayVec::<_, 3>::new();
 
-      for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
+      for (mv_index, &rec_index) in base_fi.ref_frames.iter().enumerate() {
         if !unique_indices.iter().any(|&(_, r)| r == rec_index) {
           unique_indices.push((mv_index, rec_index));
         }
       }
 
       let bit_depth = self.config.bit_depth;
-      let frame_data = &mut self.frame_data;
       let len = unique_indices.len();
 
-      let lookahead_me_stats = fi
-        .lookahead_me_stats
-        .as_ref()
-        .expect("Lookahead ME stats not populated, this is a bug");
+      let lookahead_me_stats = Arc::clone(
+        lookahead
+          .lookahead_me_stats
+          .as_ref()
+          .expect("Lookahead ME stats not populated, this is a bug"),
+      );
 
       // Compute and propagate the importance, split evenly between the
       // referenced frames.
@@ -1052,22 +1067,25 @@ impl<T: Pixel> ContextInner<T> {
         // lookahead_rec_buffer already contains reference frames for the next
         // frame (for the reference propagation to work correctly).
         let reference =
-          fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
+          base_fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
         let reference_frame = &reference.frame;
         let reference_output_frameno = reference.output_frameno;
         let me_stats = &lookahead_me_stats[mv_index];
 
         // We should never use frame as its own reference.
-        assert_ne!(reference_output_frameno, output_frameno);
+        assert_ne!(reference_output_frameno, *cur_output_frameno);
 
-        if let Some(reference_frame_block_importances) = frame_data
+        if let Some(reference_frame_block_importances) = self
+          .frame_invariants
           .get_mut(&reference_output_frameno)
-          .map(|data| &mut data.fi.block_importances)
+          .and_then(|ref_fi| {
+            ref_fi.lookahead_mut().map(|fi| &mut fi.block_importances)
+          })
         {
           Self::update_block_importances(
-            fi,
+            &cur_fi,
             me_stats,
-            frame,
+            &frame,
             reference_frame,
             bit_depth,
             bsize,
@@ -1076,15 +1094,15 @@ impl<T: Pixel> ContextInner<T> {
           );
         }
       });
-
-      self.frame_data.insert(output_frameno, output_frame_data);
+      self.frame_invariants.insert(*cur_output_frameno, cur_fi);
     }
 
     if !output_framenos.is_empty() {
-      let fi = &mut self.frame_data.get_mut(&output_framenos[0]).unwrap().fi;
-      let block_importances = fi.block_importances.iter();
-      let lookahead_intra_costs = fi.lookahead_intra_costs.iter();
-      let distortion_scales = fi.distortion_scales.iter_mut();
+      let fi = self.frame_invariants.get_mut(&output_framenos[0]).unwrap();
+      let lookahead = fi.lookahead_mut().unwrap();
+      let block_importances = lookahead.block_importances.iter();
+      let lookahead_intra_costs = lookahead.lookahead_intra_costs.iter();
+      let distortion_scales = lookahead.distortion_scales.iter_mut();
       for ((&propagate_cost, &intra_cost), distortion_scale) in
         block_importances.zip(lookahead_intra_costs).zip(distortion_scales)
       {
@@ -1093,20 +1111,24 @@ impl<T: Pixel> ContextInner<T> {
           intra_cost as f64,
         );
       }
+
       #[cfg(feature = "dump_lookahead_data")]
       {
         use byteorder::{NativeEndian, WriteBytesExt};
         let mut buf = vec![];
+        let base = fi.base().unwrap();
         let data_location = Self::build_dump_properties();
-        let file_name = format!("{:010}-imps", fi.input_frameno);
-        buf.write_u64::<NativeEndian>(fi.h_in_imp_b as u64).unwrap();
-        buf.write_u64::<NativeEndian>(fi.w_in_imp_b as u64).unwrap();
-        buf.write_u64::<NativeEndian>(fi.get_frame_subtype() as u64).unwrap();
-        for y in 0..fi.h_in_imp_b {
-          for x in 0..fi.w_in_imp_b {
+        let file_name = format!("{:010}-imps", base.input_frameno);
+        buf.write_u64::<NativeEndian>(lookahead.h_in_imp_b as u64).unwrap();
+        buf.write_u64::<NativeEndian>(lookahead.w_in_imp_b as u64).unwrap();
+        buf
+          .write_u64::<NativeEndian>(base.get_frame_subtype() as u64)
+          .unwrap();
+        for y in 0..lookahead.h_in_imp_b {
+          for x in 0..lookahead.w_in_imp_b {
             buf
               .write_f32::<NativeEndian>(f64::from(
-                fi.distortion_scales[y * fi.w_in_imp_b + x],
+                lookahead.distortion_scales[y * lookahead.w_in_imp_b + x],
               ) as f32)
               .unwrap();
           }
@@ -1123,172 +1145,134 @@ impl<T: Pixel> ContextInner<T> {
   pub(crate) fn encode_packet(
     &mut self, cur_output_frameno: u64,
   ) -> Result<Packet<T>, EncoderStatus> {
-    if self.frame_data.get(&cur_output_frameno).unwrap().fi.show_existing_frame
-    {
-      if !self.rc_state.ready() {
-        return Err(EncoderStatus::NotReady);
-      }
+    // we remove here then re-insert at the end to appease the borrow checker.
+    // remember to re-insert in ALL exit conditions.
+    let mut fi = self.frame_invariants.remove(&cur_output_frameno).unwrap();
+    if fi.is_coded_frame() {
+      if let Some(Some(_)) =
+        self.frame_q.get(&fi.base().unwrap().input_frameno)
+      {
+        if !self.rc_state.ready() {
+          self.frame_invariants.insert(cur_output_frameno, fi);
+          return Err(EncoderStatus::NotReady);
+        }
 
-      let frame_data = self.frame_data.get_mut(&cur_output_frameno).unwrap();
-      let sef_data = encode_show_existing_frame(
-        &frame_data.fi,
-        &mut frame_data.fs,
-        &self.inter_cfg,
-      );
-      let bits = (sef_data.len() * 8) as i64;
-      self.packet_data.extend(sef_data);
-      self.rc_state.update_state(
-        bits,
-        FRAME_SUBTYPE_SEF,
-        frame_data.fi.show_frame,
-        0,
-        false,
-        false,
-      );
-      let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
-      } else {
-        (None, None)
-      };
-
-      self.output_frameno += 1;
-
-      let input_frameno = frame_data.fi.input_frameno;
-      let frame_type = frame_data.fi.frame_type;
-      let qp = frame_data.fi.base_q_idx;
-      let enc_stats = frame_data.fs.enc_stats.clone();
-      self.finalize_packet(
-        rec,
-        source,
-        input_frameno,
-        frame_type,
-        qp,
-        enc_stats,
-      )
-    } else if let Some(Some(_)) = self
-      .frame_q
-      .get(&self.frame_data.get(&cur_output_frameno).unwrap().fi.input_frameno)
-    {
-      if !self.rc_state.ready() {
-        return Err(EncoderStatus::NotReady);
-      }
-      let mut frame_data =
-        self.frame_data.remove(&cur_output_frameno).unwrap();
-      let fti = frame_data.fi.get_frame_subtype();
-      let qps = self.rc_state.select_qi(
-        self,
-        cur_output_frameno,
-        fti,
-        self.maybe_prev_log_base_q,
-      );
-      frame_data.fi.set_quantizers(&qps);
-
-      if self.config.tune == Tune::Psychovisual {
-        let frame =
-          self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
-        frame_data.fi.activity_mask =
-          ActivityMask::from_plane(&frame.planes[0]);
-        frame_data.fi.activity_mask.fill_scales(
-          frame_data.fi.sequence.bit_depth,
-          &mut frame_data.fi.activity_scales,
-        );
-      } else {
-        frame_data.fi.activity_mask = ActivityMask::default();
-      }
-
-      if self.rc_state.needs_trial_encode(fti) {
-        let mut trial_fs = frame_data.fs.clone();
-        let data =
-          encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
-        self.rc_state.update_state(
-          (data.len() * 8) as i64,
-          fti,
-          frame_data.fi.show_frame,
-          qps.log_target_q,
-          true,
-          false,
-        );
+        let fti = fi.base().unwrap().get_frame_subtype();
         let qps = self.rc_state.select_qi(
           self,
           cur_output_frameno,
           fti,
           self.maybe_prev_log_base_q,
         );
-        frame_data.fi.set_quantizers(&qps);
-      }
+        fi.base_mut().unwrap().set_quantizers(&qps);
 
-      let data =
-        encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
-      let enc_stats = frame_data.fs.enc_stats.clone();
-      self.maybe_prev_log_base_q = Some(qps.log_base_q);
-      // TODO: Add support for dropping frames.
-      self.rc_state.update_state(
-        (data.len() * 8) as i64,
-        fti,
-        frame_data.fi.show_frame,
-        qps.log_target_q,
-        false,
-        false,
-      );
-      self.packet_data.extend(data);
-
-      let planes =
-        if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
-
-      Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
-        frame_data.fi.width,
-        frame_data.fi.height,
-        planes,
-      );
-
-      let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
-      } else {
-        (None, None)
-      };
-
-      update_rec_buffer(
-        cur_output_frameno,
-        &mut frame_data.fi,
-        &frame_data.fs,
-      );
-
-      // Copy persistent fields into subsequent FrameInvariants.
-      let rec_buffer = frame_data.fi.rec_buffer.clone();
-      for subsequent_fi in self
-        .frame_data
-        .iter_mut()
-        .skip_while(|(&output_frameno, _)| {
-          output_frameno <= cur_output_frameno
-        })
-        .map(|(_, frame_data)| &mut frame_data.fi)
-        // Here we want the next valid non-show-existing-frame inter frame.
-        //
-        // Copying to show-existing-frame frames isn't actually required
-        // for correct encoding, but it's needed for the reconstruction to
-        // work correctly.
-        .filter(|fi| !fi.invalid)
-        .take_while(|fi| fi.frame_type != FrameType::KEY)
-      {
-        subsequent_fi.rec_buffer = rec_buffer.clone();
-        subsequent_fi.set_ref_frame_sign_bias();
-
-        // Stop after the first non-show-existing-frame.
-        if !subsequent_fi.show_existing_frame {
-          break;
+        let input_frameno = fi.base().unwrap().input_frameno;
+        let bit_depth = fi.base().unwrap().sequence.bit_depth;
+        let lookahead = fi.lookahead_mut().unwrap();
+        if self.config.tune == Tune::Psychovisual {
+          let frame = self.frame_q[&input_frameno].as_ref().unwrap();
+          lookahead.activity_mask = ActivityMask::from_plane(&frame.planes[0]);
+          lookahead
+            .activity_mask
+            .fill_scales(bit_depth, &mut lookahead.activity_scales);
+        } else {
+          lookahead.activity_mask = ActivityMask::default();
         }
-      }
 
-      self.frame_data.insert(cur_output_frameno, frame_data);
-      let frame_data = &self.frame_data.get(&cur_output_frameno).unwrap();
-      let fi = &frame_data.fi;
+        let mut fs = self.frame_states.remove(&cur_output_frameno).unwrap();
+        if self.rc_state.needs_trial_encode(fti) {
+          let mut trial_fs = fs.clone();
+          let data = encode_frame(&fi, &mut trial_fs, &self.inter_cfg);
+          self.rc_state.update_state(
+            (data.len() * 8) as i64,
+            fti,
+            fi.base().unwrap().show_frame,
+            qps.log_target_q,
+            true,
+            false,
+          );
+          let qps = self.rc_state.select_qi(
+            self,
+            cur_output_frameno,
+            fti,
+            self.maybe_prev_log_base_q,
+          );
+          fi.base_mut().unwrap().set_quantizers(&qps);
+        }
 
-      self.output_frameno += 1;
+        let data = encode_frame(&fi, &mut fs, &self.inter_cfg);
+        let base = fi.base_mut().unwrap();
+        let enc_stats = fs.enc_stats.clone();
+        self.maybe_prev_log_base_q = Some(qps.log_base_q);
+        // TODO: Add support for dropping frames.
+        self.rc_state.update_state(
+          (data.len() * 8) as i64,
+          fti,
+          base.show_frame,
+          qps.log_target_q,
+          false,
+          false,
+        );
+        self.packet_data.extend(data);
 
-      if fi.show_frame {
-        let input_frameno = fi.input_frameno;
-        let frame_type = fi.frame_type;
-        let qp = fi.base_q_idx;
+        let planes =
+          if base.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
+
+        Arc::get_mut(&mut fs.rec).unwrap().pad(
+          base.width,
+          base.height,
+          planes,
+        );
+
+        let (rec, source) = if base.show_frame {
+          (Some(fs.rec.clone()), Some(fs.input.clone()))
+        } else {
+          (None, None)
+        };
+
+        update_rec_buffer(cur_output_frameno, base, &fs);
+
+        // Copy persistent fields into subsequent FrameInvariants.
+        let rec_buffer = base.rec_buffer.clone();
+        for (_, subsequent_fi) in self
+          .frame_invariants
+          .iter_mut()
+          // Here we want the next coded inter frame.
+          //
+          // Copying to show-existing-frame frames isn't actually required
+          // for correct encoding, but it's needed for the reconstruction to
+          // work correctly.
+          .filter(|(output_frameno, fi)| {
+            **output_frameno > cur_output_frameno && fi.is_frame()
+          })
+          .take_while(|(_, fi)| {
+            fi.base().unwrap().frame_type != FrameType::KEY
+          })
+        {
+          let base = subsequent_fi.base_mut().unwrap();
+          base.rec_buffer = rec_buffer.clone();
+          base.set_ref_frame_sign_bias();
+
+          if subsequent_fi.is_coded_frame() {
+            break;
+          }
+        }
+
+        self.output_frameno += 1;
+
+        if !base.show_frame {
+          self.frame_invariants.insert(cur_output_frameno, fi);
+          self.frame_states.insert(cur_output_frameno, fs);
+          return Err(EncoderStatus::Encoded);
+        }
+
+        let input_frameno = base.input_frameno;
+        let frame_type = base.frame_type;
+        let qp = base.base_q_idx;
+
+        self.frame_invariants.insert(cur_output_frameno, fi);
+        self.frame_states.insert(cur_output_frameno, fs);
+
         self.finalize_packet(
           rec,
           source,
@@ -1298,10 +1282,57 @@ impl<T: Pixel> ContextInner<T> {
           enc_stats,
         )
       } else {
-        Err(EncoderStatus::Encoded)
+        self.frame_invariants.insert(cur_output_frameno, fi);
+        Err(EncoderStatus::NeedMoreData)
       }
+    } else if fi.is_show_existing_frame() {
+      if !self.rc_state.ready() {
+        self.frame_invariants.insert(cur_output_frameno, fi);
+        return Err(EncoderStatus::NotReady);
+      }
+
+      let mut fs = self.frame_states.remove(&cur_output_frameno).unwrap();
+      let sef_data = encode_show_existing_frame(&fi, &mut fs, &self.inter_cfg);
+
+      let base = fi.base_mut().unwrap();
+
+      let bits = (sef_data.len() * 8) as i64;
+      self.packet_data.extend(sef_data);
+      self.rc_state.update_state(
+        bits,
+        FRAME_SUBTYPE_SEF,
+        base.show_frame,
+        0,
+        false,
+        false,
+      );
+      let (rec, source) = if base.show_frame {
+        (Some(fs.rec.clone()), Some(fs.input.clone()))
+      } else {
+        (None, None)
+      };
+
+      self.output_frameno += 1;
+
+      let input_frameno = base.input_frameno;
+      let frame_type = base.frame_type;
+      let qp = base.base_q_idx;
+      let enc_stats = fs.enc_stats.clone();
+
+      self.frame_invariants.insert(cur_output_frameno, fi);
+      self.frame_states.insert(cur_output_frameno, fs);
+
+      self.finalize_packet(
+        rec,
+        source,
+        input_frameno,
+        frame_type,
+        qp,
+        enc_stats,
+      )
     } else {
-      Err(EncoderStatus::NeedMoreData)
+      self.frame_invariants.insert(cur_output_frameno, fi);
+      panic!("Called encode_packet on placeholder frame");
     }
   }
 
@@ -1317,14 +1348,12 @@ impl<T: Pixel> ContextInner<T> {
 
     // Find the next output_frameno corresponding to a non-skipped frame.
     self.output_frameno = self
-      .frame_data
-      .iter()
-      .skip_while(|(&output_frameno, _)| output_frameno < self.output_frameno)
-      .find(|(_, data)| !data.fi.invalid)
-      .map(|(&output_frameno, _)| output_frameno)
-      .ok_or(EncoderStatus::NeedMoreData)?; // TODO: doesn't play well with the below check?
+      .get_next_output_frameno(self.output_frameno)
+      .ok_or(EncoderStatus::NeedMoreData)?;
+    // TODO: doesn't play well with the below check?
 
-    let input_frameno = self.frame_data[&self.output_frameno].fi.input_frameno;
+    let fi = self.frame_invariants.get(&self.output_frameno).unwrap();
+    let input_frameno = fi.base().unwrap().input_frameno;
     if !self.needs_more_frames(input_frameno) {
       return Err(EncoderStatus::LimitReached);
     }
@@ -1382,9 +1411,10 @@ impl<T: Pixel> ContextInner<T> {
     if self.output_frameno < 2 {
       return;
     }
-    let fi_start = self.frame_data.keys().next().cloned().unwrap_or(0);
+    let fi_start = self.frame_invariants.keys().next().copied().unwrap_or(0);
     for i in fi_start..(self.output_frameno - 1) {
-      self.frame_data.remove(&i);
+      self.frame_invariants.remove(&i);
+      self.frame_states.remove(&i);
       self.gop_output_frameno_start.remove(&i);
       self.gop_input_frameno_start.remove(&i);
     }
@@ -1448,24 +1478,28 @@ impl<T: Pixel> ContextInner<T> {
     while ntus < reservoir_frame_delay {
       let output_frameno_in_gop =
         output_frameno - prev_keyframe_output_frameno;
-      let is_kf =
-        if let Some(frame_data) = self.frame_data.get(&output_frameno) {
-          if frame_data.fi.frame_type == FrameType::KEY {
-            prev_keyframe_input_frameno = frame_data.fi.input_frameno;
+      let is_kf = if let Some(fi) = self.frame_invariants.get(&output_frameno)
+      {
+        if let Some(base) = fi.base() {
+          if base.frame_type == FrameType::KEY {
+            prev_keyframe_input_frameno = base.input_frameno;
             // We do not currently use forward keyframes, so they should always
             //  end the current TU (thus we always increment ntus below).
-            debug_assert!(frame_data.fi.show_frame);
+            debug_assert!(base.show_frame);
             true
           } else {
             false
           }
         } else {
-          // It is possible to be invoked for the first time from twopass_out()
-          //  before receive_packet() is called, in which case frame_invariants
-          //  will not be populated.
-          // Force the first frame in each GOP to be a keyframe in that case.
-          output_frameno_in_gop == 0
-        };
+          false
+        }
+      } else {
+        // It is possible to be invoked for the first time from twopass_out()
+        //  before receive_packet() is called, in which case frame_invariants
+        //  will not be populated.
+        // Force the first frame in each GOP to be a keyframe in that case.
+        output_frameno_in_gop == 0
+      };
       if is_kf {
         collect_counts(nframes, &mut acc);
         prev_keyframe_output_frameno = output_frameno;

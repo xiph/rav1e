@@ -23,13 +23,13 @@ cfg_if::cfg_if! {
 
 use crate::context::{MAX_SB_SIZE_LOG2, MAX_TX_SIZE};
 use crate::cpu_features::CpuFeatureLevel;
-use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::mc::*;
 use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
+use crate::BaseInvariants;
 use std::convert::TryInto;
 
 pub const ANGLE_STEP: i8 = 3;
@@ -297,14 +297,14 @@ impl PredictionMode {
 
   /// Inter prediction with a single reference (i.e. not compound mode)
   pub fn predict_inter_single<T: Pixel>(
-    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
+    self, fi: &BaseInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frame: RefType, mv: MotionVector,
   ) {
     assert!(!self.is_intra());
     let frame_po = tile_rect.to_frame_plane_offset(po);
 
-    let mode = fi.default_filter;
+    let mode = FilterMode::default();
 
     if let Some(ref rec) =
       fi.rec_buffer.frames[fi.ref_frames[ref_frame.to_index()] as usize]
@@ -328,7 +328,7 @@ impl PredictionMode {
 
   /// Inter prediction with two references.
   pub fn predict_inter_compound<T: Pixel>(
-    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
+    self, fi: &BaseInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
     buffer: &mut InterCompoundBuffers,
@@ -336,7 +336,7 @@ impl PredictionMode {
     assert!(!self.is_intra());
     let frame_po = tile_rect.to_frame_plane_offset(po);
 
-    let mode = fi.default_filter;
+    let mode = FilterMode::default();
 
     for i in 0..2 {
       if let Some(ref rec) =
@@ -375,7 +375,7 @@ impl PredictionMode {
   /// Inter prediction that determines whether compound mode is being used based
   /// on the second ['RefType'] in ['ref_frames'].
   pub fn predict_inter<T: Pixel>(
-    self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
+    self, fi: &BaseInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
     compound_buffer: &mut InterCompoundBuffers,

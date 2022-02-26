@@ -26,6 +26,7 @@ use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 use rust_hawktracer::*;
 
 use crate::api::SGRComplexityLevel;
+use crate::BaseInvariants;
 use std::cmp;
 use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
@@ -622,8 +623,10 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
   cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
 ) {
+  let base_fi = fi.base().unwrap();
+
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
-  let bdm8 = fi.sequence.bit_depth - 8;
+  let bdm8 = base_fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
     [[0; IMAGE_WIDTH_MAX + 2]; 2];
   let mut b_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -657,7 +660,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       stripe_w,
       s_r2,
       bdm8,
-      fi.cpu_feature_level,
+      base_fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
@@ -672,7 +675,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
-      fi.cpu_feature_level,
+      base_fi.cpu_feature_level,
     );
     sgrproj_box_ab_r1(
       &mut a_r1[1],
@@ -684,7 +687,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       stripe_w,
       s_r1,
       bdm8,
-      fi.cpu_feature_level,
+      base_fi.cpu_feature_level,
     );
   }
 
@@ -704,7 +707,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
         stripe_w,
         s_r2,
         bdm8,
-        fi.cpu_feature_level,
+        base_fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
       let bp0: [&[u32]; 2] = [&b_r2[(y / 2) % 2], &b_r2[(y / 2 + 1) % 2]];
@@ -716,7 +719,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
         y,
         stripe_w,
         cdeffed,
-        fi.cpu_feature_level,
+        base_fi.cpu_feature_level,
       );
       [&f_r2_0, &f_r2_1]
     } else {
@@ -725,7 +728,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
         y,
         stripe_w,
         cdeffed,
-        fi.cpu_feature_level,
+        base_fi.cpu_feature_level,
       );
       // share results for both rows
       [&f_r2_0, &f_r2_0]
@@ -744,7 +747,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
           stripe_w,
           s_r1,
           bdm8,
-          fi.cpu_feature_level,
+          base_fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
           [&a_r1[y % 3], &a_r1[(y + 1) % 3], &a_r1[(y + 2) % 3]];
@@ -757,7 +760,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
           y,
           stripe_w,
           cdeffed,
-          fi.cpu_feature_level,
+          base_fi.cpu_feature_level,
         );
       } else {
         sgrproj_box_f_r0(
@@ -765,7 +768,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
           y,
           stripe_w,
           cdeffed,
-          fi.cpu_feature_level,
+          base_fi.cpu_feature_level,
         );
       }
 
@@ -803,7 +806,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
         &f_r1,
         f_r2_ab[dy],
         stripe_w,
-        fi.sequence.bit_depth,
+        base_fi.sequence.bit_depth,
         w0,
         w1,
         w2,
@@ -827,7 +830,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 // Input params follow the same rules as sgrproj_stripe_filter.
 // Inputs are relative to the colocated slice views.
 pub fn sgrproj_solve<T: Pixel>(
-  set: u8, fi: &FrameInvariants<T>,
+  set: u8, fi: &BaseInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
@@ -1072,11 +1075,10 @@ pub fn sgrproj_solve<T: Pixel>(
 }
 
 fn wiener_stripe_filter<T: Pixel>(
-  coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>, crop_w: usize, crop_h: usize,
+  coeffs: [[i8; 3]; 2], bit_depth: usize, crop_w: usize, crop_h: usize,
   stripe_w: usize, stripe_h: usize, stripe_x: usize, stripe_y: isize,
   cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>,
 ) {
-  let bit_depth = fi.sequence.bit_depth;
   let round_h = if bit_depth == 12 { 5 } else { 3 };
   let round_v = if bit_depth == 12 { 9 } else { 11 };
   let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
@@ -1300,68 +1302,71 @@ pub struct RestorationState {
 
 impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
+    let base = fi.base().unwrap();
+
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
     // stripe size is decimated in 4:2:0 (and only 4:2:0)
     let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
-    let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
+    let y_sb_log2 = if base.sequence.use_128x128_superblock { 7 } else { 6 };
     let uv_sb_h_log2 = y_sb_log2 - xdec;
     let uv_sb_v_log2 = y_sb_log2 - ydec;
 
-    let (lrf_y_shift, lrf_uv_shift) = if fi.sequence.enable_large_lru
-      && fi.sequence.enable_restoration
-    {
-      assert!(
-        fi.width > 1 && fi.height > 1,
-        "Width and height must be higher than 1 for LRF setup"
-      );
+    let (lrf_y_shift, lrf_uv_shift) =
+      if base.sequence.enable_large_lru && base.sequence.enable_restoration {
+        assert!(
+          base.width > 1 && base.height > 1,
+          "Width and height must be higher than 1 for LRF setup"
+        );
 
-      // Specific content does affect optimal LRU size choice, but the
-      // quantizer in use is a surprisingly strong selector.
-      let lrf_base_shift = if fi.base_q_idx > 200 {
-        0 // big
-      } else if fi.base_q_idx > 160 {
-        1
-      } else {
-        2 // small
-      };
-      let lrf_chroma_shift = if stripe_uv_decimate > 0 {
-        // 4:2:0 only
-        if lrf_base_shift == 2 {
-          1 // smallest chroma LRU is a win at low quant
+        // Specific content does affect optimal LRU size choice, but the
+        // quantizer in use is a surprisingly strong selector.
+        let lrf_base_shift = if base.base_q_idx > 200 {
+          0 // big
+        } else if base.base_q_idx > 160 {
+          1
         } else {
-          // Will a down-shifted chroma LRU eliminate stretch in chroma?
-          // If so, that's generally a win.
-          let lrf_unit_size =
-            1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_base_shift);
-          let unshifted_stretch = ((fi.width >> xdec) - 1) % lrf_unit_size
-            <= lrf_unit_size / 2
-            || ((fi.height >> ydec) - 1) % lrf_unit_size <= lrf_unit_size / 2;
-          let shifted_stretch = ((fi.width >> xdec) - 1)
-            % (lrf_unit_size >> 1)
-            <= lrf_unit_size / 4
-            || ((fi.height >> ydec) - 1) % (lrf_unit_size >> 1)
-              <= lrf_unit_size / 4;
-          if unshifted_stretch && !shifted_stretch {
-            1 // shift to eliminate stretch
+          2 // small
+        };
+        let lrf_chroma_shift = if stripe_uv_decimate > 0 {
+          // 4:2:0 only
+          if lrf_base_shift == 2 {
+            1 // smallest chroma LRU is a win at low quant
           } else {
-            0 // don't shift; save the signaling bits
+            // Will a down-shifted chroma LRU eliminate stretch in chroma?
+            // If so, that's generally a win.
+            let lrf_unit_size =
+              1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_base_shift);
+            let unshifted_stretch = ((base.width >> xdec) - 1) % lrf_unit_size
+              <= lrf_unit_size / 2
+              || ((base.height >> ydec) - 1) % lrf_unit_size
+                <= lrf_unit_size / 2;
+            let shifted_stretch = ((base.width >> xdec) - 1)
+              % (lrf_unit_size >> 1)
+              <= lrf_unit_size / 4
+              || ((base.height >> ydec) - 1) % (lrf_unit_size >> 1)
+                <= lrf_unit_size / 4;
+            if unshifted_stretch && !shifted_stretch {
+              1 // shift to eliminate stretch
+            } else {
+              0 // don't shift; save the signaling bits
+            }
           }
-        }
+        } else {
+          0
+        };
+        (lrf_base_shift, lrf_base_shift + lrf_chroma_shift)
       } else {
-        0
+        // Explicit request to tie LRU size to superblock size ==
+        // smallest possible LRU size
+        let lrf_y_shift =
+          if base.sequence.use_128x128_superblock { 1 } else { 2 };
+        (lrf_y_shift, lrf_y_shift + stripe_uv_decimate)
       };
-      (lrf_base_shift, lrf_base_shift + lrf_chroma_shift)
-    } else {
-      // Explicit request to tie LRU size to superblock size ==
-      // smallest possible LRU size
-      let lrf_y_shift = if fi.sequence.use_128x128_superblock { 1 } else { 2 };
-      (lrf_y_shift, lrf_y_shift + stripe_uv_decimate)
-    };
 
     let mut y_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_y_shift);
     let mut uv_unit_size = 1 << (RESTORATION_TILESIZE_MAX_LOG2 - lrf_uv_shift);
 
-    let tiling = fi.sequence.tiling;
+    let tiling = base.sequence.tiling;
     // Right now we defer to tiling setup: don't choose an LRU size
     // large enough that a tile is not an integer number of LRUs
     // wide/high.
@@ -1411,13 +1416,13 @@ impl RestorationState {
     // derive the rest
     let y_unit_log2 = y_unit_size.ilog() - 1;
     let uv_unit_log2 = uv_unit_size.ilog() - 1;
-    let y_cols = ((fi.width + (y_unit_size >> 1)) / y_unit_size).max(1);
-    let y_rows = ((fi.height + (y_unit_size >> 1)) / y_unit_size).max(1);
-    let uv_cols = ((((fi.width + (1 << xdec >> 1)) >> xdec)
+    let y_cols = ((base.width + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let y_rows = ((base.height + (y_unit_size >> 1)) / y_unit_size).max(1);
+    let uv_cols = ((((base.width + (1 << xdec >> 1)) >> xdec)
       + (uv_unit_size >> 1))
       / uv_unit_size)
       .max(1);
-    let uv_rows = ((((fi.height + (1 << ydec >> 1)) >> ydec)
+    let uv_rows = ((((base.height + (1 << ydec >> 1)) >> ydec)
       + (uv_unit_size >> 1))
       / uv_unit_size)
       .max(1);
@@ -1429,8 +1434,8 @@ impl RestorationState {
           y_unit_size,
           y_unit_log2 - y_sb_log2,
           y_unit_log2 - y_sb_log2,
-          fi.sb_width,
-          fi.sb_height,
+          base.sb_width,
+          base.sb_height,
           0,
           y_cols,
           y_rows,
@@ -1440,8 +1445,8 @@ impl RestorationState {
           uv_unit_size,
           uv_unit_log2 - uv_sb_h_log2,
           uv_unit_log2 - uv_sb_v_log2,
-          fi.sb_width,
-          fi.sb_height,
+          base.sb_width,
+          base.sb_height,
           stripe_uv_decimate,
           uv_cols,
           uv_rows,
@@ -1451,8 +1456,8 @@ impl RestorationState {
           uv_unit_size,
           uv_unit_log2 - uv_sb_h_log2,
           uv_unit_log2 - uv_sb_v_log2,
-          fi.sb_width,
-          fi.sb_height,
+          base.sb_width,
+          base.sb_height,
           stripe_uv_decimate,
           uv_cols,
           uv_rows,
@@ -1466,9 +1471,10 @@ impl RestorationState {
     &mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
     fi: &FrameInvariants<T>,
   ) {
+    let base_fi = fi.base().unwrap();
     let cdeffed = out.clone();
     let planes =
-      if fi.sequence.chroma_sampling == Cs400 { 1 } else { MAX_PLANES };
+      if base_fi.sequence.chroma_sampling == Cs400 { 1 } else { MAX_PLANES };
 
     // unlike the other loop filters that operate over the padded
     // frame dimensions, restoration filtering and source pixel
@@ -1476,7 +1482,7 @@ impl RestorationState {
     // that's why we use fi.width and fi.height instead of PlaneConfig fields
 
     // number of stripes (counted according to colocated Y luma position)
-    let stripe_n = (fi.height + 7) / 64 + 1;
+    let stripe_n = (base_fi.height + 7) / 64 + 1;
 
     // Buffers for the stripe filter.
     let mut stripe_filter_buffer =
@@ -1486,8 +1492,8 @@ impl RestorationState {
       let rp = &self.planes[pli];
       let xdec = out.planes[pli].cfg.xdec;
       let ydec = out.planes[pli].cfg.ydec;
-      let crop_w = (fi.width + (1 << xdec >> 1)) >> xdec;
-      let crop_h = (fi.height + (1 << ydec >> 1)) >> ydec;
+      let crop_w = (base_fi.width + (1 << xdec >> 1)) >> xdec;
+      let crop_h = (base_fi.height + (1 << ydec >> 1)) >> ydec;
 
       for si in 0..stripe_n {
         let (stripe_start_y, stripe_size) = if si == 0 {
@@ -1512,7 +1518,7 @@ impl RestorationState {
             RestorationFilter::Wiener { coeffs } => {
               wiener_stripe_filter(
                 coeffs,
-                fi,
+                base_fi.sequence.bit_depth,
                 crop_w,
                 crop_h,
                 size,
@@ -1525,7 +1531,7 @@ impl RestorationState {
               );
             }
             RestorationFilter::Sgrproj { set, xqd } => {
-              if !fi.sequence.enable_cdef {
+              if !base_fi.sequence.enable_cdef {
                 continue;
               }
 

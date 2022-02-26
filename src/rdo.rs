@@ -17,7 +17,6 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::deblock::*;
 use crate::dist::*;
 use crate::ec::{Writer, WriterCounter, OD_BITRES};
-use crate::encode_block_with_modes;
 use crate::encoder::{FrameInvariants, IMPORTANCE_BLOCK_SIZE};
 use crate::frame::Frame;
 use crate::frame::*;
@@ -41,6 +40,7 @@ use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
+use crate::{encode_block_with_modes, BaseInvariants};
 
 use crate::partition::PartitionType::*;
 use arrayvec::*;
@@ -252,6 +252,8 @@ fn compute_distortion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, bsize: BlockSize,
   is_chroma_block: bool, tile_bo: TileBlockOffset, luma_only: bool,
 ) -> ScaledDistortion {
+  let base_fi = fi.base().unwrap();
+
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
@@ -259,8 +261,8 @@ fn compute_distortion<T: Pixel>(
   // clip a block to have visible pixles only
   let frame_bo = ts.to_frame_block_offset(tile_bo);
   let (visible_w, visible_h) = clip_visible_bsize(
-    fi.width,
-    fi.height,
+    base_fi.width,
+    base_fi.height,
     bsize,
     frame_bo.0.x << MI_SIZE_LOG2,
     frame_bo.0.y << MI_SIZE_LOG2,
@@ -270,13 +272,13 @@ fn compute_distortion<T: Pixel>(
     return ScaledDistortion::zero();
   }
 
-  let mut distortion = match fi.config.tune {
+  let mut distortion = match base_fi.config.tune {
     Tune::Psychovisual => cdef_dist_wxh(
       &input_region,
       &rec_region,
       visible_w,
       visible_h,
-      fi.sequence.bit_depth,
+      base_fi.sequence.bit_depth,
       |bias_area, bsize| {
         distortion_scale(
           fi,
@@ -284,7 +286,7 @@ fn compute_distortion<T: Pixel>(
           bsize,
         )
       },
-      fi.cpu_feature_level,
+      base_fi.cpu_feature_level,
     ),
     Tune::Psnr => sse_wxh(
       &input_region,
@@ -298,14 +300,14 @@ fn compute_distortion<T: Pixel>(
           bsize,
         )
       },
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
+      base_fi.sequence.bit_depth,
+      base_fi.cpu_feature_level,
     ),
-  } * fi.dist_scale[0];
+  } * base_fi.dist_scale[0];
 
   if is_chroma_block
     && !luma_only
-    && fi.sequence.chroma_sampling != ChromaSampling::Cs400
+    && base_fi.sequence.chroma_sampling != ChromaSampling::Cs400
   {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let chroma_w = if bsize.width() >= 8 || xdec == 0 {
@@ -334,9 +336,9 @@ fn compute_distortion<T: Pixel>(
             bsize,
           )
         },
-        fi.sequence.bit_depth,
-        fi.cpu_feature_level,
-      ) * fi.dist_scale[p];
+        base_fi.sequence.bit_depth,
+        base_fi.cpu_feature_level,
+      ) * base_fi.dist_scale[p];
     }
   }
   distortion
@@ -348,7 +350,9 @@ fn compute_tx_distortion<T: Pixel>(
   is_chroma_block: bool, tile_bo: TileBlockOffset, tx_dist: ScaledDistortion,
   skip: bool, luma_only: bool,
 ) -> ScaledDistortion {
-  assert!(fi.config.tune == Tune::Psnr);
+  let base_fi = fi.base().unwrap();
+
+  assert!(base_fi.config.tune == Tune::Psnr);
   let area = Area::BlockStartingAt { bo: tile_bo.0 };
   let input_region = ts.input_tile.planes[0].subregion(area);
   let rec_region = ts.rec.planes[0].subregion(area);
@@ -358,8 +362,8 @@ fn compute_tx_distortion<T: Pixel>(
   } else {
     let frame_bo = ts.to_frame_block_offset(tile_bo);
     clip_visible_bsize(
-      fi.width,
-      fi.height,
+      base_fi.width,
+      base_fi.height,
       bsize,
       frame_bo.0.x << MI_SIZE_LOG2,
       frame_bo.0.y << MI_SIZE_LOG2,
@@ -383,9 +387,9 @@ fn compute_tx_distortion<T: Pixel>(
           bsize,
         )
       },
-      fi.sequence.bit_depth,
-      fi.cpu_feature_level,
-    ) * fi.dist_scale[0]
+      base_fi.sequence.bit_depth,
+      base_fi.cpu_feature_level,
+    ) * base_fi.dist_scale[0]
   } else {
     tx_dist
   };
@@ -393,7 +397,7 @@ fn compute_tx_distortion<T: Pixel>(
   if is_chroma_block
     && !luma_only
     && skip
-    && fi.sequence.chroma_sampling != ChromaSampling::Cs400
+    && base_fi.sequence.chroma_sampling != ChromaSampling::Cs400
   {
     let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
     let chroma_w = if bsize.width() >= 8 || xdec == 0 {
@@ -422,9 +426,9 @@ fn compute_tx_distortion<T: Pixel>(
             bsize,
           )
         },
-        fi.sequence.bit_depth,
-        fi.cpu_feature_level,
-      ) * fi.dist_scale[p];
+        base_fi.sequence.bit_depth,
+        base_fi.cpu_feature_level,
+      ) * base_fi.dist_scale[p];
     }
   }
   distortion
@@ -435,7 +439,7 @@ fn compute_tx_distortion<T: Pixel>(
 pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
-  if !fi.config.temporal_rdo() {
+  if !fi.base().unwrap().config.temporal_rdo() || fi.lookahead().is_none() {
     return DistortionScale::default();
   }
   // EncoderConfig::temporal_rdo() should always return false in situations
@@ -446,20 +450,26 @@ pub fn distortion_scale<T: Pixel>(
   let x = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
   let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
 
-  fi.distortion_scales[y * fi.w_in_imp_b + x]
+  let lookahead = fi.lookahead().unwrap();
+  lookahead.distortion_scales[y * lookahead.w_in_imp_b + x]
 }
 
 pub fn spatiotemporal_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
-  if !fi.config.temporal_rdo() && fi.config.tune != Tune::Psychovisual {
+  let base_fi = fi.base().unwrap();
+  let lookahead = fi.lookahead().unwrap();
+
+  if !base_fi.config.temporal_rdo()
+    && base_fi.config.tune != Tune::Psychovisual
+  {
     return DistortionScale::default();
   }
 
   let x0 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
   let y0 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-  let x1 = (x0 + bsize.width_imp_b()).min(fi.w_in_imp_b);
-  let y1 = (y0 + bsize.height_imp_b()).min(fi.h_in_imp_b);
+  let x1 = (x0 + bsize.width_imp_b()).min(lookahead.w_in_imp_b);
+  let y1 = (y0 + bsize.height_imp_b()).min(lookahead.h_in_imp_b);
   let den = (((x1 - x0) * (y1 - y0)) as u64) << DistortionScale::SHIFT;
 
   // calling this on each slice individually improves autovectorization
@@ -476,13 +486,13 @@ pub fn spatiotemporal_scale<T: Pixel>(
   let mut sum = 0;
   for y in y0..y1 {
     sum += take_slice(
-      &fi.distortion_scales[y * fi.w_in_imp_b..][x0..x1],
+      &lookahead.distortion_scales[y * lookahead.w_in_imp_b..][x0..x1],
       MAX_SB_IN_IMP_B,
     )
     .iter()
     .zip(
       take_slice(
-        &fi.activity_scales[y * fi.w_in_imp_b..][x0..x1],
+        &lookahead.activity_scales[y * lookahead.w_in_imp_b..][x0..x1],
         MAX_SB_IN_IMP_B,
       )
       .iter(),
@@ -651,8 +661,9 @@ impl std::ops::AddAssign for ScaledDistortion {
   }
 }
 
+#[inline]
 pub fn compute_rd_cost<T: Pixel>(
-  fi: &FrameInvariants<T>, rate: u32, distortion: ScaledDistortion,
+  fi: &BaseInvariants<T>, rate: u32, distortion: ScaledDistortion,
 ) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
   distortion.0 as f64 + fi.lambda * rate_in_bits
@@ -664,10 +675,12 @@ pub fn rdo_tx_size_type<T: Pixel>(
   luma_mode: PredictionMode, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
   skip: bool,
 ) -> (TxSize, TxType) {
+  let base_fi = fi.base().unwrap();
+
   let is_inter = !luma_mode.is_intra();
   let mut tx_size = max_txsize_rect_lookup[bsize as usize];
 
-  if fi.enable_inter_txfm_split && is_inter && !skip {
+  if base_fi.enable_inter_txfm_split && is_inter && !skip {
     tx_size = sub_tx_size_map[tx_size as usize]; // Always choose one level split size
   }
 
@@ -675,17 +688,17 @@ pub fn rdo_tx_size_type<T: Pixel>(
   let mut best_tx_size = tx_size;
   let mut best_rd = std::f64::MAX;
 
-  let do_rdo_tx_size = fi.tx_mode_select
-    && fi.config.speed_settings.transform.rdo_tx_decision
+  let do_rdo_tx_size = base_fi.tx_mode_select
+    && base_fi.config.speed_settings.transform.rdo_tx_decision
     && !is_inter;
   let rdo_tx_depth = if do_rdo_tx_size { 2 } else { 0 };
   let mut cw_checkpoint: Option<ContextWriterCheckpoint> = None;
 
   for _ in 0..=rdo_tx_depth {
-    let tx_set = get_tx_set(tx_size, is_inter, fi.use_reduced_tx_set);
+    let tx_set = get_tx_set(tx_size, is_inter, base_fi.use_reduced_tx_set);
 
     let do_rdo_tx_type = tx_set > TxSet::TX_SET_DCTONLY
-      && fi.config.speed_settings.transform.rdo_tx_decision
+      && base_fi.config.speed_settings.transform.rdo_tx_decision
       && !is_inter
       && !skip;
 
@@ -758,10 +771,11 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   mode_context: usize, mv_stack: &ArrayVec<CandidateMV, 9>,
   angle_delta: AngleDelta,
 ) {
+  let base_fi = fi.base().unwrap();
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
 
   let is_chroma_block =
-    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+    has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling);
 
   if !luma_mode_is_intra {
     let ref_mvs = if mv_stack.is_empty() {
@@ -815,7 +829,15 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         let need_recon_pixel =
           luma_mode_is_intra && tx_size.block_size() != bsize;
 
-        encode_block_pre_cdef(&fi.sequence, ts, cw, wr, bsize, tile_bo, skip);
+        encode_block_pre_cdef(
+          &base_fi.sequence,
+          ts,
+          cw,
+          wr,
+          bsize,
+          tile_bo,
+          skip,
+        );
         let (has_coeff, tx_dist) = encode_block_post_cdef(
           fi,
           ts,
@@ -840,22 +862,23 @@ fn luma_chroma_mode_rdo<T: Pixel>(
         );
 
         let rate = wr.tell_frac() - tell;
-        let distortion = if fi.use_tx_domain_distortion && !need_recon_pixel {
-          compute_tx_distortion(
-            fi,
-            ts,
-            bsize,
-            is_chroma_block,
-            tile_bo,
-            tx_dist,
-            skip,
-            false,
-          )
-        } else {
-          compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false)
-        };
+        let distortion =
+          if base_fi.use_tx_domain_distortion && !need_recon_pixel {
+            compute_tx_distortion(
+              fi,
+              ts,
+              bsize,
+              is_chroma_block,
+              tile_bo,
+              tx_dist,
+              skip,
+              false,
+            )
+          } else {
+            compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false)
+          };
         let is_zero_dist = distortion.0 == 0;
-        let rd = compute_rd_cost(fi, rate, distortion);
+        let rd = compute_rd_cost(base_fi, rate, distortion);
         if rd < best.rd_cost {
           //if rd < best.rd_cost || luma_mode == PredictionMode::NEW_NEWMV {
           best.rd_cost = rd;
@@ -894,19 +917,21 @@ pub fn rdo_mode_decision<T: Pixel>(
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
   inter_cfg: &InterConfig,
 ) -> PartitionParameters {
+  let base_fi = fi.base().unwrap();
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+  let cw_checkpoint =
+    cw.checkpoint(&tile_bo, base_fi.sequence.chroma_sampling);
 
-  let rdo_type = if fi.use_tx_domain_rate {
+  let rdo_type = if base_fi.use_tx_domain_rate {
     RDOType::TxDistEstRate
-  } else if fi.use_tx_domain_distortion {
+  } else if base_fi.use_tx_domain_distortion {
     RDOType::TxDistRealRate
   } else {
     RDOType::PixelDistRealRate
   };
 
-  let mut best = if fi.frame_type.has_inter() {
-    assert!(fi.frame_type != FrameType::KEY);
+  let mut best = if base_fi.frame_type.has_inter() {
+    assert!(base_fi.frame_type != FrameType::KEY);
 
     inter_frame_rdo_mode_decision(
       fi,
@@ -923,7 +948,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   };
 
   let is_chroma_block =
-    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+    has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling);
 
   if !best.skip {
     best = intra_frame_rdo_mode_decision(
@@ -943,7 +968,8 @@ pub fn rdo_mode_decision<T: Pixel>(
     cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, best.sidx);
 
     let chroma_mode = PredictionMode::UV_CFL_PRED;
-    let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+    let cw_checkpoint =
+      cw.checkpoint(&tile_bo, base_fi.sequence.chroma_sampling);
     let mut wr = WriterCounter::new();
     let angle_delta = AngleDelta { y: best.angle_delta.y, uv: 0 };
 
@@ -966,13 +992,13 @@ pub fn rdo_mode_decision<T: Pixel>(
       true,
     );
     cw.rollback(&cw_checkpoint);
-    if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
+    if base_fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
       if let Some(cfl) = rdo_cfl_alpha(ts, tile_bo, bsize, best.tx_size, fi) {
         let mut wr = WriterCounter::new();
         let tell = wr.tell_frac();
 
         encode_block_pre_cdef(
-          &fi.sequence,
+          &base_fi.sequence,
           ts,
           cw,
           &mut wr,
@@ -1008,7 +1034,7 @@ pub fn rdo_mode_decision<T: Pixel>(
         // For CFL, tx-domain distortion is not an option.
         let distortion =
           compute_distortion(fi, ts, bsize, is_chroma_block, tile_bo, false);
-        let rd = compute_rd_cost(fi, rate, distortion);
+        let rd = compute_rd_cost(base_fi, rate, distortion);
         if rd < best.rd_cost {
           best.rd_cost = rd;
           best.pred_mode_chroma = chroma_mode;
@@ -1052,6 +1078,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   inter_cfg: &InterConfig, cw_checkpoint: &ContextWriterCheckpoint,
   rdo_type: RDOType,
 ) -> PartitionParameters {
+  let base_fi = fi.base().unwrap();
   let mut best = PartitionParameters::default();
 
   // we can never have more than 7 reference frame sets
@@ -1069,7 +1096,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       continue;
     }
 
-    if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
+    if !ref_slot_set.contains(&base_fi.ref_frames[i.to_index()]) {
       if fwdref == None && i.is_fwd_ref() {
         fwdref = Some(ref_frames_set.len());
       }
@@ -1077,7 +1104,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         bwdref = Some(ref_frames_set.len());
       }
       ref_frames_set.push([i, NONE_FRAME]);
-      let slot_idx = fi.ref_frames[i.to_index()];
+      let slot_idx = base_fi.ref_frames[i.to_index()];
       ref_slot_set.push(slot_idx);
     }
   }
@@ -1096,7 +1123,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       ref_frames,
       &mut mv_stack,
       bsize,
-      fi,
+      base_fi,
       false,
     ));
 
@@ -1130,7 +1157,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     if mv_stack.len() >= 2 {
       inter_mode_set.push((PredictionMode::GLOBALMV, i));
     }
-    let include_near_mvs = fi.config.speed_settings.motion.include_near_mvs;
+    let include_near_mvs =
+      base_fi.config.speed_settings.motion.include_near_mvs;
     if include_near_mvs {
       if mv_stack.len() >= 3 {
         inter_mode_set.push((PredictionMode::NEAR1MV, i));
@@ -1158,7 +1186,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   let sz = bsize.width_mi().min(bsize.height_mi());
 
   // To use non single reference modes, block width and height must be greater than 4.
-  if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
+  if base_fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
     // Adding compound candidate
     if let Some(r0) = fwdref {
       if let Some(r1) = bwdref {
@@ -1173,12 +1201,12 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
           ref_frames,
           &mut mv_stack,
           bsize,
-          fi,
+          base_fi,
           true,
         ));
         for &x in RAV1E_INTER_COMPOUND_MODES {
           // exclude any NEAR mode based on speed setting
-          if fi.config.speed_settings.motion.include_near_mvs
+          if base_fi.config.speed_settings.motion.include_near_mvs
             || !x.has_nearmv()
           {
             let mv_stack_idx = ref_frames_set.len() - 1;
@@ -1193,13 +1221,14 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
   }
 
-  let num_modes_rdo = if fi.config.speed_settings.prediction.prediction_modes
-    >= PredictionModesSetting::ComplexAll
-  {
-    inter_mode_set.len()
-  } else {
-    9 // This number is determined by AWCY test
-  };
+  let num_modes_rdo =
+    if base_fi.config.speed_settings.prediction.prediction_modes
+      >= PredictionModesSetting::ComplexAll
+    {
+      inter_mode_set.len()
+    } else {
+      9 // This number is determined by AWCY test
+    };
 
   inter_mode_set.iter().for_each(|&(luma_mode, i)| {
     let mvs = match luma_mode {
@@ -1249,7 +1278,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         rec.subregion_mut(Area::BlockStartingAt { bo: tile_bo.0 });
 
       luma_mode.predict_inter(
-        fi,
+        base_fi,
         tile_rect,
         0,
         po,
@@ -1270,8 +1299,8 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         &plane_ref,
         bsize.width(),
         bsize.height(),
-        fi.sequence.bit_depth,
-        fi.cpu_feature_level,
+        base_fi.sequence.bit_depth,
+        base_fi.cpu_feature_level,
       );
       satds.push(satd);
     } else {
@@ -1319,14 +1348,15 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
+  let base_fi = fi.base().unwrap();
   let mut modes = ArrayVec::<_, INTRA_MODES>::new();
 
   // Reduce number of prediction modes at higher speed levels
-  let num_modes_rdo = if (fi.frame_type == FrameType::KEY
-    && fi.config.speed_settings.prediction.prediction_modes
+  let num_modes_rdo = if (base_fi.frame_type == FrameType::KEY
+    && base_fi.config.speed_settings.prediction.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
-    || (fi.frame_type.has_inter()
-      && fi.config.speed_settings.prediction.prediction_modes
+    || (base_fi.frame_type.has_inter()
+      && base_fi.config.speed_settings.prediction.prediction_modes
         >= PredictionModesSetting::ComplexAll)
   {
     7
@@ -1340,7 +1370,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   {
     use crate::ec::cdf_to_pdf;
 
-    let probs_all = cdf_to_pdf(if fi.frame_type.has_inter() {
+    let probs_all = cdf_to_pdf(if base_fi.frame_type.has_inter() {
       cw.get_cdf_intra_mode(bsize)
     } else {
       cw.get_cdf_intra_mode_kf(tile_bo)
@@ -1350,7 +1380,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     modes.sort_by_key(|&a| !probs_all[a as usize]);
   }
 
-  // If tx partition (i.e. fi.tx_mode_select) is enabled, the below intra prediction screening
+  // If tx partition (i.e. base_fi.tx_mode_select) is enabled, the below intra prediction screening
   // may be improved by emulating prediction for each tx block.
   {
     let satds = {
@@ -1368,14 +1398,14 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           bsize,
           po,
           tx_size,
-          fi.sequence.bit_depth,
+          base_fi.sequence.bit_depth,
           None,
-          fi.sequence.enable_intra_edge_filter,
+          base_fi.sequence.enable_intra_edge_filter,
           IntraParam::None,
         )
       };
 
-      let ief_params = if fi.sequence.enable_intra_edge_filter {
+      let ief_params = if base_fi.sequence.enable_intra_edge_filter {
         let above_block_info = ts.above_block_info(tile_bo, 0, 0);
         let left_block_info = ts.left_block_info(tile_bo, 0, 0);
         Some(IntraEdgeFilterParameters::new(
@@ -1398,12 +1428,12 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           tile_rect,
           &mut rec_region,
           tx_size,
-          fi.sequence.bit_depth,
+          base_fi.sequence.bit_depth,
           &[0i16; 2],
           IntraParam::None,
           if luma_mode.is_directional() { ief_params } else { None },
           &edge_buf,
-          fi.cpu_feature_level,
+          base_fi.cpu_feature_level,
         );
 
         let plane_org = ts.input_tile.planes[0]
@@ -1415,8 +1445,8 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           &plane_ref,
           tx_size.width(),
           tx_size.height(),
-          fi.sequence.bit_depth,
-          fi.cpu_feature_level,
+          base_fi.sequence.bit_depth,
+          base_fi.cpu_feature_level,
         );
       }
       satds_all
@@ -1455,7 +1485,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     );
   });
 
-  if fi.config.speed_settings.prediction.fine_directional_intra
+  if base_fi.config.speed_settings.prediction.fine_directional_intra
     && bsize >= BlockSize::BLOCK_8X8
   {
     // Find the best angle delta for the current best prediction mode
@@ -1510,6 +1540,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
   luma_tx_size: TxSize, fi: &FrameInvariants<T>,
 ) -> Option<CFLParams> {
+  let base_fi = fi.base().unwrap();
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let uv_tx_size = bsize.largest_chroma_tx_size(xdec, ydec);
   debug_assert!(
@@ -1518,8 +1549,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 
   let frame_bo = ts.to_frame_block_offset(tile_bo);
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
-    (fi.width + xdec) >> xdec,
-    (fi.height + ydec) >> ydec,
+    (base_fi.width + xdec) >> xdec,
+    (base_fi.height + ydec) >> ydec,
     uv_tx_size.block_size(),
     (frame_bo.0.x << MI_SIZE_LOG2) >> xdec,
     (frame_bo.0.y << MI_SIZE_LOG2) >> ydec,
@@ -1529,7 +1560,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
     return None;
   };
   let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
-  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
+  luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, base_fi);
   let best_alpha: ArrayVec<i16, 2> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
@@ -1545,9 +1576,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
         bsize,
         po,
         uv_tx_size,
-        fi.sequence.bit_depth,
+        base_fi.sequence.bit_depth,
         Some(PredictionMode::UV_CFL_PRED),
-        fi.sequence.enable_intra_edge_filter,
+        base_fi.sequence.enable_intra_edge_filter,
         IntraParam::None,
       );
       let mut alpha_cost = |alpha: i16| -> u64 {
@@ -1557,12 +1588,12 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           tile_rect,
           &mut rec_region,
           uv_tx_size,
-          fi.sequence.bit_depth,
+          base_fi.sequence.bit_depth,
           &ac.data,
           IntraParam::Alpha(alpha),
           None,
           &edge_buf,
-          fi.cpu_feature_level,
+          base_fi.cpu_feature_level,
         );
         sse_wxh(
           &input.subregion(Area::BlockStartingAt { bo: tile_bo.0 }),
@@ -1570,8 +1601,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           visible_tx_w,
           visible_tx_h,
           |_, _| DistortionScale::default(), // We're not doing RDO here.
-          fi.sequence.bit_depth,
-          fi.cpu_feature_level,
+          base_fi.sequence.bit_depth,
+          base_fi.cpu_feature_level,
         )
         .0
       };
@@ -1612,12 +1643,14 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   bsize: BlockSize, tile_bo: TileBlockOffset, tx_size: TxSize, tx_set: TxSet,
   tx_types: &[TxType], cur_best_rd: f64,
 ) -> (TxType, f64) {
+  let base_fi = fi.base().unwrap();
+
   let mut best_type = TxType::DCT_DCT;
   let mut best_rd = std::f64::MAX;
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block =
-    has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
+    has_chroma(tile_bo, bsize, xdec, ydec, base_fi.sequence.chroma_sampling);
 
   let is_inter = !mode.is_intra();
 
@@ -1625,10 +1658,10 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     // Only run the first call
     // Prevents creating multiple checkpoints for own version of cw
     *cw_checkpoint =
-      Some(cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling));
+      Some(cw.checkpoint(&tile_bo, base_fi.sequence.chroma_sampling));
   }
 
-  let rdo_type = if fi.use_tx_domain_distortion {
+  let rdo_type = if base_fi.use_tx_domain_distortion {
     RDOType::TxDistRealRate
   } else {
     RDOType::PixelDistRealRate
@@ -1689,7 +1722,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     };
 
     let rate = wr.tell_frac() - tell;
-    let distortion = if fi.use_tx_domain_distortion {
+    let distortion = if base_fi.use_tx_domain_distortion {
       compute_tx_distortion(
         fi,
         ts,
@@ -1705,7 +1738,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
     };
     cw.rollback(cw_checkpoint.as_ref().unwrap());
 
-    let rd = compute_rd_cost(fi, rate, distortion);
+    let rd = compute_rd_cost(base_fi, rate, distortion);
 
     if first_iteration {
       // We use an optimization to early exit after testing the first
@@ -1780,11 +1813,13 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   debug_assert!(tile_bo.0.x < ts.mi_width && tile_bo.0.y < ts.mi_height);
   let subsize = bsize.subsize(partition).unwrap();
 
+  let base_fi = fi.base().unwrap();
+
   let cost = if bsize >= BlockSize::BLOCK_8X8 {
     let w: &mut W = if cw.bc.cdef_coded { w_post_cdef } else { w_pre_cdef };
     let tell = w.tell_frac();
     cw.write_partition(w, tile_bo, partition, bsize);
-    compute_rd_cost(fi, w.tell_frac() - tell, ScaledDistortion::zero())
+    compute_rd_cost(base_fi, w.tell_frac() - tell, ScaledDistortion::zero())
   } else {
     0.0
   };
@@ -1822,7 +1857,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 
       rd_cost_sum += mode_decision.rd_cost;
 
-      if fi.enable_early_exit && rd_cost_sum > best_rd {
+      if base_fi.enable_early_exit && rd_cost_sum > best_rd {
         return None;
       }
       if subsize >= BlockSize::BLOCK_8X8 && subsize.is_sqr() {
@@ -1860,11 +1895,13 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   cached_block: &PartitionGroupParameters, partition_types: &[PartitionType],
   rdo_type: RDOType, inter_cfg: &InterConfig,
 ) -> PartitionGroupParameters {
+  let base_fi = fi.base().unwrap();
   let mut best_partition = cached_block.part_type;
   let mut best_rd = cached_block.rd_cost;
   let mut best_pred_modes = cached_block.part_modes.clone();
 
-  let cw_checkpoint = cw.checkpoint(&tile_bo, fi.sequence.chroma_sampling);
+  let cw_checkpoint =
+    cw.checkpoint(&tile_bo, base_fi.sequence.chroma_sampling);
   let w_pre_checkpoint = w_pre_cdef.checkpoint();
   let w_post_checkpoint = w_post_cdef.checkpoint();
 
@@ -1935,10 +1972,12 @@ fn rdo_loop_plane_error<T: Pixel>(
   sb_w: usize, sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
   blocks: &TileBlocks<'_>, test: &Frame<T>, src: &Tile<'_, T>, pli: usize,
 ) -> ScaledDistortion {
+  let base_fi = fi.base().unwrap();
+
   let sb_w_blocks =
-    if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
+    if base_fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_w;
   let sb_h_blocks =
-    if fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_h;
+    if base_fi.sequence.use_128x128_superblock { 16 } else { 8 } * sb_h;
   // Each direction block is 8x8 in y, potentially smaller if subsampled in chroma
   // accumulating in-frame and unpadded
   let mut err = Distortion::zero();
@@ -1977,8 +2016,8 @@ fn rdo_loop_plane_error<T: Pixel>(
             &test_region,
             8,
             8,
-            fi.sequence.bit_depth,
-            fi.cpu_feature_level,
+            base_fi.sequence.bit_depth,
+            base_fi.cpu_feature_level,
           ) as u64)
             * bias
         } else {
@@ -1988,14 +2027,14 @@ fn rdo_loop_plane_error<T: Pixel>(
             8 >> xdec,
             8 >> ydec,
             |_, _| bias,
-            fi.sequence.bit_depth,
-            fi.cpu_feature_level,
+            base_fi.sequence.bit_depth,
+            base_fi.cpu_feature_level,
           )
         };
       }
     }
   }
-  err * fi.dist_scale[pli]
+  err * base_fi.dist_scale[pli]
 }
 
 // Passed in a superblock offset representing the upper left corner of
@@ -2007,12 +2046,13 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
   deblock_p: bool,
 ) {
-  let planes = if fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
+  let base_fi = fi.base().unwrap();
+  let planes = if base_fi.sequence.chroma_sampling == ChromaSampling::Cs400 {
     1
   } else {
     MAX_PLANES
   };
-  assert!(fi.sequence.enable_cdef || fi.sequence.enable_restoration);
+  assert!(base_fi.sequence.enable_cdef || base_fi.sequence.enable_restoration);
   // Determine area of optimization: Which plane has the largest LRUs?
   // How many LRUs for each?
   let mut sb_w = 1; // how many superblocks wide the largest LRU
@@ -2051,9 +2091,9 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   // sb_w/sb_h figures above can be used to determine how many
   // allocated pixels, possibly beyond the visible frame, exist).
   let crop_w =
-    fi.width - ((ts.sbo.0.x + base_sbo.0.x) << SUPERBLOCK_TO_PLANE_SHIFT);
-  let crop_h =
-    fi.height - ((ts.sbo.0.y + base_sbo.0.y) << SUPERBLOCK_TO_PLANE_SHIFT);
+    base_fi.width - ((ts.sbo.0.x + base_sbo.0.x) << SUPERBLOCK_TO_PLANE_SHIFT);
+  let crop_h = base_fi.height
+    - ((ts.sbo.0.y + base_sbo.0.y) << SUPERBLOCK_TO_PLANE_SHIFT);
   let pixel_w = crop_w.min(sb_w << SUPERBLOCK_TO_PLANE_SHIFT);
   let pixel_h = crop_h.min(sb_h << SUPERBLOCK_TO_PLANE_SHIFT);
 
@@ -2089,7 +2129,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   // to setting up for cdef.
   let mut cdef_skip = [true; MAX_SB_SIZE * MAX_SB_SIZE];
   let mut cdef_skip_all = true;
-  if fi.sequence.enable_cdef {
+  if base_fi.sequence.enable_cdef {
     for sby in 0..sb_h {
       for sbx in 0..sb_w {
         let blocks = tileblocks_subset.subregion(16 * sbx, 16 * sby, 16, 16);
@@ -2112,8 +2152,8 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   // This should be the same as `cdef_skip_all`, except when cdef is disabled.
   let mut lru_skip_all = true;
   let mut lru_skip = [[true; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
-  if fi.sequence.enable_restoration {
-    if fi.config.speed_settings.lru_on_skip {
+  if base_fi.sequence.enable_restoration {
+    if base_fi.config.speed_settings.lru_on_skip {
       lru_skip_all = false;
       lru_skip = [[false; MAX_PLANES]; MAX_LRU_SIZE * MAX_LRU_SIZE];
     } else {
@@ -2200,7 +2240,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
     // This is not RDO of deblocking itself, merely a solution to get
     // better results from CDEF/LRF RDO.
     let deblock_levels = deblock_filter_optimize(
-      fi,
+      base_fi,
       &rec_subset.as_tile(),
       &src_subset,
       &tileblocks_subset.as_const(),
@@ -2221,7 +2261,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
         &tileblocks_subset.as_const(),
         crop_w,
         crop_h,
-        fi.sequence.bit_depth,
+        base_fi.sequence.bit_depth,
         planes,
       );
     }
@@ -2250,7 +2290,8 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
       Some((
         &rec_subset,
         cdef_analyze_superblock_range(
-          fi,
+          base_fi.sequence.bit_depth,
+          base_fi.cpu_feature_level,
           &rec_subset,
           &tileblocks_subset.as_const(),
           sb_w,
@@ -2292,12 +2333,12 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
             TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
 
           /* cdef index testing loop */
-          for cdef_index in 0..(1 << fi.cdef_bits) {
+          for cdef_index in 0..(1 << base_fi.cdef_bits) {
             let mut err = ScaledDistortion::zero();
             let mut rate = 0;
 
             cdef_filter_superblock(
-              fi,
+              base_fi,
               &rec_subset,
               &mut cdef_ref.as_tile_mut(),
               &tileblocks_subset.as_const(),
@@ -2309,7 +2350,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
             for pli in 0..planes {
               // We need the cropped-to-visible-frame area of this SB
               let wh =
-                if fi.sequence.use_128x128_superblock { 128 } else { 64 };
+                if base_fi.sequence.use_128x128_superblock { 128 } else { 64 };
               let PlaneConfig { xdec, ydec, .. } = cdef_ref.planes[pli].cfg;
               let vis_width = (wh >> xdec).min(
                 (crop_w >> xdec)
@@ -2344,7 +2385,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
                       &src_subset,
                       pli,
                     );
-                    rate += if fi.sequence.enable_restoration {
+                    rate += if base_fi.sequence.enable_restoration {
                       cw.fc.count_lrf_switchable(
                         w,
                         &ts.restoration.as_const(),
@@ -2428,7 +2469,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
               }
             }
 
-            let cost = compute_rd_cost(fi, rate, err);
+            let cost = compute_rd_cost(base_fi, rate, err);
             if best_cost < 0. || cost < best_cost {
               best_cost = cost;
               best_new_index = cdef_index as i8;
@@ -2455,7 +2496,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
           // Keep cdef output up to date; we need it for restoration
           // both below and above (padding)
           cdef_filter_superblock(
-            fi,
+            base_fi,
             rec_copy,
             &mut cdef_ref_tm,
             &tileblocks_subset.as_const(),
@@ -2538,7 +2579,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
                   pli,
                 );
 
-                let cost = compute_rd_cost(fi, rate, err);
+                let cost = compute_rd_cost(base_fi, rate, err);
                 // Was this choice actually an improvement?
                 if best_cost < 0. || cost < best_cost {
                   best_cost = cost;
@@ -2572,11 +2613,12 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
                 &lrf_in_plane.slice(lrf_po),
               );
 
-              for &set in get_sgr_sets(fi.config.speed_settings.sgr_complexity)
+              for &set in
+                get_sgr_sets(base_fi.config.speed_settings.sgr_complexity)
               {
                 let (xqd0, xqd1) = sgrproj_solve(
                   set,
-                  fi,
+                  base_fi,
                   &ts.integral_buffer,
                   &src_plane
                     .subregion(Area::StartingAt { x: lrf_po.x, y: lrf_po.y }),
@@ -2620,7 +2662,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
                   current_lrf,
                   pli,
                 );
-                let cost = compute_rd_cost(fi, rate, err);
+                let cost = compute_rd_cost(base_fi, rate, err);
                 if cost < best_cost {
                   best_cost = cost;
                   best_lrf_cost[lru_y * lru_w[pli] + lru_x][pli] = cost;

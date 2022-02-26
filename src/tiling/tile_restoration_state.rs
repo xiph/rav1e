@@ -8,7 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::context::*;
-use crate::encoder::FrameInvariants;
+use crate::encoder::{BaseInvariants, FrameInvariants};
 use crate::lrf::*;
 use crate::util::Pixel;
 
@@ -238,7 +238,7 @@ macro_rules! tile_restoration_plane_common {
       // in the other tile to be part of the LRU for RDO purposes.
       pub fn restoration_unit_last_sb_for_rdo<T: Pixel>(
         &self,
-        fi: &FrameInvariants<T>,
+        fi: &BaseInvariants<T>,
         global_sbo: PlaneSuperBlockOffset,
         tile_sbo: TileSuperBlockOffset,
       ) -> bool {

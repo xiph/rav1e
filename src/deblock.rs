@@ -10,13 +10,12 @@
 use crate::api::FrameType;
 use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
-use crate::encoder::FrameInvariants;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
 use crate::tiling::*;
 use crate::util::{clamp, ILog, Pixel};
-use crate::DeblockState;
+use crate::{BaseInvariants, DeblockState};
 use rust_hawktracer::*;
 use std::cmp;
 
@@ -1639,8 +1638,8 @@ fn sse_optimize<T: Pixel>(
 
 #[hawktracer(deblock_filter_optimize)]
 pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
-  fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<U>,
-  blocks: &TileBlocks, crop_w: usize, crop_h: usize,
+  fi: &BaseInvariants<T>, rec: &Tile<U>, input: &Tile<U>, blocks: &TileBlocks,
+  crop_w: usize, crop_h: usize,
 ) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {
     let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;

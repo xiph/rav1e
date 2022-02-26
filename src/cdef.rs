@@ -9,13 +9,13 @@
 
 use crate::color::ChromaSampling::Cs400;
 use crate::context::*;
-use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
 use rust_hawktracer::*;
 
 use crate::cpu_features::CpuFeatureLevel;
+use crate::BaseInvariants;
 use std::cmp;
 
 cfg_if::cfg_if! {
@@ -324,24 +324,30 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
 }
 
 pub fn cdef_analyze_superblock_range<T: Pixel>(
-  fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
-  sb_w: usize, sb_h: usize,
+  bit_depth: usize, cpu_feature_level: CpuFeatureLevel, in_frame: &Frame<T>,
+  blocks: &TileBlocks<'_>, sb_w: usize, sb_h: usize,
 ) -> Vec<CdefDirections> {
   let mut ret = Vec::<CdefDirections>::with_capacity(sb_h * sb_w);
   for sby in 0..sb_h {
     for sbx in 0..sb_w {
       let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-      ret.push(cdef_analyze_superblock(fi, in_frame, blocks, sbo));
+      ret.push(cdef_analyze_superblock(
+        bit_depth,
+        cpu_feature_level,
+        in_frame,
+        blocks,
+        sbo,
+      ));
     }
   }
   ret
 }
 
 pub fn cdef_analyze_superblock<T: Pixel>(
-  fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
-  sbo: TileSuperBlockOffset,
+  bit_depth: usize, cpu_feature_level: CpuFeatureLevel, in_frame: &Frame<T>,
+  blocks: &TileBlocks<'_>, sbo: TileSuperBlockOffset,
 ) -> CdefDirections {
-  let coeff_shift = fi.sequence.bit_depth as usize - 8;
+  let coeff_shift = bit_depth - 8;
   let mut dir: CdefDirections =
     CdefDirections { dir: [[0; 8]; 8], var: [[0; 8]; 8] };
   // Each direction block is 8x8 in y, and direction computation only looks at y
@@ -363,7 +369,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
             &in_slice.reslice(8 * bx as isize, 8 * by as isize),
             &mut var,
             coeff_shift,
-            fi.cpu_feature_level,
+            cpu_feature_level,
           ) as u8;
           dir.var[bx][by] = var as i32;
         }
@@ -395,7 +401,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 //   don't exist.
 
 pub fn cdef_filter_superblock<T: Pixel>(
-  fi: &FrameInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
+  fi: &BaseInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
   blocks: &TileBlocks<'_>, tile_sbo: TileSuperBlockOffset, cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
@@ -588,7 +594,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 
 #[hawktracer(cdef_filter_tile)]
 pub fn cdef_filter_tile<T: Pixel>(
-  fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
+  fi: &BaseInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
   output: &mut TileMut<'_, T>,
 ) {
   // Each filter block is 64x64, except right and/or bottom for non-multiple-of-64 sizes.
@@ -608,7 +614,13 @@ pub fn cdef_filter_tile<T: Pixel>(
       // the input Frame.
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
       let cdef_index = tb.get_cdef(tile_sbo);
-      let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
+      let cdef_dirs = cdef_analyze_superblock(
+        fi.sequence.bit_depth,
+        fi.cpu_feature_level,
+        input,
+        tb,
+        tile_sbo,
+      );
 
       cdef_filter_superblock(
         fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
