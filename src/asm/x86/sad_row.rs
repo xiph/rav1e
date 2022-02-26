@@ -27,14 +27,14 @@ unsafe fn sad_scalar(src: &[u8], dst: &[u8]) -> i64 {
     unreachable_unchecked()
   }
 
-  let sum = 0;
+  let mut sum = 0;
 
   for i in 0..src.len() {
     // We use inline assembly here to force the compiler to not auto-vectorize the loop,
     // since it is already vectorized manually.
     asm!(
       "add {sum}, {x}",
-      sum = in(reg) sum,
+      sum = out(reg) sum,
       x = in(reg) (*src.get_unchecked(i) as i64 - *dst.get_unchecked(i) as i64).abs(),
       options(nostack)
     );
