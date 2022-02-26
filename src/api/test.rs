@@ -449,10 +449,10 @@ fn pyramid_level_low_latency_minus(missing: u64) {
   ctx.flush();
 
   // data[output_frameno] = pyramid_level
-  let data =
-    get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
 
-  assert!(data.into_iter().all(|pyramid_level| pyramid_level == 0));
+  assert!(get_frame_invariants(ctx)
+    .map(|fi| fi.pyramid_level)
+    .all(|pyramid_level| pyramid_level == 0));
 }
 
 #[interpolate_test(0, 0)]
@@ -1807,15 +1807,8 @@ fn lookahead_size_properly_bounded(
   assert!(end.is_some());
   assert!(end.unwrap().is_none());
 
-  loop {
-    match ctx.receive_packet() {
-      Ok(_) | Err(EncoderStatus::Encoded) => {
-        // Receive packets until all frames consumed
-      }
-      _ => {
-        break;
-      }
-    }
+  while let Ok(_) | Err(EncoderStatus::Encoded) = ctx.receive_packet() {
+    // Receive packets until all frames consumed
   }
   assert_eq!(ctx.inner.frames_processed, LIMIT as u64);
 }
@@ -1830,60 +1823,65 @@ fn zero_frames() {
 
 #[test]
 fn tile_cols_overflow() {
-  let mut enc = EncoderConfig::default();
-  enc.tile_cols = usize::max_value();
+  let enc =
+    EncoderConfig { tile_cols: usize::max_value(), ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn max_key_frame_interval_overflow() {
-  let mut enc = EncoderConfig::default();
-  enc.max_key_frame_interval = i32::max_value() as u64;
-  enc.reservoir_frame_delay = None;
+  let enc = EncoderConfig {
+    max_key_frame_interval: i32::max_value() as u64,
+    reservoir_frame_delay: None,
+    ..Default::default()
+  };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn target_bitrate_overflow() {
-  let mut enc = EncoderConfig::default();
-  enc.bitrate = i32::max_value();
-  enc.time_base = Rational::new(i64::max_value() as u64, 1);
+  let enc = EncoderConfig {
+    bitrate: i32::max_value(),
+    time_base: Rational::new(i64::max_value() as u64, 1),
+    ..Default::default()
+  };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn time_base_den_divide_by_zero() {
-  let mut enc = EncoderConfig::default();
-  enc.time_base = Rational::new(1, 0);
+  let enc =
+    EncoderConfig { time_base: Rational::new(1, 0), ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn large_width_assert() {
-  let mut enc = EncoderConfig::default();
-  enc.width = u32::max_value() as usize;
+  let enc =
+    EncoderConfig { width: u32::max_value() as usize, ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn reservoir_max_overflow() {
-  let mut enc = EncoderConfig::default();
-  enc.reservoir_frame_delay = Some(i32::max_value());
-  enc.bitrate = i32::max_value();
-  enc.time_base = Rational::new(i32::max_value() as u64 * 2, 1);
+  let enc = EncoderConfig {
+    reservoir_frame_delay: Some(i32::max_value()),
+    bitrate: i32::max_value(),
+    time_base: Rational::new(i32::max_value() as u64 * 2, 1),
+    ..Default::default()
+  };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
 
 #[test]
 fn zero_width() {
-  let mut enc = EncoderConfig::default();
-  enc.width = 0;
+  let enc = EncoderConfig { width: 0, ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());
@@ -1891,8 +1889,13 @@ fn zero_width() {
 
 #[test]
 fn rdo_lookahead_frames_overflow() {
-  let mut enc = EncoderConfig::default();
-  enc.speed_settings.rdo_lookahead_frames = usize::max_value();
+  let enc = EncoderConfig {
+    speed_settings: SpeedSettings {
+      rdo_lookahead_frames: usize::max_value(),
+      ..Default::default()
+    },
+    ..Default::default()
+  };
   let config = Config::new().with_encoder_config(enc);
   let res: Result<Context<u8>, _> = config.new_context();
   assert!(res.is_err());
