@@ -1319,11 +1319,10 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   cw_checkpoint: &ContextWriterCheckpoint, rdo_type: RDOType,
   mut best: PartitionParameters, is_chroma_block: bool,
 ) -> PartitionParameters {
-  let num_modes_rdo: usize;
   let mut modes = ArrayVec::<_, INTRA_MODES>::new();
 
   // Reduce number of prediction modes at higher speed levels
-  num_modes_rdo = if (fi.frame_type == FrameType::KEY
+  let num_modes_rdo: usize = if (fi.frame_type == FrameType::KEY
     && fi.config.speed_settings.prediction.prediction_modes
       >= PredictionModesSetting::ComplexKeyframes)
     || (fi.frame_type.has_inter()
@@ -2478,7 +2477,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
     if let Some(lrf_ref) = &mut lrf_work.as_mut() {
       let lrf_input = if cdef_work.is_some() {
         // When CDEF is enabled, we pull from the CDEF output
-        &cdef_work.as_ref().unwrap()
+        cdef_work.as_ref().unwrap()
       } else {
         // When CDEF is disabled, we pull from the [optionally
         // deblocked] reconstruction

@@ -1942,23 +1942,18 @@ pub fn luma_ac<T: Pixel>(
     ((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2).min(bsize.height());
 
   // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
-  let max_luma_w: usize;
-  let max_luma_h: usize;
-
-  if bsize.width() > BlockSize::BLOCK_8X8.width() {
+  let max_luma_w = if bsize.width() > BlockSize::BLOCK_8X8.width() {
     let txw_log2 = tx_size.width_log2();
-    max_luma_w =
-      ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2;
+    ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2
   } else {
-    max_luma_w = bsize.width();
-  }
-  if bsize.height() > BlockSize::BLOCK_8X8.height() {
+    bsize.width()
+  };
+  let max_luma_h = if bsize.height() > BlockSize::BLOCK_8X8.height() {
     let txh_log2 = tx_size.height_log2();
-    max_luma_h =
-      ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2;
+    ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2
   } else {
-    max_luma_h = bsize.height();
-  }
+    bsize.height()
+  };
 
   let max_luma_x: usize = max_luma_w.max(8) - (1 << xdec);
   let max_luma_y: usize = max_luma_h.max(8) - (1 << ydec);

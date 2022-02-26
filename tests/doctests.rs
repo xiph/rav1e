@@ -35,7 +35,7 @@ fn receive_packet() -> Result<(), Box<dyn std::error::Error>> {
       Ok(_packet) => { /* Mux the packet. */ }
       Err(EncoderStatus::Encoded) => (),
       Err(EncoderStatus::LimitReached) => break,
-      Err(err) => Err(err)?,
+      Err(err) => return Err(err.into()),
     }
   }
   Ok(())
