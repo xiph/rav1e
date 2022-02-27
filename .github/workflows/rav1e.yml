@@ -116,7 +116,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Add nasm
         env:
-          LINK: http://debian-archive.trafficmanager.net/debian/pool/main/n/nasm
+          LINK: https://mirror.cogentco.com/debian/pool/main/n/nasm
           NASM_VERSION: 2.15.05-1
           NASM_SHA256: >-
             c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
@@ -128,7 +128,7 @@ jobs:
           matrix.conf == '1.56.0-tests' || matrix.conf == 'aom-tests' ||
           matrix.conf == 'grcov-coveralls'
         env:
-          LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
+          LINK: https://mirror.cogentco.com/debian/pool/main/a/aom
           AOM3_VERSION: 3.3.0-1
           AOM_DEV_SHA256: >-
             046d6842bdb9b13abde9d4858df0d6d248ff2b69d4891338508977581f99af3a
@@ -144,7 +144,7 @@ jobs:
           matrix.conf == '1.56.0-tests' || matrix.conf == 'dav1d-tests' ||
           matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
         env:
-          LINK: http://debian-archive.trafficmanager.net/debian/pool/main/d/dav1d
+          LINK: https://mirror.cogentco.com/debian/pool/main/d/dav1d
           DAV1D_VERSION: 0.9.2-1+b1
           DAV1D_DEV_SHA256: >-
             a44e6981b36aeae428c7039495c7c2f9c11c49c00cebc7eb0d605f4cb9b472ca
