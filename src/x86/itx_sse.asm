@@ -5051,14 +5051,8 @@ cglobal idct_16x64_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
 .end1:
     LOAD_8ROWS   rsp+gprsize+16*35, 16
     lea                   dstq, [dstq+strideq*2]
-    add                    rsp, 16*32
-    lea                     r3, [o(.end2)]
-    jmp  m(idct_8x32_internal_8bpc).end
-
-.end2:
-    add                 coeffq, 16*32
-    sub                    rsp, 16*32
-
+    lea                     r3, [rsp+16*32+gprsize]
+    call .write
     mov                   dstq, [rsp+gprsize*2+16*67]
     mov                    r3d, [rsp+gprsize*3+16*67]
     lea                     r4, [dstq+8]
@@ -5067,6 +5061,36 @@ cglobal idct_16x64_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
 
     dec                    r3d
     jg .pass2_loop
+    ret
+.write:
+    mova             [r3+16*0], m7
+    mov                     r4, -16*32
+    pxor                    m7, m7
+    sub                 coeffq, r4
+.zero_loop:
+    mova      [coeffq+r4+16*0], m7
+    mova      [coeffq+r4+16*1], m7
+    add                     r4, 16*2
+    jl .zero_loop
+    call .write_main2
+    LOAD_8ROWS        r3+16*11, 16
+    call .write_main
+    LOAD_8ROWS        r3+16*19, 16
+    call .write_main
+    LOAD_8ROWS        r3+16*27, 16
+.write_main:
+    mova             [r3+16*0], m7
+.write_main2:
+    mova                    m7, [o(pw_2048)]
+    REPX      {pmulhrsw x, m7}, m0, m1, m2, m3, m4, m5, m6
+    pmulhrsw                m7, [r3+16*0]
+    mova             [r3+16*2], m5
+    mova             [r3+16*1], m6
+    mova             [r3+16*0], m7
+    WRITE_8X4                0, 1, 2, 3, 5, 6, 7
+    lea                   dstq, [dstq+strideq*2]
+    WRITE_8X4                4, [r3+16*2], [r3+16*1], [r3+16*0], 5, 6, 7
+    lea                   dstq, [dstq+strideq*2]
     ret
 
 
@@ -6486,15 +6510,9 @@ cglobal idct_64x64_internal_8bpc, 0, 0, 0, dst, stride, coeff, eob, tx2
 .pass2_end:
     LOAD_8ROWS   rsp+gprsize+16*35, 16
     lea                   dstq, [dstq+strideq*2]
-    add                    rsp, 16*32
+    lea                     r3, [rsp+16*32+gprsize]
     mova    [rsp+gprsize+16*0], m7
-    lea                     r3, [o(.pass2_end1)]
-    jmp  m(idct_8x32_internal_8bpc).end2
-
-.pass2_end1:
-    add                 coeffq, 16*32
-    sub                    rsp, 16*32
-
+    call m(idct_16x64_internal_8bpc).write
     mov                   dstq, [rsp+gprsize*2+16*67]
     mov                    r3d, [rsp+gprsize*3+16*67]
     lea                     r4, [dstq+8]
