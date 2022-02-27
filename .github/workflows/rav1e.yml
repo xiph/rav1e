@@ -129,11 +129,11 @@ jobs:
           matrix.conf == 'grcov-coveralls'
         env:
           LINK: http://debian-archive.trafficmanager.net/debian/pool/main/a/aom
-          AOM3_VERSION: 3.2.0-2
+          AOM3_VERSION: 3.3.0-1
           AOM_DEV_SHA256: >-
-            fcea17284e2d8fb4af2f999af2d341345949a8ac611de27d26cf54a7ba58a244
+            046d6842bdb9b13abde9d4858df0d6d248ff2b69d4891338508977581f99af3a
           AOM_LIB3_SHA256: >-
-            d639eb96abe6b56860bb35314b3a2bf984a7500dedda65e1ec498158ac97605c
+            0641c0f9d5bdc25a171297b58cdc39fb1d57fdff35683b854b55dde56c694ec7
         run: |
           echo "$LINK/libaom-dev_${AOM3_VERSION}_amd64.deb" >> DEBS
           echo "$LINK/libaom3_${AOM3_VERSION}_amd64.deb" >> DEBS
