@@ -49,7 +49,7 @@ For the foreseeable future, a weekly pre-release of rav1e will be [published](ht
 
 ### Toolchain: Rust
 
-rav1e currently requires Rust 1.56.0 or later to build.
+rav1e currently requires Rust 1.59.0 or later to build.
 
 ### Dependency: NASM
 Some `x86_64`-specific optimizations require [NASM](https://nasm.us/) `2.14.02` or newer and are enabled by default.
