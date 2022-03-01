@@ -16,30 +16,31 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+use std::arch::asm;
 use std::hint::unreachable_unchecked;
 use std::mem;
 
 /// SAFETY: src and dst must be the same length and less than 16 elements
 #[inline(always)]
-unsafe fn sad_below16_8bpc(src: &[u8], dst: &[u8]) -> i64 {
-  // we have a separate function for this so that the autovectorizer
-  // does not unroll the loop too much
-
+unsafe fn sad_scalar(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
     unreachable_unchecked()
   }
-  if src.len() >= 16 {
-    unreachable_unchecked()
-  }
-  if dst.len() >= 16 {
-    unreachable_unchecked()
+
+  let mut sum = 0;
+
+  for i in 0..src.len() {
+    // We use inline assembly here to force the compiler to not auto-vectorize the loop,
+    // since it is already vectorized manually.
+    asm!(
+      "add {sum}, {x}",
+      sum = out(reg) sum,
+      x = in(reg) (*src.get_unchecked(i) as i64 - *dst.get_unchecked(i) as i64).abs(),
+      options(nostack)
+    );
   }
 
-  src
-    .iter()
-    .zip(dst.iter())
-    .map(|(&p1, &p2)| (p1 as i16 - p2 as i16).abs() as i64)
-    .sum::<i64>()
+  sum
 }
 
 /// SAFETY: src and dst must be the same length and less than 32 elements
@@ -51,8 +52,8 @@ unsafe fn sad_below32_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
   }
 
   if src.len() >= 16 {
-    let src_u8x16 = _mm_loadu_si128(src.as_ptr() as *const _);
-    let dst_u8x16 = _mm_loadu_si128(dst.as_ptr() as *const _);
+    let src_u8x16 = _mm_load_si128(src.as_ptr() as *const _);
+    let dst_u8x16 = _mm_load_si128(dst.as_ptr() as *const _);
     let result = _mm_sad_epu8(src_u8x16, dst_u8x16);
     let mut sum = mem::transmute::<_, [i64; 2]>(result).iter().sum::<i64>();
 
@@ -62,12 +63,12 @@ unsafe fn sad_below32_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
     if remaining != 0 {
       let src_extra = src.get_unchecked(16..);
       let dst_extra = dst.get_unchecked(16..);
-      sum += sad_below16_8bpc(src_extra, dst_extra);
+      sum += sad_scalar(src_extra, dst_extra);
     }
 
     sum
   } else {
-    sad_below16_8bpc(src, dst)
+    sad_scalar(src, dst)
   }
 }
 
@@ -90,8 +91,8 @@ unsafe fn sad_8bpc_avx2(src: &[u8], dst: &[u8]) -> i64 {
     let main_sum = src_chunks
       .zip(dst_chunks)
       .map(|(src_chunk, dst_chunk)| {
-        let src = _mm256_loadu_si256(src_chunk.as_ptr() as *const _);
-        let dst = _mm256_loadu_si256(dst_chunk.as_ptr() as *const _);
+        let src = _mm256_load_si256(src_chunk.as_ptr() as *const _);
+        let dst = _mm256_load_si256(dst_chunk.as_ptr() as *const _);
 
         _mm256_sad_epu8(src, dst)
       })
@@ -123,13 +124,13 @@ unsafe fn sad_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
   let (src_rem, dst_rem) = (src_chunks.remainder(), dst_chunks.remainder());
 
   if src_chunks.len() == 0 {
-    sad_below16_8bpc(src_rem, dst_rem)
+    sad_scalar(src_rem, dst_rem)
   } else {
     let main_sum = src_chunks
       .zip(dst_chunks)
       .map(|(src_chunk, dst_chunk)| {
-        let src = _mm_loadu_si128(src_chunk.as_ptr() as *const _);
-        let dst = _mm_loadu_si128(dst_chunk.as_ptr() as *const _);
+        let src = _mm_load_si128(src_chunk.as_ptr() as *const _);
+        let dst = _mm_load_si128(dst_chunk.as_ptr() as *const _);
 
         _mm_sad_epu8(src, dst)
       })
@@ -140,7 +141,7 @@ unsafe fn sad_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
       mem::transmute::<_, [i64; 2]>(main_sum).iter().sum::<i64>();
 
     if !src_rem.is_empty() {
-      main_sum += sad_below16_8bpc(src_rem, dst_rem);
+      main_sum += sad_scalar(src_rem, dst_rem);
     }
 
     main_sum
