@@ -52,8 +52,8 @@ unsafe fn sad_below32_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
   }
 
   if src.len() >= 16 {
-    let src_u8x16 = _mm_loadu_si128(src.as_ptr() as *const _);
-    let dst_u8x16 = _mm_loadu_si128(dst.as_ptr() as *const _);
+    let src_u8x16 = _mm_load_si128(src.as_ptr() as *const _);
+    let dst_u8x16 = _mm_load_si128(dst.as_ptr() as *const _);
     let result = _mm_sad_epu8(src_u8x16, dst_u8x16);
     let mut sum = mem::transmute::<_, [i64; 2]>(result).iter().sum::<i64>();
 
@@ -91,8 +91,8 @@ unsafe fn sad_8bpc_avx2(src: &[u8], dst: &[u8]) -> i64 {
     let main_sum = src_chunks
       .zip(dst_chunks)
       .map(|(src_chunk, dst_chunk)| {
-        let src = _mm256_loadu_si256(src_chunk.as_ptr() as *const _);
-        let dst = _mm256_loadu_si256(dst_chunk.as_ptr() as *const _);
+        let src = _mm256_load_si256(src_chunk.as_ptr() as *const _);
+        let dst = _mm256_load_si256(dst_chunk.as_ptr() as *const _);
 
         _mm256_sad_epu8(src, dst)
       })
@@ -129,8 +129,8 @@ unsafe fn sad_8bpc_sse2(src: &[u8], dst: &[u8]) -> i64 {
     let main_sum = src_chunks
       .zip(dst_chunks)
       .map(|(src_chunk, dst_chunk)| {
-        let src = _mm_loadu_si128(src_chunk.as_ptr() as *const _);
-        let dst = _mm_loadu_si128(dst_chunk.as_ptr() as *const _);
+        let src = _mm_load_si128(src_chunk.as_ptr() as *const _);
+        let dst = _mm_load_si128(dst_chunk.as_ptr() as *const _);
 
         _mm_sad_epu8(src, dst)
       })
