@@ -51,7 +51,7 @@ use crate::rayon::iter::*;
 use rust_hawktracer::*;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CDEFSearchMethod {
   PickFromQ,
   FastSearch,
@@ -554,7 +554,6 @@ pub struct FrameInvariants<T: Pixel> {
   pub intra_only: bool,
   pub allow_high_precision_mv: bool,
   pub frame_type: FrameType,
-  pub show_existing_frame: bool,
   pub frame_to_show_map_idx: u32,
   pub use_reduced_tx_set: bool,
   pub reference_mode: ReferenceMode,
@@ -600,10 +599,23 @@ pub struct FrameInvariants<T: Pixel> {
   pub tx_mode_select: bool,
   pub enable_inter_txfm_split: bool,
   pub default_filter: FilterMode,
-  /// If true, this `FrameInvariants` corresponds to an invalid frame and
-  /// should be ignored. Invalid frames occur when a subgop is prematurely
-  /// ended, for example, by a key frame or the end of the video.
-  pub invalid: bool,
+  pub enable_segmentation: bool,
+  /// Target CPU feature level.
+  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
+
+  // These will be set if this is a coded (non-SEF) frame.
+  // We do not need them for SEFs.
+  pub coded_frame_data: Option<CodedFrameData<T>>,
+}
+
+/// These frame invariants are only used on coded frames, i.e. non-SEFs.
+/// They are stored separately to avoid useless allocations
+/// when we do not need them.
+///
+/// Currently this consists only of lookahaed data.
+/// This may change in the future.
+#[derive(Debug, Clone)]
+pub struct CodedFrameData<T: Pixel> {
   /// Motion vectors to the _original_ reference frames (not reconstructed).
   /// Used for lookahead purposes.
   ///
@@ -630,11 +642,37 @@ pub struct FrameInvariants<T: Pixel> {
   pub distortion_scales: Box<[DistortionScale]>,
   /// Pre-computed activity_scale.
   pub activity_scales: Box<[DistortionScale]>,
-
-  /// Target CPU feature level.
-  pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
   pub activity_mask: ActivityMask,
-  pub enable_segmentation: bool,
+}
+
+impl<T: Pixel> CodedFrameData<T> {
+  pub fn new(fi: &FrameInvariants<T>) -> CodedFrameData<T> {
+    // Width and height are padded to 8×8 block size.
+    let w_in_imp_b = fi.w_in_b / 2;
+    let h_in_imp_b = fi.h_in_b / 2;
+
+    CodedFrameData {
+      lookahead_me_stats: None,
+      lookahead_rec_buffer: ReferenceFramesSet::new(),
+      w_in_imp_b,
+      h_in_imp_b,
+      // This is never used before it is assigned
+      lookahead_intra_costs: Box::new([]),
+      // dynamic allocation: once per frame
+      block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
+      distortion_scales: vec![
+        DistortionScale::default();
+        w_in_imp_b * h_in_imp_b
+      ]
+      .into_boxed_slice(),
+      activity_scales: vec![
+        DistortionScale::default();
+        w_in_imp_b * h_in_imp_b
+      ]
+      .into_boxed_slice(),
+      activity_mask: Default::default(),
+    }
+  }
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -672,10 +710,6 @@ impl<T: Pixel> FrameInvariants<T> {
     let w_in_b = 2 * config.width.align_power_of_two_and_shift(3); // MiCols, ((width+7)/8)<<3 >> MI_SIZE_LOG2
     let h_in_b = 2 * config.height.align_power_of_two_and_shift(3); // MiRows, ((height+7)/8)<<3 >> MI_SIZE_LOG2
 
-    // Width and height are padded to 8×8 block size.
-    let w_in_imp_b = w_in_b / 2;
-    let h_in_imp_b = h_in_b / 2;
-
     Self {
       width,
       height,
@@ -695,7 +729,6 @@ impl<T: Pixel> FrameInvariants<T> {
       intra_only: true,
       allow_high_precision_mv: false,
       frame_type: FrameType::KEY,
-      show_existing_frame: false,
       frame_to_show_map_idx: 0,
       use_reduced_tx_set,
       reference_mode: ReferenceMode::SINGLE,
@@ -757,27 +790,7 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_early_exit: true,
       tx_mode_select: false,
       default_filter: FilterMode::REGULAR,
-      invalid: false,
-      lookahead_me_stats: None,
-      lookahead_rec_buffer: ReferenceFramesSet::new(),
-      w_in_imp_b,
-      h_in_imp_b,
-      // This is never used before it is assigned
-      lookahead_intra_costs: Box::new([]),
-      // dynamic allocation: once per frame
-      block_importances: vec![0.; w_in_imp_b * h_in_imp_b].into_boxed_slice(),
-      distortion_scales: vec![
-        DistortionScale::default();
-        w_in_imp_b * h_in_imp_b
-      ]
-      .into_boxed_slice(),
-      activity_scales: vec![
-        DistortionScale::default();
-        w_in_imp_b * h_in_imp_b
-      ]
-      .into_boxed_slice(),
       cpu_feature_level: Default::default(),
-      activity_mask: Default::default(),
       enable_segmentation: config.speed_settings.segmentation
         != SegmentationLevel::Disabled,
       enable_inter_txfm_split: config
@@ -786,6 +799,7 @@ impl<T: Pixel> FrameInvariants<T> {
         .enable_inter_tx_split,
       sequence,
       config,
+      coded_frame_data: None,
     }
   }
 
@@ -797,37 +811,41 @@ impl<T: Pixel> FrameInvariants<T> {
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;
+    fi.coded_frame_data = Some(CodedFrameData::new(&fi));
     fi
   }
 
-  /// Returns the created FrameInvariants along with a bool indicating success.
-  /// This interface provides simpler usage, because we always need the produced
-  /// FrameInvariants regardless of success or failure.
+  /// Returns the created FrameInvariants, or `None` if this should be
+  /// a placeholder frame.
   pub(crate) fn new_inter_frame(
-    previous_fi: &Self, inter_cfg: &InterConfig, gop_input_frameno_start: u64,
-    output_frameno_in_gop: u64, next_keyframe_input_frameno: u64,
-    error_resilient: bool,
-  ) -> Self {
-    let mut fi = previous_fi.clone();
+    previous_coded_fi: &Self, inter_cfg: &InterConfig,
+    gop_input_frameno_start: u64, output_frameno_in_gop: u64,
+    next_keyframe_input_frameno: u64, error_resilient: bool,
+  ) -> Option<Self> {
+    let input_frameno = inter_cfg
+      .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
+    if input_frameno >= next_keyframe_input_frameno {
+      // This is an invalid frame. We set it as a placeholder in the FI list.
+      return None;
+    }
+
+    // We have this special thin clone method to avoid cloning the
+    // quite large lookahead data for SEFs, when it is not needed.
+    let mut fi = previous_coded_fi.clone_without_coded_data();
     fi.intra_only = false;
     fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
     fi.idx_in_group_output =
       inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
     fi.tx_mode_select = fi.enable_inter_txfm_split;
 
+    let show_existing_frame =
+      inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
+    if !show_existing_frame {
+      fi.coded_frame_data = previous_coded_fi.coded_frame_data.clone();
+    }
+
     fi.order_hint =
       inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
-    let input_frameno = inter_cfg
-      .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
-    if input_frameno >= next_keyframe_input_frameno {
-      fi.frame_type = FrameType::INTER;
-      fi.show_existing_frame = false;
-      fi.show_frame = false;
-      fi.invalid = true;
-      return fi;
-    } else {
-      fi.invalid = false;
-    }
 
     fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
 
@@ -860,12 +878,10 @@ impl<T: Pixel> FrameInvariants<T> {
     // this is the slot that the current frame is going to be saved into
     let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
     fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
-    fi.show_existing_frame =
-      inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
     fi.frame_to_show_map_idx = slot_idx;
     fi.refresh_frame_flags = if fi.frame_type == FrameType::SWITCH {
       ALL_REF_FRAMES_MASK
-    } else if fi.show_existing_frame {
+    } else if fi.is_show_existing_frame() {
       0
     } else {
       1 << slot_idx
@@ -938,7 +954,84 @@ impl<T: Pixel> FrameInvariants<T> {
     };
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
-    fi
+
+    Some(fi)
+  }
+
+  pub fn is_show_existing_frame(&self) -> bool {
+    self.coded_frame_data.is_none()
+  }
+
+  pub fn clone_without_coded_data(&self) -> Self {
+    Self {
+      coded_frame_data: None,
+
+      sequence: self.sequence.clone(),
+      config: self.config.clone(),
+      width: self.width,
+      height: self.height,
+      render_width: self.render_width,
+      render_height: self.render_height,
+      frame_size_override_flag: self.frame_size_override_flag,
+      render_and_frame_size_different: self.render_and_frame_size_different,
+      sb_width: self.sb_width,
+      sb_height: self.sb_height,
+      w_in_b: self.w_in_b,
+      h_in_b: self.h_in_b,
+      input_frameno: self.input_frameno,
+      order_hint: self.order_hint,
+      show_frame: self.show_frame,
+      showable_frame: self.showable_frame,
+      error_resilient: self.error_resilient,
+      intra_only: self.intra_only,
+      allow_high_precision_mv: self.allow_high_precision_mv,
+      frame_type: self.frame_type,
+      frame_to_show_map_idx: self.frame_to_show_map_idx,
+      use_reduced_tx_set: self.use_reduced_tx_set,
+      reference_mode: self.reference_mode,
+      use_prev_frame_mvs: self.use_prev_frame_mvs,
+      partition_range: self.partition_range,
+      globalmv_transformation_type: self.globalmv_transformation_type,
+      num_tg: self.num_tg,
+      large_scale_tile: self.large_scale_tile,
+      disable_cdf_update: self.disable_cdf_update,
+      allow_screen_content_tools: self.allow_screen_content_tools,
+      force_integer_mv: self.force_integer_mv,
+      primary_ref_frame: self.primary_ref_frame,
+      refresh_frame_flags: self.refresh_frame_flags,
+      allow_intrabc: self.allow_intrabc,
+      use_ref_frame_mvs: self.use_ref_frame_mvs,
+      is_filter_switchable: self.is_filter_switchable,
+      is_motion_mode_switchable: self.is_motion_mode_switchable,
+      disable_frame_end_update_cdf: self.disable_frame_end_update_cdf,
+      allow_warped_motion: self.allow_warped_motion,
+      cdef_search_method: self.cdef_search_method,
+      cdef_damping: self.cdef_damping,
+      cdef_bits: self.cdef_bits,
+      cdef_y_strengths: self.cdef_y_strengths,
+      cdef_uv_strengths: self.cdef_uv_strengths,
+      delta_q_present: self.delta_q_present,
+      ref_frames: self.ref_frames,
+      ref_frame_sign_bias: self.ref_frame_sign_bias,
+      rec_buffer: self.rec_buffer.clone(),
+      base_q_idx: self.base_q_idx,
+      dc_delta_q: self.dc_delta_q,
+      ac_delta_q: self.ac_delta_q,
+      lambda: self.lambda,
+      me_lambda: self.me_lambda,
+      dist_scale: self.dist_scale,
+      me_range_scale: self.me_range_scale,
+      use_tx_domain_distortion: self.use_tx_domain_distortion,
+      use_tx_domain_rate: self.use_tx_domain_rate,
+      idx_in_group_output: self.idx_in_group_output,
+      pyramid_level: self.pyramid_level,
+      enable_early_exit: self.enable_early_exit,
+      tx_mode_select: self.tx_mode_select,
+      enable_inter_txfm_split: self.enable_inter_txfm_split,
+      default_filter: self.default_filter,
+      enable_segmentation: self.enable_segmentation,
+      cpu_feature_level: self.cpu_feature_level,
+    }
   }
 
   pub fn set_ref_frame_sign_bias(&mut self) {
@@ -3435,7 +3528,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 pub fn encode_show_existing_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  debug_assert!(fi.show_existing_frame);
+  debug_assert!(fi.is_show_existing_frame());
   let obu_extension = 0;
 
   let mut packet = Vec::new();
@@ -3498,8 +3591,7 @@ fn get_initial_segmentation<T: Pixel>(
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
-  debug_assert!(!fi.show_existing_frame);
-  debug_assert!(!fi.invalid);
+  debug_assert!(!fi.is_show_existing_frame());
   let obu_extension = 0;
 
   let mut packet = Vec::new();

@@ -437,8 +437,6 @@ pub unsafe extern fn rav1e_config_default() -> *mut Config {
 unsafe fn decode_slice<'a>(
   data: *mut *const u8, len: *mut size_t,
 ) -> (c_int, Option<&'a [u8]>) {
-  use std::convert::TryInto;
-
   if *len < 8 {
     return (8, None);
   }

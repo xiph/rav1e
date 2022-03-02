@@ -446,7 +446,8 @@ pub fn distortion_scale<T: Pixel>(
   let x = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
   let y = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
 
-  fi.distortion_scales[y * fi.w_in_imp_b + x]
+  let coded_data = fi.coded_frame_data.as_ref().unwrap();
+  coded_data.distortion_scales[y * coded_data.w_in_imp_b + x]
 }
 
 pub fn spatiotemporal_scale<T: Pixel>(
@@ -456,10 +457,12 @@ pub fn spatiotemporal_scale<T: Pixel>(
     return DistortionScale::default();
   }
 
+  let coded_data = fi.coded_frame_data.as_ref().unwrap();
+
   let x0 = frame_bo.0.x >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
   let y0 = frame_bo.0.y >> IMPORTANCE_BLOCK_TO_BLOCK_SHIFT;
-  let x1 = (x0 + bsize.width_imp_b()).min(fi.w_in_imp_b);
-  let y1 = (y0 + bsize.height_imp_b()).min(fi.h_in_imp_b);
+  let x1 = (x0 + bsize.width_imp_b()).min(coded_data.w_in_imp_b);
+  let y1 = (y0 + bsize.height_imp_b()).min(coded_data.h_in_imp_b);
   let den = (((x1 - x0) * (y1 - y0)) as u64) << DistortionScale::SHIFT;
 
   // calling this on each slice individually improves autovectorization
@@ -476,13 +479,13 @@ pub fn spatiotemporal_scale<T: Pixel>(
   let mut sum = 0;
   for y in y0..y1 {
     sum += take_slice(
-      &fi.distortion_scales[y * fi.w_in_imp_b..][x0..x1],
+      &coded_data.distortion_scales[y * coded_data.w_in_imp_b..][x0..x1],
       MAX_SB_IN_IMP_B,
     )
     .iter()
     .zip(
       take_slice(
-        &fi.activity_scales[y * fi.w_in_imp_b..][x0..x1],
+        &coded_data.activity_scales[y * coded_data.w_in_imp_b..][x0..x1],
         MAX_SB_IN_IMP_B,
       )
       .iter(),
