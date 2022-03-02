@@ -318,28 +318,28 @@ fn output_frameno_low_latency_minus(missing: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (1, true), // P-frame
-          (2, true), // P-frame
-          (3, true), // P-frame
-          (4, true), // P-frame
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
-          (6, true), // P-frame
-          (7, true), // P-frame
-          (8, true), // P-frame
-          (9, true), // P-frame
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       1 => {
         &[
           (0, true), // I-frame
-          (1, true), // P-frame
-          (2, true), // P-frame
-          (3, true), // P-frame
-          (4, true), // P-frame
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
-          (6, true), // P-frame
-          (7, true), // P-frame
-          (8, true), // P-frame
+          (6, true),
+          (7, true),
+          (8, true),
         ][..]
       }
       _ => unreachable!(),
@@ -499,84 +499,84 @@ fn output_frameno_reorder_minus(missing: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
-          (9, true), // P-frame
-          (7, true), // B0-frame
-          (6, true), // B1-frame (first)
-          (7, true), // B0-frame (show existing)
-          (8, true), // B1-frame (second)
-          (9, true), // P-frame (show existing)
+          (9, true),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (8, true),  // B1-frame (second)
-          (8, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (8, false),
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (7, false), // 2nd last (missing)
-          (7, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (7, true),
+          (6, true),
+          (7, true),
+          (7, false),
+          (7, false),
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (5, false), // 3rd last (missing)
-          (6, true),  // B1-frame (first)
-          (6, false), // 3rd last (missing)
-          (6, false), // 2nd last (missing)
-          (6, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (5, false),
+          (6, true),
+          (6, false),
+          (6, false),
+          (6, false),
         ][..]
       }
       4 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
         ][..]
       }
@@ -628,85 +628,35 @@ fn pyramid_level_reorder_minus(missing: u64) {
       0 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
+          0, 1, 2, 1, 2, 0, 0, // I-frame
+          0, 1, 2, 1, 2, 0,
         ][..]
       }
       1 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          2, // Last frame (missing)
+          0, 1, 2, 1, 2, 0, 0, // I-frame
+          0, 1, 2, 1, 2, 2,
         ][..]
       }
       2 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          1, // 2nd last (missing)
-          1, // Last frame (missing)
+          0, 1, 2, 1, 2, 0, 0, // I-frame
+          0, 1, 2, 1, 1, 1,
         ][..]
       }
       3 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
-          0, // Last frame (missing)
-          0, // 3rd last (missing)
-          2, // B1-frame (first)
-          2, // 3rd last (missing)
-          2, // 2nd last (missing)
-          2, // Last frame (missing)
+          0, 1, 2, 1, 2, 0, 0, // I-frame
+          0, 0, 2, 2, 2, 2,
         ][..]
       }
       4 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
-          0, // I-frame
+          0, 1, 2, 1, 2, 0, 0, // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -750,7 +700,6 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
   // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno < 5)
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -759,62 +708,107 @@ fn output_frameno_reorder_scene_change_at(scene_change_at: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (9, true),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       1 => {
         &[
           (0, true), // I-frame
           (1, true), // I-frame
-          (3, true), // B0-frame
-          (2, true), // B1-frame (first)
-          (3, true), // B0-frame (show existing)
-          (4, true), // B1-frame (second)
+          (5, true),
+          (3, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (6, false),
+          (8, true),
+          (7, true),
+          (8, true),
+          (9, true),
+          (9, false),
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
+          (0, true), // I-frame
+          (0, false),
+          (0, false),
+          (1, true),
+          (1, false),
+          (1, false),
+          (1, false),
+          (2, true), // I-frame
+          (6, true),
+          (4, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (7, false),
+          (9, true),
+          (8, true),
+          (9, true),
+          (9, false),
+          (9, false),
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (4, true),  // B1-frame (first)
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (2, false),
+          (2, false),
+          (3, true), // I-frame
+          (7, true),
+          (5, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (8, false),
+          (8, false),
+          (9, true),
+          (9, false),
+          (9, false),
+          (9, false),
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (3, false),
+          (4, true), // I-frame
+          (8, true),
+          (6, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       _ => unreachable!(),
@@ -856,10 +850,8 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
   ctx.flush();
 
   // data[output_frameno] = pyramid_level
-  let data = get_frame_invariants(ctx)
-    .filter(|fi| fi.input_frameno < 5)
-    .map(|fi| fi.pyramid_level)
-    .collect::<Vec<_>>();
+  let data =
+    get_frame_invariants(ctx).map(|fi| fi.pyramid_level).collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
@@ -867,62 +859,35 @@ fn pyramid_level_reorder_scene_change_at(scene_change_at: u64) {
       0 => {
         &[
           0, // I-frame
-          0, // P-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          0, // P-frame (show existing)
+          0, 1, 2, 1, 2, 0, 0, 0, 1, 2, 1, 2, 0,
         ][..]
       }
       1 => {
         &[
           0, // I-frame
           0, // I-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
+          0, 1, 2, 1, 2, 0, 0, 0, 1, 2, 1, 2, 2,
         ][..]
       }
       2 => {
         &[
           0, // I-frame
-          0, // Missing
-          0, // Missing
-          2, // B1-frame (first)
-          2, // Missing
-          2, // Missing
-          2, // Missing
-          0, // I-frame
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
+          0, 0, 2, 2, 2, 2, 0, // I-frame
+          0, 1, 2, 1, 2, 0, 0, 0, 1, 2, 1, 1, 1,
         ][..]
       }
       3 => {
         &[
           0, // I-frame
-          0, // Missing
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          1, // Missing
-          1, // Missing
-          0, // I-frame
-          2, // B1-frame (first)
+          0, 1, 2, 1, 1, 1, 0, // I-frame
+          0, 1, 2, 1, 2, 0, 0, 0, 0, 2, 2, 2, 2,
         ][..]
       }
       4 => {
         &[
           0, // I-frame
-          0, // Missing
-          1, // B0-frame
-          2, // B1-frame (first)
-          1, // B0-frame (show existing)
-          2, // B1-frame (second)
-          2, // Missing
-          0, // I-frame
+          0, 1, 2, 1, 2, 2, 0, // I-frame
+          0, 1, 2, 1, 2, 0, 0,
         ][..]
       }
       _ => unreachable!(),
@@ -976,84 +941,84 @@ fn output_frameno_incremental_reorder_minus(missing: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
-          (9, true), // P-frame
-          (7, true), // B0-frame
-          (6, true), // B1-frame (first)
-          (7, true), // B0-frame (show existing)
-          (8, true), // B1-frame (second)
-          (9, true), // P-frame (show existing)
+          (9, true),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (8, true),  // B1-frame (second)
-          (8, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (8, false),
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (7, true),  // B0-frame
-          (6, true),  // B1-frame (first)
-          (7, true),  // B0-frame (show existing)
-          (7, false), // 2nd last (missing)
-          (7, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (7, true),
+          (6, true),
+          (7, true),
+          (7, false),
+          (7, false),
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (4, true),  // P-frame
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (4, true),  // P-frame (show existing)
-          (5, true),  // I-frame
-          (5, false), // Last frame (missing)
-          (5, false), // 3rd last (missing)
-          (6, true),  // B1-frame (first)
-          (6, false), // 3rd last (missing)
-          (6, false), // 2nd last (missing)
-          (6, false), // Last frame (missing)
+          (0, true), // I-frame
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true), // I-frame
+          (5, false),
+          (5, false),
+          (6, true),
+          (6, false),
+          (6, false),
+          (6, false),
         ][..]
       }
       4 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
           (5, true), // I-frame
         ][..]
       }
@@ -1100,7 +1065,6 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
   // data[output_frameno] = (input_frameno, !invalid)
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno < 5)
     .collect::<Vec<_>>();
 
   assert_eq!(
@@ -1109,62 +1073,107 @@ fn output_frameno_incremental_reorder_scene_change_at(scene_change_at: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (9, true),
+          (7, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       1 => {
         &[
           (0, true), // I-frame
           (1, true), // I-frame
-          (3, true), // B0-frame
-          (2, true), // B1-frame (first)
-          (3, true), // B0-frame (show existing)
-          (4, true), // B1-frame (second)
+          (5, true),
+          (3, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (6, false),
+          (8, true),
+          (7, true),
+          (8, true),
+          (9, true),
+          (9, false),
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
+          (0, true), // I-frame
+          (0, false),
+          (0, false),
+          (1, true),
+          (1, false),
+          (1, false),
+          (1, false),
+          (2, true), // I-frame
+          (6, true),
+          (4, true),
+          (3, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (7, false),
+          (9, true),
+          (8, true),
+          (9, true),
+          (9, false),
+          (9, false),
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (4, true),  // B1-frame (first)
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (2, false),
+          (2, false),
+          (3, true), // I-frame
+          (7, true),
+          (5, true),
+          (4, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (8, false),
+          (8, false),
+          (9, true),
+          (9, false),
+          (9, false),
+          (9, false),
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (3, false),
+          (4, true), // I-frame
+          (8, true),
+          (6, true),
+          (5, true),
+          (6, true),
+          (7, true),
+          (8, true),
+          (9, true),
         ][..]
       }
       _ => unreachable!(),
@@ -1267,72 +1276,72 @@ fn output_frameno_incremental_reorder_keyframe_at(kf_at: u64) {
       0 => {
         &[
           (0, true), // I-frame
-          (4, true), // P-frame
-          (2, true), // B0-frame
-          (1, true), // B1-frame (first)
-          (2, true), // B0-frame (show existing)
-          (3, true), // B1-frame (second)
-          (4, true), // P-frame (show existing)
+          (4, true),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (4, true),
         ][..]
       }
       1 => {
         &[
-          (0, true),  // I-frame
-          (1, true),  // I-frame
-          (1, false), // Missing
-          (3, true),  // B0-frame
-          (2, true),  // B1-frame (first)
-          (3, true),  // B0-frame (show existing)
-          (4, true),  // B1-frame (second)
-          (4, false), // Missing
+          (0, true), // I-frame
+          (1, true), // I-frame
+          (1, false),
+          (3, true),
+          (2, true),
+          (3, true),
+          (4, true),
+          (4, false),
         ][..]
       }
       2 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (0, false), // Missing
-          (1, true),  // B1-frame (first)
-          (1, false), // Missing
-          (1, false), // Missing
-          (1, false), // Missing
-          (2, true),  // I-frame
-          (2, false), // Missing
-          (4, true),  // B0-frame
-          (3, true),  // B1-frame (first)
-          (4, true),  // B0-frame (show existing)
-          (4, false), // Missing
-          (4, false), // Missing
+          (0, true), // I-frame
+          (0, false),
+          (0, false),
+          (1, true),
+          (1, false),
+          (1, false),
+          (1, false),
+          (2, true), // I-frame
+          (2, false),
+          (4, true),
+          (3, true),
+          (4, true),
+          (4, false),
+          (4, false),
         ][..]
       }
       3 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (2, false), // Missing
-          (2, false), // Missing
-          (3, true),  // I-frame
-          (3, false), // Missing
-          (3, false), // Missing
-          (4, true),  // B1-frame (first)
-          (4, false), // Missing
-          (4, false), // Missing
-          (4, false), // Missing
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (2, false),
+          (2, false),
+          (3, true), // I-frame
+          (3, false),
+          (3, false),
+          (4, true),
+          (4, false),
+          (4, false),
+          (4, false),
         ][..]
       }
       4 => {
         &[
-          (0, true),  // I-frame
-          (0, false), // Missing
-          (2, true),  // B0-frame
-          (1, true),  // B1-frame (first)
-          (2, true),  // B0-frame (show existing)
-          (3, true),  // B1-frame (second)
-          (3, false), // Missing
-          (4, true),  // I-frame
+          (0, true), // I-frame
+          (0, false),
+          (2, true),
+          (1, true),
+          (2, true),
+          (3, true),
+          (3, false),
+          (4, true), // I-frame
         ][..]
       }
       _ => unreachable!(),
@@ -1385,12 +1394,12 @@ fn output_frameno_no_scene_change_at_short_flash(flash_at: u64) {
     &data[..],
     &[
       (0, true), // I-frame
-      (4, true), // P-frame
-      (2, true), // B0-frame
-      (1, true), // B1-frame (first)
-      (2, true), // B0-frame (show existing)
-      (3, true), // B1-frame (second)
-      (4, true), // P-frame (show existing)
+      (4, true),
+      (2, true),
+      (1, true),
+      (2, true),
+      (3, true),
+      (4, true),
     ]
   );
 }
@@ -1438,19 +1447,19 @@ fn output_frameno_no_scene_change_at_flash_smaller_than_max_len_flash() {
   assert_eq!(
     &data[..],
     &[
-      (0, true),  // I-frame
-      (4, true),  // P-frame
-      (2, true),  // B0-frame
-      (1, true),  // B1-frame (first)
-      (2, true),  // B0-frame (show existing)
-      (3, true),  // B1-frame (second)
-      (4, true),  // P-frame (show existing)
-      (4, false), // invalid
-      (6, true),  // B0-frame
-      (5, true),  // B1-frame (first)
-      (6, true),  // B0-frame (show existing)
-      (7, true),  // B1-frame (second)
-      (7, false), // invalid
+      (0, true), // I-frame
+      (4, true),
+      (2, true),
+      (1, true),
+      (2, true),
+      (3, true),
+      (4, true),
+      (4, false),
+      (6, true),
+      (5, true),
+      (6, true),
+      (7, true),
+      (7, false),
     ]
   );
 }
@@ -1497,27 +1506,37 @@ fn output_frameno_scene_change_before_flash_longer_than_max_flash_len() {
 
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno <= 7)
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
-      (0, true),  // I-frame
-      (0, false), // invalid
-      (0, false), // invalid
-      (1, true),  // B1-frame (first)
-      (1, false), // invalid
-      (1, false), // invalid
-      (1, false), // invalid
-      (2, true),  // I-frame
-      (6, true),  // P-frame
-      (4, true),  // B0-frame
-      (3, true),  // B1-frame (first)
-      (4, true),  // B0-frame (show existing)
-      (5, true),  // B1-frame (second)
-      (6, true),  // P-frame (show existing)
-      (7, true),  // I-frame
+      (0, true), // I-frame
+      (0, false),
+      (0, false),
+      (1, true),
+      (1, false),
+      (1, false),
+      (1, false),
+      (2, true), // I-frame
+      (6, true),
+      (4, true),
+      (3, true),
+      (4, true),
+      (5, true),
+      (6, true),
+      (10, true),
+      (8, true),
+      (7, true),
+      (8, true),
+      (9, true),
+      (10, true),
+      (10, false),
+      (10, false),
+      (11, true),
+      (11, false),
+      (11, false),
+      (11, false),
     ]
   );
 }
@@ -1562,23 +1581,31 @@ fn output_frameno_scene_change_after_multiple_flashes() {
 
   let data = get_frame_invariants(ctx)
     .map(|fi| (fi.input_frameno, !fi.invalid))
-    .filter(|&(frameno, _)| frameno <= 7)
     .collect::<Vec<_>>();
 
   assert_eq!(
     &data[..],
     &[
       (0, true), // I-frame
-      (4, true), // P-frame
-      (2, true), // B0-frame
-      (1, true), // B1-frame (first)
-      (2, true), // B0-frame (show existing)
-      (3, true), // B1-frame (second)
-      (4, true), // P-frame (show existing),
-      (5, true), // P-frame
-      (7, true), // B0-frame
-      (6, true), // B1-frame (first)
-      (7, true), // B0-frame (show existing)
+      (4, true),
+      (2, true),
+      (1, true),
+      (2, true),
+      (3, true),
+      (4, true),
+      (5, true),
+      (9, true),
+      (7, true),
+      (6, true),
+      (7, true),
+      (8, true),
+      (9, true),
+      (9, false),
+      (9, false),
+      (10, true),
+      (10, false),
+      (10, false),
+      (10, false),
     ]
   );
 }
