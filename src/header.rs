@@ -445,14 +445,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     inter_cfg: &InterConfig,
   ) -> io::Result<()> {
     if fi.sequence.reduced_still_picture_hdr {
-      assert!(!fi.show_existing_frame);
+      assert!(!fi.is_show_existing_frame());
       assert!(fi.frame_type == FrameType::KEY);
       assert!(fi.show_frame);
       assert!(!fi.showable_frame);
     } else {
-      self.write_bit(fi.show_existing_frame)?;
+      self.write_bit(fi.is_show_existing_frame())?;
 
-      if fi.show_existing_frame {
+      if fi.is_show_existing_frame() {
         self.write(3, fi.frame_to_show_map_idx)?;
 
         //TODO:
