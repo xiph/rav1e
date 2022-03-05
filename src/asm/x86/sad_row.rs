@@ -20,7 +20,7 @@ use std::arch::asm;
 use std::hint::unreachable_unchecked;
 use std::mem;
 
-/// SAFETY: src and dst must be the same length and less than 16 elements
+/// SAFETY: src and dst must be the same length
 #[inline(always)]
 unsafe fn sad_scalar(src: &[u8], dst: &[u8]) -> i64 {
   if src.len() != dst.len() {
