@@ -35,7 +35,9 @@ fn receive_packet() -> Result<(), Box<dyn std::error::Error>> {
       Ok(_packet) => { /* Mux the packet. */ }
       Err(EncoderStatus::Encoded) => (),
       Err(EncoderStatus::LimitReached) => break,
-      Err(err) => Err(err)?,
+      Err(err) => {
+        return Err(err.into());
+      }
     }
   }
   Ok(())
@@ -90,10 +92,12 @@ fn encode_frames(
 
 #[test]
 fn encoding() -> Result<(), Box<dyn std::error::Error>> {
-  let mut enc = EncoderConfig::default();
-  // So it runs faster.
-  enc.width = 16;
-  enc.height = 16;
+  let enc = EncoderConfig {
+    // So it runs faster.
+    width: 16,
+    height: 16,
+    ..Default::default()
+  };
   let cfg = Config::new().with_encoder_config(enc);
   let mut ctx: Context<u8> = cfg.new_context()?;
 

@@ -1080,12 +1080,12 @@ mod test {
 
     let mut r = Reader::new(&b);
 
-    assert_eq!(r.bool(1), false);
-    assert_eq!(r.bool(2), true);
-    assert_eq!(r.bool(3), false);
-    assert_eq!(r.bool(1), true);
-    assert_eq!(r.bool(2), true);
-    assert_eq!(r.bool(3), false);
+    assert!(!r.bool(1));
+    assert!(r.bool(2));
+    assert!(!r.bool(3));
+    assert!(r.bool(1));
+    assert!(r.bool(2));
+    assert!(!r.bool(3));
   }
 
   #[test]
@@ -1145,15 +1145,15 @@ mod test {
     let mut r = Reader::new(&b);
 
     assert_eq!(r.symbol(&cdf), 0);
-    assert_eq!(r.bool(2), true);
+    assert!(r.bool(2));
     assert_eq!(r.symbol(&cdf), 0);
-    assert_eq!(r.bool(2), true);
+    assert!(r.bool(2));
     assert_eq!(r.symbol(&cdf), 0);
-    assert_eq!(r.bool(2), true);
+    assert!(r.bool(2));
     assert_eq!(r.symbol(&cdf), 1);
-    assert_eq!(r.bool(1), true);
+    assert!(r.bool(1));
     assert_eq!(r.symbol(&cdf), 1);
-    assert_eq!(r.bool(2), false);
+    assert!(!r.bool(2));
     assert_eq!(r.symbol(&cdf), 1);
     assert_eq!(r.symbol(&cdf), 2);
     assert_eq!(r.symbol(&cdf), 2);

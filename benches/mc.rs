@@ -1,3 +1,5 @@
+#![allow(clippy::unit_arg)]
+
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
