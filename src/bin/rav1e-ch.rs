@@ -16,15 +16,18 @@
 #![allow(clippy::verbose_bit_mask)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::many_single_char_names)]
-#![warn(clippy::expl_impl_clone_on_copy)]
+// Performance lints
 #![warn(clippy::linkedlist)]
-#![warn(clippy::map_flatten)]
-#![warn(clippy::mem_forget)]
-#![warn(clippy::mut_mut)]
 #![warn(clippy::mutex_integer)]
+// Correctness lints
+#![warn(clippy::expl_impl_clone_on_copy)]
+#![warn(clippy::mem_forget)]
+#![warn(clippy::path_buf_push_overwrite)]
+// Clarity/formatting lints
+#![warn(clippy::map_flatten)]
+#![warn(clippy::mut_mut)]
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
-#![warn(clippy::path_buf_push_overwrite)]
 #![warn(clippy::range_plus_one)]
 
 #[macro_use]
