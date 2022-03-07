@@ -134,7 +134,7 @@ pub fn intra_bench<T: Pixel>(
   b: &mut Bencher, mode: PredictionMode, variant: PredictionVariant,
 ) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = Aligned::uninitialized();
+  let mut edge_buf = unsafe { Aligned::uninitialized() };
   let (mut block, ac) = generate_block::<T>(&mut rng, &mut edge_buf);
   let cpu = CpuFeatureLevel::default();
   let bitdepth = match T::type_enum() {

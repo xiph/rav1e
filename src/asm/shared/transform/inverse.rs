@@ -26,7 +26,9 @@ pub fn call_inverse_func<T: Pixel>(
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
-  let mut copied: Aligned<[T::Coeff; 32 * 32]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut copied: Aligned<[T::Coeff; 32 * 32]> =
+    unsafe { Aligned::uninitialized() };
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
@@ -35,6 +37,7 @@ pub fn call_inverse_func<T: Pixel>(
   }
 
   // perform the inverse transform
+  // SAFETY: Calls Assembly code.
   unsafe {
     func(
       output.data_ptr_mut() as *mut _,
@@ -55,7 +58,9 @@ pub fn call_inverse_hbd_func<T: Pixel>(
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
-  let mut copied: Aligned<[T::Coeff; 32 * 32]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut copied: Aligned<[T::Coeff; 32 * 32]> =
+    unsafe { Aligned::uninitialized() };
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
@@ -64,6 +69,7 @@ pub fn call_inverse_hbd_func<T: Pixel>(
   }
 
   // perform the inverse transform
+  // SAFETY: Calls Assembly code.
   unsafe {
     func(
       output.data_ptr_mut() as *mut _,
@@ -142,9 +148,13 @@ pub mod test {
       let src = &mut src_storage[..tx_size.area()];
       let mut dst =
         Plane::from_slice(&vec![0u8; tx_size.area()], tx_size.width());
-      let mut res_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+      // SAFETY: We write to the array below before reading from it.
+      let mut res_storage: Aligned<[i16; 64 * 64]> =
+        unsafe { Aligned::uninitialized() };
       let res = &mut res_storage.data[..tx_size.area()];
-      let mut freq_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+      // SAFETY: We write to the array below before reading from it.
+      let mut freq_storage: Aligned<[i16; 64 * 64]> =
+        unsafe { Aligned::uninitialized() };
       let freq = &mut freq_storage.data[..tx_size.area()];
       for ((r, s), d) in
         res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())

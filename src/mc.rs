@@ -277,6 +277,8 @@ pub(crate) mod rust {
           for c in 0..width {
             dst_slice[c] = T::cast_from(
               round_shift(
+                // SAFETY: We pass this a raw pointer, but it's created from a
+                // checked slice, so we are safe.
                 unsafe {
                   run_filter(src_slice[c..].as_ptr(), ref_stride, y_filter)
                 },
@@ -297,6 +299,8 @@ pub(crate) mod rust {
             dst_slice[c] = T::cast_from(
               round_shift(
                 round_shift(
+                  // SAFETY: We pass this a raw pointer, but it's created from a
+                  // checked slice, so we are safe.
                   unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                   7 - intermediate_bits,
                 ),
@@ -317,6 +321,8 @@ pub(crate) mod rust {
             let src_slice = &offset_slice[r];
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
+                // SAFETY: We pass this a raw pointer, but it's created from a
+                // checked slice, so we are safe.
                 unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits,
               ) as i16;
@@ -328,6 +334,8 @@ pub(crate) mod rust {
             for c in cg..(cg + 8).min(width) {
               dst_slice[c] = T::cast_from(
                 round_shift(
+                  // SAFETY: We pass this a raw pointer, but it's created from a
+                  // checked slice, so we are safe.
                   unsafe {
                     run_filter(
                       intermediate[8 * r + c - cg..].as_ptr(),
@@ -383,6 +391,8 @@ pub(crate) mod rust {
           let src_slice = &offset_slice[r];
           for c in 0..width {
             tmp[r * width + c] = (round_shift(
+              // SAFETY: We pass this a raw pointer, but it's created from a
+              // checked slice, so we are safe.
               unsafe {
                 run_filter(src_slice[c..].as_ptr(), ref_stride, y_filter)
               },
@@ -397,6 +407,8 @@ pub(crate) mod rust {
           let src_slice = &offset_slice[r];
           for c in 0..width {
             tmp[r * width + c] = (round_shift(
+              // SAFETY: We pass this a raw pointer, but it's created from a
+              // checked slice, so we are safe.
               unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
               7 - intermediate_bits,
             ) - prep_bias) as i16;
@@ -412,6 +424,8 @@ pub(crate) mod rust {
             let src_slice = &offset_slice[r];
             for c in cg..(cg + 8).min(width) {
               intermediate[8 * r + (c - cg)] = round_shift(
+                // SAFETY: We pass this a raw pointer, but it's created from a
+                // checked slice, so we are safe.
                 unsafe { run_filter(src_slice[c..].as_ptr(), 1, x_filter) },
                 7 - intermediate_bits,
               ) as i16;
@@ -421,6 +435,8 @@ pub(crate) mod rust {
           for r in 0..height {
             for c in cg..(cg + 8).min(width) {
               tmp[r * width + c] = (round_shift(
+                // SAFETY: We pass this a raw pointer, but it's created from a
+                // checked slice, so we are safe.
                 unsafe {
                   run_filter(
                     intermediate[8 * r + c - cg..].as_ptr(),

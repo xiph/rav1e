@@ -285,6 +285,11 @@ pub struct PartitionRange {
 
 impl PartitionRange {
   /// Creates a new partition range with min and max partition sizes.
+  ///
+  /// # Panics
+  ///
+  /// - Panics if `max` is larger than `min`.
+  /// - Panics if either `min` or `max` are not square.
   pub fn new(min: BlockSize, max: BlockSize) -> Self {
     assert!(max >= min);
     // Topdown search checks the min block size for PARTITION_SPLIT only, so

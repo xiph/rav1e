@@ -393,7 +393,7 @@ impl<T: Pixel> ContextInner<T> {
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
-  /// Indicates whether more frames need to be processed into FrameInvariants
+  /// Indicates whether more frames need to be processed into `FrameInvariants`
   /// in order for FI lookahead to be full.
   pub fn needs_more_fi_lookahead(&self) -> bool {
     let ready_frames = self.get_rdo_lookahead_frames().count();
@@ -1504,9 +1504,9 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   /// Counts the number of output frames of each subtype in the next
-  ///  reservoir_frame_delay temporal units (needed for rate control).
+  ///  `reservoir_frame_delay` temporal units (needed for rate control).
   /// Returns the number of output frames (excluding SEF frames) and output TUs
-  ///  until the last keyframe in the next reservoir_frame_delay temporal units,
+  ///  until the last keyframe in the next `reservoir_frame_delay` temporal units,
   ///  or the end of the interval, whichever comes first.
   /// The former is needed because it indicates the number of rate estimates we
   ///  will make.

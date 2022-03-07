@@ -38,7 +38,11 @@ pub enum RefType {
 }
 
 impl RefType {
-  // convert to a ref list index, 0-6 (INTER_REFS_PER_FRAME)
+  /// convert to a ref list index, 0-6 (`INTER_REFS_PER_FRAME`)
+  ///
+  /// # Panics
+  ///
+  /// - If the ref type is a None or Intra frame
   #[inline]
   pub fn to_index(self) -> usize {
     match self {
@@ -182,6 +186,10 @@ impl BlockSize {
   pub const BLOCK_SIZES: usize = BlockSize::BLOCK_SIZES_ALL - 6; // BLOCK_SIZES_ALL minus 4:1 non-squares, six of them
 
   #[inline]
+  /// # Errors
+  ///
+  /// - Returns `InvalidBlockSize` if the given `w` and `h` do not produce
+  ///   a valid block size.
   pub fn from_width_and_height_opt(
     w: usize, h: usize,
   ) -> Result<BlockSize, InvalidBlockSize> {
@@ -212,6 +220,9 @@ impl BlockSize {
     }
   }
 
+  /// # Panics
+  ///
+  /// - If the given `w` and `h` do not produce a valid block size.
   pub fn from_width_and_height(w: usize, h: usize) -> BlockSize {
     Self::from_width_and_height_opt(w, h).unwrap()
   }
@@ -313,7 +324,12 @@ impl BlockSize {
     }
   }
 
-  /// Source: Subsampled_Size (AV1 specification section 5.11.38)
+  /// Source: `Subsampled_Size` (AV1 specification section 5.11.38)
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidBlockSize` if the given block size cannot
+  ///   be subsampled in the requested way.
   #[inline]
   pub fn subsampled_size(
     self, xdec: usize, ydec: usize,
@@ -388,6 +404,10 @@ impl BlockSize {
     (offset_x, offset_y)
   }
 
+  /// # Errors
+  ///
+  /// - Returns `InvalidBlockSize` if the block size cannot be split
+  ///   in the requested way.
   pub fn subsize(
     self, partition: PartitionType,
   ) -> Result<BlockSize, InvalidBlockSize> {
@@ -584,8 +604,9 @@ pub fn get_intra_edges<T: Pixel>(
 ) -> Aligned<[T; 4 * MAX_TX_SIZE + 1]> {
   let plane_cfg = &dst.plane_cfg;
 
+  // SAFETY: We write to the array below before reading from it.
   let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
-    Aligned::uninitialized();
+    unsafe { Aligned::uninitialized() };
   //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
   let base = 128u16 << (bit_depth - 8);
 

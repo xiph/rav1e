@@ -107,7 +107,7 @@ pub struct EncoderConfig {
   pub speed_settings: SpeedSettings,
 }
 
-/// Default preset for EncoderConfig: it is a balance between quality and
+/// Default preset for `EncoderConfig`: it is a balance between quality and
 /// speed. See [`with_speed_preset()`].
 ///
 /// [`with_speed_preset()`]: struct.EncoderConfig.html#method.with_speed_preset

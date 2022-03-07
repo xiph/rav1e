@@ -190,6 +190,10 @@ impl<T: Pixel> Context<T> {
   ///
   /// [`receive_packet`]: #method.receive_packet
   /// [`twopass_bytes_needed`]: #method.twopass_bytes_needed
+  ///
+  /// # Errors
+  ///
+  /// Returns `Err(EncoderStatus::Failure)` if the two-pass data is invalid.
   #[inline]
   pub fn twopass_in(&mut self, buf: &[u8]) -> Result<usize, EncoderStatus> {
     self.inner.rc_state.twopass_in(Some(buf)).or(Err(EncoderStatus::Failure))
@@ -198,6 +202,10 @@ impl<T: Pixel> Context<T> {
   /// Encodes the next frame and returns the encoded data.
   ///
   /// This method is where the main encoding work is done.
+  ///
+  /// # Errors
+  ///
+  /// May return `Err(EncoderStatus)`, which should be handled by the caller.
   ///
   /// # Examples
   ///
@@ -309,6 +317,12 @@ impl<T: Pixel> Context<T> {
   ///
   /// Flushing signals the end of the video. After the encoder has been
   /// flushed, no additional frames are accepted.
+  ///
+  /// # Panics
+  ///
+  /// Panics if `send_frame` returns an `Err`.
+  /// This should never happen when calling it with `None`
+  /// and indicates a development error.
   #[inline]
   pub fn flush(&mut self) {
     self.send_frame(None).unwrap();
@@ -322,6 +336,11 @@ impl<T: Pixel> Context<T> {
   ///
   /// [the specification]:
   /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
+  ///
+  /// # Panics
+  ///
+  /// Panics if the header cannot be written in memory. This is unrecoverable,
+  /// and usually indicates the system is out of memory.
   #[inline]
   pub fn container_sequence_header(&self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {
@@ -384,9 +403,9 @@ impl<T: Pixel> Context<T> {
 
   /// Return the first pass data
   ///
-  /// Call it after receive_packet, it returns a packet or the encoder
+  /// Call it after `receive_packet`, it returns a packet or the encoder
   /// lifecycle statuses [`EncoderStatus::Encoded`] and
-  /// [`EncoderStatus::LimitReached].
+  /// [`EncoderStatus::LimitReached`].
   ///
   /// [`EncoderStatus::Encoded`]: enum.EncoderStatus.html#variant.Encoded
   /// [`EncoderStatus::LimitReached`]:
@@ -413,7 +432,6 @@ impl<T: Pixel> Context<T> {
   /// encoding process.
   ///
   /// It should be called iteratively until it returns 0.
-  ///
   pub fn rc_second_pass_data_required(&self) -> usize {
     if self.inner.done_processing() {
       0
@@ -425,9 +443,11 @@ impl<T: Pixel> Context<T> {
   /// Feed the first pass Rate Control data to the encoder,
   /// Frame-specific Packets only.
   ///
-  /// Call it before receive_packet()
+  /// Call it before `receive_packet()`
   ///
-  /// It may return `EncoderStatus::Failure` if the data provided is incorrect
+  /// # Errors
+  ///
+  /// Returns `EncoderStatus::Failure` if the data provided is incorrect
   pub fn rc_send_pass_data(
     &mut self, data: &[u8],
   ) -> Result<(), EncoderStatus> {

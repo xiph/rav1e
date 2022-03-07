@@ -309,11 +309,13 @@ impl Config {
     reassemble(recv, s, send_packet)
   }
 
-  /// Create a single pass by_gop encoder channel
+  /// Create a single pass by-gop encoder channel
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
   ///
+  /// # Errors
   ///
+  /// - Returns `InvalidConfig` if configuration is invalid.
   pub fn new_by_gop_channel<T: Pixel>(
     &self, slots: usize,
   ) -> Result<VideoDataChannel<T>, InvalidConfig> {

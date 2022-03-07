@@ -132,12 +132,16 @@ macro_rules! tile_common {
         }
       }
 
-      // Return a view to a subregion of a Tile
-      //
-      // The subregion must be included in (i.e. must not exceed) this Tile.
-      //
-      // It is described by an `Area`, relative to the luma plane of
-      // this region.
+      /// Return a view to a subregion of a Tile
+      ///
+      /// The subregion must be included in (i.e. must not exceed) this Tile.
+      ///
+      /// It is described by an `Area`, relative to the luma plane of
+      /// this region.
+      ///
+      /// # Panics
+      ///
+      /// - If the requested dimensions are larger than the plane size
       #[inline(always)]
       pub fn subregion(&self, area: Area) -> Tile<'_, T> {
         let tile_rect = area.to_rect(

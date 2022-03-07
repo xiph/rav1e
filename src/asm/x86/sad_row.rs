@@ -154,6 +154,10 @@ pub(crate) fn sad_row_internal<T: Pixel>(
       // helper macro to reduce boilerplate
       macro_rules! call_asm {
         ($func:ident, $src:expr, $dst:expr, $cpu:expr) => {
+          // SAFETY: Calls Assembly code.
+          //
+          // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+          #[allow(clippy::undocumented_unsafe_blocks)]
           unsafe {
             let result =
               $func(mem::transmute($src), mem::transmute($dst)) as u64;

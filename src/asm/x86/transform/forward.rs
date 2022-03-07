@@ -490,12 +490,16 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
   }
 }
 
+/// # Panics
+///
+/// - If called with an invalid combination of `tx_size` and `tx_type`
 pub fn forward_transform<T: Coefficient>(
   input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
   tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(valid_av1_transform(tx_size, tx_type));
   if cpu >= CpuFeatureLevel::AVX2 {
+    // SAFETY: Calls Assembly code.
     unsafe {
       forward_transform_avx2(input, output, stride, tx_size, tx_type, bd);
     }

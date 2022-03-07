@@ -17,7 +17,7 @@ pub fn init_slice_repeat_mut<T: Copy>(
     *a = MaybeUninit::new(value);
   }
 
-  // Defined behavior, since all elements of slice are initialized
+  // SAFETY: Defined behavior, since all elements of slice are initialized
   unsafe { assume_slice_init_mut(slice) }
 }
 

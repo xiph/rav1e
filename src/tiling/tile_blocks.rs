@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 
-/// Tiled view of FrameBlocks
+/// Tiled view of `FrameBlocks`
 #[derive(Debug)]
 pub struct TileBlocks<'a> {
   data: *const Block,
@@ -31,7 +31,7 @@ pub struct TileBlocks<'a> {
   phantom: PhantomData<&'a Block>,
 }
 
-/// Mutable tiled view of FrameBlocks
+/// Mutable tiled view of `FrameBlocks`
 #[derive(Debug)]
 pub struct TileBlocksMut<'a> {
   data: *mut Block,
@@ -150,6 +150,10 @@ macro_rules! tile_blocks_common {
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rows);
+        // SAFETY: The above assert ensures we do not access OOB data.
+        //
+        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.frame_cols);
           slice::from_raw_parts(ptr, self.cols)
@@ -293,6 +297,7 @@ impl IndexMut<usize> for TileBlocksMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rows);
+    // SAFETY: The above assert ensures we do not access OOB data.
     unsafe {
       let ptr = self.data.add(index * self.frame_cols);
       slice::from_raw_parts_mut(ptr, self.cols)

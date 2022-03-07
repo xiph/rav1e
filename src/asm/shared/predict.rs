@@ -24,8 +24,9 @@ mod test {
     let bit_depth = 8;
     let cpu = CpuFeatureLevel::default();
     let ac = [0i16; 32 * 32];
+    // SAFETY: We write to the array below before reading from it.
     let mut edge_buf: Aligned<[u8; 4 * MAX_TX_SIZE + 1]> =
-      Aligned::uninitialized();
+      unsafe { Aligned::uninitialized() };
     for i in 0..edge_buf.data.len() {
       edge_buf.data[i] = (i + 32).saturating_sub(2 * MAX_TX_SIZE).as_();
     }

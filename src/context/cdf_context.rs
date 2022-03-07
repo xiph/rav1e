@@ -269,6 +269,10 @@ impl CDFContext {
     reset_4d!(self.coeff_br_cdf);
   }
 
+  /// # Panics
+  ///
+  /// - If any of the CDF arrays are uninitialized.
+  ///   This should never happen and indicates a development error.
   pub fn build_map(&self) -> Vec<(&'static str, usize, usize)> {
     use std::mem::size_of_val;
 
@@ -588,10 +592,10 @@ trait CDFContextLogOps: CDFContextLogSize {
     debug_assert!(cdf.len() <= Self::CDF_LEN_MAX);
     let offset = cdf.as_ptr() as usize - log.base as usize;
     debug_assert!(offset <= u16::MAX.into());
+    // SAFETY: Maintain an invariant of non-zero spare capacity, so that
+    // branching may be deferred until writes are issued. Benchmarks indicate
+    // this is faster than first testing capacity and possibly reallocating.
     unsafe {
-      // Maintain an invariant of non-zero spare capacity, so that branching
-      // may be deferred until writes are issued. Benchmarks indicate this is
-      // faster than first testing capacity and possibly reallocating.
       let len = log.data.len();
       let new_len = len + Self::CDF_LEN_MAX + 1;
       let capacity = log.data.capacity();
@@ -611,6 +615,8 @@ trait CDFContextLogOps: CDFContextLogSize {
   ) {
     let base = fc as *mut _ as *mut u8;
     let mut len = log.data.len();
+    // SAFETY: We use unchecked pointers here for performance.
+    // Since we know the length, we can ensure not to go OOB.
     unsafe {
       let mut src = log.data.get_unchecked_mut(len) as *mut u16;
       while len > checkpoint {

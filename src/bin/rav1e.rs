@@ -29,6 +29,11 @@
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
 #![warn(clippy::range_plus_one)]
+// Documentation lints
+#![warn(clippy::doc_markdown)]
+#![warn(clippy::missing_errors_doc)]
+#![warn(clippy::missing_panics_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 
 #[macro_use]
 extern crate log;
@@ -362,6 +367,7 @@ cfg_if::cfg_if! {
     }
   } else {
     fn print_rusage() {
+      // SAFETY: This uses an FFI, it is safe because we call it correctly.
       let (utime, stime, maxrss) = unsafe {
         let mut usage = std::mem::zeroed();
         let _ = libc::getrusage(libc::RUSAGE_SELF, &mut usage);

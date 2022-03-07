@@ -394,6 +394,9 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 //   tile boundary), the filtering process ignores input pixels that
 //   don't exist.
 
+/// # Panics
+///
+/// - If called with invalid parameters
 pub fn cdef_filter_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
   blocks: &TileBlocks<'_>, tile_sbo: TileSuperBlockOffset, cdef_index: u8,
@@ -511,6 +514,9 @@ pub fn cdef_filter_superblock<T: Pixel>(
               }
             };
 
+            // SAFETY: `cdef_filter_block` may call Assembly code.
+            // The asserts here verify that we are not calling it
+            // with invalid parameters.
             unsafe {
               assert!(
                 input.planes[p].cfg.width as isize

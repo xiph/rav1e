@@ -26,6 +26,7 @@ pub fn sgrproj_box_ab_r1(
 ) {
   // only use 8-bit AVX2 assembly when bitdepth minus 8 equals 0
   if cpu >= CpuFeatureLevel::AVX2 && bdm8 == 0 {
+    // SAFETY: Calls Assembly code.
     return unsafe {
       sgrproj_box_ab_r1_avx2(
         af,
@@ -64,6 +65,7 @@ pub fn sgrproj_box_ab_r2(
 ) {
   // only use 8-bit AVX2 assembly when bitdepth minus 8 equals 0
   if cpu >= CpuFeatureLevel::AVX2 && bdm8 == 0 {
+    // SAFETY: Calls Assembly code.
     return unsafe {
       sgrproj_box_ab_r2_avx2(
         af,
@@ -99,6 +101,7 @@ pub fn sgrproj_box_f_r0<T: Pixel>(
   cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
+    // SAFETY: Calls Assembly code.
     return unsafe {
       sgrproj_box_f_r0_avx2(f, y, w, cdeffed);
     };
@@ -113,6 +116,7 @@ pub fn sgrproj_box_f_r1<T: Pixel>(
   cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
+    // SAFETY: Calls Assembly code.
     return unsafe {
       sgrproj_box_f_r1_avx2(af, bf, f, y, w, cdeffed);
     };
@@ -127,6 +131,7 @@ pub fn sgrproj_box_f_r2<T: Pixel>(
   y: usize, w: usize, cdeffed: &PlaneSlice<T>, cpu: CpuFeatureLevel,
 ) {
   if cpu >= CpuFeatureLevel::AVX2 {
+    // SAFETY: Calls Assembly code.
     return unsafe {
       sgrproj_box_f_r2_avx2(af, bf, f0, f1, y, w, cdeffed);
     };

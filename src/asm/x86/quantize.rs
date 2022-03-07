@@ -59,6 +59,7 @@ pub fn dequantize<T: Coefficient>(
   match T::Pixel::type_enum() {
     PixelType::U8 => {
       if let Some(func) = DEQUANTIZE_FNS[cpu.as_index()] {
+        // SAFETY: Calls Assembly code.
         unsafe {
           (func)(
             qindex,

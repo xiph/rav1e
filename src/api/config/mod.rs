@@ -136,14 +136,14 @@ pub struct Config {
 impl Config {
   /// Create a default configuration
   ///
-  /// same as Default::default()
+  /// same as `Default::default()`
   pub fn new() -> Self {
     Config::default()
   }
 
   /// Set the encoder configuration
   ///
-  /// EncoderConfig contains the settings impacting the
+  /// `EncoderConfig` contains the settings impacting the
   /// codec features used in the produced bitstream.
   pub fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
     self.enc = enc;
@@ -255,6 +255,10 @@ impl Config {
 
   /// Creates a [`Context`] with this configuration.
   ///
+  /// # Errors
+  ///
+  /// Returns `InvalidConfig` if the config is invalid.
+  ///
   /// # Examples
   ///
   /// ```
@@ -277,6 +281,10 @@ impl Config {
   }
 
   /// Validates the configuration.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the tiling config is invalid.
   pub fn validate(&self) -> Result<(), InvalidConfig> {
     use InvalidConfig::*;
 
@@ -395,6 +403,10 @@ impl Config {
   /// Provide the tiling information for the current Config
   ///
   /// Useful for reporting and debugging.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the tiling config is invalid.
   pub fn tiling_info(&self) -> Result<TilingInfo, InvalidConfig> {
     self.validate()?;
 

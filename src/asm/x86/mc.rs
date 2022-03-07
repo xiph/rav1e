@@ -83,6 +83,13 @@ const fn get_2d_mode_idx(mode_x: FilterMode, mode_y: FilterMode) -> usize {
   (mode_x as usize + 4 * (mode_y as usize)) & 15
 }
 
+/// # Panics
+///
+/// - If `width` is not a power of 2
+/// - If `width` is not between 2 and 128
+/// - If `height` is odd
+/// - If `width * height` is greater than the length of `tmp1` or `tmp2`
+/// - If `width` and `height` do not fit within the bounds of `src`
 #[inline(always)]
 pub fn put_8tap<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
@@ -102,9 +109,9 @@ pub fn put_8tap<T: Pixel>(
     copy
   };
 
+  // SAFETY: The assembly only supports even heights and valid uncropped
+  //         widths
   unsafe {
-    // SAFETY: The assembly only supports even heights and valid uncropped
-    //         widths
     assert_eq!(height & 1, 0);
     assert!(width.is_power_of_two() && 2 <= width && width <= 128);
 
@@ -161,6 +168,13 @@ pub fn put_8tap<T: Pixel>(
   }
 }
 
+/// # Panics
+///
+/// - If `width` is not a power of 2
+/// - If `width` is not between 2 and 128
+/// - If `height` is odd
+/// - If `width * height` is greater than the length of `tmp1` or `tmp2`
+/// - If `width` and `height` do not fit within the bounds of `src`
 #[inline(always)]
 pub fn prep_8tap<T: Pixel>(
   tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
@@ -180,9 +194,10 @@ pub fn prep_8tap<T: Pixel>(
     call_rust(&mut copy);
     copy
   };
+
+  // SAFETY: The assembly only supports even heights and valid uncropped
+  //         widths
   unsafe {
-    // SAFETY: The assembly only supports even heights and valid uncropped
-    //         widths
     assert_eq!(height & 1, 0);
     assert!(width.is_power_of_two() && 2 <= width && width <= 128);
 
@@ -232,6 +247,12 @@ pub fn prep_8tap<T: Pixel>(
   }
 }
 
+/// # Panics
+///
+/// - If `width` is not a power of 2
+/// - If `width` is not between 2 and 128
+/// - If `width * height` is greater than the length of `tmp1` or `tmp2`
+/// - If `width` and `height` do not fit within the bounds of `dst`
 pub fn mc_avg<T: Pixel>(
   dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
   height: usize, bit_depth: usize, cpu: CpuFeatureLevel,
@@ -245,9 +266,10 @@ pub fn mc_avg<T: Pixel>(
     call_rust(&mut copy.as_region_mut());
     copy
   };
+
+  // SAFETY: The assembly only supports even heights and valid uncropped
+  //         widths
   unsafe {
-    // SAFETY: The assembly only supports even heights and valid uncropped
-    //         widths
     assert_eq!(height & 1, 0);
     assert!(width.is_power_of_two() && 2 <= width && width <= 128);
 

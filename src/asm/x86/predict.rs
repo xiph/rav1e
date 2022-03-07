@@ -163,6 +163,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
     );
   };
 
+  // SAFETY: Calls Assembly code.
   unsafe {
     let stride = T::to_asm_stride(dst.plane_cfg.stride) as libc::ptrdiff_t;
     let w = tx_size.width() as libc::c_int;

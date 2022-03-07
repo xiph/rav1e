@@ -92,16 +92,25 @@ impl Default for CFLParams {
 }
 
 impl CFLParams {
+  /// # Panics
+  ///
+  /// - If either current sign is zero
   #[inline]
   pub fn joint_sign(self) -> u32 {
     assert!(self.sign[0] != CFL_SIGN_ZERO || self.sign[1] != CFL_SIGN_ZERO);
     (self.sign[0] as u32) * (CFL_SIGNS as u32) + (self.sign[1] as u32) - 1
   }
+  /// # Panics
+  ///
+  /// - If the sign at index `uv` is zero
   #[inline]
   pub fn context(self, uv: usize) -> usize {
     assert!(self.sign[uv] != CFL_SIGN_ZERO);
     (self.sign[uv] as usize - 1) * CFL_SIGNS + (self.sign[1 - uv] as usize)
   }
+  /// # Panics
+  ///
+  /// - If the sign at index `uv` is zero
   #[inline]
   pub fn index(self, uv: usize) -> u32 {
     assert!(self.sign[uv] != CFL_SIGN_ZERO && self.scale[uv] != 0);
@@ -296,6 +305,10 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  /// # Panics
+  ///
+  /// - If called with an 8x8 or larger `bsize`
+  /// - If called with a `PartitionType` incompatible with the current block.
   pub fn write_partition(
     &mut self, w: &mut impl Writer, bo: TileBlockOffset, p: PartitionType,
     bsize: BlockSize,
@@ -442,6 +455,9 @@ impl<'a> ContextWriter<'a> {
 }
 
 impl<'a> BlockContext<'a> {
+  /// # Panics
+  ///
+  /// - If called with a non-square `bsize`
   pub fn partition_plane_context(
     &self, bo: TileBlockOffset, bsize: BlockSize,
   ) -> usize {
@@ -457,6 +473,9 @@ impl<'a> BlockContext<'a> {
     (left * 2 + above) as usize + bsl as usize * PARTITION_PLOFFSET
   }
 
+  /// # Panics
+  ///
+  /// - If the block size is invalid for subsampling
   pub fn reset_skip_context(
     &mut self, bo: TileBlockOffset, bsize: BlockSize, xdec: usize,
     ydec: usize, cs: ChromaSampling,
@@ -500,6 +519,9 @@ impl<'a> BlockContext<'a> {
     above_skip as usize + left_skip as usize
   }
 
+  /// # Panics
+  ///
+  /// - If called with a non-square `bsize`
   pub fn update_partition_context(
     &mut self, bo: TileBlockOffset, subsize: BlockSize, bsize: BlockSize,
   ) {

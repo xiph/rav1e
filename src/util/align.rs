@@ -34,8 +34,11 @@ impl<T> Aligned<T> {
     Aligned { _alignment: [], data }
   }
   #[allow(clippy::uninit_assumed_init)]
-  pub fn uninitialized() -> Self {
-    Self::new(unsafe { MaybeUninit::uninit().assume_init() })
+  /// # Safety
+  ///
+  /// The resulting `Aligned<T>` *must* be written to before it is read from.
+  pub unsafe fn uninitialized() -> Self {
+    Self::new(MaybeUninit::uninit().assume_init())
   }
 }
 
@@ -57,24 +60,28 @@ impl<T> AlignedBoxedSlice<T> {
     }
   }
 
-  unsafe fn layout(len: usize) -> Layout {
-    Layout::from_size_align_unchecked(
-      len * mem::size_of::<T>(),
-      1 << Self::DATA_ALIGNMENT_LOG2,
-    )
+  fn layout(len: usize) -> Layout {
+    // SAFETY: We are ensuring that `align` is non-zero and is a multiple of 2.
+    unsafe {
+      Layout::from_size_align_unchecked(
+        len * mem::size_of::<T>(),
+        1 << Self::DATA_ALIGNMENT_LOG2,
+      )
+    }
   }
 
-  unsafe fn alloc(len: usize) -> std::ptr::NonNull<T> {
-    ptr::NonNull::new_unchecked(alloc(Self::layout(len)) as *mut T)
+  fn alloc(len: usize) -> std::ptr::NonNull<T> {
+    // SAFETY: We are not calling this with a null pointer, so it's safe.
+    unsafe { ptr::NonNull::new_unchecked(alloc(Self::layout(len)) as *mut T) }
   }
 
-  /// Creates a ['AlignedBoxedSlice'] with a slice of length ['len'] filled with
-  /// ['val'].
+  /// Creates a [`AlignedBoxedSlice`] with a slice of length [`len`] filled with
+  /// [`val`].
   pub fn new(len: usize, val: T) -> Self
   where
     T: Clone,
   {
-    let mut output = Self { ptr: unsafe { Self::alloc(len) }, len };
+    let mut output = Self { ptr: Self::alloc(len), len };
 
     for a in output.iter_mut() {
       *a = val.clone();
@@ -94,6 +101,7 @@ impl<T> std::ops::Deref for AlignedBoxedSlice<T> {
   type Target = [T];
 
   fn deref(&self) -> &[T] {
+    // SAFETY: We know that `self.ptr` is not null, and we know its length.
     unsafe {
       let p = self.ptr.as_ptr();
 
@@ -104,6 +112,7 @@ impl<T> std::ops::Deref for AlignedBoxedSlice<T> {
 
 impl<T> std::ops::DerefMut for AlignedBoxedSlice<T> {
   fn deref_mut(&mut self) -> &mut [T] {
+    // SAFETY: We know that `self.ptr` is not null, and we know its length.
     unsafe {
       let p = self.ptr.as_ptr();
 
@@ -114,6 +123,7 @@ impl<T> std::ops::DerefMut for AlignedBoxedSlice<T> {
 
 impl<T> std::ops::Drop for AlignedBoxedSlice<T> {
   fn drop(&mut self) {
+    // SAFETY: We know that the contents of this struct are aligned and valid to drop.
     unsafe {
       for a in self.iter_mut() {
         ptr::drop_in_place(a)

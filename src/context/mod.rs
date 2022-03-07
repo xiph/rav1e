@@ -184,6 +184,10 @@ pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
 }
 
 impl<'a> ContextWriter<'a> {
+  /// # Panics
+  ///
+  /// - If the `comp` is 0
+  /// - If the `comp` is outside the bounds of `MV_LOW` and `MV_UPP`
   pub fn encode_mv_component<W: Writer>(
     &mut self, w: &mut W, comp: i32, axis: usize, precision: MvSubpelPrecision,
   ) {

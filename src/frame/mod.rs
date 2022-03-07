@@ -54,7 +54,7 @@ pub(crate) trait FrameAlloc {
 
 impl<T: Pixel> FrameAlloc for Frame<T> {
   /// Creates a new frame with the given parameters.
-  /// new function calls new_with_padding function which takes luma_padding
+  /// new function calls `new_with_padding` function which takes `luma_padding`
   /// as parameter
   fn new(
     width: usize, height: usize, chroma_sampling: ChromaSampling,

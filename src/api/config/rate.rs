@@ -32,7 +32,7 @@ pub struct RateControlConfig {
 pub use crate::rate::RCSummary as RateControlSummary;
 
 impl RateControlSummary {
-  /// Deserializes a byte slice into a RateControlSummary
+  /// Deserializes a byte slice into a `RateControlSummary`
   pub(crate) fn from_slice(bytes: &[u8]) -> Result<Self, Error> {
     let mut de = RCDeserialize::default();
     let _ = de.buffer_fill(bytes, 0, TWOPASS_HEADER_SZ);
@@ -43,6 +43,10 @@ impl RateControlSummary {
 
 impl RateControlConfig {
   /// Create a rate control configuration from a serialized summary
+  ///
+  /// # Errors
+  ///
+  /// Returns an error if the serialized data is invalid.
   pub fn from_summary_slice(bytes: &[u8]) -> Result<Self, Error> {
     Ok(Self {
       summary: Some(RateControlSummary::from_slice(bytes)?),
