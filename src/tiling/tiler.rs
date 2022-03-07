@@ -27,8 +27,8 @@ pub const MAX_TILE_RATE: f64 = 4096f64 * 2176f64 * 60f64 * 1.1;
 /// This stores everything necessary to split a frame into tiles, and write
 /// headers fields into the bitstream.
 ///
-/// The method tile_iter_mut() actually provides tiled views of FrameState
-/// and FrameBlocks.
+/// The method `tile_iter_mut()` actually provides tiled views of `FrameState`
+/// and `FrameBlocks`.
 #[derive(Debug, Clone, Copy)]
 pub struct TilingInfo {
   pub frame_width: usize,
@@ -48,6 +48,9 @@ pub struct TilingInfo {
 }
 
 impl TilingInfo {
+  /// # Panics
+  ///
+  /// Panics if the resulting tile sizes would be too large.
   pub fn from_target_tiles(
     sb_size_log2: usize, frame_width: usize, frame_height: usize,
     frame_rate: f64, tile_cols_log2: usize, tile_rows_log2: usize,
@@ -204,6 +207,9 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
       let tile_row = self.next / self.ti.cols;
       let ctx = TileContextMut {
         ts: {
+          // SAFETY: Multiple tiles mutably access this struct.
+          // The dimensions must be configured correctly to ensure
+          // the tiles do not overlap.
           let fs = unsafe { &mut *self.fs };
           let sbo = PlaneSuperBlockOffset(SuperBlockOffset {
             x: tile_col * self.ti.tile_width_sb,
@@ -218,6 +224,9 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
           TileStateMut::new(fs, sbo, self.ti.sb_size_log2, width, height)
         },
         tb: {
+          // SAFETY: Multiple tiles mutably access this struct.
+          // The dimensions must be configured correctly to ensure
+          // the tiles do not overlap.
           let fb = unsafe { &mut *self.fb };
           let tile_width_mi =
             self.ti.tile_width_sb << (self.ti.sb_size_log2 - MI_SIZE_LOG2);

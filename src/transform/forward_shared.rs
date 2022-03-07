@@ -116,6 +116,9 @@ pub struct Txfm2DFlipCfg {
 }
 
 impl Txfm2DFlipCfg {
+  /// # Panics
+  ///
+  /// - If called with an invalid combination of `tx_size` and `tx_type`
   pub fn fwd(tx_type: TxType, tx_size: TxSize, bd: usize) -> Self {
     let tx_type_1d_col = VTX_TAB[tx_type as usize];
     let tx_type_1d_row = HTX_TAB[tx_type as usize];
@@ -137,7 +140,7 @@ impl Txfm2DFlipCfg {
     }
   }
 
-  /// Determine the flip config, returning (ud_flip, lr_flip)
+  /// Determine the flip config, returning `(ud_flip, lr_flip)`
   fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
     use self::TxType::*;
     match tx_type {

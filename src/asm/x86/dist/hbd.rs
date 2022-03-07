@@ -209,11 +209,13 @@ unsafe fn hadamard8_1d(
 fn hadamard2d(data: *mut i32, (w, h): (usize, usize)) {
   /*Vertical transform.*/
   let vert_func = if h == 4 { hadamard4_1d } else { hadamard8_1d };
+  // SAFETY: Calls Assembly code.
   unsafe {
     vert_func(data, w, 1, h);
   }
   /*Horizontal transform.*/
   let horz_func = if w == 4 { hadamard4_1d } else { hadamard8_1d };
+  // SAFETY: Calls Assembly code.
   unsafe {
     horz_func(data, h, w, 1);
   }

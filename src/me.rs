@@ -1383,7 +1383,8 @@ fn subpel_diamond_search<T: Pixel>(
   // Metadata for subpel scratch pad.
   let cfg = PlaneConfig::new(mc_w, mc_h, 0, 0, 0, 0, std::mem::size_of::<T>());
   // Stack allocation for subpel scratch pad.
-  let mut buf: Aligned<[T; 128 * 128]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut buf: Aligned<[T; 128 * 128]> = unsafe { Aligned::uninitialized() };
   let mut tmp_region = PlaneRegionMut::from_slice(
     &mut buf.data,
     &cfg,

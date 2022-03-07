@@ -94,6 +94,9 @@ pub mod rust {
     }
   }
 
+  /// # Panics
+  ///
+  /// - If called with an invalid combination of `tx_size` and `tx_type`
   #[cold_for_target_arch("x86_64")]
   pub fn forward_transform<T: Coefficient>(
     input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
@@ -110,7 +113,8 @@ pub mod rust {
     let txfm_size_col = tx_size.width();
     let txfm_size_row = tx_size.height();
 
-    let mut tmp: Aligned<[i32; 64 * 64]> = Aligned::uninitialized();
+    // SAFETY: We write to the array below before reading from it.
+    let mut tmp: Aligned<[i32; 64 * 64]> = unsafe { Aligned::uninitialized() };
     let buf = &mut tmp.data[..txfm_size_col * txfm_size_row];
 
     let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
@@ -120,8 +124,9 @@ pub mod rust {
 
     // Columns
     for c in 0..txfm_size_col {
+      // SAFETY: We write to the array below before reading from it.
       let mut col_coeffs_backing: Aligned<[i32; 64]> =
-        Aligned::uninitialized();
+        unsafe { Aligned::uninitialized() };
       let col_coeffs = &mut col_coeffs_backing.data[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down

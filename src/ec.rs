@@ -28,66 +28,66 @@ const EC_PROB_SHIFT: u32 = 6;
 const EC_MIN_PROB: u32 = 4;
 type ec_window = u32;
 
-/// Public trait interface to a bitstream Writer: a Counter can be
+/// Public trait interface to a bitstream `Writer`: a `Counter` can be
 /// used to count bits for cost analysis without actually storing
-/// anything (using a new::WriterCounter() as a Writer), to record
-/// tokens for later writing (using a new::WriterRecorder() as a
-/// Writer) to write actual final bits out using a range encoder
-/// (using a new::WriterEncoder() as a Writer).  A WriterRecorder's
-/// contents can be replayed into a WriterEncoder.
+/// anything (using a new `WriterCounter` as a `Writer`), to record
+/// tokens for later writing (using a new `WriterRecorder` as a
+/// `Writer`) to write actual final bits out using a range encoder
+/// (using a new `WriterEncoder` as a `Writer`).  A `WriterRecorder`'s
+/// contents can be replayed into a `WriterEncoder`.
 pub trait Writer {
-  /// Write a symbol s, using the passed in cdf reference; leaves cdf unchanged
+  /// Write a symbol `s`, using the passed in cdf reference; leaves `cdf` unchanged
   fn symbol(&mut self, s: u32, cdf: &[u16]);
-  /// return approximate number of fractional bits in OD_BITRES
-  /// precision to write a symbol s using the passed in cdf reference;
-  /// leaves cdf unchanged
+  /// return approximate number of fractional bits in `OD_BITRES`
+  /// precision to write a symbol `s` using the passed in cdf reference;
+  /// leaves `cdf` unchanged
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
-  /// Write a symbol s, using the passed in cdf reference; updates the referenced cdf.
+  /// Write a symbol `s`, using the passed in cdf reference; updates the referenced cdf.
   fn symbol_with_update<const CDF_LEN: usize>(
     &mut self, s: u32, cdf: &mut [u16; CDF_LEN], log: &mut CDFContextLog,
   );
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
-  /// Write a single bit with flat proability
+  /// Write a single bit with flat probability
   fn bit(&mut self, bit: u16);
-  /// Write literal bits with flat probability
+  /// Write literal `bits` with flat probability
   fn literal(&mut self, bits: u8, s: u32);
-  /// Write passed level as a golomb code
+  /// Write passed `level` as a golomb code
   fn write_golomb(&mut self, level: u32);
-  /// Write a value v in [0, n-1] quasi-uniformly
+  /// Write a value `v` in `[0, n-1]` quasi-uniformly
   fn write_quniform(&mut self, n: u32, v: u32);
-  /// Return fractional bits needed to write Write a value v in [0,
-  /// n-1] quasi-uniformly
+  /// Return fractional bits needed to write a value `v` in `[0, n-1]`
+  /// quasi-uniformly
   fn count_quniform(&self, n: u32, v: u32) -> u32;
-  /// Write symbol v in [0, n-1] with parameter k as finite subexponential
+  /// Write symbol `v` in `[0, n-1]` with parameter `k` as finite subexponential
   fn write_subexp(&mut self, n: u32, k: u8, v: u32);
-  /// Return fractional bits needed to write symbol v in [0, n-1] with
+  /// Return fractional bits needed to write symbol v in `[0, n-1]` with
   /// parameter k as finite subexponential
   fn count_subexp(&self, n: u32, k: u8, v: u32) -> u32;
-  /// Write symbol v in [0, n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [0, n-1].
+  /// Write symbol `v` in `[0, n-1]` with parameter `k` as finite
+  /// subexponential based on a reference `r` also in `[0, n-1]`.
   fn write_unsigned_subexp_with_ref(&mut self, v: u32, mx: u32, k: u8, r: u32);
-  /// Return fractional bits beed to write symbol v in [0, n-1] with
-  /// parameter k as finite subexponential based on a reference ref
-  /// also in [0, n-1].
+  /// Return fractional bits needed to write symbol `v` in `[0, n-1]` with
+  /// parameter `k` as finite subexponential based on a reference `r`
+  /// also in `[0, n-1]`.
   fn count_unsigned_subexp_with_ref(
     &self, v: u32, mx: u32, k: u8, r: u32,
   ) -> u32;
-  /// Write symbol v in [-(n-1), n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [-(n-1), n-1].
+  /// Write symbol v in `[-(n-1), n-1]` with parameter k as finite
+  /// subexponential based on a reference ref also in `[-(n-1), n-1]`.
   fn write_signed_subexp_with_ref(
     &mut self, v: i32, low: i32, high: i32, k: u8, r: i32,
   );
-  /// Return fractional bits needed to write symbol v in [-(n-1), n-1]
-  /// with parameter k as finite subexponential based on a reference
-  /// ref also in [-(n-1), n-1].
+  /// Return fractional bits needed to write symbol `v` in `[-(n-1), n-1]`
+  /// with parameter `k` as finite subexponential based on a reference
+  /// `r` also in `[-(n-1), n-1]`.
   fn count_signed_subexp_with_ref(
     &self, v: i32, low: i32, high: i32, k: u8, r: i32,
   ) -> u32;
   /// Return current length of range-coded bitstream in integer bits
   fn tell(&mut self) -> u32;
   /// Return current length of range-coded bitstream in fractional
-  /// bits with OD_BITRES decimal precision
+  /// bits with `OD_BITRES` decimal precision
   fn tell_frac(&mut self) -> u32;
   /// Save current point in coding/recording to a checkpoint
   fn checkpoint(&mut self) -> WriterCheckpoint;
@@ -97,8 +97,8 @@ pub trait Writer {
   fn add_bits_frac(&mut self, bits_frac: u32);
 }
 
-/// StorageBackend is an internal trait used to tie a specific Writer
-/// implementation's storage to the generic Writer.  It would be
+/// `StorageBackend` is an internal trait used to tie a specific `Writer`
+/// implementation's storage to the generic `Writer`.  It would be
 /// private, but Rust is deprecating 'private trait in a public
 /// interface' support.
 pub trait StorageBackend {
@@ -482,7 +482,8 @@ impl WriterBase<WriterEncoder> {
   }
 }
 
-/// Generic/shared implementation for Writers with StorageBackends (ie, Encoders and Recorders)
+/// Generic/shared implementation for `Writer`s with `StorageBackend`s
+/// (ie, `Encoder`s and `Recorder`s)
 impl<S> Writer for WriterBase<S>
 where
   WriterBase<S>: StorageBackend,
@@ -496,8 +497,9 @@ where
     self.symbol(if val { 1 } else { 0 }, &[f, 0]);
   }
   /// Encode a single boolean value.
-  /// `val`: The value to encode (false or true).
-  /// `f`: The probability that the val is true, scaled by 32768.
+  ///
+  /// - `val`: The value to encode (`false` or `true`).
+  /// - `f`: The probability that the `val` is `true`, scaled by `32768`.
   fn bit(&mut self, bit: u16) {
     self.bool(bit == 1, 16384);
   }
@@ -507,16 +509,18 @@ where
   }
   /// Encode a literal bitstring, bit by bit in MSB order, with flat
   /// probability.
-  /// 'bits': Length of bitstring
-  /// 's': Bit string to encode
+  ///
+  /// - 'bits': Length of bitstring
+  /// - 's': Bit string to encode
   fn literal(&mut self, bits: u8, s: u32) {
     for bit in (0..bits).rev() {
       self.bit((1 & (s >> bit)) as u16);
     }
   }
   /// Encodes a symbol given a cumulative distribution function (CDF) table in Q15.
-  /// `s`: The index of the symbol to encode.
-  /// `cdf`: The CDF, such that symbol s falls in the range
+  ///
+  /// - `s`: The index of the symbol to encode.
+  /// - `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be greater than 32704. There should be at most 16 values.
@@ -528,17 +532,24 @@ where
     debug_assert!(s < cdf.len());
     // The above is stricter than the following overflow check: s <= cdf.len()
     let nms = cdf.len() - s;
-    let fl = if s > 0 { unsafe { *cdf.get_unchecked(s - 1) } } else { 32768 };
+    let fl = if s > 0 {
+      // SAFETY: We asserted that s is less than the length of the cdf
+      unsafe { *cdf.get_unchecked(s - 1) }
+    } else {
+      32768
+    };
+    // SAFETY: We asserted that s is less than the length of the cdf
     let fh = unsafe { *cdf.get_unchecked(s) };
     debug_assert!((fh >> EC_PROB_SHIFT) <= (fl >> EC_PROB_SHIFT));
     debug_assert!(fl <= 32768);
     self.store(fl, fh, nms as u16);
   }
   /// Encodes a symbol given a cumulative distribution function (CDF)
-  /// table in Q15, then updates the CDF probabilities to relect we've
+  /// table in Q15, then updates the CDF probabilities to reflect we've
   /// written one more symbol 's'.
-  /// `s`: The index of the symbol to encode.
-  /// `cdf`: The CDF, such that symbol s falls in the range
+  ///
+  /// - `s`: The index of the symbol to encode.
+  /// - `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be greater 32704. There should be at most 16 values.
@@ -559,8 +570,9 @@ where
   }
   /// Returns approximate cost for a symbol given a cumulative
   /// distribution function (CDF) table and current write state.
-  /// `s`: The index of the symbol to encode.
-  /// `cdf`: The CDF, such that symbol s falls in the range
+  ///
+  /// - `s`: The index of the symbol to encode.
+  /// - `cdf`: The CDF, such that symbol s falls in the range
   ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
   ///       The values must be monotonically non-decreasing, and the last value
   ///       must be greater than 32704. There should be at most 16 values.
@@ -600,7 +612,8 @@ where
     Self::frac_compute((bits + sh + 9) as u32, r << d) - pre
   }
   /// Encode a golomb to the bitstream.
-  /// 'level': passed in value to encode
+  ///
+  /// - 'level': passed in value to encode
   fn write_golomb(&mut self, level: u32) {
     let x = level + 1;
     let length = 32 - x.leading_zeros();
@@ -613,9 +626,9 @@ where
       self.bit(((x >> i) & 0x01) as u16);
     }
   }
-  /// Write a value v in [0, n-1] quasi-uniformly
-  /// n: size of interval
-  /// v: value to encode
+  /// Write a value `v` in `[0, n-1]` quasi-uniformly
+  /// - `n`: size of interval
+  /// - `v`: value to encode
   fn write_quniform(&mut self, n: u32, v: u32) {
     if n > 1 {
       let l = msb(n as i32) as u8 + 1;
@@ -628,9 +641,9 @@ where
       }
     }
   }
-  /// Returns QOD_BITRES bits for a value v in [0, n-1] quasi-uniformly
-  /// n: size of interval
-  /// v: value to encode
+  /// Returns `QOD_BITRES` bits for a value `v` in `[0, n-1]` quasi-uniformly
+  /// - `n`: size of interval
+  /// - `v`: value to encode
   fn count_quniform(&self, n: u32, v: u32) -> u32 {
     let mut bits = 0;
     if n > 1 {
@@ -643,10 +656,11 @@ where
     }
     bits
   }
-  /// Write symbol v in [0, n-1] with parameter k as finite subexponential
-  /// n: size of interval
-  /// k: 'parameter'
-  /// v: value to encode
+  /// Write symbol `v` in `[0, n-1]` with parameter `k` as finite subexponential
+  ///
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `v`: value to encode
   fn write_subexp(&mut self, n: u32, k: u8, v: u32) {
     let mut i = 0;
     let mut mk = 0;
@@ -669,10 +683,12 @@ where
       }
     }
   }
-  /// Returns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite subexponential
-  /// n: size of interval
-  /// k: 'parameter'
-  /// v: value to encode
+  /// Returns `QOD_BITRES` bits for symbol `v` in `[0, n-1]` with parameter `k`
+  /// as finite subexponential
+  ///
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `v`: value to encode
   fn count_subexp(&self, n: u32, k: u8, v: u32) -> u32 {
     let mut i = 0;
     let mut mk = 0;
@@ -697,12 +713,13 @@ where
     }
     bits
   }
-  /// Write symbol v in [0, n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [0, n-1].
-  /// v: value to encode
-  /// n: size of interval
-  /// k: 'parameter'
-  /// r: reference
+  /// Write symbol `v` in `[0, n-1]` with parameter `k` as finite
+  /// subexponential based on a reference `r` also in `[0, n-1]`.
+  ///
+  /// - `v`: value to encode
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `r`: reference
   fn write_unsigned_subexp_with_ref(&mut self, v: u32, n: u32, k: u8, r: u32) {
     if (r << 1) <= n {
       self.write_subexp(n, k, Self::recenter(r, v));
@@ -710,12 +727,14 @@ where
       self.write_subexp(n, k, Self::recenter(n - 1 - r, n - 1 - v));
     }
   }
-  /// Returns QOD_BITRES bits for symbol v in [0, n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [0, n-1].
-  /// v: value to encode
-  /// n: size of interval
-  /// k: 'parameter'
-  /// r: reference
+  /// Returns `QOD_BITRES` bits for symbol `v` in `[0, n-1]`
+  /// with parameter `k` as finite subexponential based on a
+  /// reference `r` also in `[0, n-1]`.
+  ///
+  /// - `v`: value to encode
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `r`: reference
   fn count_unsigned_subexp_with_ref(
     &self, v: u32, n: u32, k: u8, r: u32,
   ) -> u32 {
@@ -725,12 +744,13 @@ where
       self.count_subexp(n, k, Self::recenter(n - 1 - r, n - 1 - v))
     }
   }
-  /// Write symbol v in [-(n-1), n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [-(n-1), n-1].
-  /// v: value to encode
-  /// n: size of interval
-  /// k: 'parameter'
-  /// r: reference
+  /// Write symbol `v` in `[-(n-1), n-1]` with parameter `k` as finite
+  /// subexponential based on a reference `r` also in `[-(n-1), n-1]`.
+  ///
+  /// - `v`: value to encode
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `r`: reference
   fn write_signed_subexp_with_ref(
     &mut self, v: i32, low: i32, high: i32, k: u8, r: i32,
   ) {
@@ -741,12 +761,15 @@ where
       (r - low) as u32,
     );
   }
-  /// Returns QOD_BITRES bits for symbol v in [-(n-1), n-1] with parameter k as finite
-  /// subexponential based on a reference ref also in [-(n-1), n-1].
-  /// v: value to encode
-  /// n: size of interval
-  /// k: 'parameter'
-  /// r: reference
+  /// Returns `QOD_BITRES` bits for symbol `v` in `[-(n-1), n-1]`
+  /// with parameter `k` as finite subexponential based on a
+  /// reference `r` also in `[-(n-1), n-1]`.
+  ///
+  /// - `v`: value to encode
+  /// - `n`: size of interval
+  /// - `k`: "parameter"
+  /// - `r`: reference
+
   fn count_signed_subexp_with_ref(
     &self, v: i32, low: i32, high: i32, k: u8, r: i32,
   ) -> u32 {
@@ -760,7 +783,8 @@ where
   /// Returns the number of bits "used" by the encoded symbols so far.
   /// This same number can be computed in either the encoder or the
   /// decoder, and is suitable for making coding decisions.  The value
-  /// will be the same whether using an Encoder or Recorder.
+  /// will be the same whether using an `Encoder` or `Recorder`.
+  ///
   /// Return: The integer number of bits.
   ///         This will always be slightly larger than the exact value (e.g., all
   ///          rounding error is in the positive direction).
@@ -773,7 +797,8 @@ where
   /// Returns the number of bits "used" by the encoded symbols so far.
   /// This same number can be computed in either the encoder or the
   /// decoder, and is suitable for making coding decisions. The value
-  /// will be the same whether using an Encoder or Recorder.
+  /// will be the same whether using an `Encoder` or `Recorder`.
+  ///
   /// Return: The number of bits scaled by `2**OD_BITRES`.
   ///         This will always be slightly larger than the exact value (e.g., all
   ///          rounding error is in the positive direction).
@@ -781,14 +806,15 @@ where
     Self::frac_compute(self.tell(), self.rng as u32) + self.fake_bits_frac
   }
   /// Save current point in coding/recording to a checkpoint that can
-  /// be restored later.  A WriterCheckpoint can be generated for an
-  /// Encoder or Recorder, but can only be used to rollback the Writer
+  /// be restored later.  A `WriterCheckpoint` can be generated for an
+  /// `Encoder` or `Recorder`, but can only be used to rollback the `Writer`
   /// instance from which it was generated.
   fn checkpoint(&mut self) -> WriterCheckpoint {
     StorageBackend::checkpoint(self)
   }
-  /// Roll back a given Writer to the state saved in the WriterCheckpoint
-  /// 'wc': Saved Writer state/posiiton to restore
+  /// Roll back a given `Writer` to the state saved in the `WriterCheckpoint`
+  ///
+  /// - 'wc': Saved `Writer` state/posiiton to restore
   fn rollback(&mut self, wc: &WriterCheckpoint) {
     StorageBackend::rollback(self, wc)
   }
@@ -797,13 +823,25 @@ where
 pub trait BCodeWriter {
   fn recenter_nonneg(&mut self, r: u16, v: u16) -> u16;
   fn recenter_finite_nonneg(&mut self, n: u16, r: u16, v: u16) -> u16;
+  /// # Errors
+  ///
+  /// - Returns `std::io::Error` if the writer cannot be written to.
   fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error>;
+  /// # Errors
+  ///
+  /// - Returns `std::io::Error` if the writer cannot be written to.
   fn write_subexpfin(
     &mut self, n: u16, k: u16, v: u16,
   ) -> Result<(), std::io::Error>;
+  /// # Errors
+  ///
+  /// - Returns `std::io::Error` if the writer cannot be written to.
   fn write_refsubexpfin(
     &mut self, n: u16, k: u16, r: i16, v: i16,
   ) -> Result<(), std::io::Error>;
+  /// # Errors
+  ///
+  /// - Returns `std::io::Error` if the writer cannot be written to.
   fn write_s_refsubexpfin(
     &mut self, n: u16, k: u16, r: i16, v: i16,
   ) -> Result<(), std::io::Error>;

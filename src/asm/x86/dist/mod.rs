@@ -121,6 +121,9 @@ pub(crate) const fn to_index(bsize: BlockSize) -> usize {
   bsize as usize & (DIST_FNS_LENGTH - 1)
 }
 
+/// # Panics
+///
+/// - If in `check_asm` mode, panics on mismatch between native and ASM results.
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_sad<T: Pixel>(
@@ -138,6 +141,7 @@ pub fn get_sad<T: Pixel>(
     (Err(_), _) => call_rust(),
     (Ok(bsize), PixelType::U8) => {
       match SAD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
@@ -151,6 +155,7 @@ pub fn get_sad<T: Pixel>(
     }
     (Ok(bsize), PixelType::U16) => {
       match SAD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
@@ -170,6 +175,9 @@ pub fn get_sad<T: Pixel>(
   dist
 }
 
+/// # Panics
+///
+/// - If in `check_asm` mode, panics on mismatch between native and ASM results.
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_satd<T: Pixel>(
@@ -187,6 +195,7 @@ pub fn get_satd<T: Pixel>(
     (Err(_), _) => call_rust(),
     (Ok(bsize), PixelType::U8) => {
       match SATD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
@@ -200,6 +209,7 @@ pub fn get_satd<T: Pixel>(
     }
     (Ok(bsize), PixelType::U16) => {
       match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
         Some(func) => unsafe {
           (func)(

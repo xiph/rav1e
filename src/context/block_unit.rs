@@ -34,7 +34,7 @@ pub const COMP_GROUP_IDX_CONTEXTS: usize = 6;
 pub const COEFF_CONTEXT_MAX_WIDTH: usize = MAX_TILE_WIDTH / MI_SIZE;
 
 /// Absolute offset in blocks, where a block is defined
-/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+/// to be an `N*N` square where `N == (1 << BLOCK_TO_PLANE_SHIFT)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct BlockOffset {
   pub x: usize,
@@ -42,12 +42,12 @@ pub struct BlockOffset {
 }
 
 /// Absolute offset in blocks inside a plane, where a block is defined
-/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+/// to be an `N*N` square where `N == (1 << BLOCK_TO_PLANE_SHIFT)`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlaneBlockOffset(pub BlockOffset);
 
 /// Absolute offset in blocks inside a tile, where a block is defined
-/// to be an N*N square where N = (1 << BLOCK_TO_PLANE_SHIFT).
+/// to be an `N*N` square where `N == (1 << BLOCK_TO_PLANE_SHIFT)`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TileBlockOffset(pub BlockOffset);
 
@@ -763,6 +763,9 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, enable as u32, cdf, 2);
   }
 
+  /// # Panics
+  ///
+  /// - If called with `enable: true` (not yet implemented
   pub fn write_use_palette_mode<W: Writer>(
     &mut self, w: &mut W, enable: bool, bsize: BlockSize, bo: TileBlockOffset,
     luma_mode: PredictionMode, chroma_mode: PredictionMode, xdec: usize,
@@ -1415,6 +1418,9 @@ impl<'a> ContextWriter<'a> {
     mode_context
   }
 
+  /// # Panics
+  ///
+  /// - If the first ref frame is not set (`NONE_FRAME`)
   pub fn find_mvrefs<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,
@@ -1649,6 +1655,9 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
+  /// # Panics
+  ///
+  /// - If `mode` is not an inter mode
   pub fn write_compound_mode<W: Writer>(
     &mut self, w: &mut W, mode: PredictionMode, ctx: usize,
   ) {
@@ -1711,6 +1720,9 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, drl_mode as u32, cdf, 2);
   }
 
+  /// # Panics
+  ///
+  /// - If the MV is invalid
   pub fn write_mv<W: Writer>(
     &mut self, w: &mut W, mv: MotionVector, ref_mv: MotionVector,
     mv_precision: MvSubpelPrecision,
@@ -1891,8 +1903,9 @@ impl<'a> ContextWriter<'a> {
       }
     }
 
+    // SAFETY: We write to the array below before reading from it.
     let mut coeff_contexts: Aligned<[i8; MAX_CODED_TX_SQUARE]> =
-      Aligned::uninitialized();
+      unsafe { Aligned::uninitialized() };
 
     self.get_nz_map_contexts(
       levels,

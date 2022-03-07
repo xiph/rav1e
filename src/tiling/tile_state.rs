@@ -23,25 +23,25 @@ use crate::util::*;
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
 
-/// Tiled view of FrameState
+/// Tiled view of `FrameState`
 ///
-/// Contrary to PlaneRegionMut and TileMut, there is no const version:
+/// Contrary to `PlaneRegionMut` and `TileMut`, there is no const version:
 ///  - in practice, we don't need it;
 ///  - it would require to instantiate a const version of every of its inner
 ///    tiled views recursively.
 ///
-/// # TileState fields
+/// # `TileState` fields
 ///
-/// The way the FrameState fields are mapped depend on how they are accessed
+/// The way the `FrameState` fields are mapped depend on how they are accessed
 /// tile-wise and frame-wise.
 ///
-/// Some fields (like "qc") are only used during tile-encoding, so they are only
-/// stored in TileState.
+/// Some fields (like `qc`) are only used during tile-encoding, so they are only
+/// stored in `TileState`.
 ///
-/// Some other fields (like "input" or "segmentation") are not written
-/// tile-wise, so they just reference the matching field in FrameState.
+/// Some other fields (like `input` or `segmentation`) are not written
+/// tile-wise, so they just reference the matching field in `FrameState`.
 ///
-/// Some others (like "rec") are written tile-wise, but must be accessible
+/// Some others (like `rec`) are written tile-wise, but must be accessible
 /// frame-wise once the tile views vanish (e.g. for deblocking).
 #[derive(Debug)]
 pub struct TileStateMut<'a, T: Pixel> {

@@ -15,6 +15,8 @@
 //!
 //! This is the C-compatible API
 #![deny(missing_docs)]
+// Basically everything will be unsafe since this is a FFI
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 use std::slice;
 use std::sync::Arc;
@@ -98,8 +100,9 @@ impl Drop for FrameOpaque {
 
 /// Raw video Frame
 ///
-/// It can be allocated through rav1e_frame_new(), populated using rav1e_frame_fill_plane()
-/// and freed using rav1e_frame_unref().
+/// It can be allocated through `rav1e_frame_new()`,
+/// populated using `rav1e_frame_fill_plane()`,
+/// and freed using `rav1e_frame_unref()`.
 pub struct Frame {
   fi: FrameInternal,
   frame_type: FrameTypeOverride,
@@ -171,10 +174,10 @@ impl From<Option<rav1e::EncoderStatus>> for EncoderStatus {
 
 /// Encoder configuration
 ///
-/// Instantiate it using rav1e_config_default() and fine-tune it using
-/// rav1e_config_parse().
+/// Instantiate it using `rav1e_config_default()` and fine-tune it using
+/// `rav1e_config_parse()`.
 ///
-/// Use rav1e_config_unref() to free its memory.
+/// Use `rav1e_config_unref()` to free its memory.
 pub struct Config {
   cfg: rav1e::Config,
 }
@@ -332,10 +335,10 @@ impl EncContext {
 
 /// Encoder context
 ///
-/// Contains the encoding state, it is created by rav1e_context_new() using an
+/// Contains the encoding state, it is created by `rav1e_context_new()` using an
 /// Encoder configuration.
 ///
-/// Use rav1e_context_unref() to free its memory.
+/// Use `rav1e_context_unref()` to free its memory.
 pub struct Context {
   ctx: EncContext,
   last_err: Option<rav1e::EncoderStatus>,
@@ -345,9 +348,9 @@ type FrameType = rav1e::FrameType;
 
 /// Encoded Packet
 ///
-/// The encoded packets are retrieved using rav1e_receive_packet().
+/// The encoded packets are retrieved using `rav1e_receive_packet()`.
 ///
-/// Use rav1e_packet_unref() to free its memory.
+/// Use `rav1e_packet_unref()` to free its memory.
 #[repr(C)]
 pub struct Packet {
   /// Encoded data buffer
@@ -361,16 +364,16 @@ pub struct Packet {
   /// User provided opaque data
   pub opaque: *mut c_void,
   /// The reconstruction of the shown frame.
-  /// This is freed automatically by rav1e_packet_unref().
+  /// This is freed automatically by `rav1e_packet_unref()`.
   pub rec: *mut Frame,
   /// The Reference Frame
-  /// This is freed automatically by rav1e_packet_unref().
+  /// This is freed automatically by `rav1e_packet_unref()`.
   pub source: *mut Frame,
 }
 
 /// Version information as presented in `[package]` `version`.
 ///
-/// e.g. `0.1.0``
+/// e.g. `0.1.0`
 ///
 /// Can be parsed by [semver](https://crates.io/crates/semver).
 /// This returns the version of the loaded library, regardless
@@ -400,9 +403,7 @@ pub unsafe extern fn rav1e_version_full() -> *const c_char {
 
 /// Simple Data
 ///
-///
-///
-/// Use rav1e_data_unref() to free its memory.
+/// Use `rav1e_data_unref()` to free its memory.
 #[repr(C)]
 pub struct Data {
   /// Pointer to the data buffer
@@ -411,7 +412,7 @@ pub struct Data {
   pub len: size_t,
 }
 
-/// Free a RaData buffer
+/// Free a `RaData` buffer
 #[no_mangle]
 pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   if !data.is_null() {
@@ -424,7 +425,7 @@ pub unsafe extern fn rav1e_data_unref(data: *mut Data) {
   }
 }
 
-/// Create a RaConfig filled with default parameters.
+/// Create a `RaConfig` filled with default parameters.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_default() -> *mut Config {
   let cfg = rav1e::Config::default();
@@ -457,16 +458,18 @@ unsafe fn decode_slice<'a>(
 
 /// Setup a second pass rate control using the provided summary
 ///
-/// Passing NULL data resets the rate control settings.
+/// Passing `NULL` data resets the rate control settings.
 ///
 /// If additional data is required, pointer and len stay unchanged, otherwise
 /// they are updated.
 ///
 /// Return:
-/// 0 on success
-/// > 0 if the buffer has to be larger
-/// < 0 on failure
+/// `0` on success
+/// `> 0` if the buffer has to be larger
+/// `< 0` on failure
 #[no_mangle]
+// Panic can never occur here
+#[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_config_set_rc_summary(
   cfg: *mut Config, data: *mut *const u8, len: *mut size_t,
 ) -> c_int {
@@ -525,9 +528,9 @@ pub unsafe extern fn rav1e_config_set_time_base(
 
 /// Set pixel format of the stream.
 ///
-/// Supported values for subsampling and chromapos are defined by the
-/// enum types RaChromaSampling and RaChromaSamplePosition respectively.
-/// Valid values for fullrange are 0 and 1.
+/// Supported values for `subsampling` and `chroma_pos` are defined by the
+/// enum types `RaChromaSampling` and `RaChromaSamplePosition` respectively.
+/// Valid values for `pixel_range` are 0 and 1.
 ///
 /// Returns a negative value on error or 0.
 #[no_mangle]
@@ -566,7 +569,7 @@ pub unsafe extern fn rav1e_config_set_pixel_format(
 /// Set color properties of the stream.
 ///
 /// Supported values are defined by the enum types
-/// RaMatrixCoefficients, RaColorPrimaries, and RaTransferCharacteristics
+/// `RaMatrixCoefficients`, `RaColorPrimaries`, and `RaTransferCharacteristics`
 /// respectively.
 ///
 /// Return a negative value on error or 0.
@@ -610,10 +613,10 @@ pub unsafe extern fn rav1e_config_set_content_light(
 
 /// Set the mastering display information for HDR10 streams.
 ///
-/// primaries and white_point arguments are RaChromaticityPoint, containing 0.16 fixed point
-/// values.
-/// max_luminance is a 24.8 fixed point value.
-/// min_luminance is a 18.14 fixed point value.
+/// `primaries` and `white_point` arguments are `RaChromaticityPoint`,
+/// containing 0.16 fixed point values.
+/// `max_luminance` is a 24.8 fixed point value.
+/// `min_luminance` is a 18.14 fixed point value.
 ///
 /// Returns a negative value on error or 0.
 /// cbindgen:ptrs-as-arrays=[[primaries;3]]
@@ -639,7 +642,7 @@ pub unsafe extern fn rav1e_config_set_mastering_display(
   }
 }
 
-/// Free the RaConfig.
+/// Free the `RaConfig`.
 #[no_mangle]
 pub unsafe extern fn rav1e_config_unref(cfg: *mut Config) {
   if !cfg.is_null() {
@@ -710,25 +713,25 @@ unsafe fn option_match(
 /// Set a configuration parameter using its key and value as string.
 ///
 /// Available keys and values
-/// - "width": width of the frame, default 640
-/// - "height": height of the frame, default 480
-/// - "speed": 0-10, default 6
-/// - "threads": maximum number of threads to be used
-/// - "tune": "psnr"-"psychovisual", default "psychovisual"
-/// - "quantizer": 0-255, default 100
-/// - "tiles": total number of tiles desired (0 denotes auto), default 0
-/// - "tile_rows": number of tiles horizontally (must be a power of two, overridden by tiles if present), default 0
-/// - "tile_cols": number of tiles vertically (must be a power of two, overridden by tiles if present), default 0
-/// - "min_quantizer": minimum allowed base quantizer to use in bitrate mode, default 0
-/// - "bitrate": target bitrate for the bitrate mode (required for two pass mode), default 0
-/// - "key_frame_interval": maximum interval between two keyframes, default 240
-/// - "min_key_frame_interval": minimum interval between two keyframes, default 12
-/// - "switch_frame_interval": interval between switch frames, default 0
-/// - "reservoir_frame_delay": number of temporal units over which to distribute the reservoir usage, default None
-/// - "rdo_lookahead_frames": number of frames to read ahead for the RDO lookahead computation, default 40
-/// - "low_latency": flag to enable low latency mode, default false
-/// - "enable_timing_info": flag to enable signaling timing info in the bitstream, default false
-/// - "still_picture": flag for still picture mode, default false
+/// - `"width"`: width of the frame, default `640`
+/// - `"height"`: height of the frame, default `480`
+/// - `"speed"`: 0-10, default `6`
+/// - `"threads"`: maximum number of threads to be used, default auto
+/// - `"tune"`: `"psnr"` or `"psychovisual"`, default `"psychovisual"`
+/// - `"quantizer"`: 0-255, default `100`
+/// - `"tiles"`: total number of tiles desired (0 denotes auto), default `0`
+/// - `"tile_rows"`: number of tiles horizontally (must be a power of two, overridden by tiles if present), default `0`
+/// - `"tile_cols"`: number of tiles vertically (must be a power of two, overridden by tiles if present), default `0`
+/// - `"min_quantizer"`: minimum allowed base quantizer to use in bitrate mode, default `0`
+/// - `"bitrate"`: target bitrate for the bitrate mode (required for two pass mode), default `0`
+/// - `"key_frame_interval"`: maximum interval between two keyframes, default `240`
+/// - `"min_key_frame_interval"`: minimum interval between two keyframes, default `12`
+/// - `"switch_frame_interval"`: interval between switch frames, default `0`
+/// - `"reservoir_frame_delay"`: number of temporal units over which to distribute the reservoir usage, default `None`
+/// - `"rdo_lookahead_frames"`: number of frames to read ahead for the RDO lookahead computation, default `40`
+/// - `"low_latency"`: flag to enable low latency mode, default `false`
+/// - `"enable_timing_info"`: flag to enable signaling timing info in the bitstream, default `false`
+/// - `"still_picture"`: flag for still picture mode, default `false`
 ///
 /// Return a negative value on error or 0.
 #[no_mangle]
@@ -744,10 +747,12 @@ pub unsafe extern fn rav1e_config_parse(
 
 /// Set a configuration parameter using its key and value as integer.
 ///
-/// Available keys and values are the same as rav1e_config_parse()
+/// Available keys and values are the same as `rav1e_config_parse()`
 ///
 /// Return a negative value on error or 0.
 #[no_mangle]
+// Panic can never occur here
+#[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_config_parse_int(
   cfg: *mut Config, key: *const c_char, value: c_int,
 ) -> c_int {
@@ -762,8 +767,8 @@ pub unsafe extern fn rav1e_config_parse_int(
 /// Generate a new encoding context from a populated encoder configuration
 ///
 /// Multiple contexts can be generated through it.
-/// Returns Null if context creation failed, e.g. by passing
-/// an invalid Config.
+/// Returns `Null` if context creation failed, e.g. by passing
+/// an invalid `Config`.
 #[no_mangle]
 pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   let cfg = &(*cfg).cfg;
@@ -781,7 +786,7 @@ pub unsafe extern fn rav1e_context_new(cfg: *const Config) -> *mut Context {
   }
 }
 
-/// Free the RaContext.
+/// Free the `RaContext`.
 #[no_mangle]
 pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
   if !ctx.is_null() {
@@ -791,10 +796,10 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 
 /// Produce a new frame from the encoding context
 ///
-/// It must be populated using rav1e_frame_fill_plane().
+/// It must be populated using `rav1e_frame_fill_plane()`.
 ///
-/// The frame is reference counted and must be released passing it to rav1e_frame_unref(),
-/// see rav1e_send_frame().
+/// The frame is reference counted and must be released passing it to `rav1e_frame_unref()`,
+/// see `rav1e_send_frame()`.
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
@@ -805,7 +810,7 @@ pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   Box::into_raw(frame)
 }
 
-/// Free the RaFrame.
+/// Free the `RaFrame`.
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
   if !frame.is_null() {
@@ -815,7 +820,7 @@ pub unsafe extern fn rav1e_frame_unref(frame: *mut Frame) {
 
 /// Overrides the encoders frame type decision for a frame
 ///
-/// Must be called before rav1e_send_frame() if used.
+/// Must be called before `rav1e_send_frame()` if used.
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_set_type(
   frame: *mut Frame, frame_type: FrameTypeOverride,
@@ -834,8 +839,8 @@ pub unsafe extern fn rav1e_frame_set_type(
 ///
 /// It takes the ownership of its memory:
 /// - it will relinquish the ownership to the context if
-///   rav1e_send_frame is called.
-/// - it will call the destructor if rav1e_frame_unref is called
+///   `rav1e_send_frame` is called.
+/// - it will call the destructor if `rav1e_frame_unref` is called
 ///   otherwise.
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_set_opaque(
@@ -849,20 +854,22 @@ pub unsafe extern fn rav1e_frame_set_opaque(
 }
 
 /// Retrieve the first-pass data of a two-pass encode for the frame that was
-/// just encoded. This should be called BEFORE every call to rav1e_receive_packet()
+/// just encoded. This should be called BEFORE every call to `rav1e_receive_packet()`
 /// (including the very first one), even if no packet was produced by the
-/// last call to rav1e_receive_packet, if any (i.e., RA_ENCODER_STATUS_ENCODED
+/// last call to `rav1e_receive_packet`, if any (i.e., `RA_ENCODER_STATUS_ENCODED`
 /// was returned). It needs to be called once more after
-/// RA_ENCODER_STATUS_LIMIT_REACHED is returned, to retrieve the header that
+/// `RA_ENCODER_STATUS_LIMIT_REACHED` is returned, to retrieve the header that
 /// should be written to the front of the stats file (overwriting the
 /// placeholder header that was emitted at the start of encoding).
 ///
-/// It is still safe to call this function when rav1e_receive_packet() returns any
-/// other error. It will return NULL instead of returning a duplicate copy
+/// It is still safe to call this function when `rav1e_receive_packet()` returns any
+/// other error. It will return `NULL` instead of returning a duplicate copy
 /// of the previous frame's data.
 ///
-/// Must be freed with rav1e_data_unref().
+/// Must be freed with `rav1e_data_unref()`.
 #[no_mangle]
+// Panic can never occur here
+#[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_twopass_out(ctx: *mut Context) -> *mut Data {
   let buf = (*ctx).ctx.twopass_out();
 
@@ -897,7 +904,7 @@ pub enum RcDataKind {
   Frame,
   /// There is no pass data available for now
   ///
-  /// This is emitted if rav1e_rc_receive_pass_data is called more
+  /// This is emitted if `rav1e_rc_receive_pass_data` is called more
   /// often than it should.
   Empty,
 }
@@ -913,12 +920,12 @@ pub unsafe extern fn rav1e_rc_summary_size(ctx: *const Context) -> size_t {
 
 /// Return the first pass data
 ///
-/// Call it after rav1e_receive_packet() returns a normal condition status:
-/// EncoderStatus::Encoded,
-/// EncoderStatus::Success,
-/// EncoderStatus::LimitReached.
+/// Call it after `rav1e_receive_packet()` returns a normal condition status:
+/// - `EncoderStatus::Encoded`,
+/// - `EncoderStatus::Success`,
+/// - `EncoderStatus::LimitReached`.
 ///
-/// use rav1e_data_unref() to free the data.
+/// use `rav1e_data_unref()` to free the data.
 ///
 /// It will return a `RcDataKind::Summary` once the encoder is flushed.
 #[no_mangle]
@@ -975,7 +982,7 @@ pub unsafe extern fn rav1e_rc_second_pass_data_required(
 /// Feed the first pass Rate Control data to the encoder,
 /// Frame-specific Packets only.
 ///
-/// Call it before receive_packet()
+/// Call it before `receive_packet()`
 ///
 /// If additional data is required, pointer and len stay unchanged, otherwise
 /// they are updated.
@@ -985,6 +992,8 @@ pub unsafe extern fn rav1e_rc_second_pass_data_required(
 /// - `> 0` the amount of bytes needed
 /// - `< 0` on unrecoverable failure
 #[no_mangle]
+// Panic can never occur here
+#[allow(clippy::missing_panics_doc)]
 pub unsafe extern fn rav1e_rc_send_pass_data(
   ctx: *mut Context, data: *mut *const u8, len: *mut size_t,
 ) -> c_int {
@@ -1014,8 +1023,8 @@ pub unsafe extern fn rav1e_rc_send_pass_data(
 /// bound (more might be required), but if 0 is returned, then encoding can
 /// proceed. This is just a hint to the application, and does not need to
 /// be called for encoding the second pass to work, so long as the
-/// application continues to provide more data to rav1e_twopass_in() in a loop
-/// until rav1e_twopass_in() returns 0.
+/// application continues to provide more data to `rav1e_twopass_in()` in a loop
+/// until `rav1e_twopass_in()` returns 0.
 #[no_mangle]
 pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
   (*ctx).ctx.twopass_bytes_needed() as size_t
@@ -1025,8 +1034,8 @@ pub unsafe extern fn rav1e_twopass_bytes_needed(ctx: *mut Context) -> size_t {
 /// second pass. On success this returns the number of bytes of that data
 /// which were consumed. When encoding the second pass of a two-pass encode,
 /// this should be called repeatedly in a loop before every call to
-/// rav1e_receive_packet() (including the very first one) until no bytes are
-/// consumed, or until twopass_bytes_needed() returns 0. Returns -1 on failure.
+/// `rav1e_receive_packet()` (including the very first one) until no bytes are
+/// consumed, or until `twopass_bytes_needed()` returns 0. Returns -1 on failure.
 #[no_mangle]
 pub unsafe extern fn rav1e_twopass_in(
   ctx: *mut Context, buf: *mut u8, buf_size: size_t,
@@ -1045,11 +1054,11 @@ pub unsafe extern fn rav1e_twopass_in(
 /// Send the frame for encoding
 ///
 /// The function increases the frame internal reference count and it can be passed multiple
-/// times to different rav1e_send_frame() with a caveat:
+/// times to different `rav1e_send_frame()` with a caveat:
 ///
-/// The opaque data, if present, will be moved from the Frame to the context
-/// and returned by rav1e_receive_packet in the Packet opaque field or
-/// the destructor will be called on rav1e_context_unref if the frame is
+/// The opaque data, if present, will be moved from the `Frame` to the `Context`
+/// and returned by `rav1e_receive_packet` in the `Packet` `opaque` field or
+/// the destructor will be called on `rav1e_context_unref` if the frame is
 /// still pending in the encoder.
 ///
 /// Returns:
@@ -1105,7 +1114,7 @@ pub unsafe extern fn rav1e_last_status(ctx: *const Context) -> EncoderStatus {
   (*ctx).last_err.into()
 }
 
-/// Return a static string matching the EncoderStatus variant.
+/// Return a static string matching the `EncoderStatus` variant.
 ///
 #[no_mangle]
 pub unsafe extern fn rav1e_status_to_str(
@@ -1142,7 +1151,7 @@ pub unsafe extern fn rav1e_receive_packet(
   ret.into()
 }
 
-/// Free the RaPacket.
+/// Free the `RaPacket`.
 #[no_mangle]
 pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
   if !pkt.is_null() {
@@ -1161,7 +1170,7 @@ pub unsafe extern fn rav1e_packet_unref(pkt: *mut Packet) {
 ///
 /// Its format is compatible with the AV1 Matroska and ISOBMFF specification.
 ///
-/// Use rav1e_data_unref() to free it.
+/// Use `rav1e_data_unref()` to free it.
 #[no_mangle]
 pub unsafe extern fn rav1e_container_sequence_header(
   ctx: *const Context,
@@ -1214,12 +1223,12 @@ fn rav1e_frame_extract_plane_internal<T: rav1e::Pixel>(
 ///
 /// The data is copied and this function has to be called for each plane.
 ///
-/// frame: A frame provided by rav1e_frame_new()
-/// plane: The index of the plane starting from 0
-/// data: The data to be copied
-/// data_len: Length of the buffer
-/// stride: Plane line in bytes, including padding
-/// bytewidth: Number of bytes per component, either 1 or 2
+/// `frame`: A frame provided by `rav1e_frame_new()`
+/// `plane`: The index of the plane starting from 0
+/// `data`: The data to be copied
+/// `data_len`: Length of the buffer
+/// `stride`: Plane line in bytes, including padding
+/// `bytewidth`: Number of bytes per component, either 1 or 2
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_fill_plane(
   frame: *mut Frame, plane: c_int, data: *const u8, data_len: size_t,
@@ -1239,20 +1248,20 @@ pub unsafe extern fn rav1e_frame_fill_plane(
 
 /// Extract a frame plane
 ///
-/// This is the reverse of rav1e_frame_fill_plane(), primarily used for
-/// extracting the source and reconstruction data from a RaPacket.
+/// This is the reverse of `rav1e_frame_fill_plane()`, primarily used for
+/// extracting the source and reconstruction data from a `RaPacket`.
 ///
 /// Currently the frame contains 3 planes, the first is luminance followed by
 /// chrominance.
 ///
 /// The data is copied out of the frame for a single plane.
 ///
-/// frame: A frame provided inside a packet returned by rav1e_receive_packet()
-/// plane: The index of the plane starting from 0
-/// data: The destination for the data
-/// data_len: Length of the buffer
-/// stride: Plane line in bytes, including padding
-/// bytewidth: Number of bytes per component, either 1 or 2
+/// `frame`: A frame provided inside a packet returned by `rav1e_receive_packet()`
+/// `plane`: The index of the plane starting from 0
+/// `data`: The destination for the data
+/// `data_len`: Length of the buffer
+/// `stride`: Plane line in bytes, including padding
+/// `bytewidth`: Number of bytes per component, either 1 or 2
 #[no_mangle]
 pub unsafe extern fn rav1e_frame_extract_plane(
   frame: *const Frame, plane: c_int, data: *mut u8, data_len: size_t,

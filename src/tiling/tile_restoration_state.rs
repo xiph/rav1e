@@ -17,7 +17,7 @@ use std::ops::{Index, IndexMut};
 use std::ptr;
 use std::slice;
 
-/// Tiled view of RestorationUnits
+/// Tiled view of `RestorationUnits`
 #[derive(Debug)]
 pub struct TileRestorationUnits<'a> {
   data: *const RestorationUnit,
@@ -26,11 +26,12 @@ pub struct TileRestorationUnits<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameRestorationUnits
+  /// number of cols in the underlying `FrameRestorationUnits`
+  stride: usize,
   phantom: PhantomData<&'a RestorationUnit>,
 }
 
-/// Mutable tiled view of RestorationUnits
+/// Mutable tiled view of `RestorationUnits`
 #[derive(Debug)]
 pub struct TileRestorationUnitsMut<'a> {
   data: *mut RestorationUnit,
@@ -39,7 +40,8 @@ pub struct TileRestorationUnitsMut<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameRestorationUnits
+  /// number of cols in the underlying `FrameRestorationUnits`
+  stride: usize,
   phantom: PhantomData<&'a mut RestorationUnit>,
 }
 
@@ -105,6 +107,10 @@ macro_rules! tile_restoration_units_common {
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rows);
+        // SAFETY: The above assert ensures we do not access OOB data.
+        //
+        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.stride);
           slice::from_raw_parts(ptr, self.cols)
@@ -136,6 +142,7 @@ impl IndexMut<usize> for TileRestorationUnitsMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rows);
+    // SAFETY: The above assert ensures we do not access OOB data.
     unsafe {
       let ptr = self.data.add(index * self.stride);
       slice::from_raw_parts_mut(ptr, self.cols)
@@ -143,7 +150,7 @@ impl IndexMut<usize> for TileRestorationUnitsMut<'_> {
   }
 }
 
-/// Tiled view of RestorationPlane
+/// Tiled view of `RestorationPlane`
 #[derive(Debug)]
 pub struct TileRestorationPlane<'a> {
   pub rp_cfg: &'a RestorationPlaneConfig,
@@ -152,7 +159,7 @@ pub struct TileRestorationPlane<'a> {
   pub units: TileRestorationUnits<'a>,
 }
 
-/// Mutable tiled view of RestorationPlane
+/// Mutable tiled view of `RestorationPlane`
 #[derive(Debug)]
 pub struct TileRestorationPlaneMut<'a> {
   pub rp_cfg: &'a RestorationPlaneConfig,
@@ -297,13 +304,13 @@ impl<'a> TileRestorationPlaneMut<'a> {
   }
 }
 
-/// Tiled view of RestorationState
+/// Tiled view of `RestorationState`
 #[derive(Debug)]
 pub struct TileRestorationState<'a> {
   pub planes: [TileRestorationPlane<'a>; MAX_PLANES],
 }
 
-/// Mutable tiled view of RestorationState
+/// Mutable tiled view of `RestorationState`
 #[derive(Debug)]
 pub struct TileRestorationStateMut<'a> {
   pub planes: [TileRestorationPlaneMut<'a>; MAX_PLANES],

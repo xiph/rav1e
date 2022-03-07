@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 use std::ops::{Index, IndexMut};
 use std::slice;
 
-/// Tiled view of FrameMEStats
+/// Tiled view of `FrameMEStats`
 #[derive(Debug)]
 pub struct TileMEStats<'a> {
   data: *const MEStats,
@@ -24,11 +24,12 @@ pub struct TileMEStats<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameMEStats
+  /// number of cols in the underlying `FrameMEStats`
+  stride: usize,
   phantom: PhantomData<&'a MotionVector>,
 }
 
-/// Mutable tiled view of FrameMEStats
+/// Mutable tiled view of `FrameMEStats`
 #[derive(Debug)]
 pub struct TileMEStatsMut<'a> {
   data: *mut MEStats,
@@ -38,7 +39,8 @@ pub struct TileMEStatsMut<'a> {
   y: usize,
   cols: usize,
   rows: usize,
-  stride: usize, // number of cols in the underlying FrameMEStats
+  /// number of cols in the underlying `FrameMEStats`
+  stride: usize,
   phantom: PhantomData<&'a mut MotionVector>,
 }
 
@@ -49,6 +51,9 @@ macro_rules! tile_me_stats_common {
   ($name:ident $(,$opt_mut:tt)?) => {
     impl<'a> $name<'a> {
 
+      /// # Panics
+      ///
+      /// - If the requested dimensions are larger than the frame MV size
       #[inline(always)]
       pub fn new(
         frame_mvs: &'a $($opt_mut)? FrameMEStats,
@@ -100,6 +105,10 @@ macro_rules! tile_me_stats_common {
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rows);
+        // SAFETY: The above assert ensures we do not access OOB data.
+        //
+        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.stride);
           slice::from_raw_parts(ptr, self.cols)
@@ -131,6 +140,7 @@ impl IndexMut<usize> for TileMEStatsMut<'_> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rows);
+    // SAFETY: The above assert ensures we do not access OOB data.
     unsafe {
       let ptr = self.data.add(index * self.stride);
       slice::from_raw_parts_mut(ptr, self.cols)

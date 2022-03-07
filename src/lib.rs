@@ -61,6 +61,11 @@
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
 #![warn(clippy::range_plus_one)]
+// Documentation lints
+#![warn(clippy::doc_markdown)]
+#![warn(clippy::missing_errors_doc)]
+#![warn(clippy::missing_panics_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]
@@ -242,7 +247,8 @@ mod rdo_tables;
 #[macro_use]
 mod util;
 mod cdef;
-mod context;
+#[doc(hidden)]
+pub mod context;
 mod deblock;
 mod encoder;
 mod entropymode;
@@ -259,7 +265,8 @@ pub mod scenechange;
 mod scenechange;
 mod segmentation;
 mod stats;
-mod tiling;
+#[doc(hidden)]
+pub mod tiling;
 mod token_cdfs;
 
 mod api;
@@ -331,6 +338,11 @@ pub mod version {
   /// Major version component
   ///
   /// It is increased every time a release presents a incompatible API change.
+  ///
+  /// # Panics
+  ///
+  /// Will panic if package is not built with Cargo,
+  /// or if the package version is not a valid triplet of integers.
   pub fn major() -> u64 {
     env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap()
   }
@@ -338,19 +350,29 @@ pub mod version {
   ///
   /// It is increased every time a release presents new functionalities are added
   /// in a backwards-compatible manner.
+  ///
+  /// # Panics
+  ///
+  /// Will panic if package is not built with Cargo,
+  /// or if the package version is not a valid triplet of integers.
   pub fn minor() -> u64 {
     env!("CARGO_PKG_VERSION_MINOR").parse().unwrap()
   }
   /// Patch version component
   ///
   /// It is increased every time a release provides only backwards-compatible bugfixes.
+  ///
+  /// # Panics
+  ///
+  /// Will panic if package is not built with Cargo,
+  /// or if the package version is not a valid triplet of integers.
   pub fn patch() -> u64 {
     env!("CARGO_PKG_VERSION_PATCH").parse().unwrap()
   }
 
   /// Version information as presented in `[package]` `version`.
   ///
-  /// e.g. `0.1.0``
+  /// e.g. `0.1.0`
   ///
   /// Can be parsed by [semver](https://crates.io/crates/semver).
   pub fn short() -> String {

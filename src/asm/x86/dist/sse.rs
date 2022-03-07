@@ -84,6 +84,9 @@ declare_asm_hbd_sse_fn![
   rav1e_weighted_sse_4x4_hbd_sse2
 ];
 
+/// # Panics
+///
+/// - If in `check_asm` mode, panics on mismatch between native and ASM results.
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_weighted_sse<T: Pixel>(
@@ -112,6 +115,7 @@ pub fn get_weighted_sse<T: Pixel>(
     (Err(_), _) => call_rust(),
     (Ok(bsize), PixelType::U8) => {
       match SSE_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
@@ -127,6 +131,7 @@ pub fn get_weighted_sse<T: Pixel>(
     }
     (Ok(bsize), PixelType::U16) => {
       match SSE_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,

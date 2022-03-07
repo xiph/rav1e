@@ -432,6 +432,11 @@ fn compute_tx_distortion<T: Pixel>(
 
 /// Compute a scaling factor to multiply the distortion of a block by,
 /// this factor is determined using temporal RDO.
+///
+/// # Panics
+///
+/// - If called with `bsize` of 8x8 or smaller
+/// - If the coded frame data doesn't exist on the `FrameInvariants`
 pub fn distortion_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
@@ -450,6 +455,9 @@ pub fn distortion_scale<T: Pixel>(
   coded_data.distortion_scales[y * coded_data.w_in_imp_b + x]
 }
 
+/// # Panics
+///
+/// - If the coded frame data doesn't exist on the `FrameInvariants`
 pub fn spatiotemporal_scale<T: Pixel>(
   fi: &FrameInvariants<T>, frame_bo: PlaneBlockOffset, bsize: BlockSize,
 ) -> DistortionScale {
@@ -891,7 +899,12 @@ fn luma_chroma_mode_rdo<T: Pixel>(
   }
 }
 
-// RDO-based mode decision
+/// RDO-based mode decision
+///
+/// # Panics
+///
+/// - If the best RD found is negative.
+///   This should never happen and indicates a development error.
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1509,6 +1522,9 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
   best
 }
 
+/// # Panics
+///
+/// - If the block size is invalid for subsampling.
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
   luma_tx_size: TxSize, fi: &FrameInvariants<T>,
@@ -1531,7 +1547,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   if visible_tx_w == 0 || visible_tx_h == 0 {
     return None;
   };
-  let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut ac: Aligned<[i16; 32 * 32]> = unsafe { Aligned::uninitialized() };
   luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
   let best_alpha: ArrayVec<i16, 2> = (1..3)
     .map(|p| {
@@ -1606,8 +1623,15 @@ pub fn rdo_cfl_alpha<T: Pixel>(
 }
 
 /// RDO-based transform type decision
-/// If cw_checkpoint is None, a checkpoint for cw's (ContextWriter) current
+/// If `cw_checkpoint` is `None`, a checkpoint for cw's (`ContextWriter`) current
 /// state is created and stored for later use.
+///
+/// # Panics
+///
+/// - If a writer checkpoint is never created before or within the function.
+///   This should never happen and indicates a development error.
+/// - If the best RD found is negative.
+///   This should never happen and indicates a development error.
 pub fn rdo_tx_type_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, cw_checkpoint: &mut Option<ContextWriterCheckpoint>,
@@ -1855,7 +1879,12 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   Some(cost + rd_cost_sum)
 }
 
-// RDO-based single level partitioning decision
+/// RDO-based single level partitioning decision
+///
+/// # Panics
+///
+/// - If the best RD found is negative.
+///   This should never happen, and indicates a development error.
 pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
@@ -2001,10 +2030,14 @@ fn rdo_loop_plane_error<T: Pixel>(
   err * fi.dist_scale[pli]
 }
 
-// Passed in a superblock offset representing the upper left corner of
-// the LRU area we're optimizing.  This area covers the largest LRU in
-// any of the present planes, but may consist of a number of
-// superblocks and full, smaller LRUs in the other planes
+/// Passed in a superblock offset representing the upper left corner of
+/// the LRU area we're optimizing.  This area covers the largest LRU in
+/// any of the present planes, but may consist of a number of
+/// superblocks and full, smaller LRUs in the other planes
+///
+/// # Panics
+///
+/// - If both CDEF and LRF are disabled.
 pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   base_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,

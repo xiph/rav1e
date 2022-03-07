@@ -43,6 +43,9 @@ static SINPI_INV: [i32; 5] = [0, 1321, 2482, 3344, 3803];
 
 const INV_COS_BIT: usize = 12;
 
+/// # Panics
+///
+/// - If `input` or `output` have fewer than 4 items.
 pub fn av1_idct4(input: &[i32], output: &mut [i32], range: usize) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
@@ -70,6 +73,9 @@ pub fn av1_iflipadst4(input: &[i32], output: &mut [i32], range: usize) {
   output[..4].reverse();
 }
 
+/// # Panics
+///
+/// - If `input` or `output` have fewer than 4 items.
 #[inline(always)]
 pub fn av1_iadst4(input: &[i32], output: &mut [i32], _range: usize) {
   assert!(input.len() >= 4);
@@ -126,6 +132,9 @@ pub fn av1_iidentity4(input: &[i32], output: &mut [i32], _range: usize) {
     .for_each(|(outp, inp)| *outp = round_shift(SQRT2 * *inp, 12));
 }
 
+/// # Panics
+///
+/// - If `input` or `output` have fewer than 8 items.
 pub fn av1_idct8(input: &[i32], output: &mut [i32], range: usize) {
   assert!(input.len() >= 8);
   assert!(output.len() >= 8);
@@ -180,6 +189,9 @@ pub fn av1_iflipadst8(input: &[i32], output: &mut [i32], range: usize) {
   output[..8].reverse();
 }
 
+/// # Panics
+///
+/// - If `input` or `output` have fewer than 8 items.
 #[inline(always)]
 pub fn av1_iadst8(input: &[i32], output: &mut [i32], range: usize) {
   assert!(input.len() >= 8);

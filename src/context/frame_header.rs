@@ -61,6 +61,9 @@ impl<'a> ContextWriter<'a> {
     ContextWriter::ref_count_ctx(fwd_cnt, bwd_cnt)
   }
 
+  /// # Panics
+  ///
+  /// - If the `comp_mode` setting does not match the reference mode and size.
   pub fn write_ref_frames<T: Pixel, W: Writer>(
     &mut self, w: &mut W, fi: &FrameInvariants<T>, bo: TileBlockOffset,
   ) {
@@ -162,6 +165,9 @@ impl<'a> ContextWriter<'a> {
     self.fc.count_lrf_switchable(w, rs, filter, pli)
   }
 
+  /// # Panics
+  ///
+  /// - If the LRF has already been written for this superblock
   pub fn write_lrf<W: Writer>(
     &mut self, w: &mut W, rs: &mut TileRestorationStateMut,
     sbo: TileSuperBlockOffset, pli: usize,

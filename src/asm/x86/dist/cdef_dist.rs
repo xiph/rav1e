@@ -41,6 +41,9 @@ extern {
   );
 }
 
+/// # Panics
+///
+/// - If in `check_asm` mode, panics on mismatch between native and ASM results.
 #[allow(clippy::let_and_return)]
 pub fn cdef_dist_kernel<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
@@ -66,6 +69,7 @@ pub fn cdef_dist_kernel<T: Pixel>(
       if let Some(func) =
         CDEF_DIST_KERNEL_FNS[cpu.as_index()][kernel_fn_index(w, h)]
       {
+        // SAFETY: Calls Assembly code.
         unsafe {
           func(
             src.data_ptr() as *const _,

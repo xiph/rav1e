@@ -41,6 +41,7 @@ pub fn write_y4m_frame<T: Pixel>(
     rec.planes[0].data_origin().chunks(stride_y).zip(rec_y.chunks_mut(pitch_y))
   {
     if y4m_details.bit_depth > 8 {
+      // SAFETY: This is essentially doing a transmute to u16, but safer.
       unsafe {
         line_out.copy_from_slice(slice::from_raw_parts::<u8>(
           line.as_ptr() as *const u8,
@@ -62,6 +63,7 @@ pub fn write_y4m_frame<T: Pixel>(
       .zip(rec_u.chunks_mut(pitch_uv))
     {
       if y4m_details.bit_depth > 8 {
+        // SAFETY: This is essentially doing a transmute to u16, but safer.
         unsafe {
           line_out.copy_from_slice(slice::from_raw_parts::<u8>(
             line.as_ptr() as *const u8,
@@ -81,6 +83,7 @@ pub fn write_y4m_frame<T: Pixel>(
       .zip(rec_v.chunks_mut(pitch_uv))
     {
       if y4m_details.bit_depth > 8 {
+        // SAFETY: This is essentially doing a transmute to u16, but safer.
         unsafe {
           line_out.copy_from_slice(slice::from_raw_parts::<u8>(
             line.as_ptr() as *const u8,

@@ -227,10 +227,10 @@ pub(crate) mod rust {
   /// Computes weighted sum of squared error.
   ///
   /// Each scale is applied to a 4x4 region in the provided inputs. Each scale
-  /// value is a fixed point number, currently ['DistortionScale'].
+  /// value is a fixed point number, currently [`DistortionScale`].
   ///
-  /// Implementations can require alignment (bw (block width) for ['src1'] and
-  /// ['src2'] and bw/4 for scale).
+  /// Implementations can require alignment (`bw` (block width) for [`src1`] and
+  /// [`src2`] and `bw/4` for `scale`).
   #[inline(never)]
   pub fn get_weighted_sse<T: Pixel>(
     src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, scale: &[u32],

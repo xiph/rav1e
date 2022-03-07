@@ -523,6 +523,9 @@ pub struct TXB_CTX {
 }
 
 impl<'a> ContextWriter<'a> {
+  /// # Panics
+  ///
+  /// - If an invalid combination of `tx_type` and `tx_size` is passed
   pub fn write_tx_type<W: Writer>(
     &mut self, w: &mut W, tx_size: TxSize, tx_type: TxType,
     y_mode: PredictionMode, is_inter: bool, use_reduced_tx_set: bool,
@@ -795,6 +798,9 @@ impl<'a> ContextWriter<'a> {
     av1_get_coded_tx_size(tx_size).height_log2()
   }
 
+  /// # Panics
+  ///
+  /// - If `eob` is prior to the start of the group
   #[inline]
   pub fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
     let t = if eob < 33 {

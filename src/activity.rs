@@ -65,7 +65,7 @@ impl ActivityMask {
   }
 }
 
-// Adapted from the source variance calculation in cdef_dist_wxh_8x8.
+// Adapted from the source variance calculation in `cdef_dist_wxh_8x8`.
 #[inline(never)]
 fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u32 {
   debug_assert!(src.plane_cfg.xdec == 0);
@@ -99,14 +99,14 @@ fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u32 {
   sum_s2 - ((sum_s * sum_s + 32) >> 6)
 }
 
-/// rsqrt result stored in fixed point w/ scaling such that:
-///   rsqrt = output.rsqrt_norm / (1 << output.shift)
+/// `rsqrt` result stored in fixed point w/ scaling such that:
+///   `rsqrt = output.rsqrt_norm / (1 << output.shift)`
 struct RsqrtOutput {
   norm: u16,
   shift: u8,
 }
 
-/// Fixed point rsqrt for ssim_boost
+/// Fixed point `rsqrt` for `ssim_boost`
 fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
   const INSHIFT: u8 = 16;
   const OUTSHIFT: u8 = 14;
@@ -188,7 +188,7 @@ mod ssim_boost_tests {
   use super::*;
   use rand::Rng;
 
-  /// Test to make sure extreme values of ssim boost don't overflow.
+  /// Test to make sure extreme values of `ssim_boost` don't overflow.
   #[test]
   fn overflow_test() {
     // Test variance for 8x8 region with a bit depth of 12
@@ -198,7 +198,7 @@ mod ssim_boost_tests {
     apply_ssim_boost(max_pix_sse * 8 * 8, max_variance, max_variance, 12);
   }
 
-  /// Floating point reference version of ssim_boost
+  /// Floating point reference version of `ssim_boost`
   fn reference_ssim_boost(svar: u32, dvar: u32, bit_depth: usize) -> f64 {
     let coeff_shift = bit_depth - 8;
     let var_scale = 1f64 / (1 << (2 * coeff_shift)) as f64;
@@ -213,7 +213,7 @@ mod ssim_boost_tests {
     RATIO * (svar + dvar + C2) / f64::sqrt(C1 * C1 + svar * dvar)
   }
 
-  /// Test that ssim_boost has sufficient accuracy.
+  /// Test that `ssim_boost` has sufficient accuracy.
   #[test]
   fn accuracy_test() {
     let mut rng = rand::thread_rng();

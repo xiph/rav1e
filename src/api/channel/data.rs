@@ -33,6 +33,12 @@ impl RcDataSender {
   pub(crate) fn new(limit: u64, sender: Sender<RcData>) -> RcDataSender {
     Self { sender, limit, count: 0 }
   }
+
+  /// # Errors
+  ///
+  /// - `TrySendError::Full` if the message could not be sent because the channel is full.
+  /// - `TrySendError::Disconnected` if the message could not be sent
+  ///   because the channel is disconnected.
   pub fn try_send(
     &mut self, data: RcData,
   ) -> Result<(), TrySendError<RcData>> {
@@ -46,6 +52,10 @@ impl RcDataSender {
       r
     }
   }
+
+  /// # Errors
+  ///
+  /// - `SendError` if the message could not be sent because the channel is disconnected.
   pub fn send(&mut self, data: RcData) -> Result<(), SendError<RcData>> {
     if self.limit <= self.count {
       Err(SendError(data))
@@ -71,9 +81,35 @@ impl RcDataSender {
 pub struct RcDataReceiver(pub(crate) Receiver<RcData>);
 
 impl RcDataReceiver {
+  /// Attempts to receive a message from the channel without blocking.
+  ///
+  /// This method will either receive a message from the channel immediately or return an error
+  /// if the channel is empty.
+  ///
+  /// If called on a zero-capacity channel, this method will receive a message only if there
+  /// happens to be a send operation on the other side of the channel at the same time.
+  ///
+  /// # Errors
+  ///
+  /// - `TryRecvError::Empty` if the channel is currently empty.
+  /// - `TryRecvError::Disconnected` if the channel is empty and has been disconnected.
   pub fn try_recv(&self) -> Result<RcData, TryRecvError> {
     self.0.try_recv()
   }
+
+  /// Blocks the current thread until a message is received or the channel is empty and
+  /// disconnected.
+  ///
+  /// If the channel is empty and not disconnected, this call will block until the receive
+  /// operation can proceed. If the channel is empty and becomes disconnected, this call will
+  /// wake up and return an error.
+  ///
+  /// If called on a zero-capacity channel, this method will wait for a send operation to appear
+  /// on the other side of the channel.
+  ///
+  /// # Errors
+  ///
+  /// - `RecvError` if the channel is empty and has been disconnected.
   pub fn recv(&self) -> Result<RcData, RecvError> {
     self.0.recv()
   }
@@ -113,6 +149,12 @@ impl<T: Pixel> FrameSender<T> {
   ) -> FrameSender<T> {
     Self { sender, config, limit, count: 0 }
   }
+
+  /// # Errors
+  ///
+  /// - `TrySendError::Full` if the message could not be sent because the channel is full.
+  /// - `TrySendError::Disconnected` if the message could not be sent
+  ///   because the channel is disconnected.
   pub fn try_send<F: IntoFrame<T>>(
     &mut self, frame: F,
   ) -> Result<(), TrySendError<FrameInput<T>>> {
@@ -127,6 +169,9 @@ impl<T: Pixel> FrameSender<T> {
     }
   }
 
+  /// # Errors
+  ///
+  /// - `SendError` if the message could not be sent because the channel is disconnected.
   pub fn send<F: IntoFrame<T>>(
     &mut self, frame: F,
   ) -> Result<(), SendError<FrameInput<T>>> {
@@ -169,9 +214,34 @@ pub struct PacketReceiver<T: Pixel> {
 }
 
 impl<T: Pixel> PacketReceiver<T> {
+  /// Attempts to receive a message from the channel without blocking.
+  ///
+  /// This method will either receive a message from the channel immediately or return an error
+  /// if the channel is empty.
+  ///
+  /// If called on a zero-capacity channel, this method will receive a message only if there
+  /// happens to be a send operation on the other side of the channel at the same time.
+  ///
+  /// # Errors
+  ///
+  /// - `TryRecvError::Empty` if the channel is currently empty.
+  /// - `TryRecvError::Disconnected` if the channel is empty and has been disconnected.
   pub fn try_recv(&self) -> Result<Packet<T>, TryRecvError> {
     self.receiver.try_recv()
   }
+  /// Blocks the current thread until a message is received or the channel is empty and
+  /// disconnected.
+  ///
+  /// If the channel is empty and not disconnected, this call will block until the receive
+  /// operation can proceed. If the channel is empty and becomes disconnected, this call will
+  /// wake up and return an error.
+  ///
+  /// If called on a zero-capacity channel, this method will wait for a send operation to appear
+  /// on the other side of the channel.
+  ///
+  /// # Errors
+  ///
+  /// - `RecvError` if the channel is empty and has been disconnected.
   pub fn recv(&self) -> Result<Packet<T>, RecvError> {
     self.receiver.recv()
   }
@@ -195,6 +265,11 @@ impl<T: Pixel> PacketReceiver<T> {
   ///
   /// [the specification]:
   /// https://aomediacodec.github.io/av1-isobmff/#av1codecconfigurationbox-section
+  ///
+  /// # Panics
+  ///
+  /// Panics if the header cannot be written in memory. This is unrecoverable,
+  /// and usually indicates the system is out of memory.
   #[inline]
   pub fn container_sequence_header(&self) -> Vec<u8> {
     fn sequence_header_inner(seq: &Sequence) -> io::Result<Vec<u8>> {

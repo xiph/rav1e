@@ -193,7 +193,7 @@ impl ColorDescription {
 
 /// Allowed pixel value range
 ///
-/// C.f. VideoFullRangeFlag variable specified in ISO/IEC 23091-4/ITU-T H.273
+/// C.f. `VideoFullRangeFlag` variable specified in ISO/IEC 23091-4/ITU-T H.273
 #[wasm_bindgen]
 #[derive(
   ArgEnum, Debug, Clone, Copy, PartialEq, FromPrimitive, Serialize, Deserialize,

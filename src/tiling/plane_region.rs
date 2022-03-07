@@ -73,9 +73,9 @@ pub enum Area {
 impl Area {
   #[inline(always)]
   /// Convert to a rectangle of pixels.
-  /// For a BlockRect and BlockStartingAt, for subsampled chroma planes,
+  /// For a `BlockRect` and `BlockStartingAt`, for subsampled chroma planes,
   /// the returned rect will be aligned to a 4x4 chroma block.
-  /// This is necessary for compute_distortion and rdo_cfl_alpha as
+  /// This is necessary for `compute_distortion` and `rdo_cfl_alpha` as
   /// the subsampled chroma block covers multiple luma blocks.
   pub fn to_rect(
     &self, xdec: usize, ydec: usize, parent_width: usize, parent_height: usize,
@@ -144,11 +144,19 @@ macro_rules! plane_region_common {
       pub fn is_null(&self) -> bool {
         self.data.is_null()
       }
+      /// # Panics
+      ///
+      /// - If the configured dimensions are invalid
+      // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+      #[allow(clippy::undocumented_unsafe_blocks)]
       #[inline(always)]
       pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect:
         Rect) -> Self {
         if cfg.width == 0 || cfg.height == 0 {
           return Self {
+            // SAFETY: This is actually pretty unsafe.
+            // This means we need to ensure that no other method on this struct
+            // can access data if the dimensions are 0.
             data: unsafe { std::ptr::null_mut::<T>() },
             plane_cfg: cfg,
             rect: Rect::default(),
@@ -162,6 +170,7 @@ macro_rules! plane_region_common {
         let origin = (cfg.yorigin as isize + rect.y) * cfg.stride as isize
                     + cfg.xorigin as isize + rect.x;
         Self {
+          // SAFETY: The above asserts ensure we do not go OOB.
           data: unsafe { data.$as_ptr().offset(origin) },
           plane_cfg: cfg,
           rect,
@@ -222,31 +231,35 @@ macro_rules! plane_region_common {
         }
       }
 
-      // Return a view to a subregion of the plane
-      //
-      // The subregion must be included in (i.e. must not exceed) this region.
-      //
-      // It is described by an `Area`, relative to this region.
-      //
-      // # Example
-      //
-      // ``` ignore
-      // # use rav1e::tiling::*;
-      // # fn f(region: &PlaneRegion<'_, u16>) {
-      // // a subregion from (10, 8) to the end of the region
-      // let subregion = region.subregion(Area::StartingAt { x: 10, y: 8 });
-      // # }
-      // ```
-      //
-      // ``` ignore
-      // # use rav1e::context::*;
-      // # use rav1e::tiling::*;
-      // # fn f(region: &PlaneRegion<'_, u16>) {
-      // // a subregion from the top-left of block (2, 3) having size (64, 64)
-      // let bo = BlockOffset { x: 2, y: 3 };
-      // let subregion = region.subregion(Area::BlockRect { bo, width: 64, height: 64 });
-      // # }
-      // ```
+      /// Return a view to a subregion of the plane
+      ///
+      /// The subregion must be included in (i.e. must not exceed) this region.
+      ///
+      /// It is described by an `Area`, relative to this region.
+      ///
+      /// # Panics
+      ///
+      /// - If the requested dimensions are larger than the plane region size
+      ///
+      /// # Example
+      ///
+      /// ``` ignore
+      /// # use rav1e::tiling::*;
+      /// # fn f(region: &PlaneRegion<'_, u16>) {
+      /// // a subregion from (10, 8) to the end of the region
+      /// let subregion = region.subregion(Area::StartingAt { x: 10, y: 8 });
+      /// # }
+      /// ```
+      ///
+      /// ``` ignore
+      /// # use rav1e::context::*;
+      /// # use rav1e::tiling::*;
+      /// # fn f(region: &PlaneRegion<'_, u16>) {
+      /// // a subregion from the top-left of block (2, 3) having size (64, 64)
+      /// let bo = BlockOffset { x: 2, y: 3 };
+      /// let subregion = region.subregion(Area::BlockRect { bo, width: 64, height: 64 });
+      /// # }
+      /// ```
       #[inline(always)]
       pub fn subregion(&self, area: Area) -> PlaneRegion<'_, T> {
         if self.data.is_null() {
@@ -265,6 +278,10 @@ macro_rules! plane_region_common {
           );
           assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
           assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
+          // SAFETY: The above asserts ensure we do not go outside the original rectangle.
+          //
+          // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+          #[allow(clippy::undocumented_unsafe_blocks)]
           let data = unsafe {
             self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
           };
@@ -375,6 +392,10 @@ macro_rules! plane_region_common {
       #[inline(always)]
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rect.height);
+        // SAFETY: The above assert ensures we do not access OOB data.
+        //
+        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.plane_cfg.stride);
           slice::from_raw_parts(ptr, self.rect.width)
@@ -404,31 +425,35 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
     }
   }
 
-  // Return a mutable view to a subregion of the plane
-  //
-  // The subregion must be included in (i.e. must not exceed) this region.
-  //
-  // It is described by an `Area`, relative to this region.
-  //
-  // # Example
-  //
-  // ``` ignore
-  // # use rav1e::tiling::*;
-  // # fn f(region: &mut PlaneRegionMut<'_, u16>) {
-  // // a mutable subregion from (10, 8) having size (32, 32)
-  // let subregion = region.subregion_mut(Area::Rect { x: 10, y: 8, width: 32, height: 32 });
-  // # }
-  // ```
-  //
-  // ``` ignore
-  // # use rav1e::context::*;
-  // # use rav1e::tiling::*;
-  // # fn f(region: &mut PlaneRegionMut<'_, u16>) {
-  // // a mutable subregion from the top-left of block (2, 3) to the end of the region
-  // let bo = BlockOffset { x: 2, y: 3 };
-  // let subregion = region.subregion_mut(Area::BlockStartingAt { bo });
-  // # }
-  // ```
+  /// Return a mutable view to a subregion of the plane
+  ///
+  /// The subregion must be included in (i.e. must not exceed) this region.
+  ///
+  /// It is described by an `Area`, relative to this region.
+  ///
+  /// # Panics
+  ///
+  /// - If the targeted `area` is outside of the bounds of this plane region.
+  ///
+  /// # Example
+  ///
+  /// ``` ignore
+  /// # use rav1e::tiling::*;
+  /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
+  /// // a mutable subregion from (10, 8) having size (32, 32)
+  /// let subregion = region.subregion_mut(Area::Rect { x: 10, y: 8, width: 32, height: 32 });
+  /// # }
+  /// ```
+  ///
+  /// ``` ignore
+  /// # use rav1e::context::*;
+  /// # use rav1e::tiling::*;
+  /// # fn f(region: &mut PlaneRegionMut<'_, u16>) {
+  /// // a mutable subregion from the top-left of block (2, 3) to the end of the region
+  /// let bo = BlockOffset { x: 2, y: 3 };
+  /// let subregion = region.subregion_mut(Area::BlockStartingAt { bo });
+  /// # }
+  /// ```
   #[inline(always)]
   pub fn subregion_mut(&mut self, area: Area) -> PlaneRegionMut<'_, T> {
     let rect = area.to_rect(
@@ -439,6 +464,7 @@ impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
     );
     assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
     assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
+    // SAFETY: The above asserts ensure we do not go outside the original rectangle.
     let data = unsafe {
       self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
     };
@@ -471,6 +497,7 @@ impl<T: Pixel> IndexMut<usize> for PlaneRegionMut<'_, T> {
   #[inline(always)]
   fn index_mut(&mut self, index: usize) -> &mut Self::Output {
     assert!(index < self.rect.height);
+    // SAFETY: The above assert ensures we do not access OOB data.
     unsafe {
       let ptr = self.data.add(index * self.plane_cfg.stride);
       slice::from_raw_parts_mut(ptr, self.rect.width)
@@ -502,6 +529,8 @@ impl<'a, T: Pixel> Iterator for RowsIter<'a, T> {
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
     if self.remaining > 0 {
+      // SAFETY: We verified that we have enough data left to not go OOB,
+      // assuming that `self.stride` and `self.width` are set correctly.
       let row = unsafe {
         let ptr = self.data;
         self.data = self.data.add(self.stride);
@@ -526,6 +555,8 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
   #[inline(always)]
   fn next(&mut self) -> Option<Self::Item> {
     if self.remaining > 0 {
+      // SAFETY: We verified that we have enough data left to not go OOB,
+      // assuming that `self.stride` and `self.width` are set correctly.
       let row = unsafe {
         let ptr = self.data;
         self.data = self.data.add(self.stride);
@@ -579,6 +610,7 @@ impl<'a, T: Pixel> Iterator for VertWindows<'a, T> {
   #[inline(always)]
   fn nth(&mut self, n: usize) -> Option<Self::Item> {
     if self.remaining > n {
+      // SAFETY: We verified that we have enough data left to not go OOB.
       self.data = unsafe { self.data.add(self.plane_cfg.stride * n) };
       self.output_rect.y += n as isize;
       let output = PlaneRegion {
@@ -587,6 +619,7 @@ impl<'a, T: Pixel> Iterator for VertWindows<'a, T> {
         rect: self.output_rect,
         phantom: PhantomData,
       };
+      // SAFETY: We verified that we have enough data left to not go OOB.
       self.data = unsafe { self.data.add(self.plane_cfg.stride) };
       self.output_rect.y += 1;
       self.remaining -= (n + 1);
@@ -613,6 +646,7 @@ impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
   #[inline(always)]
   fn nth(&mut self, n: usize) -> Option<Self::Item> {
     if self.remaining > n {
+      // SAFETY: We verified that we have enough data left to not go OOB.
       self.data = unsafe { self.data.add(n) };
       self.output_rect.x += n as isize;
       let output = PlaneRegion {
@@ -621,6 +655,7 @@ impl<'a, T: Pixel> Iterator for HorzWindows<'a, T> {
         rect: self.output_rect,
         phantom: PhantomData,
       };
+      // SAFETY: We verified that we have enough data left to not go OOB.
       self.data = unsafe { self.data.add(1) };
       self.output_rect.x += 1;
       self.remaining -= (n + 1);

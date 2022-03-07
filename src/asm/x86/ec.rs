@@ -14,6 +14,8 @@ use std::arch::x86_64::*;
 #[inline(always)]
 pub fn update_cdf(cdf: &mut [u16], val: u32) {
   if cdf.len() == 4 {
+    // SAFETY: Calls Assembly code, which is only valid when the length of
+    // `cdf` is 4.
     return unsafe {
       update_cdf_4_sse2(cdf, val);
     };
@@ -99,6 +101,7 @@ mod test {
     let mut cdf2 = [7296, 3819, 1616, 0];
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
+      // SAFETY: We are only testing on cdfs of size 4
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }
@@ -109,6 +112,7 @@ mod test {
     let mut cdf2 = cdf;
     for i in 0..4 {
       rust::update_cdf(&mut cdf, i);
+      // SAFETY: We are only testing on cdfs of size 4
       unsafe {
         super::update_cdf_4_sse2(&mut cdf2, i);
       }

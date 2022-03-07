@@ -30,8 +30,13 @@ impl Opaque {
   }
 
   /// Attempt to downcast the opaque to a concrete type.
+  ///
+  /// # Errors
+  ///
+  /// Returns `Err(Self)` if the value could not be downcast to `T`.
   pub fn downcast<T: Any + Send + Sync>(self) -> Result<Box<T>, Opaque> {
     if self.0.is::<T>() {
+      // SAFETY: We verified the type of `T` before this cast.
       unsafe {
         let raw: *mut (dyn Any + Send + Sync) = Box::into_raw(self.0);
         Ok(Box::from_raw(raw as *mut T))

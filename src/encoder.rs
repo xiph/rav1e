@@ -121,7 +121,7 @@ const DELTA_FRAME_ID_LENGTH: u32 = 14;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Sequence {
-  // OBU Sequence header of AV1
+  /// OBU Sequence header of AV1
   pub profile: u8,
   pub num_bits_width: u32,
   pub num_bits_height: u32,
@@ -139,46 +139,65 @@ pub struct Sequence {
   pub delta_frame_id_length: u32,
   pub use_128x128_superblock: bool,
   pub order_hint_bits_minus_1: u32,
-  pub force_screen_content_tools: u32, // 0 - force off
-  // 1 - force on
-  // 2 - adaptive
-  pub force_integer_mv: u32, // 0 - Not to force. MV can be in 1/4 or 1/8
-  // 1 - force to integer
-  // 2 - adaptive
-  pub still_picture: bool, // Video is a single frame still picture
-  pub reduced_still_picture_hdr: bool, // Use reduced header for still picture
-  pub enable_filter_intra: bool, // enables/disables filter_intra
-  pub enable_intra_edge_filter: bool, // enables/disables corner/edge filtering and upsampling
-  pub enable_interintra_compound: bool, // enables/disables interintra_compound
-  pub enable_masked_compound: bool,   // enables/disables masked compound
-  pub enable_dual_filter: bool,       // 0 - disable dual interpolation filter
-  // 1 - enable vert/horiz filter selection
-  pub enable_order_hint: bool, // 0 - disable order hint, and related tools
-  // jnt_comp, ref_frame_mvs, frame_sign_bias
-  // if 0, enable_jnt_comp and
-  // enable_ref_frame_mvs must be set zs 0.
-  pub enable_jnt_comp: bool, // 0 - disable joint compound modes
-  // 1 - enable it
-  pub enable_ref_frame_mvs: bool, // 0 - disable ref frame mvs
-  // 1 - enable it
-  pub enable_warped_motion: bool, // 0 - disable warped motion for sequence
-  // 1 - enable it for the sequence
-  pub enable_superres: bool, // 0 - Disable superres for the sequence, and disable
-  //     transmitting per-frame superres enabled flag.
-  // 1 - Enable superres for the sequence, and also
-  //     enable per-frame flag to denote if superres is
-  //     enabled for that frame.
-  pub enable_cdef: bool,        // To turn on/off CDEF
-  pub enable_restoration: bool, // To turn on/off loop restoration
-  pub enable_large_lru: bool, // To turn on/off larger-than-superblock loop restoration units
-  pub enable_delayed_loopfilter_rdo: bool, // allow encoder to delay loop filter RDO/coding until after frame reconstruciton is complete
+  /// 0 - force off
+  /// 1 - force on
+  /// 2 - adaptive
+  pub force_screen_content_tools: u32,
+  /// 0 - Not to force. MV can be in 1/4 or 1/8
+  /// 1 - force to integer
+  /// 2 - adaptive
+  pub force_integer_mv: u32,
+  /// Video is a single frame still picture
+  pub still_picture: bool,
+  /// Use reduced header for still picture
+  pub reduced_still_picture_hdr: bool,
+  /// enables/disables filter_intra
+  pub enable_filter_intra: bool,
+  /// enables/disables corner/edge filtering and upsampling
+  pub enable_intra_edge_filter: bool,
+  /// enables/disables interintra_compound
+  pub enable_interintra_compound: bool,
+  /// enables/disables masked compound
+  pub enable_masked_compound: bool,
+  /// 0 - disable dual interpolation filter
+  /// 1 - enable vert/horiz filter selection
+  pub enable_dual_filter: bool,
+  /// 0 - disable order hint, and related tools
+  /// jnt_comp, ref_frame_mvs, frame_sign_bias
+  /// if 0, enable_jnt_comp and
+  /// enable_ref_frame_mvs must be set zs 0.
+  pub enable_order_hint: bool,
+  /// 0 - disable joint compound modes
+  /// 1 - enable it
+  pub enable_jnt_comp: bool,
+  /// 0 - disable ref frame mvs
+  /// 1 - enable it
+  pub enable_ref_frame_mvs: bool,
+  /// 0 - disable warped motion for sequence
+  /// 1 - enable it for the sequence
+  pub enable_warped_motion: bool,
+  /// 0 - Disable superres for the sequence, and disable
+  ///     transmitting per-frame superres enabled flag.
+  /// 1 - Enable superres for the sequence, and also
+  ///     enable per-frame flag to denote if superres is
+  ///     enabled for that frame.
+  pub enable_superres: bool,
+  /// To turn on/off CDEF
+  pub enable_cdef: bool,
+  /// To turn on/off loop restoration
+  pub enable_restoration: bool,
+  /// To turn on/off larger-than-superblock loop restoration units
+  pub enable_large_lru: bool,
+  /// allow encoder to delay loop filter RDO/coding until after frame reconstruciton is complete
+  pub enable_delayed_loopfilter_rdo: bool,
   pub operating_points_cnt_minus_1: usize,
   pub operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS],
   pub display_model_info_present_flag: bool,
   pub decoder_model_info_present_flag: bool,
-  pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS], // minor, major
-  pub tier: [usize; MAX_NUM_OPERATING_POINTS], // seq_tier in the spec. One bit: 0
-  // or 1.
+  /// minor, major
+  pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS],
+  /// seq_tier in the spec. One bit: 0 or 1.
+  pub tier: [usize; MAX_NUM_OPERATING_POINTS],
   pub film_grain_params_present: bool,
   pub timing_info_present: bool,
   pub tiling: TilingInfo,
@@ -186,6 +205,9 @@ pub struct Sequence {
 }
 
 impl Sequence {
+  /// # Panics
+  ///
+  /// Panics if the resulting tile sizes would be too large.
   pub fn new(config: &EncoderConfig) -> Sequence {
     let width_bits = 32 - (config.width as u32).leading_zeros();
     let height_bits = 32 - (config.height as u32).leading_zeros();
@@ -688,6 +710,9 @@ pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
 
 impl<T: Pixel> FrameInvariants<T> {
   #[allow(clippy::erasing_op, clippy::identity_op)]
+  /// # Panics
+  ///
+  /// - If the size of `T` does not match the sequence's bit depth
   pub fn new(config: Arc<EncoderConfig>, sequence: Arc<Sequence>) -> Self {
     assert!(
       sequence.bit_depth <= mem::size_of::<T>() * 8,
@@ -815,7 +840,7 @@ impl<T: Pixel> FrameInvariants<T> {
     fi
   }
 
-  /// Returns the created FrameInvariants, or `None` if this should be
+  /// Returns the created `FrameInvariants`, or `None` if this should be
   /// a placeholder frame.
   pub(crate) fn new_inter_frame(
     previous_coded_fi: &Self, inter_cfg: &InterConfig,
@@ -1114,6 +1139,9 @@ impl<T: Pixel> fmt::Display for FrameInvariants<T> {
   }
 }
 
+/// # Errors
+///
+/// - If the frame packet cannot be written to
 pub fn write_temporal_delimiter(packet: &mut dyn io::Write) -> io::Result<()> {
   packet.write_all(&TEMPORAL_DELIMITER)?;
   Ok(())
@@ -1196,9 +1224,14 @@ fn get_qidx<T: Pixel>(
   qidx
 }
 
-// For a transform block,
-// predict, transform, quantize, write coefficients to a bitstream,
-// dequantize, inverse-transform.
+/// For a transform block,
+/// predict, transform, quantize, write coefficients to a bitstream,
+/// dequantize, inverse-transform.
+///
+/// # Panics
+///
+/// - If the block size is invalid for subsampling
+/// - If a tx type other than DCT is used for 64x64 blocks
 pub fn encode_tx_block<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
@@ -1299,13 +1332,18 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: Aligned<[i16; 64 * 64]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut residual_storage: Aligned<[i16; 64 * 64]> =
+    unsafe { Aligned::uninitialized() };
+  // SAFETY: We write to the array below before reading from it.
   let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
-    Aligned::uninitialized();
+    unsafe { Aligned::uninitialized() };
+  // SAFETY: We write to the array below before reading from it.
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    Aligned::uninitialized();
+    unsafe { Aligned::uninitialized() };
+  // SAFETY: We write to the array below before reading from it.
   let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
-    Aligned::uninitialized();
+    unsafe { Aligned::uninitialized() };
   let residual = &mut residual_storage.data[..tx_size.area()];
   let coeffs = &mut coeffs_storage.data[..tx_size.area()];
   let qcoeffs = init_slice_repeat_mut(
@@ -1447,6 +1485,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   (has_coeff, tx_dist)
 }
 
+/// # Panics
+///
+/// - If the block size is invalid for subsampling
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, luma_mode: PredictionMode, ref_frames: [RefType; 2],
@@ -1711,6 +1752,10 @@ pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
   cw.bc.cdef_coded
 }
 
+/// # Panics
+///
+/// - If chroma and luma do not match for inter modes
+/// - If an invalid motion vector is found
 pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
@@ -2013,6 +2058,9 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 }
 
+/// # Panics
+///
+/// - If the block size is invalid for subsampling
 pub fn luma_ac<T: Pixel>(
   ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
   bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
@@ -2083,6 +2131,9 @@ pub fn luma_ac<T: Pixel>(
   }
 }
 
+/// # Panics
+///
+/// - If attempting to encode a lossless block (not yet supported)
 pub fn write_tx_blocks<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
@@ -2097,7 +2148,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   assert_ne!(qidx, 0); // lossless is not yet supported
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let mut ac: Aligned<[i16; 32 * 32]> = Aligned::uninitialized();
+  // SAFETY: We write to the array below before reading from it.
+  let mut ac: Aligned<[i16; 32 * 32]> = unsafe { Aligned::uninitialized() };
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
   let do_chroma =
@@ -3521,10 +3573,14 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
   buf
 }
 
-// Write a packet containing only the placeholder that tells the decoder
-// to present the already decoded frame present at `frame_to_show_map_idx`
-//
-// See `av1-spec` Section 6.8.2 and 7.18.
+/// Write a packet containing only the placeholder that tells the decoder
+/// to present the already decoded frame present at `frame_to_show_map_idx`
+///
+/// See `av1-spec` Section 6.8.2 and 7.18.
+///
+/// # Panics
+///
+/// - If the frame packets cannot be written
 pub fn encode_show_existing_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
@@ -3588,6 +3644,9 @@ fn get_initial_segmentation<T: Pixel>(
   segmentation.unwrap_or_default()
 }
 
+/// # Panics
+///
+/// - If the frame packets cannot be written
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {

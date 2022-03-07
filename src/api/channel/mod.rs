@@ -44,6 +44,10 @@ impl Config {
   /// Create a single pass encoder channel
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the configuration is invalid.
   pub fn new_channel<T: Pixel>(
     &self,
   ) -> Result<VideoDataChannel<T>, InvalidConfig> {
@@ -63,11 +67,20 @@ impl Config {
 
   /// Create a first pass encoder channel
   ///
-  /// The pass data information is available throguht
+  /// The pass data information is emitted through this channel.
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
-  /// The last buffer in the PassDataReceiver is the summary of the whole
+  /// The last buffer in the `PassDataReceiver` is the summary of the whole
   /// encoding process.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the configuration is invalid.
+  ///
+  /// # Panics
+  ///
+  /// - If the channel cannot be created. An error should be raised before this,
+  ///   so a panic indicates a development error.
   pub fn new_firstpass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, RcDataReceiver), InvalidConfig> {
@@ -93,6 +106,15 @@ impl Config {
   /// The encoding process require both frames and pass data to progress.
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the configuration is invalid.
+  ///
+  /// # Panics
+  ///
+  /// - If the channel cannot be created. An error should be raised before this,
+  ///   so a panic indicates a development error.
   pub fn new_secondpass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, RcDataSender), InvalidConfig> {
@@ -118,8 +140,17 @@ impl Config {
   /// are sent through the `PassDataSender` endpoint
   ///
   /// Drop the `FrameSender<T>` endpoint to flush the encoder.
-  /// The last buffer in the PassDataReceiver is the summary of the whole
+  /// The last buffer in the `PassDataReceiver` is the summary of the whole
   /// encoding process.
+  ///
+  /// # Errors
+  ///
+  /// - Returns `InvalidConfig` if the configuration is invalid.
+  ///
+  /// # Panics
+  ///
+  /// - If the channel cannot be created. An error should be raised before this,
+  ///   so a panic indicates a development error.
   pub fn new_multipass_channel<T: Pixel>(
     &self,
   ) -> Result<(VideoDataChannel<T>, PassDataChannel), InvalidConfig> {

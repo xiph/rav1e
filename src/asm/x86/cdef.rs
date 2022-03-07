@@ -209,6 +209,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
   let dir = match T::type_enum() {
     PixelType::U8 => {
       if let Some(func) = CDEF_DIR_LBD_FNS[cpu.as_index()] {
+        // SAFETY: Calls Assembly code.
         unsafe {
           (func)(
             img.as_ptr() as *const _,
@@ -222,6 +223,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
     }
     PixelType::U16 if coeff_shift > 0 => {
       if let Some(func) = CDEF_DIR_HBD_FNS[cpu.as_index()] {
+        // SAFETY: Calls Assembly code.
         unsafe {
           (func)(
             img.as_ptr() as *const _,
@@ -316,6 +318,11 @@ mod test {
             let damping = 2;
             let bit_depth = 8;
 
+            // SAFETY: Calling functions with raw pointers--we created the
+            // planes above and only read from the start.
+            //
+            // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
+            #[allow(clippy::undocumented_unsafe_blocks)]
             unsafe {
               cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
               cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);

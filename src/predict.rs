@@ -201,6 +201,10 @@ impl PredictionMode {
       1
     }
   }
+
+  /// # Panics
+  ///
+  /// - If called on an inter `PredictionMode`
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
     tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
@@ -296,6 +300,10 @@ impl PredictionMode {
   }
 
   /// Inter prediction with a single reference (i.e. not compound mode)
+  ///
+  /// # Panics
+  ///
+  /// - If called on an intra `PredictionMode`
   pub fn predict_inter_single<T: Pixel>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
@@ -327,6 +335,10 @@ impl PredictionMode {
   }
 
   /// Inter prediction with two references.
+  ///
+  /// # Panics
+  ///
+  /// - If called on an intra `PredictionMode`
   pub fn predict_inter_compound<T: Pixel>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
@@ -373,7 +385,7 @@ impl PredictionMode {
   }
 
   /// Inter prediction that determines whether compound mode is being used based
-  /// on the second ['RefType'] in ['ref_frames'].
+  /// on the second [`RefType`] in [`ref_frames`].
   pub fn predict_inter<T: Pixel>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
@@ -413,7 +425,7 @@ impl PredictionMode {
 }
 
 /// A pair of buffers holding the interpolation of two references. Use for
-/// compound inter_prediction
+/// compound inter prediction.
 #[derive(Debug)]
 pub struct InterCompoundBuffers {
   data: AlignedBoxedSlice<i16>,
@@ -559,6 +571,9 @@ impl IntraEdgeFilterParameters {
     }
   }
 
+  /// # Panics
+  ///
+  /// - If the appropriate ref frame types are not set on `self`
   pub fn use_smooth_filter(self) -> bool {
     let above_smooth = match self.above_mode {
       Some(PredictionMode::SMOOTH_PRED)
@@ -1399,8 +1414,9 @@ mod test {
 
   #[test]
   fn pred_matches_u8() {
+    // SAFETY: We write to the array below before reading from it.
     let mut edge_buf: Aligned<[u8; 2 * MAX_TX_SIZE + 1]> =
-      Aligned::uninitialized();
+      unsafe { Aligned::uninitialized() };
     for i in 0..edge_buf.data.len() {
       edge_buf.data[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
     }
@@ -1542,6 +1558,7 @@ mod test {
       }
     }
 
+    // SAFETY: ???
     let above_left = unsafe { *above.as_ptr().offset(-1) };
 
     pred_paeth(
