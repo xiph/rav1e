@@ -12,12 +12,12 @@ use rav1e::config::SpeedSettings;
 use rav1e::*;
 
 fn main() {
-  let mut enc = EncoderConfig::default();
-
-  enc.width = 64;
-  enc.height = 96;
-
-  enc.speed_settings = SpeedSettings::from_preset(9);
+  let enc = EncoderConfig {
+    width: 64,
+    height: 96,
+    speed_settings: SpeedSettings::from_preset(9),
+    ..Default::default()
+  };
 
   let cfg = Config::new().with_encoder_config(enc);
 

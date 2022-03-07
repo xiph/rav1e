@@ -724,7 +724,7 @@ fn frame_block_offset() {
     let bo = BlockOffset { x: 0, y: 0 };
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
-      PlaneBlockOffset { 0: bo }
+      PlaneBlockOffset(bo)
     );
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
@@ -738,7 +738,7 @@ fn frame_block_offset() {
     let bo = BlockOffset { x: 1, y: 1 };
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
-      PlaneBlockOffset { 0: bo }
+      PlaneBlockOffset(bo)
     );
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
@@ -752,7 +752,7 @@ fn frame_block_offset() {
     let bo = BlockOffset { x: 1, y: 1 };
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
-      PlaneBlockOffset { 0: bo }
+      PlaneBlockOffset(bo)
     );
   }
   {
@@ -762,7 +762,7 @@ fn frame_block_offset() {
     let bo = BlockOffset { x: 2, y: 2 };
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
-      PlaneBlockOffset { 0: bo }
+      PlaneBlockOffset(bo)
     );
     assert_eq!(
       pr.to_frame_block_offset(TileBlockOffset(bo)),
