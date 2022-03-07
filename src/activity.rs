@@ -124,7 +124,7 @@ fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
   let rsqrt_shift: u8 = (OUTSHIFT as i16 + ((s + INSHIFT as i16) >> 1)) as u8;
 
   #[inline(always)]
-  fn mult16_16_q15(a: i32, b: i32) -> i32 {
+  const fn mult16_16_q15(a: i32, b: i32) -> i32 {
     (a * b) >> 15
   }
 

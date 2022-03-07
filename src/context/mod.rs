@@ -93,7 +93,7 @@ impl FieldMap {
 }
 
 #[inline]
-pub fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
+pub const fn av1_get_coded_tx_size(tx_size: TxSize) -> TxSize {
   match tx_size {
     TX_64X64 | TX_64X32 | TX_32X64 => TX_32X32,
     TX_16X64 => TX_16X32,
@@ -133,7 +133,7 @@ pub const MV_UPP: i32 = 1 << MV_IN_USE_BITS;
 pub const MV_LOW: i32 = -(1 << MV_IN_USE_BITS);
 
 #[inline(always)]
-pub fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
+pub const fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
   if mv.row == 0 {
     return if mv.col == 0 {
       MvJointType::MV_JOINT_ZERO
@@ -159,7 +159,7 @@ pub fn mv_joint_horizontal(joint_type: MvJointType) -> bool {
     || joint_type == MvJointType::MV_JOINT_HNZVNZ
 }
 #[inline(always)]
-pub fn mv_class_base(mv_class: usize) -> u32 {
+pub const fn mv_class_base(mv_class: usize) -> u32 {
   if mv_class != MV_CLASS_0 {
     (CLASS0_SIZE << (mv_class as usize + 2)) as u32
   } else {

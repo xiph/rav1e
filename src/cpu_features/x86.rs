@@ -30,7 +30,7 @@ impl CpuFeatureLevel {
   }
 
   #[inline(always)]
-  pub fn as_index(self) -> usize {
+  pub const fn as_index(self) -> usize {
     self as usize
   }
 }

@@ -76,7 +76,7 @@ pub enum ObuMetaType {
 }
 
 impl ObuMetaType {
-  fn size(self) -> u64 {
+  const fn size(self) -> u64 {
     use self::ObuMetaType::*;
     match self {
       OBU_META_HDR_CLL => 4,
@@ -96,7 +96,7 @@ impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
     // Disallow values larger than 32-bits to ensure consistent behavior on 32 and
     // 64 bit targets: value is typically used to determine buffer allocation size
     // when decoded.
-    fn uleb_size_in_bytes(mut value: u64) -> usize {
+    const fn uleb_size_in_bytes(mut value: u64) -> usize {
       let mut size = 0;
       loop {
         size += 1;

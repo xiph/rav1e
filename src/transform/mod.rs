@@ -128,12 +128,12 @@ impl TxSize {
   pub const TX_SIZES_ALL: usize = 14 + 5;
 
   #[inline]
-  pub fn width(self) -> usize {
+  pub const fn width(self) -> usize {
     1 << self.width_log2()
   }
 
   #[inline]
-  pub fn width_log2(self) -> usize {
+  pub const fn width_log2(self) -> usize {
     match self {
       TX_4X4 | TX_4X8 | TX_4X16 => 2,
       TX_8X8 | TX_8X4 | TX_8X16 | TX_8X32 => 3,
@@ -144,17 +144,17 @@ impl TxSize {
   }
 
   #[inline]
-  pub fn width_index(self) -> usize {
+  pub const fn width_index(self) -> usize {
     self.width_log2() - TX_4X4.width_log2()
   }
 
   #[inline]
-  pub fn height(self) -> usize {
+  pub const fn height(self) -> usize {
     1 << self.height_log2()
   }
 
   #[inline]
-  pub fn height_log2(self) -> usize {
+  pub const fn height_log2(self) -> usize {
     match self {
       TX_4X4 | TX_8X4 | TX_16X4 => 2,
       TX_8X8 | TX_4X8 | TX_16X8 | TX_32X8 => 3,
@@ -165,32 +165,32 @@ impl TxSize {
   }
 
   #[inline]
-  pub fn height_index(self) -> usize {
+  pub const fn height_index(self) -> usize {
     self.height_log2() - TX_4X4.height_log2()
   }
 
   #[inline]
-  pub fn width_mi(self) -> usize {
+  pub const fn width_mi(self) -> usize {
     self.width() >> MI_SIZE_LOG2
   }
 
   #[inline]
-  pub fn area(self) -> usize {
+  pub const fn area(self) -> usize {
     1 << self.area_log2()
   }
 
   #[inline]
-  pub fn area_log2(self) -> usize {
+  pub const fn area_log2(self) -> usize {
     self.width_log2() + self.height_log2()
   }
 
   #[inline]
-  pub fn height_mi(self) -> usize {
+  pub const fn height_mi(self) -> usize {
     self.height() >> MI_SIZE_LOG2
   }
 
   #[inline]
-  pub fn block_size(self) -> BlockSize {
+  pub const fn block_size(self) -> BlockSize {
     match self {
       TX_4X4 => BLOCK_4X4,
       TX_8X8 => BLOCK_8X8,
@@ -215,7 +215,7 @@ impl TxSize {
   }
 
   #[inline]
-  pub fn sqr(self) -> TxSize {
+  pub const fn sqr(self) -> TxSize {
     match self {
       TX_4X4 | TX_4X8 | TX_8X4 | TX_4X16 | TX_16X4 => TX_4X4,
       TX_8X8 | TX_8X16 | TX_16X8 | TX_8X32 | TX_32X8 => TX_8X8,
@@ -226,7 +226,7 @@ impl TxSize {
   }
 
   #[inline]
-  pub fn sqr_up(self) -> TxSize {
+  pub const fn sqr_up(self) -> TxSize {
     match self {
       TX_4X4 => TX_4X4,
       TX_8X8 | TX_4X8 | TX_8X4 => TX_8X8,
@@ -263,7 +263,7 @@ impl TxSize {
   }
 
   #[inline]
-  pub fn is_rect(self) -> bool {
+  pub const fn is_rect(self) -> bool {
     self.width_log2() != self.height_log2()
   }
 }
@@ -293,7 +293,7 @@ pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
 
 // performs half a butterfly
 #[inline]
-fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
+const fn half_btf(w0: i32, in0: i32, w1: i32, in1: i32, bit: usize) -> i32 {
   // Ensure defined behaviour for when w0*in0 + w1*in1 is negative and
   //   overflows, but w0*in0 + w1*in1 + rounding isn't.
   let result = (w0 * in0).wrapping_add(w1 * in1);
@@ -337,7 +337,7 @@ enum TxType1D {
   IDTX,
 }
 
-fn get_1d_tx_types(tx_type: TxType) -> (TxType1D, TxType1D) {
+const fn get_1d_tx_types(tx_type: TxType) -> (TxType1D, TxType1D) {
   match tx_type {
     TxType::DCT_DCT => (TxType1D::DCT, TxType1D::DCT),
     TxType::ADST_DCT => (TxType1D::ADST, TxType1D::DCT),
@@ -397,7 +397,7 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
 ];
 
 #[inline]
-pub fn valid_av1_transform(tx_size: TxSize, tx_type: TxType) -> bool {
+pub const fn valid_av1_transform(tx_size: TxSize, tx_type: TxType) -> bool {
   let size_sq = tx_size.sqr_up();
   use TxSize::*;
   use TxType::*;

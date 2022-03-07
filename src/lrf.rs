@@ -86,7 +86,7 @@ const SGRPROJ_ALL_SETS: &[u8] =
 // 1st, 3rd, ... smallest params of each group.
 const SGRPROJ_REDUCED_SETS: &[u8] = &[1, 3, 5, 7, 9, 11, 13, 15];
 
-pub fn get_sgr_sets(complexity: SGRComplexityLevel) -> &'static [u8] {
+pub const fn get_sgr_sets(complexity: SGRComplexityLevel) -> &'static [u8] {
   match complexity {
     SGRComplexityLevel::Full => SGRPROJ_ALL_SETS,
     SGRComplexityLevel::Reduced => SGRPROJ_REDUCED_SETS,
@@ -137,7 +137,7 @@ impl Default for RestorationFilter {
 }
 
 impl RestorationFilter {
-  pub fn notequal(self, cmp: RestorationFilter) -> bool {
+  pub const fn notequal(self, cmp: RestorationFilter) -> bool {
     match self {
       RestorationFilter::None {} => !matches!(cmp, RestorationFilter::None {}),
       RestorationFilter::Sgrproj { set, xqd } => {
@@ -359,7 +359,7 @@ fn sgrproj_sum_finish(
 }
 
 // Using an integral image, compute the sum of a square region
-fn get_integral_square(
+const fn get_integral_square(
   iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
   // Cancel out overflow in iimg by using wrapping arithmetic

@@ -121,7 +121,7 @@ pub enum PredictionVariant {
 
 impl PredictionVariant {
   #[inline]
-  fn new(x: usize, y: usize) -> Self {
+  const fn new(x: usize, y: usize) -> Self {
     match (x, y) {
       (0, 0) => PredictionVariant::NONE,
       (_, 0) => PredictionVariant::LEFT,
@@ -138,7 +138,7 @@ impl Default for PredictionMode {
   }
 }
 
-pub fn intra_mode_to_angle(mode: PredictionMode) -> isize {
+pub const fn intra_mode_to_angle(mode: PredictionMode) -> isize {
   match mode {
     PredictionMode::V_PRED => 90,
     PredictionMode::H_PRED => 180,
@@ -267,7 +267,7 @@ impl PredictionMode {
   }
 
   #[inline(always)]
-  pub fn angle_delta_count(self) -> i8 {
+  pub const fn angle_delta_count(self) -> i8 {
     match self {
       PredictionMode::V_PRED
       | PredictionMode::H_PRED
@@ -626,7 +626,7 @@ static sm_weight_arrays: [u8; 2 * MAX_TX_SIZE] = [
 ];
 
 #[inline(always)]
-fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
+const fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   let scaled_luma_q6 = (alpha_q3 as i32) * (ac_pred_q3 as i32);
   let abs_scaled_luma_q0 = (scaled_luma_q6.abs() + 32) >> 6;
   if scaled_luma_q6 < 0 {
@@ -1035,7 +1035,7 @@ pub(crate) mod rust {
     #[allow(clippy::collapsible_if)]
     #[allow(clippy::collapsible_else_if)]
     #[allow(clippy::needless_return)]
-    fn select_ief_strength(
+    const fn select_ief_strength(
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
     ) -> u8 {
       let block_wh = width + height;
@@ -1098,7 +1098,7 @@ pub(crate) mod rust {
       return 0;
     }
 
-    fn select_ief_upsample(
+    const fn select_ief_upsample(
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
     ) -> bool {
       let block_wh = width + height;
@@ -1262,7 +1262,7 @@ pub(crate) mod rust {
       left_edge = &left_filtered[..];
     }
 
-    fn dr_intra_derivative(p_angle: usize) -> usize {
+    const fn dr_intra_derivative(p_angle: usize) -> usize {
       match p_angle {
         3 => 1023,
         6 => 547,

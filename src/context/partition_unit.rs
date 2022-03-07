@@ -68,7 +68,7 @@ pub enum CFLSign {
 }
 
 impl CFLSign {
-  pub fn from_alpha(a: i16) -> CFLSign {
+  pub const fn from_alpha(a: i16) -> CFLSign {
     [CFL_SIGN_NEG, CFL_SIGN_ZERO, CFL_SIGN_POS][(a.signum() + 1) as usize]
   }
 }
@@ -121,7 +121,7 @@ impl CFLParams {
     cfl_sign_value[self.sign[uv] as usize] * (self.scale[uv] as i16)
   }
   #[inline]
-  pub fn from_alpha(u: i16, v: i16) -> CFLParams {
+  pub const fn from_alpha(u: i16, v: i16) -> CFLParams {
     CFLParams {
       sign: [CFLSign::from_alpha(u), CFLSign::from_alpha(v)],
       scale: [u.abs() as u8, v.abs() as u8],

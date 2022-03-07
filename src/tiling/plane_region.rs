@@ -77,7 +77,7 @@ impl Area {
   /// the returned rect will be aligned to a 4x4 chroma block.
   /// This is necessary for `compute_distortion` and `rdo_cfl_alpha` as
   /// the subsampled chroma block covers multiple luma blocks.
-  pub fn to_rect(
+  pub const fn to_rect(
     &self, xdec: usize, ydec: usize, parent_width: usize, parent_height: usize,
   ) -> Rect {
     match *self {

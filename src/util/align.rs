@@ -60,7 +60,7 @@ impl<T> AlignedBoxedSlice<T> {
     }
   }
 
-  fn layout(len: usize) -> Layout {
+  const fn layout(len: usize) -> Layout {
     // SAFETY: We are ensuring that `align` is non-zero and is a multiple of 2.
     unsafe {
       Layout::from_size_align_unchecked(

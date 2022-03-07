@@ -123,7 +123,7 @@ impl RcDataReceiver {
     self.0.iter()
   }
 
-  pub fn summary_size(&self) -> usize {
+  pub const fn summary_size(&self) -> usize {
     crate::rate::TWOPASS_HEADER_SZ
   }
 }

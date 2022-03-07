@@ -145,7 +145,7 @@ impl Config {
   ///
   /// `EncoderConfig` contains the settings impacting the
   /// codec features used in the produced bitstream.
-  pub fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
+  pub const fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
     self.enc = enc;
     self
   }
@@ -157,7 +157,7 @@ impl Config {
   ///
   /// If it is left unset, the encoder will use the default global
   /// threadpool provided by Rayon instead.
-  pub fn with_threads(mut self, threads: usize) -> Self {
+  pub const fn with_threads(mut self, threads: usize) -> Self {
     self.threads = threads;
     self
   }
@@ -165,7 +165,9 @@ impl Config {
   /// Set the rate control configuration
   ///
   /// The default configuration is single pass
-  pub fn with_rate_control(mut self, rate_control: RateControlConfig) -> Self {
+  pub const fn with_rate_control(
+    mut self, rate_control: RateControlConfig,
+  ) -> Self {
     self.rate_control = rate_control;
     self
   }
@@ -181,7 +183,7 @@ impl Config {
 
   #[cfg(feature = "unstable")]
   /// Set the maximum number of GOPs to encode in parallel
-  pub fn with_parallel_gops(mut self, slots: usize) -> Self {
+  pub const fn with_parallel_gops(mut self, slots: usize) -> Self {
     self.slots = slots;
     self
   }

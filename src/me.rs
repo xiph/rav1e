@@ -105,7 +105,7 @@ impl MotionSearchResult {
 
   /// Check if the value should be considered to be empty.
   #[inline(always)]
-  fn is_empty(&self) -> bool {
+  const fn is_empty(&self) -> bool {
     self.cost == u64::MAX
   }
 }
@@ -126,7 +126,7 @@ impl MVCandidateRD {
   /// cost value. The idea is that comparing to any valid rd output, the search
   /// result will always be replaced.
   #[inline(always)]
-  fn empty() -> MVCandidateRD {
+  const fn empty() -> MVCandidateRD {
     MVCandidateRD { sad: u32::MAX, cost: u64::MAX }
   }
 }
@@ -156,7 +156,7 @@ impl FullpelSearchResult {
 
   /// Check if the value should be considered to be empty.
   #[inline(always)]
-  fn is_empty(&self) -> bool {
+  const fn is_empty(&self) -> bool {
     self.rd.cost == u64::MAX
   }
 }
@@ -748,7 +748,7 @@ struct FullpelConfig {
 
 impl FullpelConfig {
   /// Configuration for motion estimation with full search and sub-sampling disabled.
-  fn create_motion_estimation_config() -> Self {
+  const fn create_motion_estimation_config() -> Self {
     FullpelConfig {
       corner: MVSamplingMode::CORNER { right: true, bottom: true },
       extensive_search: false,

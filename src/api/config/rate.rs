@@ -63,7 +63,7 @@ impl RateControlConfig {
   /// Set a rate control summary
   ///
   /// Enable the second pass encoding mode
-  pub fn with_summary(mut self, summary: RateControlSummary) -> Self {
+  pub const fn with_summary(mut self, summary: RateControlSummary) -> Self {
     self.summary = Some(summary);
     self
   }
@@ -71,7 +71,7 @@ impl RateControlConfig {
   /// Emit the current pass data
   ///
   /// The pass data will be used in a second pass encoding session
-  pub fn with_emit_data(mut self, emit: bool) -> Self {
+  pub const fn with_emit_data(mut self, emit: bool) -> Self {
     self.emit_pass_data = emit;
     self
   }
