@@ -128,7 +128,7 @@ impl InterConfig {
   }
 
   /// Get the level of the current frame in the pyramid.
-  pub(crate) fn get_level(&self, idx_in_group_output: u64) -> u64 {
+  pub(crate) const fn get_level(&self, idx_in_group_output: u64) -> u64 {
     if !self.reorder {
       0
     } else if idx_in_group_output < self.pyramid_depth {
@@ -144,7 +144,7 @@ impl InterConfig {
     }
   }
 
-  pub(crate) fn get_slot_idx(&self, level: u64, order_hint: u32) -> u32 {
+  pub(crate) const fn get_slot_idx(&self, level: u64, order_hint: u32) -> u32 {
     // Frames with level == 0 are stored in slots 0..4, and frames with higher
     //  values of level in slots 4..8
     if level == 0 {
@@ -159,7 +159,7 @@ impl InterConfig {
     idx_in_group_output >= self.pyramid_depth
   }
 
-  pub(crate) fn get_show_existing_frame(
+  pub(crate) const fn get_show_existing_frame(
     &self, idx_in_group_output: u64,
   ) -> bool {
     // The self.reorder test here is redundant, but short-circuits the rest,
@@ -188,11 +188,11 @@ impl InterConfig {
     self.group_input_len
   }
 
-  pub(crate) fn keyframe_lookahead_distance(&self) -> u64 {
+  pub(crate) const fn keyframe_lookahead_distance(&self) -> u64 {
     self.max_reordering_latency() + 1
   }
 
-  pub(crate) fn allowed_ref_frames(&self) -> &[RefType] {
+  pub(crate) const fn allowed_ref_frames(&self) -> &[RefType] {
     use crate::partition::RefType::*;
     if self.reorder {
       &ALL_INTER_REFS

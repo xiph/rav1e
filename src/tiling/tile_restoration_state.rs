@@ -196,7 +196,7 @@ macro_rules! tile_restoration_plane_common {
       // superblock belongs to.  The stretch boolean indicates if a
       // superblock that belongs to a stretched LRU should return an
       // index (stretch == true) or None (stretch == false).
-      pub fn restoration_unit_index(&self, sbo: TileSuperBlockOffset, stretch: bool)
+      pub const fn restoration_unit_index(&self, sbo: TileSuperBlockOffset, stretch: bool)
         -> Option<(usize, usize)> {
         if self.units.rows > 0 && self.units.cols > 0 {
           // is this a stretch block?

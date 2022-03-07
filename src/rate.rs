@@ -131,8 +131,7 @@ const ATANH_LOG2: &[i64; 32] = &[
 // Computes the binary exponential of logq57.
 // input: a log base 2 in Q57 format.
 // output: a 64 bit integer in Q0 (no fraction).
-// TODO: Mark const once we can use local variables in a const function.
-pub(crate) fn bexp64(logq57: i64) -> i64 {
+pub(crate) const fn bexp64(logq57: i64) -> i64 {
   let ipart = (logq57 >> 57) as i32;
   if ipart < 0 {
     return 0;
@@ -228,7 +227,6 @@ pub(crate) fn bexp64(logq57: i64) -> i64 {
 // Computes the binary log of w.
 // input: a 64-bit integer in Q0 (no fraction).
 // output: a 64-bit log in Q57.
-// TODO: Mark const once we can use local variables in a const function.
 fn blog64(w: i64) -> i64 {
   let mut w = w;
   if w <= 0 {
@@ -308,7 +306,7 @@ const fn q24_to_q57(v: i32) -> i64 {
 // log_scale: A binary logarithm in Q24 format.
 // Return: The binary exponential in Q24 format, saturated to 2**47 - 1 if
 //  log_scale was too large.
-fn bexp_q24(log_scale: i32) -> i64 {
+const fn bexp_q24(log_scale: i32) -> i64 {
   if log_scale < 23 << 24 {
     let ret = bexp64(((log_scale as i64) << 33) + q57(24));
     if ret < (1i64 << 47) - 1 {
@@ -337,7 +335,6 @@ pub struct IIRBessel2 {
 
 // alpha is Q24 in the range [0,0.5).
 // The return value is 5.12.
-// TODO: Mark const once we can use local variables in a const function.
 fn warp_alpha(alpha: i32) -> i32 {
   let i = ((alpha * 36) >> 24).min(16);
   let t0 = ROUGH_TAN_LOOKUP[i as usize];
@@ -1447,11 +1444,11 @@ impl RCState {
     dropped
   }
 
-  pub fn needs_trial_encode(&self, fti: usize) -> bool {
+  pub const fn needs_trial_encode(&self, fti: usize) -> bool {
     self.target_bitrate > 0 && self.nframes[fti] == 0
   }
 
-  pub(crate) fn ready(&self) -> bool {
+  pub(crate) const fn ready(&self) -> bool {
     match self.twopass_state {
       PASS_SINGLE => true,
       PASS_1 => self.pass1_data_retrieved,

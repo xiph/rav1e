@@ -1468,7 +1468,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn ref_count_ctx(counts0: u8, counts1: u8) -> usize {
+  pub const fn ref_count_ctx(counts0: u8, counts1: u8) -> usize {
     if counts0 < counts1 {
       0
     } else if counts0 == counts1 {

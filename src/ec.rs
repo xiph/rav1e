@@ -165,7 +165,7 @@ pub struct WriterCheckpoint {
 /// Constructor for a counting Writer
 impl WriterCounter {
   #[inline]
-  pub fn new() -> WriterBase<WriterCounter> {
+  pub const fn new() -> WriterBase<WriterCounter> {
     WriterBase::new(WriterCounter { bytes: 0 })
   }
 }
@@ -173,7 +173,7 @@ impl WriterCounter {
 /// Constructor for a recording Writer
 impl WriterRecorder {
   #[inline]
-  pub fn new() -> WriterBase<WriterRecorder> {
+  pub const fn new() -> WriterBase<WriterRecorder> {
     WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 })
   }
 }
@@ -181,7 +181,7 @@ impl WriterRecorder {
 /// Constructor for a encoding Writer
 impl WriterEncoder {
   #[inline]
-  pub fn new() -> WriterBase<WriterEncoder> {
+  pub const fn new() -> WriterBase<WriterEncoder> {
     WriterBase::new(WriterEncoder { precarry: Vec::new(), low: 0 })
   }
 }
@@ -318,20 +318,20 @@ impl<S> WriterBase<S> {
   /// Internal constructor called by the subtypes that implement the
   /// actual encoder and Recorder.
   #[inline]
+  #[cfg(not(feature = "desync_finder"))]
+  const fn new(storage: S) -> Self {
+    WriterBase { rng: 0x8000, cnt: -9, fake_bits_frac: 0, s: storage }
+  }
+
+  #[inline]
+  #[cfg(feature = "desync_finder")]
   fn new(storage: S) -> Self {
-    #[cfg(feature = "desync_finder")]
-    {
-      WriterBase {
-        rng: 0x8000,
-        cnt: -9,
-        debug: std::env::var_os("RAV1E_DEBUG").is_some(),
-        fake_bits_frac: 0,
-        s: storage,
-      }
-    }
-    #[cfg(not(feature = "desync_finder"))]
-    {
-      WriterBase { rng: 0x8000, cnt: -9, fake_bits_frac: 0, s: storage }
+    WriterBase {
+      rng: 0x8000,
+      cnt: -9,
+      debug: std::env::var_os("RAV1E_DEBUG").is_some(),
+      fake_bits_frac: 0,
+      s: storage,
     }
   }
 
@@ -387,7 +387,7 @@ impl<S> WriterBase<S> {
     nbits - l
   }
 
-  fn recenter(r: u32, v: u32) -> u32 {
+  const fn recenter(r: u32, v: u32) -> u32 {
     if v > (r << 1) {
       v
     } else if v >= r {

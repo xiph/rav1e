@@ -513,7 +513,7 @@ pub mod test {
   }
 
   #[inline]
-  fn b_area(region: &TileBlocksMut<'_>) -> (usize, usize, usize, usize) {
+  const fn b_area(region: &TileBlocksMut<'_>) -> (usize, usize, usize, usize) {
     (region.x(), region.y(), region.cols(), region.rows())
   }
 

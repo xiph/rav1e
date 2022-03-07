@@ -57,7 +57,7 @@ pub enum RDOType {
 
 impl RDOType {
   #[inline]
-  pub fn needs_tx_dist(self) -> bool {
+  pub const fn needs_tx_dist(self) -> bool {
     match self {
       // Pixel-domain distortion and exact ec rate
       RDOType::PixelDistRealRate => false,
@@ -68,7 +68,7 @@ impl RDOType {
     }
   }
   #[inline]
-  pub fn needs_coeff_rate(self) -> bool {
+  pub const fn needs_coeff_rate(self) -> bool {
     match self {
       RDOType::PixelDistRealRate => true,
       RDOType::TxDistRealRate => true,
@@ -222,7 +222,7 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   ))
 }
 
-pub fn clip_visible_bsize(
+pub const fn clip_visible_bsize(
   frame_w: usize, frame_h: usize, bsize: BlockSize, x: usize, y: usize,
 ) -> (usize, usize) {
   let blk_w = bsize.width();
@@ -585,7 +585,7 @@ impl DistortionScale {
   /// Multiply, round and shift
   /// Internal implementation, so don't use multiply trait.
   #[inline]
-  pub fn mul_u64(self, dist: u64) -> u64 {
+  pub const fn mul_u64(self, dist: u64) -> u64 {
     (self.0 as u64 * dist + (1 << Self::SHIFT >> 1)) >> Self::SHIFT
   }
 }
@@ -749,7 +749,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
 }
 
 #[inline]
-fn dmv_in_range(mv: MotionVector, ref_mv: MotionVector) -> bool {
+const fn dmv_in_range(mv: MotionVector, ref_mv: MotionVector) -> bool {
   let diff_row = mv.row as i32 - ref_mv.row as i32;
   let diff_col = mv.col as i32 - ref_mv.col as i32;
   diff_row >= MV_LOW

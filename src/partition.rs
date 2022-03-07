@@ -190,7 +190,7 @@ impl BlockSize {
   ///
   /// - Returns `InvalidBlockSize` if the given `w` and `h` do not produce
   ///   a valid block size.
-  pub fn from_width_and_height_opt(
+  pub const fn from_width_and_height_opt(
     w: usize, h: usize,
   ) -> Result<BlockSize, InvalidBlockSize> {
     match (w, h) {
@@ -234,12 +234,12 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn width(self) -> usize {
+  pub const fn width(self) -> usize {
     1 << self.width_log2()
   }
 
   #[inline]
-  pub fn width_log2(self) -> usize {
+  pub const fn width_log2(self) -> usize {
     match self {
       BLOCK_4X4 | BLOCK_4X8 | BLOCK_4X16 => 2,
       BLOCK_8X4 | BLOCK_8X8 | BLOCK_8X16 | BLOCK_8X32 => 3,
@@ -251,12 +251,12 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn width_mi_log2(self) -> usize {
+  pub const fn width_mi_log2(self) -> usize {
     self.width_log2() - 2
   }
 
   #[inline]
-  pub fn width_mi(self) -> usize {
+  pub const fn width_mi(self) -> usize {
     self.width() >> MI_SIZE_LOG2
   }
 
@@ -267,12 +267,12 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn height(self) -> usize {
+  pub const fn height(self) -> usize {
     1 << self.height_log2()
   }
 
   #[inline]
-  pub fn height_log2(self) -> usize {
+  pub const fn height_log2(self) -> usize {
     match self {
       BLOCK_4X4 | BLOCK_8X4 | BLOCK_16X4 => 2,
       BLOCK_4X8 | BLOCK_8X8 | BLOCK_16X8 | BLOCK_32X8 => 3,
@@ -284,12 +284,12 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn height_mi_log2(self) -> usize {
+  pub const fn height_mi_log2(self) -> usize {
     self.height_log2() - 2
   }
 
   #[inline]
-  pub fn height_mi(self) -> usize {
+  pub const fn height_mi(self) -> usize {
     self.height() >> MI_SIZE_LOG2
   }
 
@@ -300,7 +300,7 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn tx_size(self) -> TxSize {
+  pub const fn tx_size(self) -> TxSize {
     match self {
       BLOCK_4X4 => TX_4X4,
       BLOCK_4X8 => TX_4X8,
@@ -331,7 +331,7 @@ impl BlockSize {
   /// - Returns `InvalidBlockSize` if the given block size cannot
   ///   be subsampled in the requested way.
   #[inline]
-  pub fn subsampled_size(
+  pub const fn subsampled_size(
     self, xdec: usize, ydec: usize,
   ) -> Result<BlockSize, InvalidBlockSize> {
     Ok(match (xdec, ydec) {
@@ -387,17 +387,19 @@ impl BlockSize {
   }
 
   #[inline]
-  pub fn is_sqr(self) -> bool {
+  pub const fn is_sqr(self) -> bool {
     self.width_log2() == self.height_log2()
   }
 
   #[inline]
-  pub fn is_sub8x8(self, xdec: usize, ydec: usize) -> bool {
+  pub const fn is_sub8x8(self, xdec: usize, ydec: usize) -> bool {
     xdec != 0 && self.width_log2() == 2 || ydec != 0 && self.height_log2() == 2
   }
 
   #[inline]
-  pub fn sub8x8_offset(self, xdec: usize, ydec: usize) -> (isize, isize) {
+  pub const fn sub8x8_offset(
+    self, xdec: usize, ydec: usize,
+  ) -> (isize, isize) {
     let offset_x = if xdec != 0 && self.width_log2() == 2 { -1 } else { 0 };
     let offset_y = if ydec != 0 && self.height_log2() == 2 { -1 } else { 0 };
 
@@ -408,7 +410,7 @@ impl BlockSize {
   ///
   /// - Returns `InvalidBlockSize` if the block size cannot be split
   ///   in the requested way.
-  pub fn subsize(
+  pub const fn subsize(
     self, partition: PartitionType,
   ) -> Result<BlockSize, InvalidBlockSize> {
     use PartitionType::*;
@@ -455,7 +457,7 @@ impl BlockSize {
     })
   }
 
-  pub fn is_rect_tx_allowed(self) -> bool {
+  pub const fn is_rect_tx_allowed(self) -> bool {
     !matches!(
       self,
       BLOCK_4X4

@@ -92,7 +92,7 @@ impl From<y4m::Error> for DecodeError {
   }
 }
 
-pub fn map_y4m_color_space(
+pub const fn map_y4m_color_space(
   color_space: y4m::Colorspace,
 ) -> (ChromaSampling, ChromaSamplePosition) {
   use crate::ChromaSamplePosition::*;

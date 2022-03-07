@@ -50,6 +50,7 @@
 #![allow(clippy::enum_variant_names)]
 // Performance lints
 #![warn(clippy::linkedlist)]
+#![warn(clippy::missing_const_for_fn)]
 #![warn(clippy::mutex_integer)]
 // Correctness lints
 #![warn(clippy::expl_impl_clone_on_copy)]

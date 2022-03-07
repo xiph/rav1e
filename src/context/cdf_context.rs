@@ -722,7 +722,7 @@ impl<'a> ContextWriter<'a> {
     cw
   }
 
-  pub fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
+  pub const fn cdf_element_prob(cdf: &[u16], element: usize) -> u16 {
     (if element > 0 { cdf[element - 1] } else { 32768 })
       - (if element + 1 < cdf.len() { cdf[element] } else { 0 })
   }

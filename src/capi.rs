@@ -17,6 +17,8 @@
 #![deny(missing_docs)]
 // Basically everything will be unsafe since this is a FFI
 #![allow(clippy::undocumented_unsafe_blocks)]
+// const extern fns are unstable
+#![allow(clippy::missing_const_for_fn)]
 
 use std::slice;
 use std::sync::Arc;
@@ -142,7 +144,7 @@ pub enum EncoderStatus {
 }
 
 impl EncoderStatus {
-  fn to_c(&self) -> *const u8 {
+  const fn to_c(&self) -> *const u8 {
     use self::EncoderStatus::*;
     match self {
       Success => "Normal operation\0".as_ptr(),
@@ -325,7 +327,7 @@ impl EncContext {
     }
   }
 
-  fn config(&self) -> rav1e::EncoderConfig {
+  const fn config(&self) -> rav1e::EncoderConfig {
     match self {
       EncContext::U8(ctx) => ctx.config,
       EncContext::U16(ctx) => ctx.config,

@@ -122,7 +122,7 @@ fn divu_gen(d: u32) -> (u32, u32, u32) {
 }
 
 #[inline]
-fn divu_pair(x: u32, d: (u32, u32, u32)) -> u32 {
+const fn divu_pair(x: u32, d: (u32, u32, u32)) -> u32 {
   let x = x as u64;
   let (a, b, shift) = d;
   let shift = shift as u64;
@@ -133,7 +133,7 @@ fn divu_pair(x: u32, d: (u32, u32, u32)) -> u32 {
 }
 
 #[inline]
-fn copysign(value: u32, signed: i32) -> i32 {
+const fn copysign(value: u32, signed: i32) -> i32 {
   if signed < 0 {
     -(value as i32)
   } else {

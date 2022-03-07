@@ -772,7 +772,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   #[inline]
-  pub fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
+  pub const fn get_txsize_entropy_ctx(tx_size: TxSize) -> usize {
     (tx_size.sqr() as usize + tx_size.sqr_up() as usize + 1) >> 1
   }
 
@@ -794,7 +794,7 @@ impl<'a> ContextWriter<'a> {
   // work in the spec, use the log of block height in our calculations instead
   // of block width.
   #[inline]
-  pub fn get_txb_bhl(tx_size: TxSize) -> usize {
+  pub const fn get_txb_bhl(tx_size: TxSize) -> usize {
     av1_get_coded_tx_size(tx_size).height_log2()
   }
 

@@ -141,7 +141,7 @@ impl Txfm2DFlipCfg {
   }
 
   /// Determine the flip config, returning `(ud_flip, lr_flip)`
-  fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
+  const fn get_flip_cfg(tx_type: TxType) -> (bool, bool) {
     use self::TxType::*;
     match tx_type {
       DCT_DCT | ADST_DCT | DCT_ADST | ADST_ADST | IDTX | V_DCT | H_DCT

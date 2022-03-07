@@ -107,7 +107,7 @@ pub fn get_weighted_sse<T: Pixel>(
   let ref_dist = call_rust();
 
   #[inline]
-  fn size_of_element<T: Sized>(_: &[T]) -> usize {
+  const fn size_of_element<T: Sized>(_: &[T]) -> usize {
     std::mem::size_of::<T>()
   }
 
