@@ -135,13 +135,13 @@
 #endif
 #define GNU_PROPERTY_AARCH64_PAC (1 << 1)
 
-#else
+#else /* __ARM_FEATURE_PAC_DEFAULT */
 
 #define GNU_PROPERTY_AARCH64_PAC 0
 #define AARCH64_SIGN_LINK_REGISTER
 #define AARCH64_VALIDATE_LINK_REGISTER
 
-#endif
+#endif /* !__ARM_FEATURE_PAC_DEFAULT */
 
 
 #if (GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0)
@@ -156,8 +156,8 @@
         .long (GNU_PROPERTY_AARCH64_BTI | GNU_PROPERTY_AARCH64_PAC)
         .long 0
         .popsection
-#endif
-#endif
+#endif /* GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0 */
+#endif /* ARCH_AARCH64 */
 
 #if ARCH_ARM
         .syntax unified
@@ -167,7 +167,7 @@
         .eabi_attribute 10, 0           // suppress Tag_FP_arch
         .eabi_attribute 12, 0           // suppress Tag_Advanced_SIMD_arch
         .section .note.GNU-stack,"",%progbits // Mark stack as non-executable
-#endif
+#endif /* __ELF__ */
 
 #ifdef _WIN32
 #define CONFIG_THUMB 1
@@ -182,8 +182,8 @@
 #else
 #define A
 #define T @
-#endif
-#endif
+#endif /* CONFIG_THUMB */
+#endif /* ARCH_ARM */
 
 #if !defined(PIC)
 #if defined(__PIC__)
