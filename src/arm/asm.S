@@ -144,7 +144,7 @@
 #endif /* !__ARM_FEATURE_PAC_DEFAULT */
 
 
-#if (GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0)
+#if (GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0) && defined(__ELF__)
         .pushsection .note.gnu.property, "a"
         .balign 8
         .long 4
@@ -156,7 +156,7 @@
         .long (GNU_PROPERTY_AARCH64_BTI | GNU_PROPERTY_AARCH64_PAC)
         .long 0
         .popsection
-#endif /* GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0 */
+#endif /* (GNU_PROPERTY_AARCH64_BTI != 0 || GNU_PROPERTY_AARCH64_PAC != 0) && defined(__ELF__) */
 #endif /* ARCH_AARCH64 */
 
 #if ARCH_ARM
