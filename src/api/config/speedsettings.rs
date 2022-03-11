@@ -82,7 +82,7 @@ impl Default for SpeedSettings {
       segmentation: SegmentationLevel::Full,
       partition: PartitionSpeedSettings {
         encode_bottomup: true,
-        non_square_partition_threshold: BlockSize::BLOCK_4X4,
+        non_square_partition_max_threshold: BlockSize::BLOCK_64X64,
         partition_range: PartitionRange::new(
           BlockSize::BLOCK_4X4,
           BlockSize::BLOCK_64X64,
@@ -122,8 +122,8 @@ impl SpeedSettings {
     }
 
     if speed >= 2 {
-      settings.partition.non_square_partition_threshold =
-        BlockSize::BLOCK_16X16;
+      settings.partition.non_square_partition_max_threshold =
+        BlockSize::BLOCK_8X8;
 
       settings.prediction.prediction_modes =
         PredictionModesSetting::ComplexKeyframes;
@@ -134,8 +134,6 @@ impl SpeedSettings {
 
       settings.partition.partition_range =
         PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
-      settings.partition.non_square_partition_threshold =
-        BlockSize::BLOCK_64X64;
     }
 
     if speed >= 4 {
@@ -235,8 +233,8 @@ pub struct PartitionSpeedSettings {
   pub encode_bottomup: bool,
 
   /// Allow non-square partition type outside of frame borders
-  /// on any blocks above this size.
-  pub non_square_partition_threshold: BlockSize,
+  /// on any blocks at or below this size.
+  pub non_square_partition_max_threshold: BlockSize,
 
   /// Range of partition sizes that can be used. Larger ranges are slower.
   ///

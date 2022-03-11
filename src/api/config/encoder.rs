@@ -256,11 +256,11 @@ impl fmt::Display for EncoderConfig {
         self.speed_settings.partition.encode_bottomup.to_string(),
       ),
       (
-        "non_square_partition_threshold",
+        "non_square_partition_max_threshold",
         self
           .speed_settings
           .partition
-          .non_square_partition_threshold
+          .non_square_partition_max_threshold
           .to_string(),
       ),
       (
