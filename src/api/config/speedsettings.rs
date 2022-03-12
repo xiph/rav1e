@@ -124,6 +124,9 @@ impl SpeedSettings {
     if speed >= 2 {
       settings.partition.non_square_partition_threshold =
         BlockSize::BLOCK_16X16;
+
+      settings.prediction.prediction_modes =
+        PredictionModesSetting::ComplexKeyframes;
     }
 
     if speed >= 3 {
@@ -133,9 +136,6 @@ impl SpeedSettings {
         PartitionRange::new(BlockSize::BLOCK_8X8, BlockSize::BLOCK_64X64);
       settings.partition.non_square_partition_threshold =
         BlockSize::BLOCK_64X64;
-
-      settings.prediction.prediction_modes =
-        PredictionModesSetting::ComplexKeyframes;
     }
 
     if speed >= 4 {
