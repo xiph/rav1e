@@ -196,7 +196,7 @@ impl ChromaSampling {
   /// The plane dimensions must also be rounded up to accommodate odd luma plane
   ///  sizes.
   /// Cs400 returns None, as there are no chroma planes.
-  pub fn get_decimation(self) -> Option<(usize, usize)> {
+  pub const fn get_decimation(self) -> Option<(usize, usize)> {
     use self::ChromaSampling::*;
     match self {
       Cs420 => Some((1, 1)),
@@ -207,7 +207,7 @@ impl ChromaSampling {
   }
 
   /// Calculates the size of a chroma plane for this sampling type, given the luma plane dimensions.
-  pub fn get_chroma_dimensions(
+  pub const fn get_chroma_dimensions(
     self, luma_width: usize, luma_height: usize,
   ) -> (usize, usize) {
     if let Some((ss_x, ss_y)) = self.get_decimation() {
