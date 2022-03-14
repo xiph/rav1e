@@ -577,7 +577,8 @@ impl DistortionScale {
   #[inline]
   pub fn new(scale: f64) -> Self {
     Self(
-      (scale * (1 << Self::SHIFT) as f64 + 0.5)
+      scale
+        .mul_add((1 << Self::SHIFT) as f64, 0.5)
         .min(((1 << Self::BITS as u64) - 1) as f64) as u32,
     )
   }
@@ -666,7 +667,7 @@ pub fn compute_rd_cost<T: Pixel>(
   fi: &FrameInvariants<T>, rate: u32, distortion: ScaledDistortion,
 ) -> f64 {
   let rate_in_bits = (rate as f64) / ((1 << OD_BITRES) as f64);
-  distortion.0 as f64 + fi.lambda * rate_in_bits
+  fi.lambda.mul_add(rate_in_bits, distortion.0 as f64)
 }
 
 pub fn rdo_tx_size_type<T: Pixel>(

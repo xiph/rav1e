@@ -60,7 +60,7 @@ pub enum CDEFSearchMethod {
 
 #[inline(always)]
 fn poly2(q: f32, a: f32, b: f32, c: f32, max: i32) -> i32 {
-  clamp((q * q * a + q * b + c).round() as i32, 0, max)
+  clamp((q * q).mul_add(a, q.mul_add(b, c)).round() as i32, 0, max)
 }
 
 pub static TEMPORAL_DELIMITER: [u8; 2] = [0x12, 0x00];
