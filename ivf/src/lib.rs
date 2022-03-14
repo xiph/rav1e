@@ -8,11 +8,43 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+#![deny(bare_trait_objects)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_ptr_alignment)]
+#![allow(clippy::cognitive_complexity)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::verbose_bit_mask)]
+#![allow(clippy::unreadable_literal)]
+#![allow(clippy::many_single_char_names)]
+// Performance lints
+#![warn(clippy::linkedlist)]
+#![warn(clippy::missing_const_for_fn)]
+#![warn(clippy::mutex_integer)]
+// Correctness lints
+#![warn(clippy::expl_impl_clone_on_copy)]
+#![warn(clippy::mem_forget)]
+#![warn(clippy::path_buf_push_overwrite)]
+// Clarity/formatting lints
+#![warn(clippy::map_flatten)]
+#![warn(clippy::mut_mut)]
+#![warn(clippy::needless_borrow)]
+#![warn(clippy::needless_continue)]
+#![warn(clippy::range_plus_one)]
+// Documentation lints
+#![warn(clippy::doc_markdown)]
+#![warn(clippy::missing_errors_doc)]
+#![warn(clippy::missing_panics_doc)]
+#![warn(clippy::undocumented_unsafe_blocks)]
+
 /// Simple ivf muxer
 ///
 use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};
 use std::io;
 
+/// # Panics
+///
+/// - If header cannot be written to output file.
 pub fn write_ivf_header(
   output_file: &mut dyn io::Write, width: usize, height: usize,
   framerate_num: usize, framerate_den: usize,
@@ -30,6 +62,9 @@ pub fn write_ivf_header(
   bw.write(32, 0).unwrap();
 }
 
+/// # Panics
+///
+/// - If frame cannot be written to output file.
 pub fn write_ivf_frame(
   output_file: &mut dyn io::Write, pts: u64, data: &[u8],
 ) {
@@ -48,6 +83,10 @@ pub struct Header {
   pub timebase_den: u32,
 }
 
+/// # Errors
+///
+/// - Returns `io::Error` if packet cannot be read
+/// - Returns `io::ErrorKind::InvalidData` if header signature is invalid
 pub fn read_header(r: &mut dyn io::Read) -> io::Result<Header> {
   let mut br = BitReader::endian(r, LittleEndian);
 
@@ -81,6 +120,9 @@ pub struct Packet {
   pub pts: u64,
 }
 
+/// # Errors
+///
+/// - Returns `io::Error` if packet cannot be read
 pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {
   let mut br = BitReader::endian(r, LittleEndian);
 

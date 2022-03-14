@@ -113,6 +113,7 @@ unsafe impl<T: Pixel + Sync> Sync for PlaneData<T> {}
 
 impl<T: Pixel> Clone for PlaneData<T> {
   fn clone(&self) -> Self {
+    // SAFETY: we initialize the plane data before returning
     let mut pd = unsafe { Self::new_uninitialized(self.len) };
 
     pd.copy_from_slice(self);
@@ -125,6 +126,7 @@ impl<T: Pixel> std::ops::Deref for PlaneData<T> {
   type Target = [T];
 
   fn deref(&self) -> &[T] {
+    // SAFETY: we cannot reference out of bounds because we know the length of the data
     unsafe {
       let p = self.ptr.as_ptr();
 
@@ -135,6 +137,7 @@ impl<T: Pixel> std::ops::Deref for PlaneData<T> {
 
 impl<T: Pixel> std::ops::DerefMut for PlaneData<T> {
   fn deref_mut(&mut self) -> &mut [T] {
+    // SAFETY: we cannot reference out of bounds because we know the length of the data
     unsafe {
       let p = self.ptr.as_ptr();
 
@@ -145,6 +148,7 @@ impl<T: Pixel> std::ops::DerefMut for PlaneData<T> {
 
 impl<T: Pixel> std::ops::Drop for PlaneData<T> {
   fn drop(&mut self) {
+    // SAFETY: we cannot dealloc too much because we know the length of the data
     unsafe {
       dealloc(self.ptr.as_ptr() as *mut u8, Self::layout(self.len));
     }
@@ -209,6 +213,7 @@ impl<T: Pixel> PlaneData<T> {
   }
 
   pub fn new(len: usize) -> Self {
+    // SAFETY: we initialize the plane data before returning
     let mut pd = unsafe { Self::new_uninitialized(len) };
 
     for v in pd.iter_mut() {
@@ -219,6 +224,7 @@ impl<T: Pixel> PlaneData<T> {
   }
 
   fn from_slice(data: &[T]) -> Self {
+    // SAFETY: we initialize the plane data before returning
     let mut pd = unsafe { Self::new_uninitialized(data.len()) };
 
     pd.copy_from_slice(data);
@@ -288,6 +294,9 @@ impl<T: Pixel> Plane<T> {
     Plane { data, cfg }
   }
 
+  /// # Panics
+  ///
+  /// - If `len` is not a multiple of `stride`
   pub fn from_slice(data: &[T], stride: usize) -> Self {
     let len = data.len();
 
@@ -414,6 +423,10 @@ impl<T: Pixel> Plane<T> {
   }
 
   /// Copies data into the plane from a pixel array.
+  ///
+  /// # Panics
+  ///
+  /// - If `source_bytewidth` does not match the generic `T` of `Plane`
   pub fn copy_from_raw_u8(
     &mut self, source: &[u8], source_stride: usize, source_bytewidth: usize,
   ) {
@@ -450,6 +463,10 @@ impl<T: Pixel> Plane<T> {
   }
 
   /// Copies data from a plane into a pixel array.
+  ///
+  /// # Panics
+  ///
+  /// - If `dest_bytewidth` does not match the generic `T` of `Plane`
   pub fn copy_to_raw_u8(
     &self, dest: &mut [u8], dest_stride: usize, dest_bytewidth: usize,
   ) {
@@ -486,7 +503,11 @@ impl<T: Pixel> Plane<T> {
 
   /// Returns plane with half the resolution for width and height.
   /// Downscaled with 2x2 box filter.
-  /// Padded to dimensions with frame_width and frame_height.
+  /// Padded to dimensions with `frame_width` and `frame_height`.
+  ///
+  /// # Panics
+  ///
+  /// - If the requested width and height are > half the input width or height
   pub fn downsampled(
     &self, frame_width: usize, frame_height: usize,
   ) -> Plane<T> {
@@ -560,7 +581,9 @@ impl<T: Pixel> Plane<T> {
 
   /// Downscales the source plane by a factor of `scale`, writing the result to `in_plane` (not padded)
   ///
-  /// `in_plane`'s width and height must be sufficient for `scale`.
+  /// # Panics
+  ///
+  /// - `in_plane`'s width and height must be sufficient for `scale`.
   #[hawktracer(downscale)]
   pub fn downscale_in_place(&self, scale: usize, in_plane: &mut Plane<T>) {
     let src = self;
@@ -828,7 +851,7 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
   type Item = &'a mut [T];
 
   fn next(&mut self) -> Option<Self::Item> {
-    // there could not be a concurrent call using a mutable reference to the plane
+    // SAFETY: there could not be a concurrent call using a mutable reference to the plane
     let plane = unsafe { &mut *self.plane };
     if plane.cfg.height as isize > self.y {
       // cannot directly return self.ps.row(row) due to lifetime issue
@@ -841,7 +864,7 @@ impl<'a, T: Pixel> Iterator for RowsIterMut<'a, T> {
   }
 
   fn size_hint(&self) -> (usize, Option<usize>) {
-    // there could not be a concurrent call using a mutable reference to the plane
+    // SAFETY: there could not be a concurrent call using a mutable reference to the plane
     let plane = unsafe { &mut *self.plane };
     let remaining = plane.cfg.height as isize - self.y;
     debug_assert!(remaining >= 0);
