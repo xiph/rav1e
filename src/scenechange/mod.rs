@@ -475,6 +475,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
         intra_cost = intra_costs.iter().map(|&cost| cost as u64).sum::<u64>()
           as f64
           / intra_costs.len() as f64;
+        // If we're not using temporal RDO, we won't need these costs later,
+        // so remove them from the cache to avoid a memory leak
+        if !self.encoder_config.temporal_rdo() {
+          self.intra_costs.remove(&input_frameno);
+        };
       });
       s.spawn(|_| {
         mv_inter_cost = estimate_inter_costs(
