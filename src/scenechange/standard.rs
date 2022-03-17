@@ -8,7 +8,6 @@ use crate::{
   frame::Frame,
   me::FrameMEStats,
 };
-use rust_hawktracer::*;
 use v_frame::{math::Fixed, pixel::Pixel};
 
 use super::{SceneChangeDetector, ScenecutResult};
@@ -19,7 +18,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// We gather both intra and inter costs for the frames,
   /// as well as an importance-block-based difference,
   /// and use all three metrics.
-  #[hawktracer(cost_scenecut)]
   pub(super) fn cost_scenecut(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
     input_frameno: u64,
