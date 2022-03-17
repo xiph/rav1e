@@ -12,6 +12,7 @@ use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
 use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{clamp, ILog, Pixel};
+use const_fn_assert::cfn_debug_assert;
 use std::cmp;
 
 // The number of frame sub-types for which we track distinct parameters.
@@ -107,9 +108,8 @@ const Q_MODEL_MUL: [i64; 4] = [
 ];
 
 // Convert an integer into a Q57 fixed-point fraction.
-// The integer must be in the range -64 to 63, inclusive.
 pub(crate) const fn q57(v: i32) -> i64 {
-  // TODO: Add assert if it ever becomes possible to do in a const function.
+  cfn_debug_assert!(v >= -64 && v <= 63);
   (v as i64) << 57
 }
 
