@@ -21,7 +21,6 @@ use crate::rate::{
   RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
   FRAME_SUBTYPE_SEF,
 };
-use crate::rayon::prelude::*;
 use crate::scenechange::SceneChangeDetector;
 use crate::stats::EncoderStats;
 use crate::tiling::Area;
@@ -872,14 +871,14 @@ impl<T: Pixel> ContextInner<T> {
     let plane_org = &frame.planes[0];
     let plane_ref = &reference_frame.planes[0];
     let lookahead_intra_costs_lines =
-      coded_data.lookahead_intra_costs.par_chunks_exact(coded_data.w_in_imp_b);
+      coded_data.lookahead_intra_costs.chunks_exact(coded_data.w_in_imp_b);
     let block_importances_lines =
-      coded_data.block_importances.par_chunks_exact(coded_data.w_in_imp_b);
+      coded_data.block_importances.chunks_exact(coded_data.w_in_imp_b);
 
-    let costs: Vec<_> = lookahead_intra_costs_lines
+    lookahead_intra_costs_lines
       .zip(block_importances_lines)
       .enumerate()
-      .flat_map_iter(|(y, (lookahead_intra_costs, block_importances))| {
+      .flat_map(|(y, (lookahead_intra_costs, block_importances))| {
         lookahead_intra_costs
           .iter()
           .zip(block_importances.iter())
@@ -933,10 +932,7 @@ impl<T: Pixel> ContextInner<T> {
             (propagate_amount, reference_x, reference_y)
           })
       })
-      .collect();
-
-    costs.into_iter().for_each(
-      |(propagate_amount, reference_x, reference_y)| {
+      .for_each(|(propagate_amount, reference_x, reference_y)| {
         let mut propagate =
           |block_x_in_mv_units, block_y_in_mv_units, fraction| {
             let x = block_x_in_mv_units / IMP_BLOCK_SIZE_IN_MV_UNITS;
@@ -1017,8 +1013,7 @@ impl<T: Pixel> ContextInner<T> {
           bottom_right_block_y,
           bottom_right_block_fraction,
         );
-      },
-    );
+      });
   }
 
   /// Computes the block importances for the current output frame.
