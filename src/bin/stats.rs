@@ -747,42 +747,31 @@ pub fn calculate_frame_metrics<T: Pixel>(
   frame1: &Frame<T>, frame2: &Frame<T>, bit_depth: usize, cs: ChromaSampling,
   metrics: MetricsEnabled,
 ) -> QualityMetrics {
-  let frame1_info = FrameInfo {
-    planes: frame1.planes.clone(),
-    bit_depth,
-    chroma_sampling: cs,
-  };
-
-  let frame2_info = FrameInfo {
-    planes: frame2.planes.clone(),
-    bit_depth,
-    chroma_sampling: cs,
-  };
-
   match metrics {
     MetricsEnabled::None => QualityMetrics::default(),
     MetricsEnabled::Psnr => QualityMetrics {
       psnr: Some(
-        psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap(),
+        psnr::calculate_frame_psnr(frame1, frame2, bit_depth, cs).unwrap(),
       ),
       ..Default::default()
     },
     MetricsEnabled::All => {
       let mut metrics = QualityMetrics {
         psnr: Some(
-          psnr::calculate_frame_psnr(&frame1_info, &frame2_info).unwrap(),
+          psnr::calculate_frame_psnr(frame1, frame2, bit_depth, cs).unwrap(),
         ),
         psnr_hvs: Some(
-          psnr_hvs::calculate_frame_psnr_hvs(&frame1_info, &frame2_info)
+          psnr_hvs::calculate_frame_psnr_hvs(frame1, frame2, bit_depth, cs)
             .unwrap(),
         ),
         ..Default::default()
       };
-      let ssim = ssim::calculate_frame_ssim(&frame1_info, &frame2_info);
+      let ssim = ssim::calculate_frame_ssim(frame1, frame2, bit_depth, cs);
       metrics.ssim = Some(ssim.unwrap());
-      let ms_ssim = ssim::calculate_frame_msssim(&frame1_info, &frame2_info);
+      let ms_ssim =
+        ssim::calculate_frame_msssim(frame1, frame2, bit_depth, cs);
       metrics.ms_ssim = Some(ms_ssim.unwrap());
-      let ciede = ciede::calculate_frame_ciede(&frame1_info, &frame2_info);
+      let ciede = ciede::calculate_frame_ciede(frame1, frame2, bit_depth, cs);
       metrics.ciede = Some(ciede.unwrap());
       // TODO APSNR
       // TODO VMAF
