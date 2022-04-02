@@ -92,11 +92,11 @@ fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u32 {
   }
 
   // Sum together the sum of columns
-  let sum_s = sum_s_cols.iter().map(|&a| u32::cast_from(a)).sum::<u32>();
-  let sum_s2 = sum_s2_cols.iter().sum::<u32>();
+  let sum_s = sum_s_cols.iter().copied().map(u64::from).sum::<u64>();
+  let sum_s2 = sum_s2_cols.iter().copied().map(u64::from).sum::<u64>();
 
   // Use sums to calculate variance
-  sum_s2 - ((sum_s * sum_s + 32) >> 6)
+  u32::try_from(sum_s2 - ((sum_s * sum_s + 32) >> 6)).unwrap_or(u32::MAX)
 }
 
 /// `rsqrt` result stored in fixed point w/ scaling such that:
