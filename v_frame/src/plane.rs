@@ -196,7 +196,7 @@ impl<T: Pixel> PlaneData<T> {
     }
   }
 
-  unsafe fn layout(len: usize) -> Layout {
+  const unsafe fn layout(len: usize) -> Layout {
     Layout::from_size_align_unchecked(
       len * mem::size_of::<T>(),
       1 << Self::DATA_ALIGNMENT_LOG2,
@@ -382,7 +382,7 @@ impl<T: Pixel> Plane<T> {
       && self.data[alloc_height * stride - 1] == corner_value
   }
 
-  pub fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
+  pub const fn slice(&self, po: PlaneOffset) -> PlaneSlice<'_, T> {
     PlaneSlice { plane: self, x: po.x, y: po.y }
   }
 
@@ -391,7 +391,7 @@ impl<T: Pixel> Plane<T> {
   }
 
   #[inline]
-  fn index(&self, x: usize, y: usize) -> usize {
+  const fn index(&self, x: usize, y: usize) -> usize {
     (y + self.cfg.yorigin) * self.cfg.stride + (x + self.cfg.xorigin)
   }
 
@@ -646,12 +646,12 @@ impl<T: Pixel> Plane<T> {
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
-  pub fn iter(&self) -> PlaneIter<'_, T> {
+  pub const fn iter(&self) -> PlaneIter<'_, T> {
     PlaneIter::new(self)
   }
 
   /// Iterates over the lines of the plane
-  pub fn rows_iter(&self) -> RowsIter<'_, T> {
+  pub const fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter { plane: self, x: 0, y: 0 }
   }
 
@@ -673,15 +673,15 @@ pub struct PlaneIter<'a, T: Pixel> {
 
 impl<'a, T: Pixel> PlaneIter<'a, T> {
   /// Creates a new iterator.
-  pub fn new(plane: &'a Plane<T>) -> Self {
+  pub const fn new(plane: &'a Plane<T>) -> Self {
     Self { plane, y: 0, x: 0 }
   }
 
-  fn width(&self) -> usize {
+  const fn width(&self) -> usize {
     self.plane.cfg.width
   }
 
-  fn height(&self) -> usize {
+  const fn height(&self) -> usize {
     self.plane.cfg.height
   }
 }
@@ -751,7 +751,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     self[0].as_ptr()
   }
 
-  pub fn rows_iter(&self) -> RowsIter<'_, T> {
+  pub const fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter { plane: self.plane, x: self.x, y: self.y }
   }
 
@@ -769,7 +769,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     }
   }
 
-  pub fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a, T> {
+  pub const fn subslice(&self, xo: usize, yo: usize) -> PlaneSlice<'a, T> {
     PlaneSlice {
       plane: self.plane,
       x: self.x + xo as isize,
@@ -777,17 +777,17 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
     }
   }
 
-  pub fn reslice(&self, xo: isize, yo: isize) -> PlaneSlice<'a, T> {
+  pub const fn reslice(&self, xo: isize, yo: isize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x + xo, y: self.y + yo }
   }
 
   /// A slice starting i pixels above the current one.
-  pub fn go_up(&self, i: usize) -> PlaneSlice<'a, T> {
+  pub const fn go_up(&self, i: usize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x, y: self.y - i as isize }
   }
 
   /// A slice starting i pixels to the left of the current one.
-  pub fn go_left(&self, i: usize) -> PlaneSlice<'a, T> {
+  pub const fn go_left(&self, i: usize) -> PlaneSlice<'a, T> {
     PlaneSlice { plane: self.plane, x: self.x - i as isize, y: self.y }
   }
 
@@ -801,7 +801,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
 
   /// Checks if `add_y` and `add_x` lies in the allocated bounds of the
   /// underlying plane.
-  pub fn accessible(&self, add_x: usize, add_y: usize) -> bool {
+  pub const fn accessible(&self, add_x: usize, add_y: usize) -> bool {
     let y =
       (self.y + add_y as isize + self.plane.cfg.yorigin as isize) as usize;
     let x =
@@ -811,7 +811,7 @@ impl<'a, T: Pixel> PlaneSlice<'a, T> {
 
   /// Checks if -`sub_x` and -`sub_y` lies in the allocated bounds of the
   /// underlying plane.
-  pub fn accessible_neg(&self, sub_x: usize, sub_y: usize) -> bool {
+  pub const fn accessible_neg(&self, sub_x: usize, sub_y: usize) -> bool {
     let y = self.y - sub_y as isize + self.plane.cfg.yorigin as isize;
     let x = self.x - sub_x as isize + self.plane.cfg.xorigin as isize;
     y >= 0 && x >= 0
@@ -878,8 +878,7 @@ impl<'a, T: Pixel> ExactSizeIterator for RowsIterMut<'a, T> {}
 impl<'a, T: Pixel> FusedIterator for RowsIterMut<'a, T> {}
 
 impl<'a, T: Pixel> PlaneMutSlice<'a, T> {
-  #[allow(unused)]
-  pub fn rows_iter(&self) -> RowsIter<'_, T> {
+  pub const fn rows_iter(&self) -> RowsIter<'_, T> {
     RowsIter { plane: self.plane, x: self.x, y: self.y }
   }
 
