@@ -1314,6 +1314,7 @@ impl<T: Pixel> ContextInner<T> {
             frame_data.fi.sequence.bit_depth,
             &mut coded_data.activity_scales,
           );
+          frame_data.fi.compute_spatiotemporal_scores();
         } else {
           coded_data.activity_mask = ActivityMask::default();
         }

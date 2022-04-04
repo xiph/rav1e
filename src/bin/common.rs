@@ -162,6 +162,15 @@ pub struct CliOptions {
   /// Still picture mode
   #[clap(long, help_heading = "ENCODE SETTINGS")]
   pub still_picture: bool,
+  /// Adjusts the strength of adaptive quantization
+  #[clap(
+    long,
+    value_parser,
+    hide = true,
+    default_value_t = 1.0,
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub aq_strength: f64,
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[cfg(feature = "unstable")]
@@ -600,6 +609,11 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
 
   if cfg.tune == Tune::Psychovisual {
     cfg.speed_settings.transform.tx_domain_distortion = false;
+  }
+  if cfg.tune == Tune::Psnr {
+    cfg.aq_strength = 0.0;
+  } else {
+    cfg.aq_strength = matches.aq_strength;
   }
 
   cfg.tile_cols = matches.tile_cols;
