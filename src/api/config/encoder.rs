@@ -108,6 +108,9 @@ pub struct EncoderConfig {
   /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
 
+  /// Strength of variance AQ. Defaults to 1.0. Disabled automatically by Tune=Psnr.
+  pub aq_strength: f64,
+
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -165,6 +168,7 @@ impl EncoderConfig {
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
+      aq_strength: 1.0,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
@@ -253,6 +257,12 @@ impl EncoderConfig {
         timestamp >= entry.start_time && timestamp < entry.end_time
       })
     })
+  }
+
+  /// Whether we should build data such as lookahead intra costs and block importances.
+  #[inline]
+  pub fn need_psy_lookahead_data(&self) -> bool {
+    self.temporal_rdo() || self.aq_strength > f64::EPSILON
   }
 }
 

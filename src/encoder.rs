@@ -550,7 +550,7 @@ impl Default for DeblockState {
   }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SegmentationState {
   pub enabled: bool,
   pub update_data: bool,
@@ -559,6 +559,8 @@ pub struct SegmentationState {
   pub last_active_segid: u8,
   pub features: [[bool; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub data: [[i16; SegLvl::SEG_LVL_MAX as usize]; 8],
+  pub segmentation_mask: Box<[u8]>,
+  pub activity_lut: [usize; 8],
 }
 
 // Frame Invariants are invariant inside a frame
@@ -3678,7 +3680,7 @@ fn get_initial_segmentation<T: Pixel>(
   } else {
     let ref_frame_idx = fi.ref_frames[fi.primary_ref_frame as usize] as usize;
     let ref_frame = fi.rec_buffer.frames[ref_frame_idx].as_ref();
-    ref_frame.map(|rec| rec.segmentation)
+    ref_frame.map(|rec| rec.segmentation.clone())
   };
 
   // return the retrieved instance if any, a new one otherwise
@@ -3749,7 +3751,7 @@ pub fn update_rec_buffer<T: Pixel>(
     cdfs: fs.cdfs,
     frame_me_stats: fs.frame_me_stats.clone(),
     output_frameno,
-    segmentation: fs.segmentation,
+    segmentation: fs.segmentation.clone(),
   });
   for i in 0..(REF_FRAMES as usize) {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {

@@ -247,6 +247,13 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .takes_value(true)
     )
     .arg(
+      Arg::new("AQ_STRENGTH")
+        .help("Adjusts the strength of spatial adaptive quantization")
+        .long("aq-strength")
+        .takes_value(true)
+        .hide(true)
+    )
+    .arg(
       Arg::new("TUNE")
         .help("Quality tuning")
         .long("tune")
@@ -765,6 +772,12 @@ fn parse_config(matches: &ArgMatches) -> Result<EncoderConfig, CliError> {
 
   if cfg.tune == Tune::Psychovisual {
     cfg.speed_settings.transform.tx_domain_distortion = false;
+  }
+  if cfg.tune == Tune::Psnr {
+    cfg.aq_strength = 0.0;
+  }
+  if let Some(aq_str) = matches.value_of("AQ_STRENGTH") {
+    cfg.aq_strength = aq_str.parse().unwrap();
   }
 
   cfg.tile_cols = matches.value_of("TILE_COLS").unwrap().parse().unwrap();

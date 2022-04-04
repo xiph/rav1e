@@ -696,7 +696,7 @@ impl<T: Pixel> ContextInner<T> {
         cdfs: fs.cdfs,
         frame_me_stats: fs.frame_me_stats.clone(),
         output_frameno,
-        segmentation: fs.segmentation,
+        segmentation: fs.segmentation.clone(),
       });
       for i in 0..(REF_FRAMES as usize) {
         if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -781,7 +781,7 @@ impl<T: Pixel> ContextInner<T> {
       cdfs: fs.cdfs,
       frame_me_stats: fs.frame_me_stats.clone(),
       output_frameno,
-      segmentation: fs.segmentation,
+      segmentation: fs.segmentation.clone(),
     });
     for i in 0..(REF_FRAMES as usize) {
       if (fi.refresh_frame_flags & (1 << i)) != 0 {
@@ -853,7 +853,7 @@ impl<T: Pixel> ContextInner<T> {
     {
       self
         .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
-      if self.config.temporal_rdo() {
+      if self.config.need_psy_lookahead_data() {
         self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
       }
       self.next_lookahead_output_frameno += 1;
@@ -1289,7 +1289,9 @@ impl<T: Pixel> ContextInner<T> {
       frame_data.fi.set_quantizers(&qps);
 
       if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
-        if self.config.tune == Tune::Psychovisual {
+        if self.config.tune == Tune::Psychovisual
+          || self.config.aq_strength > f64::EPSILON
+        {
           let frame =
             self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
           coded_data.activity_mask =
@@ -1437,7 +1439,7 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::LimitReached);
     }
 
-    if self.config.temporal_rdo() {
+    if self.config.need_psy_lookahead_data() {
       // Compute the block importances for the current output frame.
       self.compute_block_importances();
     }

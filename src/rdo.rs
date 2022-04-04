@@ -804,7 +804,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 
     let mut zero_distortion = false;
 
-    for sidx in select_segment(fi, ts, tile_bo, bsize, skip) {
+    for sidx in select_segment(fi, ts, tile_bo, is_chroma_block, bsize, skip) {
       cw.bc.blocks.set_segmentation_idx(tile_bo, bsize, sidx);
 
       let (tx_size, tx_type) = rdo_tx_size_type(

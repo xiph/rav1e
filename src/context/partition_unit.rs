@@ -249,7 +249,9 @@ impl<'a> ContextWriter<'a> {
     symbol_with_update!(self, w, skip as u32, cdf, 2);
   }
 
-  pub fn get_segment_pred(&self, bo: TileBlockOffset) -> (u8, u8) {
+  pub fn get_segment_pred(
+    &self, bo: TileBlockOffset, last_active_segid: u8,
+  ) -> (u8, u8) {
     let mut prev_ul = -1;
     let mut prev_u = -1;
     let mut prev_l = -1;
@@ -288,7 +290,8 @@ impl<'a> ContextWriter<'a> {
     } else {
       r = if prev_ul == prev_u { prev_u } else { prev_l };
     }
-    (r as u8, cdf_index)
+
+    ((r as u8).min(last_active_segid), cdf_index)
   }
 
   pub fn write_cfl_alphas<W: Writer>(&mut self, w: &mut W, cfl: CFLParams) {
@@ -434,7 +437,7 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut W, bo: TileBlockOffset, bsize: BlockSize, skip: bool,
     last_active_segid: u8,
   ) {
-    let (pred, cdf_index) = self.get_segment_pred(bo);
+    let (pred, cdf_index) = self.get_segment_pred(bo, last_active_segid);
     if skip {
       self.bc.blocks.set_segmentation_idx(bo, bsize, pred);
       return;

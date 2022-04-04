@@ -232,6 +232,8 @@ impl Arbitrary for ArbitraryEncoder {
       tile_cols: u.int_in_range(0..=2)?,
       tile_rows: u.int_in_range(0..=2)?,
       tiles: u.int_in_range(0..=16)?,
+      aq_strength: *u
+        .choose(&[-1.0, -0.5, 0.0, 0.1, 0.5, 1.0, 1.5, 2.5, 69.0])?,
 
       chroma_sampling: *u.choose(&[
         ChromaSampling::Cs420,

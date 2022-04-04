@@ -9,14 +9,18 @@
 
 use crate::frame::*;
 use crate::rdo::DistortionScale;
+use crate::segmentation::MAX_SEGMENTS;
 use crate::tiling::*;
 use crate::util::*;
 use itertools::izip;
 use rust_hawktracer::*;
+use statrs::statistics::Data;
+use statrs::statistics::OrderStatistics;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
-  variances: Box<[u32]>,
+  pub variances: Box<[u32]>,
+  pub segments: Box<[u8]>,
 }
 
 impl ActivityMask {
@@ -52,7 +56,26 @@ impl ActivityMask {
         variances.push(variance);
       }
     }
-    ActivityMask { variances: variances.into_boxed_slice() }
+
+    // Compute initial segmentation choices for variance AQ
+    // We take the 95th percentile of variances here to get a less skewed sample.
+    // Otherwise segment 0 becomes heavily oversaturated.
+    let mut fdata = Data::new(
+      variances.iter().map(|&var| var as f64).collect::<Box<[f64]>>(),
+    );
+    let max_var = fdata.percentile(95);
+    let segments = variances
+      .iter()
+      .map(|var| {
+        clamp(
+          (*var as f64 / max_var * MAX_SEGMENTS as f64).floor(),
+          0.0,
+          (MAX_SEGMENTS - 1) as f64,
+        ) as u8
+      })
+      .collect();
+
+    ActivityMask { variances: variances.into_boxed_slice(), segments }
   }
 
   #[hawktracer(activity_mask_fill_scales)]

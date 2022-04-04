@@ -2082,6 +2082,7 @@ fn log_q_exp_overflow() {
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,
+    aq_strength: 1.0,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
@@ -2159,6 +2160,7 @@ fn guess_frame_subtypes_assert() {
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,
+    aq_strength: 1.0,
     speed_settings: SpeedSettings {
       multiref: false,
       fast_deblock: true,
