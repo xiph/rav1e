@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -2077,6 +2077,8 @@ fn log_q_exp_overflow() {
     min_quantizer: 64,
     bitrate: 1,
     tune: Tune::Psychovisual,
+    #[cfg(feature = "unstable")]
+    film_grain_params: None,
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,
@@ -2152,6 +2154,8 @@ fn guess_frame_subtypes_assert() {
     min_quantizer: 0,
     bitrate: 16384,
     tune: Tune::Psychovisual,
+    #[cfg(feature = "unstable")]
+    film_grain_params: None,
     tile_cols: 0,
     tile_rows: 0,
     tiles: 0,

@@ -1,4 +1,4 @@
-// Copyright (c) 2018, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -53,7 +53,7 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
 
   fn decode_packet(
     &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
-    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize,
+    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize, verify: bool,
   ) -> DecodeResult {
     let mut corrupted_count = 0;
     unsafe {
@@ -104,8 +104,10 @@ impl<T: Pixel> TestDecoder<T> for AomDecoder<T> {
           }
           corrupted_count += corrupted;
 
-          let rec = rec_fifo.pop_front().unwrap();
-          compare_img(img, &rec, bit_depth, w, h, chroma_sampling);
+          if verify {
+            let rec = rec_fifo.pop_front().unwrap();
+            compare_img(img, &rec, bit_depth, w, h, chroma_sampling);
+          }
         }
       }
     }

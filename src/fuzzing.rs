@@ -256,6 +256,8 @@ impl Arbitrary for ArbitraryEncoder {
       enable_timing_info: Arbitrary::arbitrary(u)?,
       switch_frame_interval: u.int_in_range(0..=3)?,
       tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
+      #[cfg(feature = "unstable")]
+      film_grain_params: None,
     };
 
     let frame_count =
@@ -360,6 +362,7 @@ pub fn fuzz_encode_decode<T: Pixel>(p: DecodeTestParameters<T>) {
 
   let mut dec = get_decoder::<T>("dav1d", p.w, p.h);
   dec.encode_decode(
+    true,
     p.w,
     p.h,
     p.speed,
@@ -376,5 +379,7 @@ pub fn fuzz_encode_decode<T: Pixel>(p: DecodeTestParameters<T>) {
     p.tile_cols_log2,
     p.tile_rows_log2,
     p.still_picture,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }

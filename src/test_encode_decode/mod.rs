@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -11,8 +11,12 @@
 #![cfg_attr(fuzzing, allow(unused))]
 
 use crate::color::ChromaSampling;
+#[cfg(feature = "unstable")]
+use crate::config::GrainTableParams;
 use crate::util::Pixel;
 use crate::*;
+#[cfg(feature = "unstable")]
+use arrayvec::ArrayVec;
 use interpolate_name::interpolate_test;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -64,11 +68,13 @@ pub(crate) trait TestDecoder<T: Pixel> {
   where
     Self: Sized;
   fn encode_decode(
-    &mut self, w: usize, h: usize, speed: usize, quantizer: usize,
-    limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
-    min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
-    low_latency: bool, error_resilient: bool, bitrate: i32,
-    tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
+    &mut self, verify: bool, w: usize, h: usize, speed: usize,
+    quantizer: usize, limit: usize, bit_depth: usize,
+    chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
+    switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
+    bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
+    still_picture: bool,
+    #[cfg(feature = "unstable")] grain_table: Option<Vec<GrainTableParams>>,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -88,6 +94,8 @@ pub(crate) trait TestDecoder<T: Pixel> {
       tile_cols_log2,
       tile_rows_log2,
       still_picture,
+      #[cfg(feature = "unstable")]
+      grain_table,
     );
 
     debug!(
@@ -128,6 +136,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
             h,
             chroma_sampling,
             bit_depth,
+            verify,
           ) {
             DecodeResult::Done => {
               break;
@@ -146,7 +155,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
   }
   fn decode_packet(
     &mut self, packet: &[u8], rec_fifo: &mut VecDeque<Frame<T>>, w: usize,
-    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize,
+    h: usize, chroma_sampling: ChromaSampling, bit_depth: usize, verify: bool,
   ) -> DecodeResult;
 }
 
@@ -173,6 +182,7 @@ fn setup_encoder<T: Pixel>(
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
   bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
   still_picture: bool,
+  #[cfg(feature = "unstable")] grain_table: Option<Vec<GrainTableParams>>,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -190,6 +200,10 @@ fn setup_encoder<T: Pixel>(
   enc.tile_cols = 1 << tile_cols_log2;
   enc.tile_rows = 1 << tile_rows_log2;
   enc.still_picture = still_picture;
+  #[cfg(feature = "unstable")]
+  {
+    enc.film_grain_params = grain_table;
+  }
 
   let threads = if cfg!(fuzzing) { 1 } else { 2 };
 
@@ -213,6 +227,7 @@ fn speed(s: usize, decoder: &str) {
     let h = h + b.1;
     let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
     dec.encode_decode(
+      true,
       w,
       h,
       s,
@@ -229,6 +244,8 @@ fn speed(s: usize, decoder: &str) {
       0,
       0,
       false,
+      #[cfg(feature = "unstable")]
+      None,
     );
   }
 }
@@ -305,6 +322,7 @@ fn dimension(w: usize, h: usize, decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -321,6 +339,8 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     0,
     0,
     still_picture,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -333,6 +353,7 @@ fn quantizer(decoder: &str, q: usize) {
   for b in DIMENSION_OFFSETS.iter() {
     let mut dec = get_decoder::<u8>(decoder, b.0, b.1);
     dec.encode_decode(
+      true,
       w + b.0,
       h + b.1,
       speed,
@@ -349,6 +370,8 @@ fn quantizer(decoder: &str, q: usize) {
       0,
       0,
       false,
+      #[cfg(feature = "unstable")]
+      None,
     );
   }
 }
@@ -382,6 +405,7 @@ fn bitrate(decoder: &str) {
     for &r in [100, 1000, 10_000].iter() {
       let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
       dec.encode_decode(
+        true,
         w,
         h,
         speed,
@@ -398,6 +422,8 @@ fn bitrate(decoder: &str) {
         0,
         0,
         false,
+        #[cfg(feature = "unstable")]
+        None,
       );
     }
   }
@@ -414,6 +440,7 @@ fn keyframes(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -430,6 +457,8 @@ fn keyframes(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -445,6 +474,7 @@ fn reordering(decoder: &str) {
   for keyint in &[4, 5, 6] {
     let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
     dec.encode_decode(
+      true,
       w,
       h,
       speed,
@@ -461,6 +491,8 @@ fn reordering(decoder: &str) {
       0,
       0,
       false,
+      #[cfg(feature = "unstable")]
+      None,
     );
   }
 }
@@ -478,6 +510,7 @@ fn reordering_short_video(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -494,6 +527,8 @@ fn reordering_short_video(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -509,6 +544,7 @@ fn error_resilient(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -525,6 +561,8 @@ fn error_resilient(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -540,6 +578,7 @@ fn error_resilient_reordering(decoder: &str) {
   for keyint in &[4, 5, 6] {
     let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
     dec.encode_decode(
+      true,
       w,
       h,
       speed,
@@ -556,6 +595,8 @@ fn error_resilient_reordering(decoder: &str) {
       0,
       0,
       false,
+      #[cfg(feature = "unstable")]
+      None,
     );
   }
 }
@@ -572,6 +613,7 @@ fn switch_frame(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -588,6 +630,8 @@ fn switch_frame(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -603,6 +647,7 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -619,6 +664,8 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -635,6 +682,7 @@ fn low_bit_depth(decoder: &str) {
   // 8-bit
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -651,6 +699,8 @@ fn low_bit_depth(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -663,6 +713,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
 
   let mut dec = get_decoder::<u16>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -679,6 +730,8 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -708,8 +761,25 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
-    w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0, 0,
+    true,
+    w,
+    h,
+    speed,
+    quantizer,
+    limit,
+    8,
+    cs,
+    15,
+    15,
+    0,
+    true,
     false,
+    0,
+    0,
+    0,
+    false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -744,6 +814,7 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -760,6 +831,8 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     2,
     2,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -774,6 +847,7 @@ fn still_picture_mode(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -790,6 +864,8 @@ fn still_picture_mode(decoder: &str) {
     0,
     0,
     true,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -817,6 +893,7 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -833,6 +910,8 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
   );
 }
 
@@ -848,6 +927,7 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
+    true,
     w,
     h,
     speed,
@@ -864,5 +944,171 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
     0,
     0,
     false,
+    #[cfg(feature = "unstable")]
+    None,
+  );
+}
+
+#[cfg(feature = "unstable")]
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
+fn film_grain_table_luma_only(decoder: &str) {
+  let quantizer = 100;
+  let limit = 5; // Include inter frames
+  let speed = 10;
+  let w = 64;
+  let h = 80;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    false,
+    w,
+    h,
+    speed,
+    quantizer,
+    limit,
+    8,
+    Default::default(),
+    15,
+    15,
+    0,
+    true,
+    false,
+    0,
+    0,
+    0,
+    false,
+    Some(vec![GrainTableParams {
+      start_time: 0,
+      end_time: 9223372036854775807,
+      scaling_points_y: ArrayVec::from([
+        [0, 20],
+        [20, 5],
+        [39, 4],
+        [59, 3],
+        [78, 3],
+        [98, 3],
+        [118, 3],
+        [137, 3],
+        [157, 3],
+        [177, 3],
+        [196, 3],
+        [216, 4],
+        [235, 4],
+        [255, 4],
+      ]),
+      scaling_points_cb: ArrayVec::new(),
+      scaling_points_cr: ArrayVec::new(),
+      scaling_shift: 8,
+      ar_coeff_lag: 0,
+      ar_coeffs_y: ArrayVec::new(),
+      ar_coeffs_cb: ArrayVec::try_from([0].as_slice()).unwrap(),
+      ar_coeffs_cr: ArrayVec::try_from([0].as_slice()).unwrap(),
+      ar_coeff_shift: 6,
+      cb_mult: 0,
+      cb_luma_mult: 0,
+      cb_offset: 0,
+      cr_mult: 0,
+      cr_luma_mult: 0,
+      cr_offset: 0,
+      overlap_flag: true,
+      chroma_scaling_from_luma: false,
+      grain_scale_shift: 0,
+      random_seed: 7391,
+    }]),
+  );
+}
+
+#[cfg(feature = "unstable")]
+#[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
+#[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
+#[ignore]
+fn film_grain_table_chroma(decoder: &str) {
+  let quantizer = 100;
+  let limit = 5; // Include inter frames
+  let speed = 10;
+  let w = 64;
+  let h = 80;
+
+  let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
+  dec.encode_decode(
+    false,
+    w,
+    h,
+    speed,
+    quantizer,
+    limit,
+    8,
+    Default::default(),
+    15,
+    15,
+    0,
+    true,
+    false,
+    0,
+    0,
+    0,
+    false,
+    Some(vec![GrainTableParams {
+      start_time: 0,
+      end_time: 9223372036854775807,
+      scaling_points_y: ArrayVec::from([
+        [0, 0],
+        [20, 4],
+        [39, 3],
+        [59, 3],
+        [78, 3],
+        [98, 3],
+        [118, 4],
+        [137, 4],
+        [157, 4],
+        [177, 4],
+        [196, 4],
+        [216, 5],
+        [235, 5],
+        [255, 5],
+      ]),
+      scaling_points_cb: ArrayVec::from([
+        [0, 0],
+        [28, 0],
+        [57, 0],
+        [85, 0],
+        [113, 0],
+        [142, 0],
+        [170, 0],
+        [198, 0],
+        [227, 0],
+        [255, 1],
+      ]),
+      scaling_points_cr: ArrayVec::from([
+        [0, 0],
+        [28, 0],
+        [57, 0],
+        [85, 0],
+        [113, 0],
+        [142, 0],
+        [170, 0],
+        [198, 0],
+        [227, 0],
+        [255, 1],
+      ]),
+      scaling_shift: 8,
+      ar_coeff_lag: 0,
+      ar_coeffs_y: ArrayVec::new(),
+      ar_coeffs_cb: ArrayVec::try_from([0].as_slice()).unwrap(),
+      ar_coeffs_cr: ArrayVec::try_from([0].as_slice()).unwrap(),
+      ar_coeff_shift: 6,
+      cb_mult: 128,
+      cb_luma_mult: 192,
+      cb_offset: 256,
+      cr_mult: 128,
+      cr_luma_mult: 192,
+      cr_offset: 256,
+      overlap_flag: true,
+      chroma_scaling_from_luma: false,
+      grain_scale_shift: 0,
+      random_seed: 7391,
+    }]),
   );
 }

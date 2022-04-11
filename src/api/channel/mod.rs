@@ -292,7 +292,7 @@ impl Config {
       (None, None, i32::MAX as u64)
     };
 
-    let config = Arc::new(self.enc);
+    let config = Arc::new(self.enc.clone());
 
     let channel = (
       FrameSender::new(frame_limit, send_frame, config.clone()),

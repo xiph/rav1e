@@ -327,10 +327,12 @@ impl EncContext {
     }
   }
 
-  const fn config(&self) -> rav1e::EncoderConfig {
+  fn config(&self) -> rav1e::EncoderConfig {
+    // Ideally this would return a reference instead of cloning,
+    // but that would require a breaking change in the CAPI.
     match self {
-      EncContext::U8(ctx) => ctx.config,
-      EncContext::U16(ctx) => ctx.config,
+      EncContext::U8(ctx) => ctx.config.clone(),
+      EncContext::U16(ctx) => ctx.config.clone(),
     }
   }
 }
