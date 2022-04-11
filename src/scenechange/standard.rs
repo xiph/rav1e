@@ -66,7 +66,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
           frame2_inter_ref,
           frame1,
           self.bit_depth,
-          self.encoder_config,
+          self.encoder_config.clone(),
           self.sequence.clone(),
           buffer,
         );

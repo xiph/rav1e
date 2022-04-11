@@ -19,7 +19,7 @@ fn main() {
     ..Default::default()
   };
 
-  let cfg = Config::new().with_encoder_config(enc);
+  let cfg = Config::new().with_encoder_config(enc.clone());
 
   let mut ctx: Context<u16> = cfg.new_context().unwrap();
 

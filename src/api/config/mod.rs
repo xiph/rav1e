@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -17,6 +17,11 @@ use crate::util::Pixel;
 
 mod encoder;
 pub use encoder::*;
+
+#[cfg(feature = "unstable")]
+mod grain_synth;
+#[cfg(feature = "unstable")]
+pub use grain_synth::*;
 
 mod rate;
 pub use rate::Error as RateControlError;
@@ -145,7 +150,7 @@ impl Config {
   ///
   /// `EncoderConfig` contains the settings impacting the
   /// codec features used in the produced bitstream.
-  pub const fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
+  pub fn with_encoder_config(mut self, enc: EncoderConfig) -> Self {
     self.enc = enc;
     self
   }
@@ -212,7 +217,7 @@ impl Config {
 
     self.validate()?;
 
-    let mut config = self.enc;
+    let mut config = self.enc.clone();
     config.set_key_frame_interval(
       config.min_key_frame_interval,
       config.max_key_frame_interval,
@@ -276,7 +281,7 @@ impl Config {
   /// [`Context`]: struct.Context.html
   pub fn new_context<T: Pixel>(&self) -> Result<Context<T>, InvalidConfig> {
     let inner = self.new_inner()?;
-    let config = *inner.config;
+    let config = (*inner.config).clone();
     let pool = self.new_thread_pool();
 
     Ok(Context { is_flushing: false, inner, pool, config })

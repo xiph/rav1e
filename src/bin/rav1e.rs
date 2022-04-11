@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -43,6 +43,8 @@ extern crate log;
 mod common;
 mod decoder;
 mod error;
+#[cfg(feature = "unstable")]
+mod grain_synth;
 #[cfg(feature = "serialize")]
 mod kv;
 mod muxer;
@@ -51,6 +53,8 @@ mod stats;
 use crate::common::*;
 use crate::error::*;
 use crate::stats::*;
+#[cfg(feature = "unstable")]
+use grain_synth::generate_grain_params;
 use rav1e::config::CpuFeatureLevel;
 use rav1e::prelude::*;
 
@@ -454,6 +458,16 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
+  #[cfg(feature = "unstable")]
+  if cli.generate_grain_strength > 0 && cli.enc.film_grain_params.is_none() {
+    cli.enc.film_grain_params = Some(vec![generate_grain_params(
+      video_info.width as u32,
+      video_info.height as u32,
+      cli.generate_grain_strength as u32 * 100,
+      cli.enc.is_hdr(),
+    )]);
+  }
+
   let mut rc = RateControlConfig::new();
 
   let pass2file = match cli.pass2file_name {
@@ -490,7 +504,7 @@ fn run() -> Result<(), error::CliError> {
   };
 
   let cfg = Config::new()
-    .with_encoder_config(cli.enc)
+    .with_encoder_config(cli.enc.clone())
     .with_threads(cli.threads)
     .with_rate_control(rc);
 

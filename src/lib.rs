@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2017-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -309,6 +309,11 @@ pub use crate::api::color;
 
 /// Encoder configuration and settings
 pub mod config {
+  #[cfg(feature = "unstable")]
+  pub use crate::api::config::{
+    GrainTableParams, GS_NUM_UV_COEFFS, GS_NUM_UV_POINTS, GS_NUM_Y_COEFFS,
+    GS_NUM_Y_POINTS,
+  };
   pub use crate::api::{
     Config, EncoderConfig, InvalidConfig, PredictionModesSetting,
     RateControlConfig, RateControlError, RateControlSummary, SpeedSettings,

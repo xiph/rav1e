@@ -52,7 +52,7 @@ impl<T: Pixel> SceneChange<T> {
     let seq = Arc::new(Sequence::new(enc));
 
     let detector = SceneChangeDetector::new(
-      *enc,
+      enc.clone(),
       CpuFeatureLevel::default(),
       pyramid_size,
       seq,
@@ -353,8 +353,11 @@ impl Config {
     }
 
     let channel = (
-      FrameSender::new(frame_limit, send_frame, Arc::new(self.enc)),
-      PacketReceiver { receiver: receive_packet, config: Arc::new(self.enc) },
+      FrameSender::new(frame_limit, send_frame, Arc::new(self.enc.clone())),
+      PacketReceiver {
+        receiver: receive_packet,
+        config: Arc::new(self.enc.clone()),
+      },
     );
 
     Ok(channel)

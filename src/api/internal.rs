@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -286,12 +286,12 @@ impl<T: Pixel> ContextInner<T> {
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
       keyframe_detector: SceneChangeDetector::new(
-        *enc,
+        enc.clone(),
         CpuFeatureLevel::default(),
         lookahead_distance,
         seq.clone(),
       ),
-      config: Arc::new(*enc),
+      config: Arc::new(enc.clone()),
       seq,
       rc_state: RCState::new(
         enc.width as i32,

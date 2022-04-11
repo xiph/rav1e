@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -10,6 +10,8 @@
 use itertools::*;
 
 use crate::api::color::*;
+#[cfg(feature = "unstable")]
+use crate::api::config::GrainTableParams;
 use crate::api::{Rational, SpeedSettings};
 use crate::encoder::Tune;
 use crate::serialize::{Deserialize, Serialize};
@@ -22,7 +24,7 @@ pub(crate) const MAX_RDO_LOOKAHEAD_FRAMES: usize = usize::max_value() - 1;
 pub(crate) const MAX_MAX_KEY_FRAME_INTERVAL: u64 = i32::max_value() as u64 / 3;
 
 /// Encoder settings which impact the produced bitstream.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EncoderConfig {
   // output size
   /// Width of the frames in pixels.
@@ -82,6 +84,9 @@ pub struct EncoderConfig {
   pub bitrate: i32,
   /// Metric to tune the quality for.
   pub tune: Tune,
+  /// Parameters for grain synthesis.
+  #[cfg(feature = "unstable")]
+  pub film_grain_params: Option<Vec<GrainTableParams>>,
   /// Number of tiles horizontally. Must be a power of two.
   ///
   /// Overridden by [`tiles`], if present.
@@ -155,6 +160,8 @@ impl EncoderConfig {
       quantizer: 100,
       bitrate: 0,
       tune: Tune::default(),
+      #[cfg(feature = "unstable")]
+      film_grain_params: None,
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
@@ -214,6 +221,38 @@ impl EncoderConfig {
     // distortion is used, distortion is only known at the tx block level which
     // might be bigger than 8x8. So temporal RDO is always disabled in that case.
     !self.speed_settings.transform.tx_domain_distortion
+  }
+
+  /// Describes whether the output is targeted as HDR
+  pub fn is_hdr(&self) -> bool {
+    self
+      .color_description
+      .map(|colors| {
+        colors.transfer_characteristics == TransferCharacteristics::SMPTE2084
+      })
+      .unwrap_or(false)
+  }
+
+  #[cfg(feature = "unstable")]
+  pub(crate) fn get_film_grain_at(
+    &self, timestamp: u64,
+  ) -> Option<&GrainTableParams> {
+    self.film_grain_params.as_ref().and_then(|entries| {
+      entries.iter().find(|entry| {
+        timestamp >= entry.start_time && timestamp < entry.end_time
+      })
+    })
+  }
+
+  #[cfg(feature = "unstable")]
+  pub(crate) fn get_film_grain_mut_at(
+    &mut self, timestamp: u64,
+  ) -> Option<&mut GrainTableParams> {
+    self.film_grain_params.as_mut().and_then(|entries| {
+      entries.iter_mut().find(|entry| {
+        timestamp >= entry.start_time && timestamp < entry.end_time
+      })
+    })
   }
 }
 

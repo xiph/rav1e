@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2021, The rav1e contributors. All rights reserved
+// Copyright (c) 2018-2022, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -821,8 +821,98 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
     }
 
-    if fi.sequence.film_grain_params_present && fi.show_frame {
-      unimplemented!();
+    #[cfg(feature = "unstable")]
+    if fi.sequence.film_grain_params_present {
+      if let Some(grain_params) = fi.film_grain_params() {
+        // Apply grain
+        self.write_bit(true)?;
+        self.write(16, grain_params.random_seed)?;
+        if fi.frame_type == FrameType::INTER {
+          // For the purposes of photon noise,
+          // it's simpler to always update the params,
+          // and the output will be the same.
+          self.write_bit(true)?;
+        }
+
+        self.write(4, grain_params.scaling_points_y.len() as u8)?;
+        for point in &grain_params.scaling_points_y {
+          self.write(8, point[0])?;
+          self.write(8, point[1])?;
+        }
+
+        let chroma_scaling_from_luma =
+          if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
+            self.write_bit(grain_params.chroma_scaling_from_luma)?;
+            grain_params.chroma_scaling_from_luma
+          } else {
+            false
+          };
+        if !(fi.sequence.chroma_sampling == ChromaSampling::Cs400
+          || chroma_scaling_from_luma
+          || (fi.sequence.chroma_sampling == ChromaSampling::Cs420
+            && grain_params.scaling_points_y.is_empty()))
+        {
+          self.write(4, grain_params.scaling_points_cb.len() as u8)?;
+          for point in &grain_params.scaling_points_cb {
+            self.write(8, point[0])?;
+            self.write(8, point[1])?;
+          }
+          self.write(4, grain_params.scaling_points_cr.len() as u8)?;
+          for point in &grain_params.scaling_points_cr {
+            self.write(8, point[0])?;
+            self.write(8, point[1])?;
+          }
+        }
+
+        self.write(2, grain_params.scaling_shift - 8)?;
+        self.write(2, grain_params.ar_coeff_lag)?;
+
+        let mut num_pos_luma =
+          (2 * grain_params.ar_coeff_lag * (grain_params.ar_coeff_lag + 1))
+            as usize;
+        let mut num_pos_chroma;
+        if !grain_params.scaling_points_y.is_empty() {
+          num_pos_chroma = num_pos_luma + 1;
+          for i in 0..num_pos_luma {
+            self.write(8, grain_params.ar_coeffs_y[i] as i16 + 128)?;
+          }
+        } else {
+          num_pos_chroma = num_pos_luma;
+        }
+
+        if chroma_scaling_from_luma
+          || !grain_params.scaling_points_cb.is_empty()
+        {
+          for i in 0..num_pos_chroma {
+            self.write(8, grain_params.ar_coeffs_cb[i] as i16 + 128)?;
+          }
+        }
+        if chroma_scaling_from_luma
+          || !grain_params.scaling_points_cr.is_empty()
+        {
+          for i in 0..num_pos_chroma {
+            self.write(8, grain_params.ar_coeffs_cr[i] as i16 + 128)?;
+          }
+        }
+
+        self.write(2, grain_params.ar_coeff_shift - 6)?;
+        self.write(2, grain_params.grain_scale_shift)?;
+        if !grain_params.scaling_points_cb.is_empty() {
+          self.write(8, grain_params.cb_mult)?;
+          self.write(8, grain_params.cb_luma_mult)?;
+          self.write(9, grain_params.cb_offset)?;
+        }
+        if !grain_params.scaling_points_cr.is_empty() {
+          self.write(8, grain_params.cr_mult)?;
+          self.write(8, grain_params.cr_luma_mult)?;
+          self.write(9, grain_params.cr_offset)?;
+        }
+        self.write_bit(grain_params.overlap_flag)?;
+        self.write_bit(fi.sequence.pixel_range == PixelRange::Limited)?;
+      } else {
+        // No film grain for this frame
+        self.write_bit(false)?;
+      }
     }
 
     if fi.large_scale_tile {

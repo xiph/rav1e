@@ -8,6 +8,8 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::activity::*;
+#[cfg(feature = "unstable")]
+use crate::api::config::GrainTableParams;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -331,6 +333,13 @@ impl Sequence {
       decoder_model_info_present_flag: false,
       level,
       tier,
+      #[cfg(feature = "unstable")]
+      film_grain_params_present: config
+        .film_grain_params
+        .as_ref()
+        .map(|entries| !entries.is_empty())
+        .unwrap_or(false),
+      #[cfg(not(feature = "unstable"))]
       film_grain_params_present: false,
       timing_info_present: config.enable_timing_info,
       time_base: config.time_base,
@@ -980,6 +989,20 @@ impl<T: Pixel> FrameInvariants<T> {
     fi.input_frameno = input_frameno;
     fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
 
+    #[cfg(feature = "unstable")]
+    if fi.show_frame || fi.showable_frame {
+      let cur_frame_time = fi.frame_timestamp();
+      // Increment the film grain seed for the next frame
+      if let Some(params) =
+        Arc::make_mut(&mut fi.config).get_film_grain_mut_at(cur_frame_time)
+      {
+        params.random_seed = params.random_seed.wrapping_add(3248);
+        if params.random_seed == 0 {
+          params.random_seed = DEFAULT_GS_SEED;
+        }
+      }
+    }
+
     Some(fi)
   }
 
@@ -1130,6 +1153,24 @@ impl<T: Pixel> FrameInvariants<T> {
   #[inline(always)]
   pub fn sb_size_log2(&self) -> usize {
     self.sequence.tiling.sb_size_log2
+  }
+
+  #[cfg(feature = "unstable")]
+  pub fn film_grain_params(&self) -> Option<&GrainTableParams> {
+    if !(self.show_frame || self.showable_frame) {
+      return None;
+    }
+    let cur_frame_time = self.frame_timestamp();
+    self.config.get_film_grain_at(cur_frame_time)
+  }
+
+  #[cfg(feature = "unstable")]
+  pub fn frame_timestamp(&self) -> u64 {
+    // I don't know why this is the base unit for a timestamp but it is. 1/10000000 of a second.
+    const TIMESTAMP_BASE_UNIT: u64 = 10_000_000;
+
+    self.input_frameno * TIMESTAMP_BASE_UNIT * self.sequence.time_base.num
+      / self.sequence.time_base.den
   }
 }
 
