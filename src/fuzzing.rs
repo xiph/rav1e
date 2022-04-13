@@ -257,6 +257,7 @@ impl Arbitrary for ArbitraryEncoder {
       switch_frame_interval: u.int_in_range(0..=3)?,
       tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,
       film_grain_params: None,
+      denoise_strength: u.int_in_range(0..=50)?,
     };
 
     let frame_count =

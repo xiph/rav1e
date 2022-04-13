@@ -10,9 +10,8 @@
 // Fuzzing only uses a subset of these.
 #![cfg_attr(fuzzing, allow(unused))]
 
-use crate::color::ChromaSampling;
-
 use crate::api::config::GrainTableSegment;
+use crate::color::ChromaSampling;
 use crate::util::Pixel;
 use crate::*;
 

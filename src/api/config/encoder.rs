@@ -85,6 +85,8 @@ pub struct EncoderConfig {
   pub tune: Tune,
   /// Parameters for grain synthesis.
   pub film_grain_params: Option<Vec<GrainTableSegment>>,
+  /// Strength of denoising, 0 = disabled
+  pub denoise_strength: u8,
   /// Number of tiles horizontally. Must be a power of two.
   ///
   /// Overridden by [`tiles`], if present.
@@ -159,6 +161,7 @@ impl EncoderConfig {
       bitrate: 0,
       tune: Tune::default(),
       film_grain_params: None,
+      denoise_strength: 0,
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,

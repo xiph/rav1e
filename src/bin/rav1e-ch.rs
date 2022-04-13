@@ -473,7 +473,6 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
-  #[cfg(feature = "unstable")]
   if cli.generate_grain_strength > 0 && cli.enc.film_grain_params.is_none() {
     cli.enc.film_grain_params = Some(vec![generate_photon_noise_params(
       0,

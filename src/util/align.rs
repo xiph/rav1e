@@ -42,6 +42,20 @@ impl<T> Aligned<T> {
   }
 }
 
+impl<T> std::ops::Deref for Aligned<T> {
+  type Target = T;
+
+  fn deref(&self) -> &T {
+    &self.data
+  }
+}
+
+impl<T> std::ops::DerefMut for Aligned<T> {
+  fn deref_mut(&mut self) -> &mut T {
+    &mut self.data
+  }
+}
+
 /// An analog to a Box<[T]> where the underlying slice is aligned.
 /// Alignment is according to the architecture-specific SIMD constraints.
 pub struct AlignedBoxedSlice<T> {
