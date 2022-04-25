@@ -6837,10 +6837,11 @@ ALIGN function_align
     ret
 
 cglobal inv_txfm_add_identity_identity_16x32_10bpc, 4, 7, 12, dst, stride, c, eob
+    vpbroadcastd         m7, [pixel_10bpc_max]
+.pass1:
     vpbroadcastd         m8, [pw_2896x8]
     vpbroadcastd         m9, [pw_1697x16]
     vpbroadcastd        m11, [pw_8192]
-    vpbroadcastd         m7, [pixel_10bpc_max]
     lea                  r6, [strideq*5]
     pxor                 m6, m6
     paddw               m10, m11, m11 ; pw_16384
@@ -6909,6 +6910,10 @@ ALIGN function_align
     punpcklqdq           m0, m3, m2
     punpckhqdq           m1, m3, m2
     jmp m(iidentity_8x8_internal_10bpc).write_2x8x2
+
+cglobal inv_txfm_add_identity_identity_16x32_12bpc, 4, 7, 12, dst, stride, c, eob
+    vpbroadcastd         m7, [pixel_12bpc_max]
+    jmp m(inv_txfm_add_identity_identity_16x32_10bpc).pass1
 
 cglobal inv_txfm_add_dct_dct_32x16_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
