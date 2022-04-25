@@ -3137,10 +3137,14 @@ INV_TXFM_8X16_FN identity, adst
 INV_TXFM_8X16_FN identity, flipadst
 INV_TXFM_8X16_FN identity, identity
 
-%macro IDTX16 3-4 ; src/dst, tmp, pw_1697x16, [pw_16394]
+%macro IDTX16 3-4 ; src/dst, tmp, pw_1697x16, [pw_16384]
     pmulhrsw            m%2, m%3, m%1
 %if %0 == 4 ; if downshifting by 1
+%ifnum %4
     pmulhrsw            m%2, m%4
+%else ; without rounding
+    psraw               m%2, 1
+%endif
 %else
     paddsw              m%1, m%1
 %endif
@@ -7141,10 +7145,11 @@ ALIGN function_align
     jmp m(idct_16x8_internal_10bpc).write_16x4
 
 cglobal inv_txfm_add_identity_identity_32x16_10bpc, 4, 7, 11, dst, stride, c, eob
+    vpbroadcastd         m7, [pixel_10bpc_max]
+.pass1:
     vpbroadcastd         m8, [pw_2896x8]
     vpbroadcastd         m9, [pw_1697x16]
-    vpbroadcastd        m10, [pw_2048]
-    vpbroadcastd         m7, [pixel_10bpc_max]
+    vpbroadcastd        m10, [pw_4096]
     lea                  r6, [strideq*5]
     pxor                 m6, m6
     mov                  r5, dstq
@@ -7192,10 +7197,14 @@ ALIGN function_align
     packssdw             m3, [cq+64*7]
     REPX  {pmulhrsw x, m8 }, m0, m1, m2, m3
     REPX  {paddsw   x, x  }, m0, m1, m2, m3
-    REPX  {IDTX16 x, 4, 9 }, 0, 1, 2, 3
+    REPX  {IDTX16 x, 4, 9, _ }, 0, 1, 2, 3
     REPX  {pmulhrsw x, m10}, m0, m1, m2, m3
     REPX {mova [cq+64*x], m6}, 0, 1, 2, 3, 4, 5, 6, 7
     jmp m(inv_txfm_add_identity_identity_16x32_10bpc).main2
+
+cglobal inv_txfm_add_identity_identity_32x16_12bpc, 4, 7, 11, dst, stride, c, eob
+    vpbroadcastd         m7, [pixel_12bpc_max]
+    jmp m(inv_txfm_add_identity_identity_32x16_10bpc).pass1
 
 cglobal inv_txfm_add_dct_dct_32x32_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
