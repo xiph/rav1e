@@ -63,9 +63,12 @@ cfg_if::cfg_if! {
 }
 
 impl IvfMuxer {
-  pub fn check_file(path: &str) -> Result<(), CliError> {
-    if is_file(path) {
-      eprint!("File '{}' already exists. Overwrite ? [y/N] ", path);
+  pub fn check_file<P: AsRef<Path>>(path: P) -> Result<(), CliError> {
+    if is_file(path.as_ref()) {
+      eprint!(
+        "File '{}' already exists. Overwrite ? [y/N] ",
+        path.as_ref().display()
+      );
       io::stdout().flush().unwrap();
 
       let mut option_input = String::new();
@@ -81,12 +84,14 @@ impl IvfMuxer {
     Ok(())
   }
 
-  pub fn open(path: &str) -> Result<Box<dyn Muxer + Send>, CliError> {
+  pub fn open<P: AsRef<Path>>(
+    path: P,
+  ) -> Result<Box<dyn Muxer + Send>, CliError> {
     let ivf = IvfMuxer {
-      output: match path {
-        "-" => Box::new(std::io::stdout()),
-        f => Box::new(
-          File::create(&f)
+      output: match path.as_ref().to_str() {
+        Some("-") => Box::new(std::io::stdout()),
+        _ => Box::new(
+          File::create(path)
             .map_err(|e| e.context("Cannot open output file"))?,
         ),
       },
