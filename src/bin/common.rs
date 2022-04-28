@@ -17,6 +17,7 @@ use rav1e::prelude::*;
 use rav1e::version;
 use scan_fmt::scan_fmt;
 
+use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -45,8 +46,8 @@ pub struct CliOptions {
   pub benchmark: bool,
   pub threads: usize,
   pub metrics_enabled: MetricsEnabled,
-  pub pass1file_name: Option<String>,
-  pub pass2file_name: Option<String>,
+  pub pass1file_name: Option<OsString>,
+  pub pass2file_name: Option<OsString>,
   pub save_config: Option<String>,
   pub slots: usize,
 }
@@ -108,6 +109,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Uncompressed YUV4MPEG2 video input")
         .required_unless_present("FULLHELP")
         .index(1)
+        .allow_invalid_utf8(true)
     )
     .arg(
       Arg::new("OUTPUT")
@@ -116,6 +118,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("output")
         .required_unless_present("FULLHELP")
         .takes_value(true)
+        .allow_invalid_utf8(true)
     )
     // ENCODING SETTINGS
     .arg(
@@ -123,12 +126,14 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .help("Perform the first pass of a two-pass encode, saving the pass data to the specified file for future passes")
         .long("first-pass")
         .takes_value(true)
+        .allow_invalid_utf8(true)
     )
     .arg(
       Arg::new("SECOND_PASS")
         .help("Perform the second pass of a two-pass encode, reading the pass data saved from a previous pass from the specified file")
         .long("second-pass")
         .takes_value(true)
+        .allow_invalid_utf8(true)
     )
     .arg(
       Arg::new("LIMIT")
@@ -373,6 +378,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
         .long("reconstruction")
         .short('r')
         .takes_value(true)
+        .allow_invalid_utf8(true)
     )
     .arg(
       Arg::new("OVERWRITE")
@@ -464,7 +470,7 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     }
   }
 
-  let rec = match matches.value_of("RECONSTRUCTION") {
+  let rec = match matches.value_of_os("RECONSTRUCTION") {
     Some(f) => Some(Box::new(
       File::create(&f)
         .map_err(|e| e.context("Cannot create reconstruction file"))?,
@@ -472,15 +478,17 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     None => None,
   };
 
+  let os_input = matches.value_of_os("INPUT").unwrap();
   let io = EncoderIO {
-    input: match matches.value_of("INPUT").unwrap() {
-      "-" => Box::new(io::stdin()) as Box<dyn Read + Send>,
-      f => Box::new(
-        File::open(&f).map_err(|e| e.context("Cannot open input file"))?,
+    input: match os_input.to_str() {
+      Some("-") => Box::new(io::stdin()) as Box<dyn Read + Send>,
+      _ => Box::new(
+        File::open(os_input)
+          .map_err(|e| e.context("Cannot open input file"))?,
       ) as Box<dyn Read + Send>,
     },
     output: create_muxer(
-      matches.value_of("OUTPUT").unwrap(),
+      matches.value_of_os("OUTPUT").unwrap(),
       matches.is_present("OVERWRITE"),
     )?,
     rec,
@@ -528,8 +536,8 @@ pub fn parse_cli() -> Result<CliOptions, CliError> {
     benchmark: matches.is_present("BENCHMARK"),
     verbose,
     threads,
-    pass1file_name: matches.value_of("FIRST_PASS").map(|s| s.to_owned()),
-    pass2file_name: matches.value_of("SECOND_PASS").map(|s| s.to_owned()),
+    pass1file_name: matches.value_of_os("FIRST_PASS").map(|s| s.to_owned()),
+    pass2file_name: matches.value_of_os("SECOND_PASS").map(|s| s.to_owned()),
     save_config,
     slots,
   })
