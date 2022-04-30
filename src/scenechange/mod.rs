@@ -17,6 +17,7 @@ use crate::frame::*;
 use crate::me::FrameMEStats;
 use crate::partition::REF_FRAMES;
 use crate::util::Pixel;
+use debug_unreachable::debug_unreachable;
 use rust_hawktracer::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -27,17 +28,46 @@ use self::fast::{detect_scale_factor, FAST_THRESHOLD};
 /// Experiments have determined this to be an optimal threshold
 const IMP_BLOCK_DIFF_THRESHOLD: f64 = 7.0;
 
+/// Fast integer division where divisor is a nonzero power of 2
+#[inline(always)]
+pub(crate) unsafe fn fast_idiv(n: usize, d: usize) -> usize {
+  debug_assert!(d.is_power_of_two());
+
+  // Remove branch on bsf instruction on x86 (which is used when compiling without tzcnt enabled)
+  if d == 0 {
+    debug_unreachable!();
+  }
+
+  n >> d.trailing_zeros()
+}
+
+struct ScaleFunction<T: Pixel> {
+  downscale_in_place:
+    fn(/* &self: */ &Plane<T>, /* in_plane: */ &mut Plane<T>),
+  downscale: fn(/* &self: */ &Plane<T>) -> Plane<T>,
+  factor: usize,
+}
+
+impl<T: Pixel> ScaleFunction<T> {
+  fn from_scale<const SCALE: usize>() -> Self {
+    Self {
+      downscale: Plane::downscale::<SCALE>,
+      downscale_in_place: Plane::downscale_in_place::<SCALE>,
+      factor: SCALE,
+    }
+  }
+}
 /// Runs keyframe detection on frames from the lookahead queue.
 pub struct SceneChangeDetector<T: Pixel> {
   /// Minimum average difference between YUV deltas that will trigger a scene change.
   threshold: f64,
   /// Fast scene cut detection mode, uses simple SAD instead of encoder cost estimates.
   speed_mode: SceneDetectionSpeed,
-  /// scaling factor for fast scene detection
-  scale_factor: usize,
+  /// Downscaling function for fast scene detection
+  scale_func: Option<ScaleFunction<T>>,
   /// Frame buffer for scaled frames
   downscaled_frame_buffer: Option<(
-    Box<[Plane<T>; 2]>,
+    [Plane<T>; 2],
     // `true` if the data is valid and initialized, or `false`
     // if it should be assumed that the data is uninitialized.
     bool,
@@ -48,7 +78,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   ///
   /// Useful for not copying data into the downscaled frame buffer
   /// when using a downscale factor of 1.
-  frame_ref_buffer: Option<Box<[Arc<Frame<T>>; 2]>>,
+  frame_ref_buffer: Option<[Arc<Frame<T>>; 2]>,
   /// Deque offset for current
   lookahead_offset: usize,
   /// Start deque offset based on lookahead
@@ -80,8 +110,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
       encoder_config.speed_settings.scene_detection_mode
     };
 
-    // Scale factor for fast scene detection
-    let scale_factor = detect_scale_factor(&sequence, speed_mode);
+    // Downscaling function for fast scene detection
+    let scale_func = detect_scale_factor(&sequence, speed_mode);
 
     // Set lookahead offset to 5 if normal lookahead available
     let lookahead_offset = if lookahead_distance >= 5 { 5 } else { 0 };
@@ -89,10 +119,16 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     let score_deque = Vec::with_capacity(5 + lookahead_distance);
 
-    // Pixel count for fast scenedetect
+    // Downscaling factor for fast scenedetect (is currently always a power of 2)
+    let factor = scale_func.as_ref().map(|x| x.factor).unwrap_or(1);
+
     let pixels = if speed_mode == SceneDetectionSpeed::Fast {
-      (sequence.max_frame_height as usize / scale_factor)
-        * (sequence.max_frame_width as usize / scale_factor)
+      // SAFETY: factor should always be a power of 2 and not 0 because of
+      // the output of detect_scale_factor.
+      unsafe {
+        fast_idiv(sequence.max_frame_height as usize, factor)
+          * fast_idiv(sequence.max_frame_width as usize, factor)
+      }
     } else {
       1
     };
@@ -102,7 +138,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     Self {
       threshold,
       speed_mode,
-      scale_factor,
+      scale_func,
       downscaled_frame_buffer: None,
       frame_me_stats_buffer: None,
       frame_ref_buffer: None,

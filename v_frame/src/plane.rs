@@ -7,11 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use rayon::current_num_threads;
-use rayon::iter::ParallelIterator;
-use rayon::prelude::*;
+use debug_unreachable::debug_unreachable;
 use rust_hawktracer::*;
-use std::cmp;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{Index, IndexMut, Range};
@@ -561,12 +558,12 @@ impl<T: Pixel> Plane<T> {
   }
 
   /// Returns a plane downscaled from the source plane by a factor of `scale` (not padded)
-  pub fn downscale(&self, scale: usize) -> Plane<T> {
+  pub fn downscale<const SCALE: usize>(&self) -> Plane<T> {
     // SAFETY: all pixels initialized when `downscale_in_place` is called
     let mut new_plane = unsafe {
       Plane::new_uninitialized(
-        self.cfg.width / scale,
-        self.cfg.height / scale,
+        self.cfg.width / SCALE,
+        self.cfg.height / SCALE,
         0,
         0,
         0,
@@ -574,75 +571,84 @@ impl<T: Pixel> Plane<T> {
       )
     };
 
-    self.downscale_in_place(scale, &mut new_plane);
+    self.downscale_in_place::<SCALE>(&mut new_plane);
 
     new_plane
   }
 
   /// Downscales the source plane by a factor of `scale`, writing the result to `in_plane` (not padded)
   ///
-  /// # Panics
-  ///
-  /// - `in_plane`'s width and height must be sufficient for `scale`.
-  #[hawktracer(downscale)]
-  pub fn downscale_in_place(&self, scale: usize, in_plane: &mut Plane<T>) {
-    let src = self;
-    let box_pixels = scale * scale;
-    assert!(box_pixels != 0);
-    let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
+  /// `in_plane`'s width and height must be sufficient for `scale`.
+  #[hawktracer(downscale_in_place)]
+  pub fn downscale_in_place<const SCALE: usize>(
+    &self, in_plane: &mut Plane<T>,
+  ) {
+    // SAFETY: Bounds checks have been removed for performance reasons
+    unsafe {
+      let src = self;
+      let box_pixels = SCALE * SCALE;
+      let half_box_pixels = box_pixels as u32 / 2; // Used for rounding int division
 
-    let data_origin = src.data_origin();
+      let data_origin = src.data_origin();
 
-    let stride = in_plane.cfg.stride;
-    let width = in_plane.cfg.width;
-    let height = in_plane.cfg.height;
+      let stride = in_plane.cfg.stride;
+      let width = in_plane.cfg.width;
+      let height = in_plane.cfg.height;
 
-    // Par iter over dst chunks
-    let plane_data_mut_slice = in_plane.data.deref_mut();
-    let threads = current_num_threads();
-    let chunk_rows = cmp::max((height + threads / 2) / threads, 1);
+      if stride == 0 {
+        debug_unreachable!();
+      }
+      if src.cfg.stride == 0 {
+        debug_unreachable!();
+      }
 
-    let chunk_size = chunk_rows * stride;
+      let plane_data_mut_slice = in_plane.data.deref_mut();
 
-    let height_limit = height * stride;
-    plane_data_mut_slice[0..height_limit]
-      .par_chunks_mut(chunk_size)
-      .enumerate()
-      .for_each(|(chunk_idx, chunk)| {
-        // Iter dst rows
-        let dst_rows = chunk.chunks_mut(stride);
-        for (row_offset, dst_row) in dst_rows.enumerate() {
-          let row_idx = chunk_idx * chunk_rows + row_offset;
+      // Iter dst rows
+      for row_idx in 0..height {
+        let dst_row =
+          plane_data_mut_slice.get_unchecked_mut(row_idx * stride..);
+        // Iter dst cols
+        for (col_idx, dst) in
+          dst_row.get_unchecked_mut(..width).iter_mut().enumerate()
+        {
+          macro_rules! generate_inner_loop {
+            ($x:ty) => {
+              let mut sum = half_box_pixels as $x;
+              // Sum box of size scale * scale
 
-          // Iter dst cols
-          for (col_idx, dst) in dst_row[0..width].iter_mut().enumerate() {
-            let mut sum = half_box_pixels;
-            // Sum box of size scale * scale
+              // Iter src row
+              for y in 0..SCALE {
+                let src_row_idx = row_idx * SCALE + y;
+                let src_row =
+                  data_origin.get_unchecked((src_row_idx * src.cfg.stride)..);
 
-            // Iter src row
-            for y in 0..scale {
-              let src_row_idx = row_idx * scale + y;
-              let src_row = &data_origin[(src_row_idx * src.cfg.stride)..];
-
-              // Iter src col
-              // max value of x is `scale - 1`
-              assert!(src_row.len() > col_idx * scale + (scale - 1));
-              for x in 0..scale {
-                let src_col_idx = col_idx * scale + x;
-                // SAFETY: we asserted that the length is greater than the max
-                // value of src_col_idx
-                sum += u32::cast_from(unsafe {
-                  *src_row.get_unchecked(src_col_idx)
-                });
+                // Iter src col
+                for x in 0..SCALE {
+                  let src_col_idx = col_idx * SCALE + x;
+                  sum += <$x>::cast_from(*src_row.get_unchecked(src_col_idx));
+                }
               }
-            }
 
-            // Box average
-            let avg = sum as usize / box_pixels;
-            *dst = T::cast_from(avg);
+              // Box average
+              let avg = sum as usize / box_pixels;
+              *dst = T::cast_from(avg);
+            };
+          }
+
+          // Use 16 bit precision if overflow would not happen
+          if T::type_enum() == PixelType::U8
+            && SCALE as u128 * SCALE as u128 * (u8::MAX as u128)
+              + half_box_pixels as u128
+              <= u16::MAX as u128
+          {
+            generate_inner_loop!(u16);
+          } else {
+            generate_inner_loop!(u32);
           }
         }
-      });
+      }
+    }
   }
 
   /// Iterates over the pixels in the plane, skipping the padding.
@@ -1077,7 +1083,7 @@ pub mod test {
         yorigin: 3,
       },
     };
-    let downscaled = plane.downscale(2);
+    let downscaled = plane.downscale::<2>();
 
     #[rustfmt::skip]
     let expected = &[
@@ -1116,7 +1122,7 @@ pub mod test {
       },
     };
 
-    let downscaled = plane.downscale(3);
+    let downscaled = plane.downscale::<3>();
 
     #[rustfmt::skip]
     let expected = &[
@@ -1157,7 +1163,7 @@ pub mod test {
         yorigin: 0,
       },
     };
-    let downscaled = plane.downscale(3);
+    let downscaled = plane.downscale::<3>();
 
     #[rustfmt::skip]
     let expected = &[
