@@ -428,10 +428,14 @@ impl<T: Pixel> Plane<T> {
     &mut self, source: &[u8], source_stride: usize, source_bytewidth: usize,
   ) {
     let stride = self.cfg.stride;
+
+    assert!(stride != 0);
+    assert!(source_stride != 0);
+
     for (self_row, source_row) in self
       .data_origin_mut()
-      .chunks_mut(stride)
-      .zip(source.chunks(source_stride))
+      .chunks_exact_mut(stride)
+      .zip(source.chunks_exact(source_stride))
     {
       match source_bytewidth {
         1 => {
@@ -443,14 +447,26 @@ impl<T: Pixel> Plane<T> {
         }
         2 => {
           assert!(
-            mem::size_of::<T>() >= 2,
+            mem::size_of::<T>() == 2,
             "source bytewidth ({}) cannot fit in Plane<u8>",
             source_bytewidth
           );
-          for (self_pixel, bytes) in
-            self_row.iter_mut().zip(source_row.chunks_exact(2))
-          {
-            *self_pixel = T::cast_from(bytes[1]) << 8 | T::cast_from(bytes[0]);
+
+          debug_assert!(T::type_enum() == PixelType::U16);
+
+          // SAFETY: because of the assert it is safe to assume that T == u16
+          let self_row: &mut [u16] = unsafe { std::mem::transmute(self_row) };
+          // SAFETY: we reinterpret the slice of bytes as a slice of elements of
+          // [u8; 2] to allow for more efficient codegen with from_le_bytes
+          let source_row: &[[u8; 2]] = unsafe {
+            std::slice::from_raw_parts(
+              source_row.as_ptr().cast(),
+              source_row.len() / 2,
+            )
+          };
+
+          for (self_pixel, bytes) in self_row.iter_mut().zip(source_row) {
+            *self_pixel = u16::from_le_bytes(*bytes);
           }
         }
 
