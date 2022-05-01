@@ -136,7 +136,11 @@ To build and install it you can use [cargo-c](https://crates.io/crates/cargo-c):
 
 ```sh
 cargo install cargo-c
-cargo cinstall --release
+D=`mktemp -d`
+cargo cinstall --release --destdir=${D}
+# if you want to install it system-wide
+chown -R root:root ${D}/*
+sudo cp -dR ${D}/* /
 ```
 
 Please refer to the cargo-c [installation](https://github.com/lu-zero/cargo-c#installation) instructions.
