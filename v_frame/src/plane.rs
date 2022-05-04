@@ -484,8 +484,10 @@ impl<T: Pixel> Plane<T> {
     &self, dest: &mut [u8], dest_stride: usize, dest_bytewidth: usize,
   ) {
     let stride = self.cfg.stride;
-    for (self_row, dest_row) in
-      self.data_origin().chunks(stride).zip(dest.chunks_mut(dest_stride))
+    for (self_row, dest_row) in self
+      .data_origin()
+      .chunks_exact(stride)
+      .zip(dest.chunks_exact_mut(dest_stride))
     {
       match dest_bytewidth {
         1 => {
@@ -501,11 +503,20 @@ impl<T: Pixel> Plane<T> {
             "dest bytewidth ({}) cannot fit in Plane<u8>",
             dest_bytewidth
           );
+
+          // SAFETY: we reinterpret the slice of bytes as a slice
+          // of [u8; 2] with half the elements
+          let dest_row: &mut [[u8; 2]] = unsafe {
+            std::slice::from_raw_parts_mut(
+              dest_row.as_mut_ptr().cast(),
+              dest_row.len() / 2,
+            )
+          };
+
           for (self_pixel, bytes) in
-            self_row[..self.cfg.width].iter().zip(dest_row.chunks_mut(2))
+            self_row[..self.cfg.width].iter().zip(dest_row)
           {
-            bytes[0] = u16::cast_from(*self_pixel) as u8;
-            bytes[1] = (u16::cast_from(*self_pixel) >> 8) as u8;
+            *bytes = u16::cast_from(*self_pixel).to_le_bytes();
           }
         }
 
