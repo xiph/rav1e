@@ -676,6 +676,10 @@ pub struct CodedFrameData<T: Pixel> {
   /// Pre-computed activity_scale.
   pub activity_scales: Box<[DistortionScale]>,
   pub activity_mask: ActivityMask,
+  /// Combined, scaled metrics of spatial variance and temporal RDO value
+  pub spatiotemporal_scores: Box<[f32]>,
+  /// Segmentation decisions, 0-7
+  pub segments: Box<[u8]>,
 }
 
 impl<T: Pixel> CodedFrameData<T> {
@@ -704,6 +708,8 @@ impl<T: Pixel> CodedFrameData<T> {
       ]
       .into_boxed_slice(),
       activity_mask: Default::default(),
+      spatiotemporal_scores: Default::default(),
+      segments: Default::default(),
     }
   }
 }
@@ -1150,6 +1156,71 @@ impl<T: Pixel> FrameInvariants<T> {
       // TODO: implement FastSearch and FullSearch
       _ => unreachable!(),
     }
+  }
+
+  // Assumes that we have already computed activity scales and distortion scales
+  pub fn compute_spatiotemporal_scores(&mut self) {
+    let coded_data = self.coded_frame_data.as_ref().unwrap();
+    let mut scores = vec![0.; coded_data.w_in_imp_b * coded_data.h_in_imp_b]
+      .into_boxed_slice();
+    let bd_shift = self.sequence.bit_depth - 8;
+    let bsize = BlockSize::from_width_and_height(
+      IMPORTANCE_BLOCK_SIZE,
+      IMPORTANCE_BLOCK_SIZE,
+    );
+    for y_in_imp_b in (0..coded_data.h_in_imp_b).step_by(2) {
+      for x_in_imp_b in (0..coded_data.w_in_imp_b).step_by(2) {
+        let block_offset = PlaneBlockOffset(BlockOffset {
+          x: x_in_imp_b << IMPORTANCE_BLOCK_TO_BLOCK_SHIFT,
+          y: y_in_imp_b << IMPORTANCE_BLOCK_TO_BLOCK_SHIFT,
+        });
+        let scale = spatiotemporal_scale(self, block_offset, bsize);
+        for y_off in 0..2 {
+          for x_off in 0..2 {
+            let imp_b_idx = (y_in_imp_b + y_off) * coded_data.w_in_imp_b
+              + x_in_imp_b
+              + x_off;
+            // We have to do this check because there may be an odd number
+            // of variances, but we do the outer loop in 2x2 chunks of blocks
+            // because `spatiotemporal_scale` works on 16x16 blocks
+            // while the variances and scores are on 8x8 blocks.
+            if let Some(variance) =
+              coded_data.activity_mask.variances.get(imp_b_idx)
+            {
+              // The reasoning for this computation is as follows:
+              // The variances follow an exponential curve. We want to flatten that
+              // so that we have more of a linear scale of variances to sort
+              // into segments. We then multiply by the spatiotemporal scale,
+              // which is centered at 1.0. Higher values mean we want to
+              // give a higher qindex while lower values mean we want a
+              // lower qindex.
+              let variance = *variance >> bd_shift;
+              scores[imp_b_idx] =
+                (variance as f32).log10() * f64::from(scale) as f32;
+            }
+          }
+        }
+      }
+    }
+    let segments = scores
+      .iter()
+      .map(|score| {
+        // This approximates fitting a curve like this, without branching:
+        // seg 0 = <2
+        // seg 1 = 2-2.5
+        // seg 2 = 2.5-3
+        // seg 3 = 3-3.5
+        // seg 4 = 3.5-4
+        // seg 5 = 4.5-5
+        // seg 6 = 5-6
+        // seg 7 = >6
+        clamp(((*score - 1.5) * 1.8).floor() as i8, 0, 7) as u8
+      })
+      .collect();
+
+    let coded_data = self.coded_frame_data.as_mut().unwrap();
+    coded_data.spatiotemporal_scores = scores;
+    coded_data.segments = segments;
   }
 
   #[inline(always)]

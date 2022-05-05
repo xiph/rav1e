@@ -82,9 +82,7 @@ fn segmentation_optimize_aq<T: Pixel>(
   const AVG_SEG_ADJUSTMENT: f64 = 1.0;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
-  let mut segments = coded_data.activity_mask.segments.clone();
-  apply_temporal_rdo_adjustments(&mut segments, fi, fs);
-
+  let segments = &coded_data.segments;
   let mut seg_counts = [0usize; MAX_SEGMENTS];
   segments.iter().for_each(|&seg| {
     // SAFETY: In `apply_temporal_rdo_adjustments` we ensured that all segments are within the range of 0-7
@@ -115,8 +113,8 @@ fn segmentation_optimize_aq<T: Pixel>(
     }
   }
 
-  // We want at least 5% of the blocks in a segment in order to code it
-  let threshold = segments.len() / 20;
+  // We want at least 10% of the blocks in a segment in order to code it
+  let threshold = segments.len() / 10;
 
   let mut remap_segment_tab: [usize; MAX_SEGMENTS] = [0, 1, 2, 3, 4, 5, 6, 7];
   let mut num_segments = MAX_SEGMENTS;
@@ -275,16 +273,6 @@ pub fn select_segment<T: Pixel>(
     return 0..=0;
   }
 
-  let segment_2_is_lossless = fi.base_q_idx as i16
-    + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
-    < 1;
-
-  if fi.config.speed_settings.segmentation == SegmentationLevel::Full
-    && fi.config.aq_strength.abs() < f64::EPSILON
-  {
-    return if segment_2_is_lossless { 0..=1 } else { 0..=2 };
-  }
-
   if fi.config.aq_strength > f64::EPSILON {
     // Fetch the precomputed segment index for variance AQ
     let plane_cfg = &ts.input.planes[if is_chroma_block { 1 } else { 0 }].cfg;
@@ -301,6 +289,16 @@ pub fn select_segment<T: Pixel>(
     let seg =
       ts.segmentation.segmentation_mask[y_in_imp_b * w_in_imp_b + x_in_imp_b];
     return seg..=seg;
+  }
+
+  let segment_2_is_lossless = fi.base_q_idx as i16
+    + ts.segmentation.data[2][SegLvl::SEG_LVL_ALT_Q as usize]
+    < 1;
+
+  if fi.config.speed_settings.segmentation == SegmentationLevel::Full
+    && fi.config.aq_strength.abs() < f64::EPSILON
+  {
+    return if segment_2_is_lossless { 0..=1 } else { 0..=2 };
   }
 
   // With temporal RDO only (no AQ), compute the index now.
@@ -350,40 +348,4 @@ fn seg_ac_q<T: Pixel>(
       )
     })
     .collect()
-}
-
-fn apply_temporal_rdo_adjustments<T: Pixel>(
-  segments: &mut [u8], fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
-) {
-  let w_in_imp_b = fi.coded_frame_data.as_ref().unwrap().w_in_imp_b;
-  let ts = fs.as_tile_state_mut();
-  for (i, segment) in segments.iter_mut().enumerate() {
-    // The activity masks are in 16x16 blocks, so we will iterate by 16x16 here as well.
-    let frame_bo = PlaneBlockOffset(BlockOffset {
-      x: (i % w_in_imp_b) << 1,
-      y: (i / w_in_imp_b) << 1,
-    });
-
-    // Apply temporal RDO bias
-    let trdo_sidx =
-      get_temporal_rdo_sidx(fi, &ts, frame_bo, BlockSize::BLOCK_16X16, false);
-    // TODO: Use more gradual adjustments
-    match trdo_sidx {
-      0 => {
-        *segment += 2;
-      }
-      1 => {
-        *segment += 4;
-      }
-      2 => {
-        *segment = (*segment).saturating_sub(1);
-      }
-      _ => unreachable!(),
-    };
-
-    // Clamp
-    if *segment >= MAX_SEGMENTS as u8 {
-      *segment = MAX_SEGMENTS as u8 - 1;
-    }
-  }
 }
