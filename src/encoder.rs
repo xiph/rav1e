@@ -1205,16 +1205,8 @@ impl<T: Pixel> FrameInvariants<T> {
     let segments = scores
       .iter()
       .map(|score| {
-        // This approximates fitting a curve like this, without branching:
-        // seg 0 = <2
-        // seg 1 = 2-2.5
-        // seg 2 = 2.5-3
-        // seg 3 = 3-3.5
-        // seg 4 = 3.5-4
-        // seg 5 = 4.5-5
-        // seg 6 = 5-6
-        // seg 7 = >6
-        clamp(((*score - 1.5) * 1.8).floor() as i8, 0, 7) as u8
+        // This formula was arrived at by some experimentation
+        clamp(((*score - 2.5) * 1.5).floor() as i8, 0, 7) as u8
       })
       .collect();
 

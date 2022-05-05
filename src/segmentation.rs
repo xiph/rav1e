@@ -113,8 +113,8 @@ fn segmentation_optimize_aq<T: Pixel>(
     }
   }
 
-  // We want at least 10% of the blocks in a segment in order to code it
-  let threshold = segments.len() / 10;
+  // We want at least 20% of the blocks in a segment in order to code it
+  let threshold = segments.len() / 5;
 
   let mut remap_segment_tab: [usize; MAX_SEGMENTS] = [0, 1, 2, 3, 4, 5, 6, 7];
   let mut num_segments = MAX_SEGMENTS;
