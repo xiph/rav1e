@@ -76,7 +76,7 @@ pub fn segmentation_optimize<T: Pixel>(
 fn segmentation_optimize_aq<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
-  const AVG_SEG: f64 = 2.0;
+  const AVG_SEG: f64 = 3.2;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
   let segments = &coded_data.segments;
