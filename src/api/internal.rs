@@ -1294,8 +1294,10 @@ impl<T: Pixel> ContextInner<T> {
         {
           let frame =
             self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
-          coded_data.activity_mask =
-            ActivityMask::from_plane(&frame.planes[0]);
+          coded_data.activity_mask = ActivityMask::from_plane(
+            &frame.planes[0],
+            frame_data.fi.sequence.bit_depth,
+          );
           coded_data.activity_mask.fill_scales(
             frame_data.fi.sequence.bit_depth,
             &mut coded_data.activity_scales,

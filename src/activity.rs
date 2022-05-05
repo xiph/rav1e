@@ -21,7 +21,9 @@ pub struct ActivityMask {
 
 impl ActivityMask {
   #[hawktracer(activity_mask_from_plane)]
-  pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
+  pub fn from_plane<T: Pixel>(
+    luma_plane: &Plane<T>, bit_depth: usize,
+  ) -> ActivityMask {
     let PlaneConfig { width, height, .. } = luma_plane.cfg;
 
     // Width and height are padded to 8×8 block size.
@@ -48,7 +50,7 @@ impl ActivityMask {
         };
 
         let block = luma.subregion(block_rect);
-        let variance = variance_8x8(&block);
+        let variance = variance_8x8(&block, bit_depth);
         variances.push(variance);
       }
     }
@@ -68,9 +70,11 @@ impl ActivityMask {
 
 // Adapted from the source variance calculation in `cdef_dist_wxh_8x8`.
 #[inline(never)]
-fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u32 {
+fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>, bit_depth: usize) -> u32 {
   debug_assert!(src.plane_cfg.xdec == 0);
   debug_assert!(src.plane_cfg.ydec == 0);
+
+  let bd_shift = bit_depth - 8;
 
   // Sum into columns to improve auto-vectorization
   let mut sum_s_cols: [u16; 8] = [0; 8];
@@ -83,7 +87,7 @@ fn variance_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u32 {
     let row = &src[j][0..8];
     for (sum_s, sum_s2, s) in izip!(&mut sum_s_cols, &mut sum_s2_cols, row) {
       // Don't convert directly to u32 to allow better vectorization
-      let s: u16 = u16::cast_from(*s);
+      let s: u16 = u16::cast_from(*s) >> bd_shift;
       *sum_s += s;
 
       // Convert to u32 to avoid overflows when multiplying

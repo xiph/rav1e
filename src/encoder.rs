@@ -1163,7 +1163,6 @@ impl<T: Pixel> FrameInvariants<T> {
     let coded_data = self.coded_frame_data.as_ref().unwrap();
     let mut scores = vec![0.; coded_data.w_in_imp_b * coded_data.h_in_imp_b]
       .into_boxed_slice();
-    let bd_shift = self.sequence.bit_depth - 8;
     let bsize = BlockSize::from_width_and_height(
       IMPORTANCE_BLOCK_SIZE,
       IMPORTANCE_BLOCK_SIZE,
@@ -1194,9 +1193,8 @@ impl<T: Pixel> FrameInvariants<T> {
               // which is centered at 1.0. Higher values mean we want to
               // give a higher qindex while lower values mean we want a
               // lower qindex.
-              let variance = *variance >> bd_shift;
               scores[imp_b_idx] =
-                (variance as f32).ln() * f64::from(scale) as f32;
+                (*variance as f32).ln() * f64::from(scale) as f32;
             }
           }
         }
@@ -1207,7 +1205,7 @@ impl<T: Pixel> FrameInvariants<T> {
       .map(|score| {
         // This formula was arrived at by some experimentation.
         // Ranges for the raw score could reasonably be anywhere from 1.5 to 18.
-        clamp(((*score - 2.5) * 0.5).floor() as i8, 0, 7) as u8
+        clamp(((*score - 3.5) * 0.4).floor() as i8, 0, 7) as u8
       })
       .collect();
 
