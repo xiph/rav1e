@@ -1196,7 +1196,7 @@ impl<T: Pixel> FrameInvariants<T> {
               // lower qindex.
               let variance = *variance >> bd_shift;
               scores[imp_b_idx] =
-                (variance as f32).log10() * f64::from(scale) as f32;
+                (variance as f32).ln() * f64::from(scale) as f32;
             }
           }
         }
@@ -1205,8 +1205,9 @@ impl<T: Pixel> FrameInvariants<T> {
     let segments = scores
       .iter()
       .map(|score| {
-        // This formula was arrived at by some experimentation
-        clamp(((*score - 2.5) * 1.5).floor() as i8, 0, 7) as u8
+        // This formula was arrived at by some experimentation.
+        // Ranges for the raw score could reasonably be anywhere from 1.5 to 18.
+        clamp(((*score - 2.5) * 0.5).floor() as i8, 0, 7) as u8
       })
       .collect();
 

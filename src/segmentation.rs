@@ -21,7 +21,6 @@ use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
 use arrayvec::ArrayVec;
-use v_frame::math::clamp;
 
 pub const MAX_SEGMENTS: usize = 8;
 
@@ -77,9 +76,7 @@ pub fn segmentation_optimize<T: Pixel>(
 fn segmentation_optimize_aq<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
-  // This is the amount we skew the average segment in order to obtain a similar average qindex
-  // to when AQ is disabled.
-  const AVG_SEG_ADJUSTMENT: f64 = 1.0;
+  const AVG_SEG: f64 = 2.0;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
   let segments = &coded_data.segments;
@@ -90,22 +87,12 @@ fn segmentation_optimize_aq<T: Pixel>(
       *seg_counts.get_unchecked_mut(seg as usize) += 1;
     }
   });
-  let avg_seg = (seg_counts
-    .iter()
-    .copied()
-    .enumerate()
-    .fold(0, |acc, (seg, count)| acc + (seg + 1) * count)
-    as f64
-    / segments.len() as f64)
-    - 1.0
-    + AVG_SEG_ADJUSTMENT;
-  let avg_seg = clamp(avg_seg, 0.0, MAX_SEGMENTS as f64 - 1.0);
 
   let mut num_neg = 0usize;
   let mut num_pos = 0usize;
   let mut tmp_delta = [0f64; MAX_SEGMENTS];
   for i in 0..MAX_SEGMENTS {
-    tmp_delta[i] = (avg_seg - i as f64) * BASE_AQ_MULT * fi.config.aq_strength;
+    tmp_delta[i] = (AVG_SEG - i as f64) * BASE_AQ_MULT * fi.config.aq_strength;
     if tmp_delta[i] > 0f64 {
       num_pos += 1;
     } else if tmp_delta[i] < 0f64 {
@@ -113,8 +100,8 @@ fn segmentation_optimize_aq<T: Pixel>(
     }
   }
 
-  // We want at least 20% of the blocks in a segment in order to code it
-  let threshold = segments.len() / 5;
+  // We want at least 10% of the blocks in a segment in order to code it
+  let threshold = segments.len() / 10;
 
   let mut remap_segment_tab: [usize; MAX_SEGMENTS] = [0, 1, 2, 3, 4, 5, 6, 7];
   let mut num_segments = MAX_SEGMENTS;
