@@ -27,7 +27,7 @@ pub const MAX_SEGMENTS: usize = 8;
 // A series of AWCY runs with deltas 13, 15, 17, 18, 19, 20, 21, 22, 23
 // showed this to be the optimal one.
 const TEMPORAL_RDO_QI_DELTA: i16 = 21;
-const BASE_AQ_MULT: f64 = -7.0;
+const BASE_AQ_MULT: f64 = -8.0;
 
 pub fn segmentation_optimize<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
@@ -76,7 +76,7 @@ pub fn segmentation_optimize<T: Pixel>(
 fn segmentation_optimize_aq<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
-  const AVG_SEG: f64 = 3.2;
+  const AVG_SEG: f64 = 3.0;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
   let segments = &coded_data.segments;
@@ -100,8 +100,8 @@ fn segmentation_optimize_aq<T: Pixel>(
     }
   }
 
-  // We want at least 10% of the blocks in a segment in order to code it
-  let threshold = segments.len() / 10;
+  // We want at least 1/12 of the blocks in a segment in order to code it
+  let threshold = segments.len() / 12;
 
   let mut remap_segment_tab: [usize; MAX_SEGMENTS] = [0, 1, 2, 3, 4, 5, 6, 7];
   let mut num_segments = MAX_SEGMENTS;
@@ -189,6 +189,14 @@ fn segmentation_optimize_aq<T: Pixel>(
       break;
     }
   }
+
+  tmp_delta.iter_mut().for_each(|delta| {
+    if *delta > 0.0 {
+      // We want the strength of the bitrate reduction to be
+      // less than the strength of the bitrate increase.
+      *delta *= 0.8;
+    }
+  });
 
   /* Get all unique values in the intentionally unsorted array (its a LUT) */
   let mut uniq_array = [0usize; MAX_SEGMENTS];

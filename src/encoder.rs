@@ -1189,13 +1189,11 @@ impl<T: Pixel> FrameInvariants<T> {
               // The reasoning for this computation is as follows:
               // The variances follow an exponential curve. We want to flatten that
               // so that we have more of a linear scale of variances to sort
-              // into segments. Before doing that, we multiply by the
-              // spatiotemporal scale, which is centered at 1.0.
-              // Higher values mean we want to give a higher qindex while
-              // lower values mean we want a lower qindex.
+              // into segments. We then multiply by the spatiotemporal scale,
+              // which is centered at 1.0. Higher values mean we want to give
+              // a higher qindex while lower values mean we want a lower qindex.
               // We then subtract 1 so that the base value for a minimal variance is 0.
-              // This gives us a total range of about 0-5.
-              let score = ((*variance as f64) * f64::from(scale)).log10();
+              let score = (*variance as f64).log10() * f64::from(scale).sqrt();
               scores[imp_b_idx] = (score as f32 - 1.0).max(0.0);
             }
           }
@@ -1206,13 +1204,13 @@ impl<T: Pixel> FrameInvariants<T> {
     let segments = scores
       .iter()
       .map(|&s| match s {
-        s if s < 1.75 => 0,
-        s if s < 2.55 => 1,
-        s if s < 3.2 => 2,
-        s if s < 3.75 => 3,
-        s if s < 4.2 => 4,
-        s if s < 4.5 => 5,
-        s if s < 4.75 => 6,
+        s if s < 1.9 => 0,
+        s if s < 3.1 => 1,
+        s if s < 4.2 => 2,
+        s if s < 5.2 => 3,
+        s if s < 6.1 => 4,
+        s if s < 6.9 => 5,
+        s if s < 7.6 => 6,
         _ => 7,
       })
       .collect();
