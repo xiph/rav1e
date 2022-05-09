@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use itertools::Itertools;
+
 use super::*;
 
 use crate::context::*;
@@ -14,14 +16,18 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::mc::MotionVector;
+use crate::me::FrameMEStats;
 use crate::partition::{RefType, REF_FRAMES};
 use crate::predict::{InterCompoundBuffers, PredictionMode};
 use crate::quantize::*;
 use crate::rdo::*;
 use crate::stats::EncoderStats;
 use crate::util::*;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::ops::{Index, IndexMut};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// Tiled view of `FrameState`
 ///
@@ -67,6 +73,9 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub integral_buffer: IntegralImageBuffer,
   pub inter_compound_buffers: InterCompoundBuffers,
   pub enc_stats: EncoderStats,
+  /// Keeps a reference to the frame's active tile list
+  /// so that we can remove this tile from the list on drop.
+  frame_tile_states: Arc<Mutex<Vec<TileRect>>>,
 }
 
 /// Contains information for a coded block that is
@@ -122,6 +131,29 @@ impl IndexMut<usize> for MiTileState {
   }
 }
 
+fn overlaps_any_active_tile(
+  luma_rect: TileRect, tile_states: &[TileRect],
+) -> bool {
+  let this_start_x = luma_rect.x;
+  let this_end_x = this_start_x + luma_rect.width;
+  let this_start_y = luma_rect.y;
+  let this_end_y = this_start_y + luma_rect.height;
+  for state in tile_states {
+    let locked_start_x = state.x;
+    let locked_end_x = locked_start_x + state.width;
+    let locked_start_y = state.y;
+    let locked_end_y = locked_start_y + state.height;
+    if ((locked_start_x..locked_end_x).contains(&this_start_x)
+      || (locked_start_x..locked_end_x).contains(&this_end_x))
+      && ((locked_start_y..locked_end_y).contains(&this_start_y)
+        || (locked_start_y..locked_end_y).contains(&this_end_y))
+    {
+      return true;
+    }
+  }
+  false
+}
+
 impl<'a, T: Pixel> TileStateMut<'a, T> {
   pub fn new(
     fs: &'a mut FrameState<T>, sbo: PlaneSuperBlockOffset,
@@ -148,48 +180,63 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     let sb_width = width.align_power_of_two_and_shift(sb_size_log2);
     let sb_height = height.align_power_of_two_and_shift(sb_size_log2);
 
-    Self {
-      sbo,
-      sb_size_log2,
-      sb_width,
-      sb_height,
-      mi_width: width >> MI_SIZE_LOG2,
-      mi_height: height >> MI_SIZE_LOG2,
-      width,
-      height,
-      input: &fs.input,
-      input_tile: Tile::new(&fs.input, luma_rect),
-      input_hres: &fs.input_hres,
-      input_qres: &fs.input_qres,
-      deblock: &fs.deblock,
-      rec: TileMut::new(Arc::make_mut(&mut fs.rec), luma_rect),
-      qc: Default::default(),
-      segmentation: &fs.segmentation,
-      restoration: TileRestorationStateMut::new(
-        &mut fs.restoration,
+    {
+      let mut tile_states = fs.active_tiles.lock().unwrap();
+      assert!(
+        !overlaps_any_active_tile(luma_rect, &tile_states),
+        "Overlapping tiles were initialized, this is not thread safe"
+      );
+      tile_states.push(luma_rect);
+    }
+
+    // SAFETY: We use `arc_get_mut_unsafe` to make mutable references
+    // to the rec and ME stats contents.
+    // The above assert ensures that safety conditions are not violated.
+    unsafe {
+      Self {
         sbo,
+        sb_size_log2,
         sb_width,
         sb_height,
-      ),
-      me_stats: Arc::make_mut(&mut fs.frame_me_stats)
-        .iter_mut()
-        .map(|fmvs| {
-          TileMEStatsMut::new(
-            fmvs,
-            sbo.0.x << (sb_size_log2 - MI_SIZE_LOG2),
-            sbo.0.y << (sb_size_log2 - MI_SIZE_LOG2),
-            width >> MI_SIZE_LOG2,
-            height >> MI_SIZE_LOG2,
-          )
-        })
-        .collect(),
-      coded_block_info: MiTileState::new(
-        width >> MI_SIZE_LOG2,
-        height >> MI_SIZE_LOG2,
-      ),
-      integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
-      inter_compound_buffers: InterCompoundBuffers::default(),
-      enc_stats: EncoderStats::default(),
+        mi_width: width >> MI_SIZE_LOG2,
+        mi_height: height >> MI_SIZE_LOG2,
+        width,
+        height,
+        input: &fs.input,
+        input_tile: Tile::new(&fs.input, luma_rect),
+        input_hres: &fs.input_hres,
+        input_qres: &fs.input_qres,
+        deblock: &fs.deblock,
+        rec: TileMut::new(arc_get_mut_unsafe(&mut fs.rec), luma_rect),
+        qc: Default::default(),
+        segmentation: &fs.segmentation,
+        restoration: TileRestorationStateMut::new(
+          &mut fs.restoration,
+          sbo,
+          sb_width,
+          sb_height,
+        ),
+        me_stats: arc_get_mut_unsafe(&mut fs.frame_me_stats)
+          .iter_mut()
+          .map(|fmvs| {
+            TileMEStatsMut::new(
+              fmvs,
+              sbo.0.x << (sb_size_log2 - MI_SIZE_LOG2),
+              sbo.0.y << (sb_size_log2 - MI_SIZE_LOG2),
+              width >> MI_SIZE_LOG2,
+              height >> MI_SIZE_LOG2,
+            )
+          })
+          .collect(),
+        coded_block_info: MiTileState::new(
+          width >> MI_SIZE_LOG2,
+          height >> MI_SIZE_LOG2,
+        ),
+        integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
+        inter_compound_buffers: InterCompoundBuffers::default(),
+        enc_stats: EncoderStats::default(),
+        frame_tile_states: Arc::clone(&fs.active_tiles),
+      }
     }
   }
 
@@ -260,5 +307,19 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
     } else {
       Some(self.coded_block_info[bo_y][bo_x - 1])
     }
+  }
+}
+
+impl<'a, T: Pixel> Drop for TileStateMut<'a, T> {
+  fn drop(&mut self) {
+    // Remove this tile from the list of active tiles
+    let rect = self.tile_rect();
+    let mut tile_states = self.frame_tile_states.lock().unwrap();
+    let pos = tile_states
+      .iter()
+      .find_position(|ts_rect| ts_rect.x == rect.x && ts_rect.y == rect.y)
+      .unwrap()
+      .0;
+    tile_states.swap_remove(pos);
   }
 }

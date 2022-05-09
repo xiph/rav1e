@@ -47,6 +47,7 @@ use std::collections::VecDeque;
 use std::io::Write;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::{fmt, io, mem};
 
 use crate::rayon::iter::*;
@@ -438,6 +439,7 @@ pub struct FrameState<T: Pixel> {
   // these are stored per-tile for easier access.
   pub frame_me_stats: Arc<[FrameMEStats; REF_FRAMES as usize]>,
   pub enc_stats: EncoderStats,
+  pub active_tiles: Arc<Mutex<Vec<TileRect>>>,
 }
 
 impl<T: Pixel> FrameState<T> {
@@ -479,6 +481,7 @@ impl<T: Pixel> FrameState<T> {
       restoration: rs,
       frame_me_stats: me_stats,
       enc_stats: Default::default(),
+      active_tiles: Default::default(),
     }
   }
 
@@ -510,6 +513,7 @@ impl<T: Pixel> FrameState<T> {
       restoration: rs,
       frame_me_stats: FrameMEStats::new_arc_array(fi.w_in_b, fi.h_in_b),
       enc_stats: Default::default(),
+      active_tiles: Default::default(),
     }
   }
 
@@ -992,13 +996,16 @@ impl<T: Pixel> FrameInvariants<T> {
     #[cfg(feature = "unstable")]
     if fi.show_frame || fi.showable_frame {
       let cur_frame_time = fi.frame_timestamp();
-      // Increment the film grain seed for the next frame
-      if let Some(params) =
-        Arc::make_mut(&mut fi.config).get_film_grain_mut_at(cur_frame_time)
-      {
-        params.random_seed = params.random_seed.wrapping_add(3248);
-        if params.random_seed == 0 {
-          params.random_seed = DEFAULT_GS_SEED;
+      // SAFETY: We're not inside a tile, there's nothing else writing to the encoder config here.
+      unsafe {
+        // Increment the film grain seed for the next frame
+        if let Some(params) = arc_get_mut_unsafe(&mut fi.config)
+          .get_film_grain_mut_at(cur_frame_time)
+        {
+          params.random_seed = params.random_seed.wrapping_add(3248);
+          if params.random_seed == 0 {
+            params.random_seed = DEFAULT_GS_SEED;
+          }
         }
       }
     }
@@ -3192,8 +3199,15 @@ fn encode_tile_group<T: Pixel>(
     })
     .unzip();
 
-  let stats =
-    tile_states.into_iter().map(|ts| ts.enc_stats).collect::<Vec<_>>();
+  let stats = tile_states
+    .into_iter()
+    .map(|ts| {
+      // We have to clone here because `TileStateMut` is `Drop`.
+      // However, `EncoderStats` is a small struct, and the compiler is likely to
+      // optimize away this clone anyway.
+      ts.enc_stats.clone()
+    })
+    .collect::<Vec<_>>();
   for tile_stats in stats {
     fs.enc_stats += &tile_stats;
   }
@@ -3242,12 +3256,16 @@ fn encode_tile_group<T: Pixel>(
       let rec = &mut ts.rec;
       cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
     }
-    /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(
-      Arc::get_mut(&mut fs.rec).unwrap(),
-      &deblocked_frame,
-      fi,
-    );
+    // SAFETY: We know no other threads are accessing this because we are done with tiles.
+    // The only references would be in ref frames, which are not being touched at the moment.
+    unsafe {
+      /* TODO: Don't apply if lossless */
+      fs.restoration.lrf_filter_frame(
+        arc_get_mut_unsafe(&mut fs.rec),
+        &deblocked_frame,
+        fi,
+      );
+    }
   } else {
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
