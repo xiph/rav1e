@@ -48,7 +48,7 @@ jobs:
           - aom-tests
           - dav1d-tests
           - no-asm-tests
-          # - grcov-coveralls
+          - grcov-coveralls
           - bench
           - doc
           - cargo-c
@@ -67,8 +67,8 @@ jobs:
             toolchain: stable
           - conf: no-asm-tests
             toolchain: stable
-          # - conf: grcov-coveralls
-          #   toolchain: stable
+          - conf: grcov-coveralls
+            toolchain: stable
           - conf: bench
             toolchain: stable
           - conf: doc
@@ -185,7 +185,7 @@ jobs:
         env:
           LINK: https://github.com/mozilla/grcov/releases/latest/download
         run: |
-          curl -L "$LINK/grcov-linux-x86_64.tar.bz2" |
+          curl -L "$LINK/grcov-x86_64-unknown-linux-musl.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
       - name: Install ${{ matrix.toolchain }}
         uses: actions-rs/toolchain@v1
@@ -193,6 +193,10 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
           override: true
+      - name: Install llvm-tools-preview
+        if: matrix.conf == 'grcov-coveralls'
+        run: |
+          rustup component add llvm-tools-preview
       - name: Generate Cargo.lock and Cargo.version
         run: |
           cargo update
@@ -279,13 +283,13 @@ jobs:
         if: matrix.conf == 'grcov-coveralls'
         env:
           CARGO_INCREMENTAL: 0
-          RUSTC_BOOTSTRAP: 1
+          LLVM_PROFILE_FILE: "rav1e-%p-%m.profraw"
           RUSTFLAGS: >
-            -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-            -Cpanic=abort -Zpanic_abort_tests
+            -Cinstrument-coverage -Ccodegen-units=1 -Clink-dead-code
+            -Coverflow-checks=off
           RUSTDOCFLAGS: >
-            -Zprofile -Ccodegen-units=1 -Clink-dead-code -Coverflow-checks=off
-            -Cpanic=abort -Zpanic_abort_tests
+            -Cinstrument-coverage -Ccodegen-units=1 -Clink-dead-code
+            -Coverflow-checks=off
         run: |
           cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
                      --features=decode_test,decode_test_dav1d,quick_test
@@ -295,8 +299,10 @@ jobs:
           cargo test --workspace --verbose
       - name: Run grcov
         if: matrix.conf == 'grcov-coveralls'
-        id: coverage
-        uses: actions-rs/grcov@v0.1
+        run: |
+          grcov . --binary-path ./target/x86_64-unknown-linux-gnu/debug/  -s . \
+                -t lcov --branch --ignore-not-existing --ignore "/*" \
+                --ignore "../*" -o lcov.info
       - name: Stop sccache server
         run: |
           sccache --stop-server
@@ -305,7 +311,7 @@ jobs:
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: ${{ steps.coverage.outputs.report }}
+          path-to-lcov: lcov.info
 
   build-macos:
     strategy:

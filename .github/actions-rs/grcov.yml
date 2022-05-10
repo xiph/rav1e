@@ -1,4 +1,0 @@
-ignore-not-existing: true
-ignore:
-  - "/*"
-  - "../*"
