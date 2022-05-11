@@ -302,7 +302,9 @@ jobs:
         run: |
           grcov . --binary-path ./target/x86_64-unknown-linux-gnu/debug/  -s . \
                 -t lcov --branch --ignore-not-existing --ignore "/*" \
-                --ignore "../*" -o lcov.info
+                --ignore "../*" --ignore "target/*" --ignore "examples/*" \
+                --ignore "tests/*" --ignore "src/test_encode_decode/*" \
+                -o lcov.info
       - name: Stop sccache server
         run: |
           sccache --stop-server
