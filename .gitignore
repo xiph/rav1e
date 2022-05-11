@@ -1,5 +1,5 @@
 aom_test
-target
+target/
 Cargo.lock
 *.y4m
 *.ivf
