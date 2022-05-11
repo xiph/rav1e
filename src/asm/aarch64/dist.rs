@@ -91,7 +91,7 @@ pub fn get_sad<T: Pixel>(
         None => call_rust(),
       }
     }
-    (Ok(bsize), PixelType::U16) => call_rust(),
+    (Ok(_bsize), PixelType::U16) => call_rust(),
   };
 
   #[cfg(feature = "check_asm")]
