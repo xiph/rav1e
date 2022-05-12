@@ -390,7 +390,7 @@ struct VertPaddedIter<'a, T: Pixel> {
   crop: isize,
 }
 
-impl<'a, 'b, T: Pixel> VertPaddedIter<'a, T> {
+impl<'a, T: Pixel> VertPaddedIter<'a, T> {
   fn new(
     cdeffed: &PlaneSlice<'a, T>, deblocked: &PlaneSlice<'a, T>,
     stripe_h: usize, crop: usize,
