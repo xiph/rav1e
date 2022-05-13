@@ -1805,7 +1805,7 @@ impl<'a> ContextWriter<'a> {
     let coeffs = &mut coeffs_storage.data;
     coeffs.extend(scan.iter().map(|&scan_idx| coeffs_in[scan_idx as usize]));
 
-    let mut cul_level = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
+    let cul_level: u32 = coeffs.iter().map(|c| u32::cast_from(c.abs())).sum();
 
     let txs_ctx = Self::get_txsize_entropy_ctx(tx_size);
     let txb_ctx = self.bc.get_txb_ctx(
@@ -1850,7 +1850,20 @@ impl<'a> ContextWriter<'a> {
       );
     }
 
-    // Encode EOB
+    self.encode_eob(eob, tx_size, tx_class, txs_ctx, plane_type, w);
+    self.encode_coeffs(
+      coeffs, levels, scan, eob, tx_size, tx_class, txs_ctx, plane_type, w,
+    );
+    let cul_level =
+      self.encode_coeff_signs(coeffs, w, plane_type, txb_ctx, cul_level);
+    self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
+    true
+  }
+
+  fn encode_eob<W: Writer>(
+    &mut self, eob: usize, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
+    plane_type: usize, w: &mut W,
+  ) {
     let mut eob_extra: u32 = 0;
     let eob_pt = Self::get_eob_pos_token(eob, &mut eob_extra);
     let eob_multi_size: usize = tx_size.area_log2() - 4;
@@ -1902,7 +1915,13 @@ impl<'a> ContextWriter<'a> {
         w.bit(bit as u16);
       }
     }
+  }
 
+  fn encode_coeffs<T: Coefficient, W: Writer>(
+    &mut self, coeffs: &[T], levels: &mut [u8], scan: &[u16], eob: usize,
+    tx_size: TxSize, tx_class: TxClass, txs_ctx: usize, plane_type: usize,
+    w: &mut W,
+  ) {
     // SAFETY: We write to the array below before reading from it.
     let mut coeff_contexts: Aligned<[i8; MAX_CODED_TX_SQUARE]> =
       unsafe { Aligned::uninitialized() };
@@ -1962,7 +1981,12 @@ impl<'a> ContextWriter<'a> {
         }
       }
     }
+  }
 
+  fn encode_coeff_signs<T: Coefficient, W: Writer>(
+    &mut self, coeffs: &[T], w: &mut W, plane_type: usize, txb_ctx: TXB_CTX,
+    orig_cul_level: u32,
+  ) -> u32 {
     // Loop to code all signs in the transform block,
     // starting with the sign of DC (if applicable)
     for (c, &v) in coeffs.iter().enumerate() {
@@ -1986,11 +2010,11 @@ impl<'a> ContextWriter<'a> {
       }
     }
 
-    cul_level = cmp::min(COEFF_CONTEXT_MASK as u32, cul_level);
+    let mut new_cul_level =
+      cmp::min(COEFF_CONTEXT_MASK as u32, orig_cul_level);
 
-    BlockContext::set_dc_sign(&mut cul_level, i32::cast_from(coeffs[0]));
+    BlockContext::set_dc_sign(&mut new_cul_level, i32::cast_from(coeffs[0]));
 
-    self.bc.set_coeff_context(plane, bo, tx_size, xdec, ydec, cul_level as u8);
-    true
+    new_cul_level
   }
 }
