@@ -71,7 +71,7 @@ cglobal sad_row_8bpc, 3, 5, 8, p1, p2, len, \
   add     p2q, lenq
   sub     resid_simdq, lenq
   ; last register needed for unrolled loop
-  pxor   xm3, xm3
+  pxor    xm3, xm3
   neg     lenq
 .loop:
   mova        m4,     [p1q + lenq + 0*mmsize]
@@ -92,7 +92,7 @@ cglobal sad_row_8bpc, 3, 5, 8, p1, p2, len, \
   add         lenq, 4*mmsize
   jnz        .loop
 
-  paddq      m2, m3
+  paddq       m2, m3
 .lt_4x:
   ; jump to correct place for residual vector reduction
   test      resid_simdd, resid_simdd
