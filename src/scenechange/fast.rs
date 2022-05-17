@@ -4,7 +4,7 @@ use crate::{
   api::SceneDetectionSpeed,
   encoder::Sequence,
   frame::{Frame, Plane},
-  sad_row,
+  sad_plane,
   scenechange::fast_idiv,
 };
 use debug_unreachable::debug_unreachable;
@@ -106,15 +106,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Calculates the average sum of absolute difference (SAD) per pixel between 2 planes
   #[hawktracer(delta_in_planes)]
   fn delta_in_planes(&self, plane1: &Plane<T>, plane2: &Plane<T>) -> f64 {
-    let mut delta = 0;
+    let delta = sad_plane::sad_plane(plane1, plane2, self.cpu_feature_level);
 
-    let lines = plane1.rows_iter().zip(plane2.rows_iter());
-
-    for (l1, l2) in lines {
-      let l1 = l1.get(..plane1.cfg.width).unwrap_or(l1);
-      let l2 = l2.get(..plane1.cfg.width).unwrap_or(l2);
-      delta += sad_row::sad_row(l1, l2, self.cpu_feature_level);
-    }
     delta as f64 / self.pixels as f64
   }
 }

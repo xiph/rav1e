@@ -10,6 +10,8 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
+%if ARCH_X86_64
+
 SECTION_RODATA
 
 align 32
@@ -47,103 +49,132 @@ mask_lut: db \
 -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, \
 -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,
 
+jmp_table_avx2: dq \
+  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec0, \
+  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec1, \
+  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec2, \
+  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec3
+
+jmp_table_sse2: dq \
+  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec0, \
+  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec1, \
+  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec2, \
+  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec3
+
+%use ifunc
+
 SECTION .text
 
-%if ARCH_X86_64
-
-%macro SAD_ROW_FN 0
-cglobal sad_row_8bpc, 3, 5, 8, p1, p2, len, \
-                      resid_simd, resid
-  ; always need to zero first register
-  pxor    xm0, xm0
-  mov     resid_simdq, lenq
-  mov     residq,  lenq
+%macro SAD_PLANE_FN 0
+cglobal sad_plane_8bpc, 5, 9, 9, p1, p2, stride, width, rows, \
+                      resid_simd, resid, width_unrll, tmp0
+  mov     resid_simdq, widthq
+  mov     residd, widthd
   and     residd, mmsize - 1
   and     resid_simdq, -(mmsize)
-  jz     .residual
-  ; need to zero 2 more registers
+  and     widthq, -(4*mmsize)
+  ; LUT row size is always 32 regardless of mmsize (because the
+  ; start of the rows would be the same, so we reuse the same LUT)
+  shl     residd, ilog2(32)
+  pxor    xm0, xm0
   pxor    xm1, xm1
   pxor    xm2, xm2
-  ; len = num elements processed by unrolled loop
-  and     lenq, -(4*mmsize)
-  jz     .lt_4x
-  add     p1q, lenq
-  add     p2q, lenq
-  sub     resid_simdq, lenq
-  ; last register needed for unrolled loop
   pxor    xm3, xm3
-  neg     lenq
-.loop:
-  mova        m4,     [p1q + lenq + 0*mmsize]
-  mova        m5,     [p1q + lenq + 1*mmsize]
-  mova        m6,     [p1q + lenq + 2*mmsize]
-  mova        m7,     [p1q + lenq + 3*mmsize]
+  ; load mask from lookup table into m8
+  lea   tmp0q, [mask_lut]
+  mova     m8, [tmp0q + residq]
 
-  psadbw      m4, m4, [p2q + lenq + 0*mmsize]
-  psadbw      m5, m5, [p2q + lenq + 1*mmsize]
-  psadbw      m6, m6, [p2q + lenq + 2*mmsize]
-  psadbw      m7, m7, [p2q + lenq + 3*mmsize]
+  DEFINE_ARGS p1, p2, stride, width, rows, \
+                      resid_simd, resid, width_unrll, skip_ptr
+
+  sub     resid_simdq, widthq
+  ; need to divide by mmsize to load skip pointer
+  shr     resid_simdq, ilog2(mmsize)
+%if mmsize == 32
+  %define jmp_table jmp_table_avx2
+%elif mmsize == 16
+  %define jmp_table jmp_table_sse2
+%endif
+  lea     skip_ptrq, [jmp_table]
+  mov     skip_ptrq, [skip_ptrq + 8*resid_simdq]
+  ; shift back (for residual to load correct number of bytes)
+  shl     resid_simdq, ilog2(mmsize)
+  ; set pointer to point after end of width of first row
+  add     p1q, widthq
+  add     p2q, widthq
+  mov     width_unrllq, widthq
+  neg     widthq
+.loop_row:
+  test    widthq, widthq
+  jz     .skip
+.loop:
+  mova        m4,     [p1q + widthq + 0*mmsize]
+  mova        m5,     [p1q + widthq + 1*mmsize]
+  mova        m6,     [p1q + widthq + 2*mmsize]
+  mova        m7,     [p1q + widthq + 3*mmsize]
+
+  psadbw      m4, m4, [p2q + widthq + 0*mmsize]
+  psadbw      m5, m5, [p2q + widthq + 1*mmsize]
+  psadbw      m6, m6, [p2q + widthq + 2*mmsize]
+  psadbw      m7, m7, [p2q + widthq + 3*mmsize]
 
   paddq       m0, m4
   paddq       m1, m5
   paddq       m2, m6
   paddq       m3, m7
 
-  add         lenq, 4*mmsize
+  add         widthq, 4*mmsize
   jnz        .loop
-
-  paddq       m2, m3
-.lt_4x:
-  ; jump to correct place for residual vector reduction
-  test      resid_simdd, resid_simdd
-  jz       .residual_setup
-  cmp       resid_simdd, 1*mmsize
-  je       .r1
-  cmp       resid_simdd, 2*mmsize
-  je       .r2
-  ; add residual vectors in reverse order
-  mova      m6,     [p1q + lenq + 2*mmsize]
-  psadbw    m6, m6, [p2q + lenq + 2*mmsize]
-  paddq     m2, m6
-.r2:
-  mova      m5,     [p1q + lenq + 1*mmsize]
-  psadbw    m5, m5, [p2q + lenq + 1*mmsize]
-  paddq     m1, m5
-.r1:
-  mova      m4,     [p1q + lenq + 0*mmsize]
-  psadbw    m4, m4, [p2q + lenq + 0*mmsize]
-  paddq     m0, m4
-.residual_setup:
-  paddq     m1, m2
-  paddq     m0, m1
-  test  residd, residd
-  jz       .hsum
-.residual:
-  DEFINE_ARGS p1, p2, mask_ptr, resid_simd, resid
-  lea   mask_ptrq, [mask_lut]
-  shl      residd, 5
-  mova     m1,     [mask_ptrq + residq]
-  ; read residual elements and zero out elements
-  ; past the end of the array with mask in m1
-  pand     m2, m1, [p1q + resid_simdq]
-  pand     m3, m1, [p2q + resid_simdq]
-  psadbw   m1, m2, m3
-  paddq    m0, m1
-.hsum:
+.skip:
+  jmp         skip_ptrq
+.vec3:
+  mova        m6,     [p1q + 2*mmsize]
+  psadbw      m6, m6, [p2q + 2*mmsize]
+  paddq       m2, m6
+.vec2:
+  mova        m5,     [p1q + 1*mmsize]
+  psadbw      m5, m5, [p2q + 1*mmsize]
+  paddq       m1, m5
+.vec1:
+  mova        m4,     [p1q + 0*mmsize]
+  psadbw      m4, m4, [p2q + 0*mmsize]
+  paddq       m0, m4
+.vec0:
+  ; skip residual element add if necessary
+  test        residd, residd
+  jz         .next_row
+  ; load residual elements and mask out elements past the width
+  pand        m4, m8, [p1q + resid_simdq]
+  pand        m5, m8, [p2q + resid_simdq]
+  psadbw      m4, m4, m5
+  paddq       m2, m4
+.next_row:
+  ; width is 0 after the unrolled loop, so subtracting is basically a mov + neg
+  sub        widthq, width_unrllq
+  ; since we started with p1+width, adding stride will get the
+  ; pointer at the end of the next row
+  add           p1q, strideq
+  add           p2q, strideq
+  dec           rowsd
+  jnz          .loop_row
+  ; final horizontal reduction
+  paddq         m2, m3
+  paddq         m0, m1
+  paddq         m0, m2
 %if mmsize == 32
-  vextracti128  xm1, ym0, 1
-  paddq         xm0, xm1
+  vextracti128 xm1, ym0, 1
+  paddq        xm0, xm1
 %endif
-  pshufd        xm1, xm0, q0032
-  paddq         xm0, xm1
-  movq          rax, xm0
+  pshufd       xm1, xm0, q0032
+  paddq        xm0, xm1
+  movq         rax, xm0
   RET
 %endmacro
 
 INIT_XMM sse2
-SAD_ROW_FN
+SAD_PLANE_FN
 
 INIT_YMM avx2
-SAD_ROW_FN
+SAD_PLANE_FN
 
 %endif ; ARCH_X86_64
