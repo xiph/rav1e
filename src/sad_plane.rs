@@ -9,11 +9,13 @@
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
-    use crate::asm::x86::sad_row::*;
+    use crate::asm::x86::sad_plane::*;
   } else {
     use self::rust::*;
   }
 }
+
+use v_frame::plane::Plane;
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::util::{CastFromPrimitive, Pixel};
@@ -23,14 +25,29 @@ pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
 
   #[inline]
-  pub(crate) fn sad_row_internal<T: Pixel>(
-    src: &[T], dst: &[T], _cpu: CpuFeatureLevel,
+  pub(crate) fn sad_plane_internal<T: Pixel>(
+    src: &Plane<T>, dst: &Plane<T>, _cpu: CpuFeatureLevel,
   ) -> u64 {
+    debug_assert!(src.cfg.width == dst.cfg.width);
+
+    let width = src.cfg.width;
+
     src
-      .iter()
-      .zip(dst.iter())
-      .map(|(&p1, &p2)| (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32)
-      .sum::<u32>() as u64
+      .rows_iter()
+      .zip(dst.rows_iter())
+      .map(|(src, dst)| {
+        let src = src.get(..width).unwrap_or(src);
+        let dst = dst.get(..width).unwrap_or(dst);
+
+        src
+          .iter()
+          .zip(dst.iter())
+          .map(|(&p1, &p2)| {
+            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
+          })
+          .sum::<u32>() as u64
+      })
+      .sum()
   }
 }
 
@@ -38,8 +55,8 @@ pub(crate) mod rust {
 ///
 /// This differs from other SAD functions in that it operates over a row
 /// (or line) of unknown length rather than a `PlaneRegion<T>`.
-pub(crate) fn sad_row<T: Pixel>(
-  src: &[T], dst: &[T], cpu: CpuFeatureLevel,
+pub(crate) fn sad_plane<T: Pixel>(
+  src: &Plane<T>, dst: &Plane<T>, cpu: CpuFeatureLevel,
 ) -> u64 {
-  sad_row_internal(src, dst, cpu)
+  sad_plane_internal(src, dst, cpu)
 }

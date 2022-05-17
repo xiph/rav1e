@@ -14,5 +14,5 @@ pub mod lrf;
 pub mod mc;
 pub mod predict;
 pub mod quantize;
-pub mod sad_row;
+pub mod sad_plane;
 pub mod transform;
