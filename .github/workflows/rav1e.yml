@@ -304,6 +304,7 @@ jobs:
                 -t lcov --branch --ignore-not-existing --ignore "/*" \
                 --ignore "../*" --ignore "target/*" --ignore "examples/*" \
                 --ignore "tests/*" --ignore "src/test_encode_decode/*" \
+                --ignore "src/x86/*" --ignore "src/ext/x86/*" \
                 -o lcov.info
       - name: Stop sccache server
         run: |
