@@ -1759,7 +1759,7 @@ impl<'a> ContextWriter<'a> {
     };
 
     for (&delta, cdf) in deltas.iter().zip(cdfs.iter_mut()) {
-      let abs = delta.abs() as u32;
+      let abs = delta.unsigned_abs() as u32;
 
       symbol_with_update!(self, w, cmp::min(abs, DELTA_LF_SMALL), cdf, 4);
 

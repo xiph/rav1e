@@ -1039,7 +1039,7 @@ pub(crate) mod rust {
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
     ) -> u8 {
       let block_wh = width + height;
-      let abs_delta = angle_delta.abs() as usize;
+      let abs_delta = angle_delta.unsigned_abs();
 
       if smooth_filter {
         if block_wh <= 8 {
@@ -1102,7 +1102,7 @@ pub(crate) mod rust {
       width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
     ) -> bool {
       let block_wh = width + height;
-      let abs_delta = angle_delta.abs() as usize;
+      let abs_delta = angle_delta.unsigned_abs();
 
       if abs_delta == 0 || abs_delta >= 40 {
         false

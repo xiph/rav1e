@@ -43,7 +43,7 @@ pub(crate) mod rust {
           .iter()
           .zip(dst.iter())
           .map(|(&p1, &p2)| {
-            (i16::cast_from(p1) - i16::cast_from(p2)).abs() as u32
+            (i16::cast_from(p1) - i16::cast_from(p2)).unsigned_abs() as u32
           })
           .sum::<u32>() as u64
       })
