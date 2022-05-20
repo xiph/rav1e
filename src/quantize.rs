@@ -247,7 +247,7 @@ impl QuantizationContext {
     qcoeffs[0] = {
       let coeff: i32 =
         i32::cast_from(coeffs[0]) << (self.log_tx_scale as usize);
-      let abs_coeff = coeff.abs() as u32;
+      let abs_coeff = coeff.unsigned_abs();
       T::cast_from(copysign(
         divu_pair(abs_coeff + self.dc_offset, self.dc_mul_add),
         coeff,
@@ -288,7 +288,7 @@ impl QuantizationContext {
     let mut level_mode = 1;
     for &pos in scan.iter().take(eob).skip(1) {
       let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
-      let abs_coeff = coeff.abs() as u32;
+      let abs_coeff = coeff.unsigned_abs();
 
       let level0 = divu_pair(abs_coeff, self.ac_mul_add);
       let offset = if level0 > 1 - level_mode {

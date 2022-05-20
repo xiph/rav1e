@@ -124,7 +124,7 @@ impl CFLParams {
   pub const fn from_alpha(u: i16, v: i16) -> CFLParams {
     CFLParams {
       sign: [CFLSign::from_alpha(u), CFLSign::from_alpha(v)],
-      scale: [u.abs() as u8, v.abs() as u8],
+      scale: [u.unsigned_abs() as u8, v.unsigned_abs() as u8],
     }
   }
 }

@@ -48,7 +48,7 @@ pub(crate) mod rust {
         .iter()
         .take(w)
         .zip(slice_ref)
-        .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).abs() as u32)
+        .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).unsigned_abs())
         .sum::<u32>();
     }
 
@@ -215,7 +215,7 @@ pub(crate) mod rust {
         }
 
         // Sum the absolute values of the transformed differences
-        sum += buf.iter().map(|a| a.abs() as u64).sum::<u64>();
+        sum += buf.iter().map(|a| a.unsigned_abs() as u64).sum::<u64>();
       }
     }
 
