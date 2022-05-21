@@ -44,14 +44,19 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     crate::rayon::scope(|s| {
       s.spawn(|_| {
+        let mut temp_plane =
+          self.temp_plane.get_or_insert_with(|| frame2.planes[0].clone());
+
         let intra_costs =
           self.intra_costs.entry(input_frameno).or_insert_with(|| {
             estimate_intra_costs(
+              &mut temp_plane,
               &*frame2,
               self.bit_depth,
               self.cpu_feature_level,
             )
           });
+
         intra_cost = intra_costs.iter().map(|&cost| cost as u64).sum::<u64>()
           as f64
           / intra_costs.len() as f64;
