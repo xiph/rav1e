@@ -37,7 +37,7 @@ pub fn inverse_transform_add<T: Pixel>(
       }
     }
     PixelType::U16 if bd == 10 => {
-      if let Some(func) = INV_TXFM_HBD_FNS[cpu.as_index()]
+      if let Some(func) = INV_TXFM_HBD_FNS_10[cpu.as_index()]
         [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
       {
         return call_inverse_hbd_func(
@@ -90,7 +90,7 @@ macro_rules! decl_itx_fns {
 
 macro_rules! decl_itx_hbd_fns {
   // Takes a 2d list of tx types for W and H
-  ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
+  ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr, $BPC:expr,
    $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
       // For each tx type, declare an function for the current WxH
@@ -98,7 +98,7 @@ macro_rules! decl_itx_hbd_fns {
         $(
           extern {
             // Note: type1 and type2 are flipped
-            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _16bpc_$OPT_LOWER>](
+            fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _ $BPC bpc_$OPT_LOWER>](
               dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
               eob: i32,
             );
@@ -106,12 +106,12 @@ macro_rules! decl_itx_hbd_fns {
         )*
       )*
       // Create a lookup table for the tx types declared above
-      const [<INV_TXFM_HBD_FNS_$W _$H _$OPT_UPPER>]: [Option<InvTxfmHBDFunc>; TX_TYPES] = {
+      const [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>]: [Option<InvTxfmHBDFunc>; TX_TYPES] = {
         #[allow(unused_mut)]
         let mut out: [Option<InvTxfmHBDFunc>; 16] = [None; 16];
         $(
           $(
-            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _16bpc_$OPT_LOWER>]);
+            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _ $BPC bpc_$OPT_LOWER>]);
           )*
         )*
         out
@@ -147,14 +147,14 @@ macro_rules! create_wxh_tables {
 
 macro_rules! create_wxh_hbd_tables {
   // Create a lookup table for each cpu feature
-  ([$([$(($W:expr, $H:expr)),*]),*], $OPT_LOWER:ident, $OPT_UPPER:ident) => {
+  ([$([$(($W:expr, $H:expr)),*]),*], $EXT:ident, $BPC:expr, $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
-      const [<INV_TXFM_HBD_FNS_$OPT_UPPER>]: [[Option<InvTxfmHBDFunc>; TX_TYPES]; 32] = {
+      const [<INV_TXFM_HBD_FNS $EXT _$OPT_UPPER>]: [[Option<InvTxfmHBDFunc>; TX_TYPES]; 32] = {
         let mut out: [[Option<InvTxfmHBDFunc>; TX_TYPES]; 32] = [[None; TX_TYPES]; 32];
         // For each dimension, add an entry to the table
         $(
           $(
-            out[get_tx_size_idx(TxSize::[<TX_ $W X $H>])] = [<INV_TXFM_HBD_FNS_$W _$H _$OPT_UPPER>];
+            out[get_tx_size_idx(TxSize::[<TX_ $W X $H>])] = [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>];
           )*
         )*
         out
@@ -163,9 +163,9 @@ macro_rules! create_wxh_hbd_tables {
   };
 
   // Loop through cpu features
-  ($DIMS:tt, [$(($OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
+  ($DIMS:tt, $EXT:ident, [$(($BPC:expr, $OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
     $(
-      create_wxh_hbd_tables!($DIMS, $OPT_LOWER, $OPT_UPPER);
+      create_wxh_hbd_tables!($DIMS, $EXT, $BPC, $OPT_LOWER, $OPT_UPPER);
     )*
   };
 }
@@ -243,9 +243,9 @@ cpu_function_lookup_table!(
 
 macro_rules! impl_itx_hbd_fns {
 
-  ($TYPES:tt, $W:expr, $H:expr, [$(($OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
+  ($TYPES:tt, $W:expr, $H:expr, [$(($BPC:expr, $OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
     $(
-      decl_itx_hbd_fns!($TYPES, $W, $H, $OPT_LOWER, $OPT_UPPER);
+      decl_itx_hbd_fns!($TYPES, $W, $H, $BPC, $OPT_LOWER, $OPT_UPPER);
     )*
   };
 
@@ -257,7 +257,7 @@ macro_rules! impl_itx_hbd_fns {
   };
 
   ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-   $TYPES84:tt, $DIMS84:tt, $OPT:tt) => {
+   $TYPES84:tt, $DIMS84:tt, $EXT:ident, $OPT:tt) => {
     // Make 2d list of tx types for each set of dimensions. Each set of
     //   dimensions uses a superset of the previous set of tx types.
     impl_itx_hbd_fns!([$TYPES64], $DIMS64, $OPT);
@@ -270,7 +270,7 @@ macro_rules! impl_itx_hbd_fns {
     // Pool all of the dimensions together to create a table for each cpu
     // feature level.
     create_wxh_hbd_tables!(
-      [$DIMS64, $DIMS32, $DIMS16, $DIMS84], $OPT
+      [$DIMS64, $DIMS32, $DIMS16, $DIMS84], $EXT, $OPT
     );
   };
 }
@@ -304,7 +304,8 @@ impl_itx_hbd_fns!(
     (TxType::H_FLIPADST, identity, flipadst)
   ],
   [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
-  [(avx2, AVX2)]
+  _10,
+  [(16, avx2, AVX2)]
 );
 
 impl_itx_hbd_fns!(
@@ -331,11 +332,12 @@ impl_itx_hbd_fns!(
     (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
   ],
   [(8, 16), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
-  [(sse4, SSE4_1)]
+  _10,
+  [(16, sse4, SSE4_1)]
 );
 
 cpu_function_lookup_table!(
-  INV_TXFM_HBD_FNS: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
+  INV_TXFM_HBD_FNS_10: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
   default: [[None; TX_TYPES]; 32],
   [SSE4_1, AVX2]
 );
