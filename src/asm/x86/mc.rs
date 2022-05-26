@@ -553,22 +553,22 @@ cpu_function_lookup_table!(
 );
 
 extern {
-  fn rav1e_w_avg_8bpc_ssse3(
+  fn rav1e_avg_8bpc_ssse3(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
   );
 
-  fn rav1e_w_avg_8bpc_avx2(
+  fn rav1e_avg_8bpc_avx2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32,
   );
 
-  fn rav1e_w_avg_16bpc_ssse3(
+  fn rav1e_avg_16bpc_ssse3(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
 
-  fn rav1e_w_avg_16bpc_avx2(
+  fn rav1e_avg_16bpc_avx2(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
   );
@@ -577,16 +577,13 @@ extern {
 cpu_function_lookup_table!(
   AVG_FNS: [Option<AvgFn>],
   default: None,
-  [(SSSE3, Some(rav1e_w_avg_8bpc_ssse3)), (AVX2, Some(rav1e_w_avg_8bpc_avx2))]
+  [(SSSE3, Some(rav1e_avg_8bpc_ssse3)), (AVX2, Some(rav1e_avg_8bpc_avx2))]
 );
 
 cpu_function_lookup_table!(
   AVG_HBD_FNS: [Option<AvgHBDFn>],
   default: None,
-  [
-    (SSSE3, Some(rav1e_w_avg_16bpc_ssse3)),
-    (AVX2, Some(rav1e_w_avg_16bpc_avx2))
-  ]
+  [(SSSE3, Some(rav1e_avg_16bpc_ssse3)), (AVX2, Some(rav1e_avg_16bpc_avx2))]
 );
 
 #[cfg(test)]
