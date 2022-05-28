@@ -170,8 +170,11 @@ jobs:
           cd ~/.cache/debs
           xargs -a DEBS curl --remote-name-all
           sha256sum -c CHECKSUMS
+      # libdav1d6 depends on libc6 >= 2.32, which is not included in the docker image
       - name: Install packages
         run: |
+          apt update
+          apt --only-upgrade install libc6
           sudo dpkg -i ~/.cache/debs/*.deb
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
