@@ -16,7 +16,7 @@ jobs:
       (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
       (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v2
@@ -95,7 +95,7 @@ jobs:
       (github.event_name == 'push' && !endsWith(github.event.head_commit.message, 'CI: skip')) ||
       (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.names, 'skip-ci'))
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v2
@@ -114,65 +114,10 @@ jobs:
           chmod +x $SCCACHE_FILE/sccache
           mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - name: Add nasm
-        env:
-          LINK: https://mirror.cogentco.com/debian/pool/main/n/nasm
-          NASM_VERSION: 2.15.05-1
-          NASM_SHA256: >-
-            c860caec653b865d5b83359452d97b11f1b3ba5b18b07cac554cf72550b3bfc9
+      - name: Install dependencies
         run: |
-          echo "$LINK/nasm_${NASM_VERSION}_amd64.deb" >> DEBS
-          echo "$NASM_SHA256 nasm_${NASM_VERSION}_amd64.deb" >> CHECKSUMS
-      - name: Add aom
-        if: >
-          matrix.conf == '1.59.0-tests' || matrix.conf == 'aom-tests' ||
-          matrix.conf == 'grcov-coveralls'
-        env:
-          LINK: https://mirror.cogentco.com/debian/pool/main/a/aom
-          AOM3_VERSION: 3.3.0-2
-          AOM_DEV_SHA256: >-
-            6e1107e2cc37f753577fbf31e13b9aaa9305956c3c18033a8bf0b827f5f16562
-          AOM_LIB3_SHA256: >-
-            44a2ef32f834e709584f436e135dc2f559588aa47f210cab11fc9f08776ac25a
-        run: |
-          echo "$LINK/libaom-dev_${AOM3_VERSION}_amd64.deb" >> DEBS
-          echo "$LINK/libaom3_${AOM3_VERSION}_amd64.deb" >> DEBS
-          echo "$AOM_DEV_SHA256 libaom-dev_${AOM3_VERSION}_amd64.deb" >> CHECKSUMS
-          echo "$AOM_LIB3_SHA256 libaom3_${AOM3_VERSION}_amd64.deb" >> CHECKSUMS
-      - name: Add dav1d
-        if: >
-          matrix.conf == '1.59.0-tests' || matrix.conf == 'dav1d-tests' ||
-          matrix.conf == 'grcov-coveralls' || matrix.conf == 'fuzz' || matrix.conf == 'no-asm-tests'
-        env:
-          LINK: https://mirror.cogentco.com/debian/pool/main/d/dav1d
-          DAV1D_VERSION: 0.9.2-1+b1
-          DAV1D_DEV_SHA256: >-
-            a44e6981b36aeae428c7039495c7c2f9c11c49c00cebc7eb0d605f4cb9b472ca
-          DAV1D_LIB_SHA256: >-
-            f20e98bcdc6c3eab210061abc55067df548c928225923d6c729b0aff8293b9b8
-        run: |
-          echo "$LINK/libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> DEBS
-          echo "$LINK/libdav1d5_${DAV1D_VERSION}_amd64.deb" >> DEBS
-          echo "$DAV1D_DEV_SHA256 libdav1d-dev_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
-          echo "$DAV1D_LIB_SHA256 libdav1d5_${DAV1D_VERSION}_amd64.deb" >> CHECKSUMS
-      - name: Cache packages
-        uses: actions/cache@v2
-        continue-on-error: true
-        id: debs
-        with:
-          path: ~/.cache/debs
-          key: debs-${{ hashFiles('CHECKSUMS') }}
-      - name: Fetch packages
-        if: steps.debs.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ~/.cache/debs
-          cp DEBS CHECKSUMS ~/.cache/debs
-          cd ~/.cache/debs
-          xargs -a DEBS curl --remote-name-all
-          sha256sum -c CHECKSUMS
-      - name: Install packages
-        run: |
-          sudo dpkg -i ~/.cache/debs/*.deb
+          sudo apt update
+          sudo apt install nasm libaom-dev libdav1d-dev
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         env:
