@@ -49,17 +49,18 @@ mask_lut: db \
 -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0, 0, \
 -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1, 0,
 
-jmp_table_avx2: dq \
-  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec0, \
-  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec1, \
-  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec2, \
-  mangle(private_prefix %+ _sad_plane_8bpc_avx2).vec3
+%macro JMP_TABLE 3-*
+  %xdefine %%func mangle(private_prefix %+ _%1_%2)
+  %xdefine %%table %1_%2_table
+  %%table:
+  %rep %0 - 2
+      dd (%%func %+ .%3) - (%%table)
+      %rotate 1
+  %endrep
+%endmacro
 
-jmp_table_sse2: dq \
-  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec0, \
-  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec1, \
-  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec2, \
-  mangle(private_prefix %+ _sad_plane_8bpc_sse2).vec3
+JMP_TABLE sad_plane_8bpc, avx2, vec0, vec1, vec2, vec3
+JMP_TABLE sad_plane_8bpc, sse2, vec0, vec1, vec2, vec3
 
 %use ifunc
 
@@ -91,12 +92,14 @@ cglobal sad_plane_8bpc, 5, 9, 9, p1, p2, stride, width, rows, \
   ; need to divide by mmsize to load skip pointer
   shr     resid_simdq, ilog2(mmsize)
 %if mmsize == 32
-  %define jmp_table jmp_table_avx2
+  %define jmp_table sad_plane_8bpc_avx2_table
 %elif mmsize == 16
-  %define jmp_table jmp_table_sse2
+  %define jmp_table sad_plane_8bpc_sse2_table
 %endif
-  lea     skip_ptrq, [jmp_table]
-  mov     skip_ptrq, [skip_ptrq + 8*resid_simdq]
+  lea        r6, [jmp_table]
+  movsxd     skip_ptrq, [r6 + 4*resid_simdq]
+  add        skip_ptrq, r6
+
   ; shift back (for residual to load correct number of bytes)
   shl     resid_simdq, ilog2(mmsize)
   ; set pointer to point after end of width of first row
