@@ -25,7 +25,9 @@ use crate::header::ReferenceMode;
 use crate::lrf::*;
 use crate::luma_ac;
 use crate::mc::MotionVector;
-use crate::me::*;
+use crate::me::estimate_motion;
+use crate::me::MVSamplingMode;
+use crate::me::MotionSearchResult;
 use crate::motion_compensate;
 use crate::partition::RefType::*;
 use crate::partition::*;
@@ -1125,16 +1127,21 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
       pmv[1] = mv_stack[1].this_mv;
     }
 
-    let res = motion_estimation(
+    let res = estimate_motion(
       fi,
       ts,
       bsize.width(),
       bsize.height(),
       tile_bo,
       ref_frames[0],
-      pmv,
-    );
-    let b_me = res.0;
+      Some(pmv),
+      MVSamplingMode::CORNER { right: true, bottom: true },
+      false,
+      0,
+      None,
+    )
+    .unwrap_or_else(MotionSearchResult::empty);
+    let b_me = res.mv;
 
     mvs_from_me.push([b_me, MotionVector::default()]);
 
