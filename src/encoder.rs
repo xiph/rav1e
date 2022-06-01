@@ -647,12 +647,6 @@ pub struct FrameInvariants<T: Pixel> {
 /// This may change in the future.
 #[derive(Debug, Clone)]
 pub struct CodedFrameData<T: Pixel> {
-  /// Motion vectors to the _original_ reference frames (not reconstructed).
-  /// Used for lookahead purposes.
-  ///
-  /// These objects are very expensive to create, so their creation
-  /// is deferred until it is needed.
-  pub lookahead_me_stats: Option<Arc<[FrameMEStats; REF_FRAMES as usize]>>,
   /// The lookahead version of `rec_buffer`, used for storing and propagating
   /// the original reference frames (rather than reconstructed ones). The
   /// lookahead uses both `rec_buffer` and `lookahead_rec_buffer`, where
@@ -683,7 +677,6 @@ impl<T: Pixel> CodedFrameData<T> {
     let h_in_imp_b = fi.h_in_b / 2;
 
     CodedFrameData {
-      lookahead_me_stats: None,
       lookahead_rec_buffer: ReferenceFramesSet::new(),
       w_in_imp_b,
       h_in_imp_b,

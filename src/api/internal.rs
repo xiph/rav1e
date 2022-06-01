@@ -726,9 +726,6 @@ impl<T: Pixel> ContextInner<T> {
 
     let coded_data = fi.coded_frame_data.as_mut().unwrap();
 
-    // Save the motion vectors to FrameInvariants.
-    coded_data.lookahead_me_stats = Some(fs.frame_me_stats.clone());
-
     #[cfg(feature = "dump_lookahead_data")]
     {
       use crate::partition::RefType::*;
@@ -1088,6 +1085,7 @@ impl<T: Pixel> ContextInner<T> {
       let output_frame_data =
         self.frame_data.remove(&output_frameno).unwrap().unwrap();
       let fi = &output_frame_data.fi;
+      let fs = &output_frame_data.fs;
 
       let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
@@ -1104,13 +1102,7 @@ impl<T: Pixel> ContextInner<T> {
       let frame_data = &mut self.frame_data;
       let len = unique_indices.len();
 
-      let lookahead_me_stats = fi
-        .coded_frame_data
-        .as_ref()
-        .unwrap()
-        .lookahead_me_stats
-        .as_ref()
-        .expect("Lookahead ME stats not populated, this is a bug");
+      let lookahead_me_stats = &fs.frame_me_stats;
 
       // Compute and propagate the importance, split evenly between the
       // referenced frames.
