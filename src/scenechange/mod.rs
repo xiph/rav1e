@@ -166,7 +166,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// This will gracefully handle the first frame in the video as well.
   #[hawktracer(analyze_next_frame)]
   pub fn analyze_next_frame(
-    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
+    &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
     previous_keyframe: u64,
   ) -> bool {
     // Use score deque for adaptive threshold for scene cut
@@ -254,7 +254,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
   // Initially fill score deque with frame scores
   fn initialize_score_deque(
-    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
+    &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
     init_len: usize,
   ) {
     for x in 0..init_len {
