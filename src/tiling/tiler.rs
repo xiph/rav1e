@@ -178,28 +178,28 @@ impl TilingInfo {
   /// Provide mutable tiled views of frame-level structures.
   pub fn tile_iter_mut<'a, T: Pixel>(
     &self, fs: &'a mut FrameState<T>, fb: &'a mut FrameBlocks,
-  ) -> TileContextIterMut<'a, 'a, T> {
+  ) -> TileContextIterMut<'a, T> {
     TileContextIterMut { ti: *self, fs, fb, next: 0, phantom: PhantomData }
   }
 }
 
 /// Container for all tiled views
-pub struct TileContextMut<'a, 'b, T: Pixel> {
+pub struct TileContextMut<'a, T: Pixel> {
   pub ts: TileStateMut<'a, T>,
-  pub tb: TileBlocksMut<'b>,
+  pub tb: TileBlocksMut<'a>,
 }
 
 /// Iterator over tiled views
-pub struct TileContextIterMut<'a, 'b, T: Pixel> {
+pub struct TileContextIterMut<'a, T: Pixel> {
   ti: TilingInfo,
   fs: *mut FrameState<T>,
   fb: *mut FrameBlocks,
   next: usize,
-  phantom: PhantomData<(&'a mut FrameState<T>, &'b mut FrameBlocks)>,
+  phantom: PhantomData<&'a T>,
 }
 
-impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
-  type Item = TileContextMut<'a, 'b, T>;
+impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, T> {
+  type Item = TileContextMut<'a, T>;
 
   fn next(&mut self) -> Option<Self::Item> {
     if self.next < self.ti.rows * self.ti.cols {
@@ -252,8 +252,8 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, 'b, T> {
   }
 }
 
-impl<T: Pixel> ExactSizeIterator for TileContextIterMut<'_, '_, T> {}
-impl<T: Pixel> FusedIterator for TileContextIterMut<'_, '_, T> {}
+impl<T: Pixel> ExactSizeIterator for TileContextIterMut<'_, T> {}
+impl<T: Pixel> FusedIterator for TileContextIterMut<'_, T> {}
 
 #[cfg(test)]
 pub mod test {
