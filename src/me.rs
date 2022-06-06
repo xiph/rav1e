@@ -687,14 +687,15 @@ fn full_pixel_me<T: Pixel>(
   ref_frame: RefType, corner: MVSamplingMode, extensive_search: bool,
   ssdec: u8,
 ) -> MotionSearchResult {
-  let tile_me_stats = &ts.me_stats[ref_frame.to_index()].as_const();
+  let ref_frame_id = ref_frame.to_index();
+  let tile_me_stats = &ts.me_stats[ref_frame_id].as_const();
   let frame_ref =
     fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
   let subsets = get_subset_predictors(
     tile_bo,
     tile_me_stats,
     frame_ref,
-    ref_frame.to_index(),
+    ref_frame_id,
     w,
     h,
     mvx_min,
