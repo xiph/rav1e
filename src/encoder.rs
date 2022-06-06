@@ -3398,7 +3398,7 @@ fn check_lf_queue<T: Pixel>(
 
 #[hawktracer(encode_tile)]
 fn encode_tile<'a, T: Pixel>(
-  fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
+  fi: &FrameInvariants<T>, ts: &'a mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
 ) -> (Vec<u8>, EncoderStats) {
