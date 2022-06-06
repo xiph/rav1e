@@ -3174,19 +3174,17 @@ fn encode_tile_group<T: Pixel>(
   // dynamic allocation: once per frame
   let mut cdfs = vec![initial_cdf; ti.tile_count()];
 
-  let (raw_tiles, tile_states): (Vec<_>, Vec<_>) = ti
+  let (raw_tiles, stats): (Vec<_>, Vec<_>) = ti
     .tile_iter_mut(fs, &mut blocks)
     .zip(cdfs.iter_mut())
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
       let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg);
-      (raw, ctx.ts)
+      (raw, ctx.ts.enc_stats)
     })
     .unzip();
 
-  let stats =
-    tile_states.into_iter().map(|ts| ts.enc_stats).collect::<Vec<_>>();
   for tile_stats in stats {
     fs.enc_stats += &tile_stats;
   }
