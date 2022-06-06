@@ -176,9 +176,9 @@ impl TilingInfo {
   /// Split frame-level structures into tiles
   ///
   /// Provide mutable tiled views of frame-level structures.
-  pub fn tile_iter_mut<'a, 'b, T: Pixel>(
-    &self, fs: &'a mut FrameState<T>, fb: &'b mut FrameBlocks,
-  ) -> TileContextIterMut<'a, 'b, T> {
+  pub fn tile_iter_mut<'a, T: Pixel>(
+    &self, fs: &'a mut FrameState<T>, fb: &'a mut FrameBlocks,
+  ) -> TileContextIterMut<'a, 'a, T> {
     TileContextIterMut { ti: *self, fs, fb, next: 0, phantom: PhantomData }
   }
 }
