@@ -1797,7 +1797,8 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   ref_frames: [RefType; 2], mvs: [MotionVector; 2], bsize: BlockSize,
   tile_bo: TileBlockOffset, skip: bool, cfl: CFLParams, tx_size: TxSize,
   tx_type: TxType, mode_context: usize, mv_stack: &[CandidateMV],
-  rdo_type: RDOType, need_recon_pixel: bool, record_stats: bool,
+  rdo_type: RDOType, need_recon_pixel: bool,
+  enc_stats: Option<&mut EncoderStats>,
 ) -> (bool, ScaledDistortion) {
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -2022,14 +2023,14 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
     }
   }
 
-  if record_stats {
+  if let Some(enc_stats) = enc_stats {
     let pixels = tx_size.area();
-    ts.enc_stats.block_size_counts[bsize as usize] += pixels;
-    ts.enc_stats.tx_type_counts[tx_type as usize] += pixels;
-    ts.enc_stats.luma_pred_mode_counts[luma_mode as usize] += pixels;
-    ts.enc_stats.chroma_pred_mode_counts[chroma_mode as usize] += pixels;
+    enc_stats.block_size_counts[bsize as usize] += pixels;
+    enc_stats.tx_type_counts[tx_type as usize] += pixels;
+    enc_stats.luma_pred_mode_counts[luma_mode as usize] += pixels;
+    enc_stats.chroma_pred_mode_counts[chroma_mode as usize] += pixels;
     if skip {
-      ts.enc_stats.skip_block_count += pixels;
+      enc_stats.skip_block_count += pixels;
     }
   }
 
@@ -2490,7 +2491,8 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
-  mode_decision: &PartitionParameters, rdo_type: RDOType, record_stats: bool,
+  mode_decision: &PartitionParameters, rdo_type: RDOType,
+  enc_stats: Option<&mut EncoderStats>,
 ) {
   let (mode_luma, mode_chroma) =
     (mode_decision.pred_mode_luma, mode_decision.pred_mode_chroma);
@@ -2547,7 +2549,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     &mv_stack,
     rdo_type,
     true,
-    record_stats,
+    enc_stats,
   );
 }
 
@@ -2555,7 +2557,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
-  inter_cfg: &InterConfig,
+  inter_cfg: &InterConfig, enc_stats: &mut EncoderStats,
 ) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
   let mut rd_cost = std::f64::MAX;
@@ -2642,7 +2644,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         tile_bo,
         &mode_decision,
         rdo_type,
-        true,
+        Some(enc_stats),
       );
     }
   } // if !must_split
@@ -2738,6 +2740,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           offset,
           best_rd,
           inter_cfg,
+          enc_stats,
         );
         let cost = child_rdo_output.rd_cost;
         assert!(cost >= 0.0);
@@ -2810,7 +2813,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
           mode.bo,
           &mode,
           rdo_type,
-          true,
+          Some(enc_stats),
         );
       }
     }
@@ -2844,6 +2847,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
   block_output: &Option<PartitionGroupParameters>, inter_cfg: &InterConfig,
+  enc_stats: &mut EncoderStats,
 ) {
   if tile_bo.0.x >= ts.mi_width || tile_bo.0.y >= ts.mi_height {
     return;
@@ -3073,7 +3077,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         &mv_stack,
         RDOType::PixelDistRealRate,
         true,
-        true,
+        Some(enc_stats),
       );
     }
     PARTITION_SPLIT | PARTITION_HORZ | PARTITION_VERT => {
@@ -3098,6 +3102,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
               part_modes: once(mode).collect(),
             }),
             inter_cfg,
+            enc_stats,
           );
         }
       } else {
@@ -3132,6 +3137,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             offset,
             &None,
             inter_cfg,
+            enc_stats,
           );
         });
       }
@@ -3180,8 +3186,7 @@ fn encode_tile_group<T: Pixel>(
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
-      let raw = encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg);
-      (raw, ctx.ts.enc_stats)
+      encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg)
     })
     .unzip();
 
@@ -3396,7 +3401,8 @@ fn encode_tile<'a, T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
-) -> Vec<u8> {
+) -> (Vec<u8>, EncoderStats) {
+  let mut enc_stats = EncoderStats::default();
   let mut w = WriterEncoder::new();
   let planes =
     if fi.sequence.chroma_sampling == ChromaSampling::Cs400 { 1 } else { 3 };
@@ -3448,6 +3454,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           std::f64::MAX,
           inter_cfg,
+          &mut enc_stats,
         );
       } else {
         encode_partition_topdown(
@@ -3460,6 +3467,7 @@ fn encode_tile<'a, T: Pixel>(
           tile_bo,
           &None,
           inter_cfg,
+          &mut enc_stats,
         );
       }
 
@@ -3591,7 +3599,7 @@ fn encode_tile<'a, T: Pixel>(
     ts.sbo.0.x,
     ts.sbo.0.y
   );
-  w.done()
+  (w.done(), enc_stats)
 }
 
 #[allow(unused)]

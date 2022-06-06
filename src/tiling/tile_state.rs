@@ -66,7 +66,6 @@ pub struct TileStateMut<'a, T: Pixel> {
   pub coded_block_info: MiTileState,
   pub integral_buffer: IntegralImageBuffer,
   pub inter_compound_buffers: InterCompoundBuffers,
-  pub enc_stats: EncoderStats,
 }
 
 /// Contains information for a coded block that is
@@ -189,7 +188,6 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
       ),
       integral_buffer: IntegralImageBuffer::zeroed(SOLVE_IMAGE_SIZE),
       inter_compound_buffers: InterCompoundBuffers::default(),
-      enc_stats: EncoderStats::default(),
     }
   }
 
