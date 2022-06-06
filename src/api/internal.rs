@@ -819,21 +819,19 @@ impl<T: Pixel> ContextInner<T> {
       .unwrap_or_else(|| {
         let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
-        let mut temp_plane = self
+        let temp_plane = self
           .keyframe_detector
           .temp_plane
           .get_or_insert_with(|| frame.planes[0].clone());
 
         // We use the cached values from scenechange if available,
         // otherwise we need to calculate them here.
-        let intra_costs = estimate_intra_costs(
-          &mut temp_plane,
+        estimate_intra_costs(
+          temp_plane,
           &*frame,
           fi.sequence.bit_depth,
           fi.cpu_feature_level,
-        );
-
-        intra_costs
+        )
       });
   }
 
