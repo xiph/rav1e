@@ -11,10 +11,12 @@ use super::*;
 
 use crate::context::*;
 use crate::encoder::*;
+use crate::me::WriteGuardMEStats;
 use crate::util::*;
 
 use std::iter::FusedIterator;
 use std::marker::PhantomData;
+use std::ops::DerefMut;
 
 pub const MAX_TILE_WIDTH: usize = 4096;
 pub const MAX_TILE_AREA: usize = 4096 * 2304;
@@ -179,7 +181,10 @@ impl TilingInfo {
   pub fn tile_iter_mut<'a, T: Pixel>(
     &self, fs: &'a mut FrameState<T>, fb: &'a mut FrameBlocks,
   ) -> TileContextIterMut<'a, T> {
-    TileContextIterMut { ti: *self, fs, fb, next: 0, phantom: PhantomData }
+    let afs = fs as *mut _;
+    let afb = fb as *mut _;
+    let frame_me_stats = fs.frame_me_stats.write().expect("poisoned lock");
+    TileContextIterMut { ti: *self, fs: afs, fb: afb, next: 0, frame_me_stats }
   }
 }
 
@@ -194,11 +199,11 @@ pub struct TileContextIterMut<'a, T: Pixel> {
   ti: TilingInfo,
   fs: *mut FrameState<T>,
   fb: *mut FrameBlocks,
+  frame_me_stats: WriteGuardMEStats<'a>,
   next: usize,
-  phantom: PhantomData<&'a T>,
 }
 
-impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, T> {
+impl<'a, T: Pixel> Iterator for TileContextIterMut<'a, T> {
   type Item = TileContextMut<'a, T>;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -211,6 +216,12 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, T> {
           // The dimensions must be configured correctly to ensure
           // the tiles do not overlap.
           let fs = unsafe { &mut *self.fs };
+          // SAFETY: ditto
+          let frame_me_stats = unsafe {
+            let len = self.frame_me_stats.len();
+            let ptr = self.frame_me_stats.as_mut_ptr();
+            std::slice::from_raw_parts_mut(ptr, len)
+          };
           let sbo = PlaneSuperBlockOffset(SuperBlockOffset {
             x: tile_col * self.ti.tile_width_sb,
             y: tile_row * self.ti.tile_height_sb,
@@ -221,7 +232,14 @@ impl<'a, 'b, T: Pixel> Iterator for TileContextIterMut<'a, T> {
           let tile_height = self.ti.tile_height_sb << self.ti.sb_size_log2;
           let width = tile_width.min(self.ti.frame_width - x);
           let height = tile_height.min(self.ti.frame_height - y);
-          TileStateMut::new(fs, sbo, self.ti.sb_size_log2, width, height)
+          TileStateMut::new(
+            fs,
+            sbo,
+            self.ti.sb_size_log2,
+            width,
+            height,
+            frame_me_stats,
+          )
         },
         tb: {
           // SAFETY: Multiple tiles mutably access this struct.
@@ -753,10 +771,10 @@ pub mod test {
 
     // check that writes on tiled views affected the underlying motion vectors
 
-    let me_stats = &fs.frame_me_stats[0];
+    let me_stats = &fs.frame_me_stats.read().unwrap()[0];
     assert_eq!(MotionVector { col: 42, row: 38 }, me_stats[5][8].mv);
 
-    let me_stats = &fs.frame_me_stats[2];
+    let me_stats = &fs.frame_me_stats.read().unwrap()[2];
     let mix = (128 >> MI_SIZE_LOG2) + 3;
     let miy = (64 >> MI_SIZE_LOG2) + 2;
     assert_eq!(MotionVector { col: 2, row: 14 }, me_stats[miy][mix].mv);

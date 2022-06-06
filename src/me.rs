@@ -13,7 +13,6 @@ use crate::context::{
   MI_SIZE_LOG2, SB_SIZE,
 };
 use crate::dist::*;
-use crate::encoder::ReferenceFrame;
 use crate::frame::*;
 use crate::mc::MotionVector;
 use crate::partition::*;
@@ -27,7 +26,7 @@ use arrayvec::*;
 use crate::api::InterConfig;
 use crate::util::ILog;
 use std::ops::{Index, IndexMut};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use rust_hawktracer::*;
 
@@ -45,6 +44,15 @@ pub struct FrameMEStats {
   pub rows: usize,
 }
 
+/// cbindgen:ignore
+pub type RefMEStats = Arc<RwLock<[FrameMEStats; REF_FRAMES]>>;
+/// cbindgen:ignore
+pub type ReadGuardMEStats<'a> =
+  RwLockReadGuard<'a, [FrameMEStats; REF_FRAMES]>;
+/// cbindgen:ignore
+pub type WriteGuardMEStats<'a> =
+  RwLockWriteGuard<'a, [FrameMEStats; REF_FRAMES]>;
+
 impl FrameMEStats {
   pub fn new(cols: usize, rows: usize) -> Self {
     Self {
@@ -54,8 +62,8 @@ impl FrameMEStats {
       rows,
     }
   }
-  pub fn new_arc_array(cols: usize, rows: usize) -> Arc<[Self; REF_FRAMES]> {
-    Arc::new([
+  pub fn new_arc_array(cols: usize, rows: usize) -> RefMEStats {
+    Arc::new(RwLock::new([
       FrameMEStats::new(cols, rows),
       FrameMEStats::new(cols, rows),
       FrameMEStats::new(cols, rows),
@@ -64,7 +72,7 @@ impl FrameMEStats {
       FrameMEStats::new(cols, rows),
       FrameMEStats::new(cols, rows),
       FrameMEStats::new(cols, rows),
-    ])
+    ]))
   }
 }
 
@@ -373,9 +381,9 @@ impl MotionEstimationSubsets {
   }
 }
 
-fn get_subset_predictors<T: Pixel>(
+fn get_subset_predictors(
   tile_bo: TileBlockOffset, tile_me_stats: &TileMEStats<'_>,
-  frame_ref_opt: Option<&ReferenceFrame<T>>, ref_frame_id: usize,
+  frame_ref_opt: Option<ReadGuardMEStats<'_>>, ref_frame_id: usize,
   pix_w: usize, pix_h: usize, mvx_min: isize, mvx_max: isize, mvy_min: isize,
   mvy_max: isize, corner: MVSamplingMode, ssdec: u8,
 ) -> MotionEstimationSubsets {
@@ -464,8 +472,8 @@ fn get_subset_predictors<T: Pixel>(
   // blocks of the previous frame.
   // Sample the middle of this block in the previous frame.
 
-  if let Some(frame_ref) = frame_ref_opt {
-    let prev_frame = &frame_ref.frame_me_stats[ref_frame_id];
+  if let Some(frame_me_stats) = frame_ref_opt {
+    let prev_frame = &frame_me_stats[ref_frame_id];
 
     let frame_bo = PlaneBlockOffset(BlockOffset {
       x: tile_me_stats.x() + tile_bo.0.x,
@@ -689,8 +697,9 @@ fn full_pixel_me<T: Pixel>(
 ) -> MotionSearchResult {
   let ref_frame_id = ref_frame.to_index();
   let tile_me_stats = &ts.me_stats[ref_frame_id].as_const();
-  let frame_ref =
-    fi.rec_buffer.frames[fi.ref_frames[0] as usize].as_ref().map(Arc::as_ref);
+  let frame_ref = fi.rec_buffer.frames[fi.ref_frames[0] as usize]
+    .as_ref()
+    .map(|frame_ref| frame_ref.frame_me_stats.read().expect("poisoned lock"));
   let subsets = get_subset_predictors(
     tile_bo,
     tile_me_stats,
