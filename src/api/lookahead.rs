@@ -7,8 +7,8 @@ use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
 use crate::frame::{AsRegion, PlaneOffset};
-use crate::me::{estimate_tile_motion, FrameMEStats};
-use crate::partition::{get_intra_edges, BlockSize, REF_FRAMES};
+use crate::me::{estimate_tile_motion, RefMEStats};
+use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::rayon::iter::*;
 use crate::tiling::{Area, PlaneRegion, TileRect};
@@ -178,8 +178,7 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
 #[hawktracer(estimate_inter_costs)]
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
-  mut config: EncoderConfig, sequence: Arc<Sequence>,
-  buffer: Arc<[FrameMEStats; REF_FRAMES]>,
+  mut config: EncoderConfig, sequence: Arc<Sequence>, buffer: RefMEStats,
 ) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
@@ -210,7 +209,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   let plane_ref = &ref_frame.planes[0];
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
-  let stats = &fs.frame_me_stats[0];
+  let stats = &fs.frame_me_stats.read().expect("poisoned lock")[0];
   let bsize = BlockSize::from_width_and_height(
     IMPORTANCE_BLOCK_SIZE,
     IMPORTANCE_BLOCK_SIZE,

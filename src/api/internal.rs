@@ -743,7 +743,7 @@ impl<T: Pixel> ContextInner<T> {
       // backwards lower reference (so the closest previous frame).
       let index = if second_ref_frame.to_index() != 0 { 0 } else { 1 };
 
-      let me_stats = &fs.frame_me_stats[index];
+      let me_stats = &fs.frame_me_stats.read().expect("poisoned lock")[index];
       use byteorder::{NativeEndian, WriteBytesExt};
       // dynamic allocation: debugging only
       let mut buf = vec![];
@@ -1084,68 +1084,70 @@ impl<T: Pixel> ContextInner<T> {
       // is more performant because it avoids a very expensive clone.
       let output_frame_data =
         self.frame_data.remove(&output_frameno).unwrap().unwrap();
-      let fi = &output_frame_data.fi;
-      let fs = &output_frame_data.fs;
+      {
+        let fi = &output_frame_data.fi;
+        let fs = &output_frame_data.fs;
 
-      let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+        let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
-      // There can be at most 3 of these.
-      let mut unique_indices = ArrayVec::<_, 3>::new();
+        // There can be at most 3 of these.
+        let mut unique_indices = ArrayVec::<_, 3>::new();
 
-      for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
-        if !unique_indices.iter().any(|&(_, r)| r == rec_index) {
-          unique_indices.push((mv_index, rec_index));
+        for (mv_index, &rec_index) in fi.ref_frames.iter().enumerate() {
+          if !unique_indices.iter().any(|&(_, r)| r == rec_index) {
+            unique_indices.push((mv_index, rec_index));
+          }
         }
+
+        let bit_depth = self.config.bit_depth;
+        let frame_data = &mut self.frame_data;
+        let len = unique_indices.len();
+
+        let lookahead_me_stats =
+          fs.frame_me_stats.read().expect("poisoned lock");
+
+        // Compute and propagate the importance, split evenly between the
+        // referenced frames.
+        unique_indices.iter().for_each(|&(mv_index, rec_index)| {
+          // Use rec_buffer here rather than lookahead_rec_buffer because
+          // rec_buffer still contains the reference frames for the current frame
+          // (it's only overwritten when the frame is encoded), while
+          // lookahead_rec_buffer already contains reference frames for the next
+          // frame (for the reference propagation to work correctly).
+          let reference =
+            fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
+          let reference_frame = &reference.frame;
+          let reference_output_frameno = reference.output_frameno;
+          let me_stats = &lookahead_me_stats[mv_index];
+
+          // We should never use frame as its own reference.
+          assert_ne!(reference_output_frameno, output_frameno);
+
+          if let Some(reference_frame_block_importances) =
+            frame_data.get_mut(&reference_output_frameno).map(|data| {
+              &mut data
+                .as_mut()
+                .unwrap()
+                .fi
+                .coded_frame_data
+                .as_mut()
+                .unwrap()
+                .block_importances
+            })
+          {
+            Self::update_block_importances(
+              fi,
+              me_stats,
+              frame,
+              reference_frame,
+              bit_depth,
+              bsize,
+              len,
+              reference_frame_block_importances,
+            );
+          }
+        });
       }
-
-      let bit_depth = self.config.bit_depth;
-      let frame_data = &mut self.frame_data;
-      let len = unique_indices.len();
-
-      let lookahead_me_stats = &fs.frame_me_stats;
-
-      // Compute and propagate the importance, split evenly between the
-      // referenced frames.
-      unique_indices.iter().for_each(|&(mv_index, rec_index)| {
-        // Use rec_buffer here rather than lookahead_rec_buffer because
-        // rec_buffer still contains the reference frames for the current frame
-        // (it's only overwritten when the frame is encoded), while
-        // lookahead_rec_buffer already contains reference frames for the next
-        // frame (for the reference propagation to work correctly).
-        let reference =
-          fi.rec_buffer.frames[rec_index as usize].as_ref().unwrap();
-        let reference_frame = &reference.frame;
-        let reference_output_frameno = reference.output_frameno;
-        let me_stats = &lookahead_me_stats[mv_index];
-
-        // We should never use frame as its own reference.
-        assert_ne!(reference_output_frameno, output_frameno);
-
-        if let Some(reference_frame_block_importances) =
-          frame_data.get_mut(&reference_output_frameno).map(|data| {
-            &mut data
-              .as_mut()
-              .unwrap()
-              .fi
-              .coded_frame_data
-              .as_mut()
-              .unwrap()
-              .block_importances
-          })
-        {
-          Self::update_block_importances(
-            fi,
-            me_stats,
-            frame,
-            reference_frame,
-            bit_depth,
-            bsize,
-            len,
-            reference_frame_block_importances,
-          );
-        }
-      });
-
       self.frame_data.insert(output_frameno, Some(output_frame_data));
     }
 

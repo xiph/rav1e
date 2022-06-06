@@ -14,8 +14,7 @@ use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::Sequence;
 use crate::frame::*;
-use crate::me::FrameMEStats;
-use crate::partition::REF_FRAMES;
+use crate::me::RefMEStats;
 use crate::util::Pixel;
 use debug_unreachable::debug_unreachable;
 use rust_hawktracer::*;
@@ -73,7 +72,7 @@ pub struct SceneChangeDetector<T: Pixel> {
     bool,
   )>,
   /// Buffer for FrameMEStats for cost scenecut
-  frame_me_stats_buffer: Option<Arc<[FrameMEStats; REF_FRAMES]>>,
+  frame_me_stats_buffer: Option<RefMEStats>,
   /// Frame buffer for holding references to source frames.
   ///
   /// Useful for not copying data into the downscaled frame buffer

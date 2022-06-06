@@ -87,7 +87,7 @@ pub struct ReferenceFrame<T: Pixel> {
   pub input_hres: Arc<Plane<T>>,
   pub input_qres: Arc<Plane<T>>,
   pub cdfs: CDFContext,
-  pub frame_me_stats: Arc<[FrameMEStats; REF_FRAMES as usize]>,
+  pub frame_me_stats: RefMEStats,
   pub output_frameno: u64,
   pub segmentation: SegmentationState,
 }
@@ -436,7 +436,7 @@ pub struct FrameState<T: Pixel> {
   pub restoration: RestorationState,
   // Because we only reference these within a tile context,
   // these are stored per-tile for easier access.
-  pub frame_me_stats: Arc<[FrameMEStats; REF_FRAMES as usize]>,
+  pub frame_me_stats: RefMEStats,
   pub enc_stats: EncoderStats,
 }
 
@@ -457,8 +457,8 @@ impl<T: Pixel> FrameState<T> {
   /// it does not create hres or qres versions of `frame` as downscaling is
   /// somewhat expensive and are not needed for [`estimate_inter_costs`].
   pub fn new_with_frame_and_me_stats_and_rec(
-    fi: &FrameInvariants<T>, frame: Arc<Frame<T>>,
-    me_stats: Arc<[FrameMEStats; REF_FRAMES]>, rec: Arc<Frame<T>>,
+    fi: &FrameInvariants<T>, frame: Arc<Frame<T>>, me_stats: RefMEStats,
+    rec: Arc<Frame<T>>,
   ) -> Self {
     let rs = RestorationState::new(fi, &frame);
 
@@ -519,8 +519,16 @@ impl<T: Pixel> FrameState<T> {
   {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
     let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
-    let ts =
-      &mut TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height);
+    let frame_me_stats = self.frame_me_stats.clone();
+    let frame_me_stats = &mut *frame_me_stats.write().expect("poisoned lock");
+    let ts = &mut TileStateMut::new(
+      self,
+      sbo_0,
+      self.sb_size_log2,
+      width,
+      height,
+      frame_me_stats,
+    );
 
     f(ts)
   }

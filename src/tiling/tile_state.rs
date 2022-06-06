@@ -14,6 +14,8 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::lrf::{IntegralImageBuffer, SOLVE_IMAGE_SIZE};
 use crate::mc::MotionVector;
+use crate::me::FrameMEStats;
+use crate::me::WriteGuardMEStats;
 use crate::partition::{RefType, REF_FRAMES};
 use crate::predict::{InterCompoundBuffers, PredictionMode};
 use crate::quantize::*;
@@ -125,6 +127,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
   pub fn new(
     fs: &'a mut FrameState<T>, sbo: PlaneSuperBlockOffset,
     sb_size_log2: usize, width: usize, height: usize,
+    frame_me_stats: &'a mut [FrameMEStats],
   ) -> Self {
     debug_assert!(
       width % MI_SIZE == 0,
@@ -170,7 +173,7 @@ impl<'a, T: Pixel> TileStateMut<'a, T> {
         sb_width,
         sb_height,
       ),
-      me_stats: Arc::make_mut(&mut fs.frame_me_stats)
+      me_stats: frame_me_stats
         .iter_mut()
         .map(|fmvs| {
           TileMEStatsMut::new(
