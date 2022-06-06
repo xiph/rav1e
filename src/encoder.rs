@@ -513,11 +513,16 @@ impl<T: Pixel> FrameState<T> {
     }
   }
 
-  #[inline(always)]
-  pub fn as_tile_state_mut(&mut self) -> TileStateMut<'_, T> {
+  pub fn apply_tile_state_mut<F, R>(&mut self, f: F) -> R
+  where
+    F: FnOnce(&mut TileStateMut<'_, T>) -> R,
+  {
     let PlaneConfig { width, height, .. } = self.rec.planes[0].cfg;
     let sbo_0 = PlaneSuperBlockOffset(SuperBlockOffset { x: 0, y: 0 });
-    TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height)
+    let ts =
+      &mut TileStateMut::new(self, sbo_0, self.sb_size_log2, width, height);
+
+    f(ts)
   }
 }
 
@@ -3198,33 +3203,32 @@ fn encode_tile_group<T: Pixel>(
    * frame rather than the frame itself so that deblocking is
    * available inside RDO when needed */
   /* TODO: Don't apply if lossless */
-  let levels;
-  {
-    let ts = &mut fs.as_tile_state_mut();
+  let levels = fs.apply_tile_state_mut(|ts| {
     let rec = &mut ts.rec;
-    levels = deblock_filter_optimize(
+    deblock_filter_optimize(
       fi,
       &rec.as_const(),
       &ts.input.as_tile(),
       &blocks.as_tile_blocks(),
       fi.width,
       fi.height,
-    );
-  }
+    )
+  });
   fs.deblock.levels = levels;
 
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
-    let ts = &mut fs.as_tile_state_mut();
-    let rec = &mut ts.rec;
-    deblock_filter_frame(
-      ts.deblock,
-      rec,
-      &blocks.as_tile_blocks(),
-      fi.width,
-      fi.height,
-      fi.sequence.bit_depth,
-      planes,
-    );
+    fs.apply_tile_state_mut(|ts| {
+      let rec = &mut ts.rec;
+      deblock_filter_frame(
+        ts.deblock,
+        rec,
+        &blocks.as_tile_blocks(),
+        fi.width,
+        fi.height,
+        fi.sequence.bit_depth,
+        planes,
+      );
+    });
   }
 
   if fi.sequence.enable_restoration {
@@ -3234,9 +3238,10 @@ fn encode_tile_group<T: Pixel>(
 
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
-      let ts = &mut fs.as_tile_state_mut();
-      let rec = &mut ts.rec;
-      cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      fs.apply_tile_state_mut(|ts| {
+        let rec = &mut ts.rec;
+        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      });
     }
     /* TODO: Don't apply if lossless */
     fs.restoration.lrf_filter_frame(
@@ -3248,9 +3253,10 @@ fn encode_tile_group<T: Pixel>(
     /* TODO: Don't apply if lossless */
     if fi.sequence.enable_cdef {
       let deblocked_frame = (*fs.rec).clone();
-      let ts = &mut fs.as_tile_state_mut();
-      let rec = &mut ts.rec;
-      cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      fs.apply_tile_state_mut(|ts| {
+        let rec = &mut ts.rec;
+        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+      });
     }
   }
 

@@ -57,66 +57,69 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
   let mut tb = fb.as_tile_blocks_mut();
   let bc = BlockContext::new(&mut tb);
   let mut fs = FrameState::new(&fi);
-  let mut ts = fs.as_tile_state_mut();
   // For now, restoration unit size is locked to superblock size.
   let mut cw = ContextWriter::new(&mut fc, bc);
 
-  let tx_type = TxType::DCT_DCT;
+  fs.apply_tile_state_mut(|ts| {
+    let tx_type = TxType::DCT_DCT;
 
-  let sbx = 0;
-  let sby = 0;
-  let ac = &[0i16; 32 * 32];
+    let sbx = 0;
+    let sby = 0;
+    let ac = &[0i16; 32 * 32];
 
-  b.iter(|| {
-    for &mode in RAV1E_INTRA_MODES {
-      let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-      for p in 1..3 {
-        ts.qc.update(
-          fi.base_q_idx,
-          tx_size,
-          mode.is_intra(),
-          8,
-          fi.dc_delta_q[p],
-          fi.ac_delta_q[p],
-        );
-        for by in 0..8 {
-          for bx in 0..8 {
-            // For ex, 8x8 tx should be applied to even numbered (bx,by)
-            if (tx_size.width_mi() >> 1) & bx != 0
-              || (tx_size.height_mi() >> 1) & by != 0
-            {
-              continue;
-            };
-            let bo = sbo.block_offset(bx, by);
-            let tx_bo =
-              TileBlockOffset(BlockOffset { x: bo.0.x + bx, y: bo.0.y + by });
-            let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
-            encode_tx_block(
-              &fi,
-              &mut ts,
-              &mut cw,
-              &mut w,
-              p,
-              bo,
-              0,
-              0,
-              tx_bo,
-              mode,
-              tx_size,
-              tx_type,
-              tx_size.block_size(),
-              po,
-              false,
-              qindex as u8,
-              ac,
-              IntraParam::None,
-              RDOType::PixelDistRealRate,
-              true,
-            );
+    b.iter(|| {
+      for &mode in RAV1E_INTRA_MODES {
+        let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
+        for p in 1..3 {
+          ts.qc.update(
+            fi.base_q_idx,
+            tx_size,
+            mode.is_intra(),
+            8,
+            fi.dc_delta_q[p],
+            fi.ac_delta_q[p],
+          );
+          for by in 0..8 {
+            for bx in 0..8 {
+              // For ex, 8x8 tx should be applied to even numbered (bx,by)
+              if (tx_size.width_mi() >> 1) & bx != 0
+                || (tx_size.height_mi() >> 1) & by != 0
+              {
+                continue;
+              };
+              let bo = sbo.block_offset(bx, by);
+              let tx_bo = TileBlockOffset(BlockOffset {
+                x: bo.0.x + bx,
+                y: bo.0.y + by,
+              });
+              let po = tx_bo.plane_offset(&ts.input.planes[p].cfg);
+              encode_tx_block(
+                &fi,
+                ts,
+                &mut cw,
+                &mut w,
+                p,
+                bo,
+                0,
+                0,
+                tx_bo,
+                mode,
+                tx_size,
+                tx_type,
+                tx_size.block_size(),
+                po,
+                false,
+                qindex as u8,
+                ac,
+                IntraParam::None,
+                RDOType::PixelDistRealRate,
+                true,
+              );
+            }
           }
         }
       }
-    }
+    });
   });
 }
 
@@ -140,10 +143,10 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
   let fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
   let in_frame = fs.rec.clone();
-  let mut ts = fs.as_tile_state_mut();
-
-  b.iter(|| {
-    cdef_filter_tile(&fi, &in_frame, &fb.as_tile_blocks(), &mut ts.rec)
+  fs.apply_tile_state_mut(|ts| {
+    b.iter(|| {
+      cdef_filter_tile(&fi, &in_frame, &fb.as_tile_blocks(), &mut ts.rec)
+    });
   });
 }
 
@@ -170,9 +173,10 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let sequence = Arc::new(Sequence::new(&Default::default()));
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
-  let mut ts = fs.as_tile_state_mut();
-  let offset = TileBlockOffset(BlockOffset { x: 1, y: 1 });
-  b.iter(|| rdo_cfl_alpha(&mut ts, offset, bsize, bsize.tx_size(), &fi))
+  fs.apply_tile_state_mut(|ts| {
+    let offset = TileBlockOffset(BlockOffset { x: 1, y: 1 });
+    b.iter(|| rdo_cfl_alpha(ts, offset, bsize, bsize.tx_size(), &fi))
+  });
 }
 
 fn ec_bench(c: &mut Criterion) {
