@@ -28,10 +28,11 @@ pub(crate) const IMP_BLOCK_AREA_IN_MV_UNITS: i64 =
 
 #[hawktracer(estimate_intra_costs)]
 pub(crate) fn estimate_intra_costs<T: Pixel>(
-  frame: &Frame<T>, bit_depth: usize, cpu_feature_level: CpuFeatureLevel,
+  temp_plane: &mut Plane<T>, frame: &Frame<T>, bit_depth: usize,
+  cpu_feature_level: CpuFeatureLevel,
 ) -> Box<[u32]> {
   let plane = &frame.planes[0];
-  let mut plane_after_prediction = frame.planes[0].clone();
+  let plane_after_prediction = temp_plane;
 
   let bsize = BlockSize::from_width_and_height(
     IMPORTANCE_BLOCK_SIZE,
