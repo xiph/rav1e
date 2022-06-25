@@ -118,7 +118,7 @@ pub struct EncoderConfig {
 /// [`with_speed_preset()`]: struct.EncoderConfig.html#method.with_speed_preset
 impl Default for EncoderConfig {
   fn default() -> Self {
-    const DEFAULT_SPEED: usize = 6;
+    const DEFAULT_SPEED: u8 = 6;
     Self::with_speed_preset(DEFAULT_SPEED)
   }
 }
@@ -130,7 +130,7 @@ impl EncoderConfig {
   /// than 10, it will result in the same settings as 10.
   ///
   /// [`from_preset()`]: struct.SpeedSettings.html#method.from_preset
-  pub fn with_speed_preset(speed: usize) -> Self {
+  pub fn with_speed_preset(speed: u8) -> Self {
     EncoderConfig {
       width: 640,
       height: 480,
