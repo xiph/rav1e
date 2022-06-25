@@ -300,7 +300,7 @@ pub fn fuzz_encode(arbitrary: ArbitraryEncoder) {
 pub struct DecodeTestParameters<T: Pixel> {
   w: usize,
   h: usize,
-  speed: usize,
+  speed: u8,
   q: usize,
   limit: usize,
   bit_depth: usize,

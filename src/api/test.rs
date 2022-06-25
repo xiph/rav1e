@@ -15,7 +15,7 @@ use std::sync::Arc;
 use interpolate_name::interpolate_test;
 
 fn setup_config(
-  w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
+  w: usize, h: usize, speed: u8, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   bitrate: i32, low_latency: bool, switch_frame_interval: u64,
   no_scene_detection: bool, rdo_lookahead_frames: usize,
@@ -44,7 +44,7 @@ fn setup_config(
 }
 
 fn setup_encoder<T: Pixel>(
-  w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
+  w: usize, h: usize, speed: u8, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   bitrate: i32, low_latency: bool, switch_frame_interval: u64,
   no_scene_detection: bool, rdo_lookahead_frames: usize,

@@ -100,6 +100,7 @@ impl<D: Decoder> Source<D> {
         Self { limit, input, count: 0, exit_requested, }
       }
     } else {
+      #[allow(clippy::missing_const_for_fn)]
       fn new(limit: usize, input: D) -> Self {
         Self { limit, input, count: 0, }
       }

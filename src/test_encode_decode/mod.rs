@@ -68,12 +68,11 @@ pub(crate) trait TestDecoder<T: Pixel> {
   where
     Self: Sized;
   fn encode_decode(
-    &mut self, verify: bool, w: usize, h: usize, speed: usize,
-    quantizer: usize, limit: usize, bit_depth: usize,
-    chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
-    switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
-    bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
-    still_picture: bool,
+    &mut self, verify: bool, w: usize, h: usize, speed: u8, quantizer: usize,
+    limit: usize, bit_depth: usize, chroma_sampling: ChromaSampling,
+    min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
+    low_latency: bool, error_resilient: bool, bitrate: i32,
+    tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
     #[cfg(feature = "unstable")] grain_table: Option<Vec<GrainTableParams>>,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
@@ -177,7 +176,7 @@ pub fn compare_plane<T: Ord + std::fmt::Debug>(
 }
 
 fn setup_encoder<T: Pixel>(
-  w: usize, h: usize, speed: usize, quantizer: usize, bit_depth: usize,
+  w: usize, h: usize, speed: u8, quantizer: usize, bit_depth: usize,
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
   bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
@@ -216,7 +215,7 @@ fn setup_encoder<T: Pixel>(
 static DIMENSION_OFFSETS: &[(usize, usize)] =
   &[(0, 0), (4, 4), (8, 8), (16, 16)];
 
-fn speed(s: usize, decoder: &str) {
+fn speed(s: u8, decoder: &str) {
   let quantizer = 100;
   let limit = 5;
   let w = 64;

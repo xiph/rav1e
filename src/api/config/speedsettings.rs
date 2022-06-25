@@ -112,7 +112,7 @@ impl Default for SpeedSettings {
 
 impl SpeedSettings {
   /// Set the speed setting according to a numeric speed preset.
-  pub fn from_preset(speed: usize) -> Self {
+  pub fn from_preset(speed: u8) -> Self {
     // The default settings are equivalent to speed 0
     let mut settings = SpeedSettings::default();
 
