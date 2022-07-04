@@ -853,7 +853,7 @@ impl<T: Pixel> ContextInner<T> {
     keyframe_detector: &mut SceneChangeDetector<T>,
     next_lookahead_frame: &mut u64, keyframes: &mut BTreeSet<u64>,
   ) {
-    if keyframes_forced.contains(&next_lookahead_frame)
+    if keyframes_forced.contains(next_lookahead_frame)
       || keyframe_detector.analyze_next_frame(
         lookahead_frames,
         *next_lookahead_frame,
