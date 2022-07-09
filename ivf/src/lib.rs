@@ -36,7 +36,8 @@
 #![warn(clippy::doc_markdown)]
 #![warn(clippy::missing_errors_doc)]
 #![warn(clippy::missing_panics_doc)]
-#![warn(clippy::undocumented_unsafe_blocks)]
+// FIXME: Temporarily disabled due to https://github.com/rust-lang/rust-clippy/issues/9142
+#![allow(clippy::undocumented_unsafe_blocks)]
 
 /// Simple ivf muxer
 ///
