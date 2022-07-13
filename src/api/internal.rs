@@ -357,8 +357,8 @@ impl<T: Pixel> ContextInner<T> {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
-        .filter_map(|(&_input_frameno, frame)| frame.clone())
-        .collect::<Vec<_>>();
+        .filter_map(|(&_input_frameno, frame)| frame.as_ref())
+        .collect::<Vec<&Arc<Frame<T>>>>();
 
       if is_flushing {
         // This is the last time send_frame is called, process all the
@@ -371,10 +371,22 @@ impl<T: Pixel> ContextInner<T> {
             break;
           }
 
-          self.compute_keyframe_placement(cur_lookahead_frames);
+          Self::compute_keyframe_placement(
+            cur_lookahead_frames,
+            &self.keyframes_forced,
+            &mut self.keyframe_detector,
+            &mut self.next_lookahead_frame,
+            &mut self.keyframes,
+          );
         }
       } else {
-        self.compute_keyframe_placement(&lookahead_frames);
+        Self::compute_keyframe_placement(
+          &lookahead_frames,
+          &self.keyframes_forced,
+          &mut self.keyframe_detector,
+          &mut self.next_lookahead_frame,
+          &mut self.keyframes,
+        );
       }
     }
 
@@ -837,19 +849,21 @@ impl<T: Pixel> ContextInner<T> {
 
   #[hawktracer(compute_keyframe_placement)]
   pub fn compute_keyframe_placement(
-    &mut self, lookahead_frames: &[Arc<Frame<T>>],
+    lookahead_frames: &[&Arc<Frame<T>>], keyframes_forced: &BTreeSet<u64>,
+    keyframe_detector: &mut SceneChangeDetector<T>,
+    next_lookahead_frame: &mut u64, keyframes: &mut BTreeSet<u64>,
   ) {
-    if self.keyframes_forced.contains(&self.next_lookahead_frame)
-      || self.keyframe_detector.analyze_next_frame(
+    if keyframes_forced.contains(next_lookahead_frame)
+      || keyframe_detector.analyze_next_frame(
         lookahead_frames,
-        self.next_lookahead_frame,
-        *self.keyframes.iter().last().unwrap(),
+        *next_lookahead_frame,
+        *keyframes.iter().last().unwrap(),
       )
     {
-      self.keyframes.insert(self.next_lookahead_frame);
+      keyframes.insert(*next_lookahead_frame);
     }
 
-    self.next_lookahead_frame += 1;
+    *next_lookahead_frame += 1;
   }
 
   #[hawktracer(compute_frame_invariants)]

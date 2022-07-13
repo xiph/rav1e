@@ -66,8 +66,10 @@ impl<T: Pixel> SceneChange<T> {
   fn split(&mut self, lookahead: &[Arc<Frame<T>>]) -> Option<(usize, bool)> {
     self.processed += 1;
 
+    let lookahead_ref: Vec<_> = lookahead[self.frames..].iter().collect();
+
     let new_gop = self.detector.analyze_next_frame(
-      &lookahead[self.frames..],
+      &lookahead_ref,
       self.processed,
       self.last_keyframe,
     );
