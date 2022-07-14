@@ -166,6 +166,11 @@ debug = true
 incremental = true
 lto = "thin"
 
+# windows-gnu should use it until rust-lang/rust#98302 is not fixed
+[profile.release-no-lto]
+inherits = "release"
+lto = "off"
+
 [profile.bench]
 incremental = true
 
