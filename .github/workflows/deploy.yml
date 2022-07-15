@@ -17,14 +17,16 @@ jobs:
         include:
          - conf: msvc
            toolchain: stable
+           profile: release
          - conf: gnu
            toolchain: stable-x86_64-pc-windows-gnu
+           profile: release-no-lto
 
     if: github.repository_owner == 'xiph'
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: ilammy/setup-nasm@v1
 
     - name: Install cargo-c
@@ -55,16 +57,16 @@ jobs:
         override: true
 
     - name: Build rav1e
-      run: cargo build --release
+      run: cargo build --profile ${{ matrix.profile }}
 
     - name: Strip rav1e gnu-binary
       if: matrix.conf == 'gnu'
-      run: strip target/release/rav1e.exe
+      run: strip target/${{ matrix.profile }}/rav1e.exe
 
     - name: Run cargo-c
       run: |
         cargo fetch
-        cargo cinstall --release --destdir="C:\" --offline
+        cargo cinstall --profile ${{ matrix.profile }} --destdir="C:\" --offline
 
     - name: Rename cargo-c folder
       run: Rename-Item "C:\usr\local" "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
@@ -95,13 +97,13 @@ jobs:
       if: matrix.conf == 'msvc'
       env:
         RUSTFLAGS: "-C target-feature=+avx2,+fma"
-      run: cargo build --release --features=unstable,channel-api --bin=rav1e-ch
+      run: cargo build --profile ${{ matrix.profile }} --features=unstable,channel-api --bin=rav1e-ch
 
     - name: Upload rav1e msvc binary
       if: matrix.conf == 'msvc'
       uses: actions/upload-artifact@v2
       with:
-        path: target/release/rav1e.exe
+        path: target/${{ matrix.profile }}/rav1e.exe
 
     - name: Upload pre-release binaries
       if: >
@@ -120,7 +122,7 @@ jobs:
       if: matrix.conf == 'msvc'
       uses: actions/upload-artifact@v2
       with:
-        path: target/release/rav1e-ch.exe
+        path: target/${{ matrix.profile }}/rav1e-ch.exe
 
   linux-binaries:
     strategy:
@@ -142,7 +144,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - uses: ilammy/setup-nasm@v1
 
     - name: Install musl tools
@@ -227,7 +229,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Install nasm
       run: brew install nasm
@@ -285,7 +287,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Download artifacts
       uses: actions/download-artifact@v2
