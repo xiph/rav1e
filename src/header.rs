@@ -22,6 +22,7 @@ use crate::FrameState;
 use crate::SegmentationState;
 use crate::Sequence;
 
+use arrayvec::ArrayVec;
 use bitstream_io::{BigEndian, BitWrite, BitWriter, LittleEndian};
 
 use std::io;
@@ -96,37 +97,27 @@ impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
     // Disallow values larger than 32-bits to ensure consistent behavior on 32 and
     // 64 bit targets: value is typically used to determine buffer allocation size
     // when decoded.
-    const fn uleb_size_in_bytes(mut value: u64) -> usize {
-      let mut size = 0;
-      loop {
-        size += 1;
-        value >>= 7;
-        if value == 0 {
-          break;
-        }
+    let mut coded_value: ArrayVec<u8, 8> = ArrayVec::new();
+
+    let mut value = payload as u32;
+    loop {
+      let mut byte = (value & 0x7f) as u8;
+      value >>= 7u8;
+      if value != 0 {
+        // Signal that more bytes follow.
+        byte |= 0x80;
       }
-      size
+      coded_value.push(byte);
+
+      if value == 0 {
+        // We have to break at the end of the loop
+        // because there must be at least one byte written.
+        break;
+      }
     }
 
-    fn uleb_encode(mut value: u64, coded_value: &mut [u8]) -> usize {
-      let leb_size = uleb_size_in_bytes(value);
-
-      for i in 0..leb_size {
-        let mut byte = (value & 0x7f) as u8;
-        value >>= 7;
-        if value != 0 {
-          byte |= 0x80
-        }; // Signal that more bytes follow.
-        coded_value[i] = byte;
-      }
-
-      leb_size
-    }
-
-    let mut coded_payload_length: [u8; 8] = [0; 8];
-    let leb_size = uleb_encode(payload, &mut coded_payload_length);
-    for i in 0..leb_size {
-      self.write(8, coded_payload_length[i])?;
+    for byte in coded_value {
+      self.write(8, byte)?;
     }
     Ok(())
   }
@@ -1192,5 +1183,39 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_signed(6 + 1, delta_q)?;
     }
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ULEB128Writer;
+  use bitstream_io::{BigEndian, BitWriter};
+  use nom::error::Error;
+  use nom::IResult;
+  use quickcheck_macros::quickcheck;
+
+  fn leb128(mut input: &[u8]) -> IResult<&[u8], u64, Error<&[u8]>> {
+    use nom::bytes::complete::take;
+
+    let mut value = 0u64;
+    for i in 0..8u8 {
+      let result = take(1usize)(input)?;
+      input = result.0;
+      let leb128_byte = result.1[0];
+      value |= u64::from(leb128_byte & 0x7f) << (i * 7);
+      if (leb128_byte & 0x80) == 0 {
+        break;
+      }
+    }
+    Ok((input, value))
+  }
+
+  #[quickcheck]
+  pub fn validate_leb128_write(val: u32) -> bool {
+    let mut buf1 = Vec::new();
+    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+    bw1.write_uleb128(val as u64).unwrap();
+    let result = leb128(&buf1).unwrap();
+    u64::from(val) == result.1 && result.0.is_empty()
   }
 }
