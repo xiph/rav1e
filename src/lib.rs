@@ -312,8 +312,8 @@ pub use crate::api::color;
 pub mod config {
   #[cfg(feature = "unstable")]
   pub use crate::api::config::{
-    GrainTableParams, GS_NUM_UV_COEFFS, GS_NUM_UV_POINTS, GS_NUM_Y_COEFFS,
-    GS_NUM_Y_POINTS,
+    GrainTableSegment, NoiseGenArgs, TransferFunction, NUM_UV_COEFFS,
+    NUM_UV_POINTS, NUM_Y_COEFFS, NUM_Y_POINTS,
   };
   pub use crate::api::{
     Config, EncoderConfig, InvalidConfig, PredictionModesSetting,

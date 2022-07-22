@@ -19,9 +19,7 @@ mod encoder;
 pub use encoder::*;
 
 #[cfg(feature = "unstable")]
-mod grain_synth;
-#[cfg(feature = "unstable")]
-pub use grain_synth::*;
+pub use av1_grain::*;
 
 mod rate;
 pub use rate::Error as RateControlError;

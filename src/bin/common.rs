@@ -8,8 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::error::*;
-#[cfg(feature = "unstable")]
-use crate::grain_synth::parse_grain_table;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
