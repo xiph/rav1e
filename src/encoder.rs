@@ -9,7 +9,7 @@
 
 use crate::activity::*;
 #[cfg(feature = "unstable")]
-use crate::api::config::GrainTableParams;
+use crate::api::config::GrainTableSegment;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -1004,7 +1004,7 @@ impl<T: Pixel> FrameInvariants<T> {
       {
         params.random_seed = params.random_seed.wrapping_add(3248);
         if params.random_seed == 0 {
-          params.random_seed = DEFAULT_GS_SEED;
+          params.random_seed = DEFAULT_GRAIN_SEED;
         }
       }
     }
@@ -1162,7 +1162,7 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 
   #[cfg(feature = "unstable")]
-  pub fn film_grain_params(&self) -> Option<&GrainTableParams> {
+  pub fn film_grain_params(&self) -> Option<&GrainTableSegment> {
     if !(self.show_frame || self.showable_frame) {
       return None;
     }

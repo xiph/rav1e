@@ -11,7 +11,7 @@ use itertools::*;
 
 use crate::api::color::*;
 #[cfg(feature = "unstable")]
-use crate::api::config::GrainTableParams;
+use crate::api::config::GrainTableSegment;
 use crate::api::{Rational, SpeedSettings};
 use crate::encoder::Tune;
 use crate::serialize::{Deserialize, Serialize};
@@ -86,7 +86,7 @@ pub struct EncoderConfig {
   pub tune: Tune,
   /// Parameters for grain synthesis.
   #[cfg(feature = "unstable")]
-  pub film_grain_params: Option<Vec<GrainTableParams>>,
+  pub film_grain_params: Option<Vec<GrainTableSegment>>,
   /// Number of tiles horizontally. Must be a power of two.
   ///
   /// Overridden by [`tiles`], if present.
@@ -236,7 +236,7 @@ impl EncoderConfig {
   #[cfg(feature = "unstable")]
   pub(crate) fn get_film_grain_at(
     &self, timestamp: u64,
-  ) -> Option<&GrainTableParams> {
+  ) -> Option<&GrainTableSegment> {
     self.film_grain_params.as_ref().and_then(|entries| {
       entries.iter().find(|entry| {
         timestamp >= entry.start_time && timestamp < entry.end_time
@@ -247,7 +247,7 @@ impl EncoderConfig {
   #[cfg(feature = "unstable")]
   pub(crate) fn get_film_grain_mut_at(
     &mut self, timestamp: u64,
-  ) -> Option<&mut GrainTableParams> {
+  ) -> Option<&mut GrainTableSegment> {
     self.film_grain_params.as_mut().and_then(|entries| {
       entries.iter_mut().find(|entry| {
         timestamp >= entry.start_time && timestamp < entry.end_time
