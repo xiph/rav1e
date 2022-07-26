@@ -641,6 +641,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub enable_inter_txfm_split: bool,
   pub default_filter: FilterMode,
   pub enable_segmentation: bool,
+  pub t35_metadata: Box<[T35]>,
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 
@@ -841,6 +842,7 @@ impl<T: Pixel> FrameInvariants<T> {
         .speed_settings
         .transform
         .enable_inter_tx_split,
+      t35_metadata: Box::new([]),
       sequence,
       config,
       coded_frame_data: None,
@@ -849,13 +851,14 @@ impl<T: Pixel> FrameInvariants<T> {
 
   pub fn new_key_frame(
     config: Arc<EncoderConfig>, sequence: Arc<Sequence>,
-    gop_input_frameno_start: u64,
+    gop_input_frameno_start: u64, t35_metadata: Box<[T35]>,
   ) -> Self {
     let tx_mode_select = config.speed_settings.transform.rdo_tx_decision;
     let mut fi = Self::new(config, sequence);
     fi.input_frameno = gop_input_frameno_start;
     fi.tx_mode_select = tx_mode_select;
     fi.coded_frame_data = Some(CodedFrameData::new(&fi));
+    fi.t35_metadata = t35_metadata;
     fi
   }
 
@@ -865,6 +868,7 @@ impl<T: Pixel> FrameInvariants<T> {
     previous_coded_fi: &Self, inter_cfg: &InterConfig,
     gop_input_frameno_start: u64, output_frameno_in_gop: u64,
     next_keyframe_input_frameno: u64, error_resilient: bool,
+    t35_metadata: Box<[T35]>,
   ) -> Option<Self> {
     let input_frameno = inter_cfg
       .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
@@ -922,6 +926,7 @@ impl<T: Pixel> FrameInvariants<T> {
     // this is the slot that the current frame is going to be saved into
     let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
     fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
+    fi.t35_metadata = if fi.show_frame { t35_metadata } else { Box::new([]) };
     fi.frame_to_show_map_idx = slot_idx;
     fi.refresh_frame_flags = if fi.frame_type == FrameType::SWITCH {
       ALL_REF_FRAMES_MASK
@@ -1087,6 +1092,7 @@ impl<T: Pixel> FrameInvariants<T> {
       enable_inter_txfm_split: self.enable_inter_txfm_split,
       default_filter: self.default_filter,
       enable_segmentation: self.enable_segmentation,
+      t35_metadata: self.t35_metadata.clone(),
       cpu_feature_level: self.cpu_feature_level,
     }
   }
@@ -1259,14 +1265,20 @@ fn write_key_frame_obus<T: Pixel>(
 
   if fi.sequence.content_light.is_some() {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_CLL, &fi.sequence)?;
+    bw1.write_sequence_metadata_obu(
+      ObuMetaType::OBU_META_HDR_CLL,
+      &fi.sequence,
+    )?;
     packet.write_all(&buf1).unwrap();
     buf1.clear();
   }
 
   if fi.sequence.mastering_display.is_some() {
     let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_metadata_obu(ObuMetaType::OBU_META_HDR_MDCV, &fi.sequence)?;
+    bw1.write_sequence_metadata_obu(
+      ObuMetaType::OBU_META_HDR_MDCV,
+      &fi.sequence,
+    )?;
     packet.write_all(&buf1).unwrap();
     buf1.clear();
   }
@@ -3680,6 +3692,14 @@ pub fn encode_show_existing_frame<T: Pixel>(
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
   }
 
+  for t35 in fi.t35_metadata.iter() {
+    let mut t35_buf = Vec::new();
+    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
+    t35_bw.write_t35_metadata_obu(t35).unwrap();
+    packet.write_all(&t35_buf).unwrap();
+    t35_buf.clear();
+  }
+
   let mut buf1 = Vec::new();
   let mut buf2 = Vec::new();
   {
@@ -3750,6 +3770,14 @@ pub fn encode_frame<T: Pixel>(
 
   if fi.frame_type == FrameType::KEY {
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
+  }
+
+  for t35 in fi.t35_metadata.iter() {
+    let mut t35_buf = Vec::new();
+    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
+    t35_bw.write_t35_metadata_obu(t35).unwrap();
+    packet.write_all(&t35_buf).unwrap();
+    t35_buf.clear();
   }
 
   let mut buf1 = Vec::new();

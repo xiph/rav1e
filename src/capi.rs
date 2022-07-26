@@ -200,8 +200,11 @@ impl EncContext {
     &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride,
     opaque: Option<rav1e::Opaque>,
   ) -> Result<(), rav1e::EncoderStatus> {
-    let info =
-      rav1e::FrameParameters { frame_type_override: frame_type, opaque };
+    let info = rav1e::FrameParameters {
+      frame_type_override: frame_type,
+      opaque,
+      t35_metadata: Box::new([]),
+    };
     if let Some(frame) = frame {
       match (self, frame) {
         (EncContext::U8(ctx), FrameInternal::U8(ref f)) => {

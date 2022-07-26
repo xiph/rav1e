@@ -88,6 +88,7 @@ impl<T: Pixel> Context<T> {
   /// let info = FrameParameters {
   ///   frame_type_override: FrameTypeOverride::Key,
   ///   opaque: None,
+  ///   ..Default::default()
   /// };
   ///
   /// // Send the plain frame data

@@ -9,7 +9,7 @@
 
 use num_derive::FromPrimitive;
 
-use crate::api::Opaque;
+use crate::api::{Opaque, T35};
 use crate::context::SB_SIZE;
 use crate::mc::SUBPEL_FILTER_SIZE;
 use crate::util::*;
@@ -34,13 +34,21 @@ pub enum FrameTypeOverride {
   Key,
 }
 
+impl Default for FrameTypeOverride {
+  fn default() -> Self {
+    FrameTypeOverride::No
+  }
+}
+
 /// Optional per-frame encoder parameters
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct FrameParameters {
   /// Force emitted frame to be of the type selected
   pub frame_type_override: FrameTypeOverride,
   /// Output the provided data in the matching encoded Packet
   pub opaque: Option<Opaque>,
+  /// List of t35 metadata associated with this frame
+  pub t35_metadata: Box<[T35]>,
 }
 
 pub use v_frame::frame::Frame;
