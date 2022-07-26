@@ -1312,7 +1312,11 @@ fn send_frame_kf<T: Pixel>(ctx: &mut Context<T>, keyframe: bool) {
 
   let opaque = Some(Opaque::new(keyframe));
 
-  let fp = FrameParameters { frame_type_override, opaque };
+  let fp = FrameParameters {
+    frame_type_override,
+    opaque,
+    t35_metadata: Box::new([]),
+  };
 
   let _ = ctx.send_frame((input, fp));
 }
@@ -1351,6 +1355,52 @@ fn test_opaque_delivery() {
       assert_eq!(kf, Box::new(input_frameno == kf_at));
     }
   }
+}
+
+fn send_frame_t35<T: Pixel>(ctx: &mut Context<T>) {
+  let input = ctx.new_frame();
+
+  let frame_type_override = FrameTypeOverride::No;
+
+  let opaque = None;
+
+  let t35_metadata = Box::new([T35 {
+    country_code: 0xFF,
+    country_code_extension_byte: 0x00,
+    data: Box::new(*b"AYAYA"),
+  }]);
+
+  let fp = FrameParameters { frame_type_override, opaque, t35_metadata };
+
+  let _ = ctx.send_frame((input, fp));
+}
+
+#[test]
+fn test_t35_parameter() {
+  let mut ctx = setup_encoder::<u8>(
+    64,
+    80,
+    10,
+    100,
+    8,
+    ChromaSampling::Cs420,
+    0,
+    5,
+    0,
+    false,
+    0,
+    false,
+    10,
+    None,
+  );
+
+  let limit = 2;
+  for _ in 0..limit {
+    send_frame_t35(&mut ctx);
+  }
+  ctx.flush();
+
+  while let Ok(_) = ctx.receive_packet() {}
 }
 
 #[interpolate_test(0, 0)]

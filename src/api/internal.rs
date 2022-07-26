@@ -10,7 +10,9 @@
 
 use crate::activity::ActivityMask;
 use crate::api::lookahead::*;
-use crate::api::{EncoderConfig, EncoderStatus, FrameType, Opaque, Packet};
+use crate::api::{
+  EncoderConfig, EncoderStatus, FrameType, Opaque, Packet, T35,
+};
 use crate::color::ChromaSampling::Cs400;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
@@ -256,6 +258,8 @@ pub(crate) struct ContextInner<T: Pixel> {
   next_lookahead_output_frameno: u64,
   /// Optional opaque to be sent back to the user
   opaque_q: BTreeMap<u64, Opaque>,
+  /// Optional T35 metadata per frame
+  t35_q: BTreeMap<u64, Box<[T35]>>,
 }
 
 impl<T: Pixel> ContextInner<T> {
@@ -308,6 +312,7 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_frame: 1,
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
+      t35_q: BTreeMap::new(),
     }
   }
 
@@ -351,6 +356,7 @@ impl<T: Pixel> ContextInner<T> {
       if let Some(op) = params.opaque {
         self.opaque_q.insert(input_frameno, op);
       }
+      self.t35_q.insert(input_frameno, params.t35_metadata);
     }
 
     if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {
@@ -515,6 +521,12 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::NeedMoreData);
     }
 
+    let t35_metadata = if let Some(t35) = self.t35_q.remove(&input_frameno) {
+      t35
+    } else {
+      Box::new([])
+    };
+
     if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
@@ -550,6 +562,7 @@ impl<T: Pixel> ContextInner<T> {
             output_frameno_in_gop,
             next_keyframe_input_frameno,
             self.config.error_resilient,
+            t35_metadata,
           );
           assert!(fi.is_none());
           return Ok(fi);
@@ -584,6 +597,7 @@ impl<T: Pixel> ContextInner<T> {
         self.config.clone(),
         self.seq.clone(),
         self.gop_input_frameno_start[&output_frameno],
+        t35_metadata,
       );
       Ok(Some(fi))
     } else {
@@ -598,6 +612,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno_in_gop,
         next_keyframe_input_frameno,
         self.config.error_resilient,
+        t35_metadata,
       );
       assert!(fi.is_some());
       Ok(fi)

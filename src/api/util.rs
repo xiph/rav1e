@@ -137,6 +137,17 @@ impl fmt::Display for FrameType {
   }
 }
 
+/// A single T.35 metadata packet.
+#[derive(Clone, Debug, Default)]
+pub struct T35 {
+  /// Country code.
+  pub country_code: u8,
+  /// Country code extension bytes (if country_code == 0xFF)
+  pub country_code_extension_byte: u8,
+  /// T.35 payload.
+  pub data: Box<[u8]>,
+}
+
 /// Status that can be returned by [`Context`] functions.
 ///
 /// [`Context`]: struct.Context.html

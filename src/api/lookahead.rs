@@ -184,10 +184,22 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   config.low_latency = true;
   config.speed_settings.multiref = false;
   let inter_cfg = InterConfig::new(&config);
-  let last_fi = FrameInvariants::new_key_frame(Arc::new(config), sequence, 0);
-  let mut fi =
-    FrameInvariants::new_inter_frame(&last_fi, &inter_cfg, 0, 1, 2, false)
-      .unwrap();
+  let last_fi = FrameInvariants::new_key_frame(
+    Arc::new(config),
+    sequence,
+    0,
+    Box::new([]),
+  );
+  let mut fi = FrameInvariants::new_inter_frame(
+    &last_fi,
+    &inter_cfg,
+    0,
+    1,
+    2,
+    false,
+    Box::new([]),
+  )
+  .unwrap();
 
   // Compute the motion vectors.
   let mut fs = FrameState::new_with_frame_and_me_stats_and_rec(

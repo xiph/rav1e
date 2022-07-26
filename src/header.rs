@@ -142,7 +142,7 @@ pub trait UncompressedHeader {
   fn write_obu_header(
     &mut self, obu_type: ObuType, obu_extension: u32,
   ) -> io::Result<()>;
-  fn write_metadata_obu(
+  fn write_sequence_metadata_obu(
     &mut self, obu_meta_type: ObuMetaType, seq: &Sequence,
   ) -> io::Result<()>;
   fn write_sequence_header_obu<T: Pixel>(
@@ -156,6 +156,7 @@ pub trait UncompressedHeader {
     &mut self, fi: &FrameInvariants<T>,
   ) -> io::Result<()>;
   fn write_color_config(&mut self, seq: &Sequence) -> io::Result<()>;
+  fn write_t35_metadata_obu(&mut self, t35: &T35) -> io::Result<()>;
   // End of OBU Headers
 
   fn write_max_frame_size<T: Pixel>(
@@ -208,7 +209,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     Ok(())
   }
 
-  fn write_metadata_obu(
+  fn write_sequence_metadata_obu(
     &mut self, obu_meta_type: ObuMetaType, seq: &Sequence,
   ) -> io::Result<()> {
     // header
@@ -244,6 +245,29 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
       _ => {}
     }
+
+    // trailing bits (1 byte)
+    self.write_bit(true)?;
+    self.byte_align()?;
+
+    Ok(())
+  }
+
+  fn write_t35_metadata_obu(&mut self, t35: &T35) -> io::Result<()> {
+    self.write_obu_header(ObuType::OBU_METADATA, 0)?;
+
+    // metadata type + country code + optional extension + trailing bits
+    self.write_uleb128(
+      t35.data.len() as u64 + if t35.country_code == 0xFF { 4 } else { 3 },
+    )?;
+
+    self.write_uleb128(ObuMetaType::OBU_META_ITUT_T35 as u64)?;
+
+    self.write(8, t35.country_code)?;
+    if t35.country_code == 0xFF {
+      self.write(8, t35.country_code_extension_byte)?;
+    }
+    self.write_bytes(&t35.data)?;
 
     // trailing bits (1 byte)
     self.write_bit(true)?;
