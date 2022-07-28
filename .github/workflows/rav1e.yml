@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
       - name: Install stable
         uses: actions-rs/toolchain@v1
@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set no-asm-tests env vars
         if: matrix.conf == 'no-asm-tests'
         run: |
@@ -282,7 +282,7 @@ jobs:
 
     runs-on: macos-11.0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install sccache
         run: |
           brew install sccache
@@ -360,7 +360,7 @@ jobs:
 
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
       - name: Install sccache
         run: |
