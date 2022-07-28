@@ -280,7 +280,7 @@ jobs:
       SCCACHE_CACHE_SIZE: 300M
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
 
-    runs-on: macos-11.0
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
       - name: Install sccache
