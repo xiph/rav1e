@@ -8,6 +8,33 @@ on:
       - 'p*'
 
 jobs:
+  windows-rav1e-ch-binary:
+
+    if: github.repository_owner == 'xiph'
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: ilammy/setup-nasm@v1
+
+    - name: Install stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build rav1e-ch (unstable)
+      env:
+        RUSTFLAGS: "-C target-feature=+avx2,+fma"
+      run: cargo build --release --features=unstable,channel-api --bin=rav1e-ch
+
+    - name: Upload rav1e-ch msvc binary (unstable)
+      uses: actions/upload-artifact@v2
+      with:
+        path: target/release/rav1e-ch.exe
+
+
   windows-binaries:
     strategy:
       matrix:
@@ -93,12 +120,6 @@ jobs:
         7z a "$ZIP_PREFIX-${{ matrix.conf }}.zip" `
              "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
-    - name: Build rav1e-ch (unstable)
-      if: matrix.conf == 'msvc'
-      env:
-        RUSTFLAGS: "-C target-feature=+avx2,+fma"
-      run: cargo build --profile ${{ matrix.profile }} --features=unstable,channel-api --bin=rav1e-ch
-
     - name: Upload rav1e msvc binary
       if: matrix.conf == 'msvc'
       uses: actions/upload-artifact@v2
@@ -118,11 +139,6 @@ jobs:
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
 
-    - name: Upload rav1e-ch msvc binary (unstable)
-      if: matrix.conf == 'msvc'
-      uses: actions/upload-artifact@v2
-      with:
-        path: target/${{ matrix.profile }}/rav1e-ch.exe
 
   linux-binaries:
     strategy:
@@ -282,7 +298,7 @@ jobs:
         path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
 
   deploy:
-    needs: [windows-binaries, linux-binaries, macos-binaries]
+    needs: [windows-rav1e-ch-binary, windows-binaries, linux-binaries, macos-binaries]
     if: github.repository_owner == 'xiph'
     runs-on: ubuntu-latest
 
