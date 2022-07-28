@@ -63,19 +63,6 @@ jobs:
         curl -LO "$LINK/$CARGO_C_FILE.zip"
         7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
 
-    - name: Set environment variables
-      if: matrix.conf == 'msvc'
-      run: |
-        $VsPath = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
-
-    - name: Set MSVC x86_64 linker path
-      if: matrix.conf == 'msvc'
-      run: |
-        $LinkGlob = "VC\Tools\MSVC\*\bin\Hostx64\x64"
-        $LinkPath = vswhere -latest -products * -find "$LinkGlob" |
-                    Select-Object -Last 1
-        echo "$LinkPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
     - name: Install stable
       uses: actions-rs/toolchain@v1
       with:
