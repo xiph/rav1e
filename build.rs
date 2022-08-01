@@ -198,6 +198,7 @@ fn build_asm_files() {
     "src/arm/64/ipred.S",
     "src/arm/64/ipred16.S",
     "src/arm/64/sad.S",
+    "src/arm/64/satd.S",
     "src/arm/tables.S",
   ];
 

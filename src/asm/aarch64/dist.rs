@@ -20,6 +20,8 @@ type SadFn = unsafe extern fn(
   dst_stride: isize,
 ) -> u32;
 
+type SatdFn = SadFn;
+
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
@@ -52,7 +54,13 @@ declare_asm_dist_fn![
   (rav1e_sad64x64_neon, u8),
   (rav1e_sad64x128_neon, u8),
   (rav1e_sad128x64_neon, u8),
-  (rav1e_sad128x128_neon, u8)
+  (rav1e_sad128x128_neon, u8),
+  /* SATD */
+  (rav1e_satd4x4_neon, u8),
+  (rav1e_satd4x8_neon, u8),
+  (rav1e_satd4x16_neon, u8),
+  (rav1e_satd8x4_neon, u8),
+  (rav1e_satd16x4_neon, u8)
 ];
 
 // BlockSize::BLOCK_SIZES.next_power_of_two();
@@ -100,6 +108,43 @@ pub fn get_sad<T: Pixel>(
   dist
 }
 
+#[inline(always)]
+pub fn get_satd<T: Pixel>(
+  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
+  bit_depth: usize, cpu: CpuFeatureLevel,
+) -> u32 {
+  let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
+
+  let call_rust = || -> u32 { rust::get_satd(dst, src, w, h, bit_depth, cpu) };
+
+  #[cfg(feature = "check_asm")]
+  let ref_dist = call_rust();
+
+  let dist = match (bsize_opt, T::type_enum()) {
+    (Err(_), _) => call_rust(),
+    (Ok(bsize), PixelType::U8) => {
+      match SATD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        },
+        None => call_rust(),
+      }
+    }
+    _ => call_rust(),
+  };
+
+  #[cfg(feature = "check_asm")]
+  assert_eq!(dist, ref_dist);
+
+  dist
+}
+
 static SAD_FNS_NEON: [Option<SadFn>; DIST_FNS_LENGTH] = {
   let mut out: [Option<SadFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
 
@@ -136,8 +181,28 @@ static SAD_FNS_NEON: [Option<SadFn>; DIST_FNS_LENGTH] = {
   out
 };
 
+static SATD_FNS_NEON: [Option<SatdFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SatdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_4X4 as usize] = Some(rav1e_satd4x4_neon);
+  out[BLOCK_4X8 as usize] = Some(rav1e_satd4x8_neon);
+  out[BLOCK_4X16 as usize] = Some(rav1e_satd4x16_neon);
+  out[BLOCK_8X4 as usize] = Some(rav1e_satd8x4_neon);
+  out[BLOCK_16X4 as usize] = Some(rav1e_satd16x4_neon);
+
+  out
+};
+
 cpu_function_lookup_table!(
   SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
   [NEON]
 );
