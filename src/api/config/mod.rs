@@ -18,7 +18,6 @@ use crate::util::Pixel;
 mod encoder;
 pub use encoder::*;
 
-#[cfg(feature = "unstable")]
 pub use av1_grain::*;
 
 mod rate;

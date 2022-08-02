@@ -11,11 +11,11 @@
 #![cfg_attr(fuzzing, allow(unused))]
 
 use crate::color::ChromaSampling;
-#[cfg(feature = "unstable")]
-use crate::config::GrainTableParams;
+
+use crate::api::config::GrainTableSegment;
 use crate::util::Pixel;
 use crate::*;
-#[cfg(feature = "unstable")]
+
 use arrayvec::ArrayVec;
 use interpolate_name::interpolate_test;
 use rand::{Rng, SeedableRng};
@@ -73,7 +73,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
     min_keyint: u64, max_keyint: u64, switch_frame_interval: u64,
     low_latency: bool, error_resilient: bool, bitrate: i32,
     tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
-    #[cfg(feature = "unstable")] grain_table: Option<Vec<GrainTableParams>>,
+    grain_table: Option<Vec<GrainTableSegment>>,
   ) {
     let mut ra = ChaChaRng::from_seed([0; 32]);
 
@@ -93,7 +93,6 @@ pub(crate) trait TestDecoder<T: Pixel> {
       tile_cols_log2,
       tile_rows_log2,
       still_picture,
-      #[cfg(feature = "unstable")]
       grain_table,
     );
 
@@ -180,8 +179,7 @@ fn setup_encoder<T: Pixel>(
   chroma_sampling: ChromaSampling, min_keyint: u64, max_keyint: u64,
   switch_frame_interval: u64, low_latency: bool, error_resilient: bool,
   bitrate: i32, tile_cols_log2: usize, tile_rows_log2: usize,
-  still_picture: bool,
-  #[cfg(feature = "unstable")] grain_table: Option<Vec<GrainTableParams>>,
+  still_picture: bool, grain_table: Option<Vec<GrainTableSegment>>,
 ) -> Context<T> {
   assert!(bit_depth == 8 || std::mem::size_of::<T>() > 1);
   let mut enc = EncoderConfig::with_speed_preset(speed);
@@ -199,10 +197,7 @@ fn setup_encoder<T: Pixel>(
   enc.tile_cols = 1 << tile_cols_log2;
   enc.tile_rows = 1 << tile_rows_log2;
   enc.still_picture = still_picture;
-  #[cfg(feature = "unstable")]
-  {
-    enc.film_grain_params = grain_table;
-  }
+  enc.film_grain_params = grain_table;
 
   let threads = if cfg!(fuzzing) { 1 } else { 2 };
 
@@ -243,7 +238,6 @@ fn speed(s: u8, decoder: &str) {
       0,
       0,
       false,
-      #[cfg(feature = "unstable")]
       None,
     );
   }
@@ -338,7 +332,6 @@ fn dimension(w: usize, h: usize, decoder: &str) {
     0,
     0,
     still_picture,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -369,7 +362,6 @@ fn quantizer(decoder: &str, q: usize) {
       0,
       0,
       false,
-      #[cfg(feature = "unstable")]
       None,
     );
   }
@@ -421,7 +413,6 @@ fn bitrate(decoder: &str) {
         0,
         0,
         false,
-        #[cfg(feature = "unstable")]
         None,
       );
     }
@@ -456,7 +447,6 @@ fn keyframes(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -490,7 +480,6 @@ fn reordering(decoder: &str) {
       0,
       0,
       false,
-      #[cfg(feature = "unstable")]
       None,
     );
   }
@@ -526,7 +515,6 @@ fn reordering_short_video(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -560,7 +548,6 @@ fn error_resilient(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -594,7 +581,6 @@ fn error_resilient_reordering(decoder: &str) {
       0,
       0,
       false,
-      #[cfg(feature = "unstable")]
       None,
     );
   }
@@ -629,7 +615,6 @@ fn switch_frame(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -663,7 +648,6 @@ fn odd_size_frame_with_full_rdo(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -698,7 +682,6 @@ fn low_bit_depth(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -729,7 +712,6 @@ fn high_bit_depth(decoder: &str, depth: usize) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -760,25 +742,8 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 
   let mut dec = get_decoder::<u8>(decoder, w as usize, h as usize);
   dec.encode_decode(
-    true,
-    w,
-    h,
-    speed,
-    quantizer,
-    limit,
-    8,
-    cs,
-    15,
-    15,
-    0,
-    true,
-    false,
-    0,
-    0,
-    0,
-    false,
-    #[cfg(feature = "unstable")]
-    None,
+    true, w, h, speed, quantizer, limit, 8, cs, 15, 15, 0, true, false, 0, 0,
+    0, false, None,
   );
 }
 
@@ -830,7 +795,6 @@ fn tile_encoding_with_stretched_restoration_units(decoder: &str) {
     2,
     2,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -863,7 +827,6 @@ fn still_picture_mode(decoder: &str) {
     0,
     0,
     true,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -909,7 +872,6 @@ fn rdo_loop_decision_lrf_sanity(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
@@ -943,12 +905,10 @@ fn rdo_loop_decision_cdef_sanity(decoder: &str) {
     0,
     0,
     false,
-    #[cfg(feature = "unstable")]
     None,
   );
 }
 
-#[cfg(feature = "unstable")]
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
 #[ignore]
@@ -978,7 +938,7 @@ fn film_grain_table_luma_only(decoder: &str) {
     0,
     0,
     false,
-    Some(vec![GrainTableParams {
+    Some(vec![GrainTableSegment {
       start_time: 0,
       end_time: 9223372036854775807,
       scaling_points_y: ArrayVec::from([
@@ -1019,7 +979,6 @@ fn film_grain_table_luma_only(decoder: &str) {
   );
 }
 
-#[cfg(feature = "unstable")]
 #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
 #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
 #[ignore]
@@ -1049,7 +1008,7 @@ fn film_grain_table_chroma(decoder: &str) {
     0,
     0,
     false,
-    Some(vec![GrainTableParams {
+    Some(vec![GrainTableSegment {
       start_time: 0,
       end_time: 9223372036854775807,
       scaling_points_y: ArrayVec::from([

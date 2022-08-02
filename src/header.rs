@@ -812,7 +812,6 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
     }
 
-    #[cfg(feature = "unstable")]
     if fi.sequence.film_grain_params_present {
       if let Some(grain_params) = fi.film_grain_params() {
         // Apply grain

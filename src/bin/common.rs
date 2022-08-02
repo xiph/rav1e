@@ -174,18 +174,23 @@ pub struct CliOptions {
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[cfg(feature = "unstable")]
-  #[clap(long, value_parser = clap::value_parser!(u8).range(0..=64), default_value_t = 0, help_heading = "ENCODE SETTINGS")]
+  #[clap(
+    long,
+    conflicts_with = "film-grain-table",
+    value_parser = clap::value_parser!(u8).range(0..=64),
+    default_value_t = 0,
+    help_heading = "ENCODE SETTINGS"
+  )]
   pub photon_noise: u8,
   /// Uses a film grain table file to apply grain synthesis to the encode.
   /// Uses the same table file format as aomenc and svt-av1.
-  #[cfg(feature = "unstable")]
   #[clap(
     long,
+    alias = "photon-noise-table",
     value_parser,
-    conflicts_with = "photon-noise",
     help_heading = "ENCODE SETTINGS"
   )]
-  pub photon_noise_table: Option<PathBuf>,
+  pub film_grain_table: Option<PathBuf>,
 
   /// Pixel range
   #[clap(long, value_parser, help_heading = "VIDEO METADATA")]
@@ -625,23 +630,13 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
     panic!("Tile columns and rows may not be greater than 64");
   }
 
-  #[cfg(feature = "unstable")]
-  {
-    let grain_str = matches.photon_noise;
-    if grain_str > 0 {
-      if grain_str > 64 {
-        panic!("Film grain strength must be between 0-64");
-      }
-      // We have to know the video resolution before we can generate a table,
-      // so we must handle that elsewhere.
-    } else if let Some(table_file) = matches.photon_noise_table.as_ref() {
-      let contents = std::fs::read_to_string(table_file)
-        .expect("Failed to read film grain table file");
-      let table = parse_grain_table(&contents)
-        .expect("Failed to parse film grain table");
-      if !table.is_empty() {
-        cfg.film_grain_params = Some(table);
-      }
+  if let Some(table_file) = matches.film_grain_table.as_ref() {
+    let contents = std::fs::read_to_string(table_file)
+      .expect("Failed to read film grain table file");
+    let table = av1_grain::parse_grain_table(&contents)
+      .expect("Failed to parse film grain table");
+    if !table.is_empty() {
+      cfg.film_grain_params = Some(table);
     }
   }
 

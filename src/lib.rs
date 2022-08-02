@@ -310,7 +310,6 @@ pub use crate::api::color;
 
 /// Encoder configuration and settings
 pub mod config {
-  #[cfg(feature = "unstable")]
   pub use crate::api::config::{
     GrainTableSegment, NoiseGenArgs, TransferFunction, NUM_UV_COEFFS,
     NUM_UV_POINTS, NUM_Y_COEFFS, NUM_Y_POINTS,
