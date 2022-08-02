@@ -2077,7 +2077,6 @@ fn log_q_exp_overflow() {
     min_quantizer: 64,
     bitrate: 1,
     tune: Tune::Psychovisual,
-    #[cfg(feature = "unstable")]
     film_grain_params: None,
     tile_cols: 0,
     tile_rows: 0,
@@ -2155,7 +2154,6 @@ fn guess_frame_subtypes_assert() {
     min_quantizer: 0,
     bitrate: 16384,
     tune: Tune::Psychovisual,
-    #[cfg(feature = "unstable")]
     film_grain_params: None,
     tile_cols: 0,
     tile_rows: 0,
