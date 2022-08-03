@@ -717,6 +717,34 @@ impl<T: Pixel> CodedFrameData<T> {
       imp_b_segments: Default::default(),
     }
   }
+
+  // Assumes that we have already computed activity scales and distortion scales
+  pub fn compute_spatiotemporal_scores(&mut self) -> u32 {
+    let mut scores = self
+      .distortion_scales
+      .iter()
+      .zip(self.activity_scales.iter())
+      .map(|(&d, &a)| d * a)
+      .collect::<Box<_>>();
+
+    let inv_mean = DistortionScale::inv_mean(&scores);
+
+    for score in scores.iter_mut() {
+      *score *= inv_mean;
+    }
+
+    let segments =
+      scores.iter().map(|&s| segment_idx_from_distortion(s)).collect();
+
+    for scale in self.distortion_scales.iter_mut() {
+      *scale *= inv_mean;
+    }
+
+    self.spatiotemporal_scores = scores;
+    self.imp_b_segments = segments;
+
+    inv_mean.0
+  }
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
@@ -1165,38 +1193,6 @@ impl<T: Pixel> FrameInvariants<T> {
       // TODO: implement FastSearch and FullSearch
       _ => unreachable!(),
     }
-  }
-
-  // Assumes that we have already computed activity scales and distortion scales
-  pub fn compute_spatiotemporal_scores(&mut self) {
-    let coded_data = self.coded_frame_data.as_ref().unwrap();
-    let mut scores = vec![
-      DistortionScale::default();
-      coded_data.w_in_imp_b * coded_data.h_in_imp_b
-    ]
-    .into_boxed_slice();
-    let bsize = BlockSize::from_width_and_height(
-      IMPORTANCE_BLOCK_SIZE,
-      IMPORTANCE_BLOCK_SIZE,
-    );
-    for y_in_imp_b in 0..coded_data.h_in_imp_b {
-      for x_in_imp_b in 0..coded_data.w_in_imp_b {
-        let block_offset = PlaneBlockOffset(BlockOffset {
-          x: x_in_imp_b << IMPORTANCE_BLOCK_TO_BLOCK_SHIFT,
-          y: y_in_imp_b << IMPORTANCE_BLOCK_TO_BLOCK_SHIFT,
-        });
-        let scale = spatiotemporal_scale(self, block_offset, bsize);
-        let imp_b_idx = y_in_imp_b * coded_data.w_in_imp_b + x_in_imp_b;
-        scores[imp_b_idx] = scale;
-      }
-    }
-
-    let segments =
-      scores.iter().map(|&s| segment_idx_from_distortion(s)).collect();
-
-    let coded_data = self.coded_frame_data.as_mut().unwrap();
-    coded_data.spatiotemporal_scores = scores;
-    coded_data.imp_b_segments = segments;
   }
 
   #[inline(always)]

@@ -671,6 +671,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno,
         fti,
         self.maybe_prev_log_base_q,
+        1u32 << 12,
       )
     };
 
@@ -1310,14 +1311,8 @@ impl<T: Pixel> ContextInner<T> {
       }
       let mut frame_data =
         self.frame_data.remove(&cur_output_frameno).unwrap().unwrap();
-      let fti = frame_data.fi.get_frame_subtype();
-      let qps = self.rc_state.select_qi(
-        self,
-        cur_output_frameno,
-        fti,
-        self.maybe_prev_log_base_q,
-      );
-      frame_data.fi.set_quantizers(&qps);
+
+      let mut inv_mean_scale_q12 = 1u32 << 12;
 
       if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
         if self.config.tune == Tune::Psychovisual {
@@ -1329,11 +1324,21 @@ impl<T: Pixel> ContextInner<T> {
             frame_data.fi.sequence.bit_depth,
             &mut coded_data.activity_scales,
           );
-          frame_data.fi.compute_spatiotemporal_scores();
+          inv_mean_scale_q12 = coded_data.compute_spatiotemporal_scores();
         } else {
           coded_data.activity_mask = ActivityMask::default();
         }
       }
+
+      let fti = frame_data.fi.get_frame_subtype();
+      let qps = self.rc_state.select_qi(
+        self,
+        cur_output_frameno,
+        fti,
+        self.maybe_prev_log_base_q,
+        inv_mean_scale_q12,
+      );
+      frame_data.fi.set_quantizers(&qps);
 
       if self.rc_state.needs_trial_encode(fti) {
         let mut trial_fs = frame_data.fs.clone();
@@ -1352,6 +1357,7 @@ impl<T: Pixel> ContextInner<T> {
           cur_output_frameno,
           fti,
           self.maybe_prev_log_base_q,
+          inv_mean_scale_q12,
         );
         frame_data.fi.set_quantizers(&qps);
       }

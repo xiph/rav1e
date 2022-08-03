@@ -585,11 +585,41 @@ impl DistortionScale {
     )
   }
 
+  pub fn inv_mean(slice: &[Self]) -> Self {
+    let sum = slice.iter().map(|&s| s.0 as u64).sum::<u64>().max(1);
+    Self(
+      ((((slice.len() as u64) << (2 * Self::SHIFT)) + (sum >> 1)) / sum)
+        .min((1 << Self::BITS) - 1)
+        .max(1) as u32,
+    )
+  }
+
   /// Multiply, round and shift
   /// Internal implementation, so don't use multiply trait.
   #[inline]
   pub const fn mul_u64(self, dist: u64) -> u64 {
     (self.0 as u64 * dist + (1 << Self::SHIFT >> 1)) >> Self::SHIFT
+  }
+}
+
+impl std::ops::Mul for DistortionScale {
+  type Output = Self;
+
+  /// Multiply, round and shift
+  #[inline]
+  fn mul(self, rhs: Self) -> Self {
+    Self(
+      (((self.0 as u64 * rhs.0 as u64) + (1 << (Self::SHIFT - 1)))
+        >> Self::SHIFT)
+        .min((1 << Self::BITS) - 1)
+        .max(1) as u32,
+    )
+  }
+}
+
+impl std::ops::MulAssign for DistortionScale {
+  fn mul_assign(&mut self, rhs: Self) {
+    *self = *self * rhs;
   }
 }
 

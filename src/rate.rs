@@ -733,8 +733,9 @@ impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
     chroma_sampling: ChromaSampling, is_intra: bool,
+    log_isqrt_mean_scale: i64,
   ) -> QuantizerParameters {
-    let scale = q57(QSCALE + bit_depth as i32 - 8);
+    let scale = log_isqrt_mean_scale + q57(QSCALE + bit_depth as i32 - 8);
 
     let mut log_q_y = log_target_q;
     if !is_intra && bit_depth == 8 {
@@ -751,7 +752,9 @@ impl QuantizerParameters {
     let quantizer_u = bexp64(log_q_u + scale);
     let quantizer_v = bexp64(log_q_v + scale);
     let lambda = (::std::f64::consts::LN_2 / 6.0)
-      * ((log_target_q as f64) * Q57_SQUARE_EXP_SCALE).exp();
+      * (((log_target_q + log_isqrt_mean_scale) as f64)
+        * Q57_SQUARE_EXP_SCALE)
+        .exp();
 
     let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
     let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
@@ -932,14 +935,17 @@ impl RCState {
       bit_depth,
       chroma_sampling,
       fti == 0,
+      0,
     )
   }
 
   // TODO: Separate quantizers for Cb and Cr.
   pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
-    maybe_prev_log_base_q: Option<i64>,
+    maybe_prev_log_base_q: Option<i64>, inv_mean_scale_q12: u32,
   ) -> QuantizerParameters {
+    let log_isqrt_mean_scale =
+      (blog64(inv_mean_scale_q12 as i64) - q57(12)) >> 1;
     // Is rate control active?
     if self.target_bitrate <= 0 {
       // Rate control is not active.
@@ -954,6 +960,7 @@ impl RCState {
         bit_depth,
         chroma_sampling,
         fti == 0,
+        log_isqrt_mean_scale,
       )
     } else {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
@@ -1252,6 +1259,7 @@ impl RCState {
         bit_depth,
         chroma_sampling,
         fti == 0,
+        log_isqrt_mean_scale,
       )
     }
   }
@@ -1478,7 +1486,7 @@ impl RCState {
     if !self.pass1_data_retrieved {
       if self.twopass_state == PASS_SINGLE {
         pass1_log_base_q = self
-          .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None)
+          .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 1u32 << 12)
           .log_base_q;
       }
     } else {
