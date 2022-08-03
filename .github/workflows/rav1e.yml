@@ -243,7 +243,7 @@ jobs:
                 --ignore "../*" --ignore "target/*" --ignore "examples/*" \
                 --ignore "tests/*" --ignore "src/test_encode_decode/*" \
                 --ignore "src/x86/*" --ignore "src/ext/x86/*" \
-                --ignore "tools/*" -o lcov.info
+                --ignore "tools/*" --ignore "crates/*" -o lcov.info
       - name: Stop sccache server
         run: |
           sccache --stop-server
