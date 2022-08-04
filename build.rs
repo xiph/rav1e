@@ -236,6 +236,8 @@ fn rustc_version_check() {
 fn main() {
   rustc_version_check();
 
+  built::write_built_file().expect("Failed to acquire build-time information");
+
   let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
   let os = env::var("CARGO_CFG_TARGET_OS").unwrap();
   // let env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
@@ -260,4 +262,12 @@ fn main() {
     .expect("Unable to generate the cargo keys!");
 
   println!("cargo:rustc-env=PROFILE={}", env::var("PROFILE").unwrap());
+  println!(
+    "cargo:rustc-env=CARGO_CFG_TARGET_FEATURE={}",
+    env::var("CARGO_CFG_TARGET_FEATURE").unwrap()
+  );
+  println!(
+    "cargo:rustc-env=CARGO_ENCODED_RUSTFLAGS={}",
+    env::var("CARGO_ENCODED_RUSTFLAGS").unwrap()
+  );
 }
