@@ -1,4 +1,4 @@
-# rav1e [![Travis Build Status](https://travis-ci.org/xiph/rav1e.svg?branch=master)](https://travis-ci.org/xiph/rav1e)  [![Actions Status](https://github.com/xiph/rav1e/workflows/rav1e/badge.svg)](https://github.com/xiph/rav1e/actions) [![CodeCov](https://codecov.io/gh/xiph/rav1e/branch/master/graph/badge.svg)](https://codecov.io/gh/xiph/rav1e)
+# rav1e [![Actions Status](https://github.com/xiph/rav1e/workflows/rav1e/badge.svg)](https://github.com/xiph/rav1e/actions) [![CodeCov](https://codecov.io/gh/xiph/rav1e/branch/master/graph/badge.svg)](https://codecov.io/gh/xiph/rav1e)
 
 The fastest and safest AV1 encoder.
 
