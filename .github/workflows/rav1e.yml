@@ -45,7 +45,7 @@ jobs:
           - aom-tests
           - dav1d-tests
           - no-asm-tests
-          - grcov-coveralls
+          - grcov-codecov
           - bench
           - doc
           - cargo-c
@@ -64,7 +64,7 @@ jobs:
             toolchain: stable
           - conf: no-asm-tests
             toolchain: stable
-          - conf: grcov-coveralls
+          - conf: grcov-codecov
             toolchain: stable
           - conf: bench
             toolchain: stable
@@ -119,7 +119,7 @@ jobs:
           curl -L "$LINK/cargo-c-linux.tar.gz" |
           tar xz -C $HOME/.cargo/bin
       - name: Install grcov
-        if: matrix.conf == 'grcov-coveralls'
+        if: matrix.conf == 'grcov-codecov'
         env:
           LINK: https://github.com/mozilla/grcov/releases/latest/download
         run: |
@@ -132,7 +132,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           override: true
       - name: Install llvm-tools-preview
-        if: matrix.conf == 'grcov-coveralls'
+        if: matrix.conf == 'grcov-codecov'
         run: |
           rustup component add llvm-tools-preview
       - name: Generate Cargo.lock and Cargo.version
@@ -213,12 +213,12 @@ jobs:
         run: |
           cargo fuzz build --sanitizer none
       - name: Run cargo clean
-        if: matrix.conf == 'grcov-coveralls'
+        if: matrix.conf == 'grcov-codecov'
         uses: actions-rs/cargo@v1
         with:
           command: clean
       - name: Run tests with coverage
-        if: matrix.conf == 'grcov-coveralls'
+        if: matrix.conf == 'grcov-codecov'
         env:
           CARGO_INCREMENTAL: 0
           LLVM_PROFILE_FILE: "rav1e-%p-%m.profraw"
@@ -236,7 +236,7 @@ jobs:
         run: |
           cargo test --workspace --verbose
       - name: Run grcov
-        if: matrix.conf == 'grcov-coveralls'
+        if: matrix.conf == 'grcov-codecov'
         run: |
           grcov . --binary-path ./target/x86_64-unknown-linux-gnu/debug/  -s . \
                 -t lcov --branch --ignore-not-existing --ignore "/*" \
@@ -247,12 +247,11 @@ jobs:
       - name: Stop sccache server
         run: |
           sccache --stop-server
-      - name: Coveralls upload
-        if: matrix.conf == 'grcov-coveralls'
-        uses: coverallsapp/github-action@master
+      - name: Codecov upload
+        if: matrix.conf == 'grcov-codecov'
+        uses: codecov/codecov-action@v3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: lcov.info
+          files: lcov.info
 
   build-macos:
     strategy:
