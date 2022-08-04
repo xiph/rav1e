@@ -13,6 +13,7 @@ use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{ArgMatches, IntoApp, Parser as Clap, Subcommand};
 use clap_complete::{generate, Shell};
+use once_cell::sync::Lazy;
 use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
@@ -21,8 +22,19 @@ use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
+pub mod built_info {
+  // The file has been placed there by the build script.
+  include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[derive(Clap)]
-#[clap(name = "rav1e", version, about = "AV1 video encoder", long_about = None)]
+#[clap(
+  name = "rav1e",
+  version = get_version(),
+  long_version = get_long_version(),
+  about = "AV1 video encoder",
+  long_about = None
+)]
 pub struct CliOptions {
   /// Uncompressed YUV4MPEG2 video input
   #[clap(value_parser, help_heading = "INPUT/OUTPUT")]
@@ -243,6 +255,47 @@ pub struct CliOptions {
 
   #[clap(subcommand)]
   pub command: Option<Commands>,
+}
+
+fn get_version() -> &'static str {
+  static VERSION_STR: Lazy<String> = Lazy::new(|| {
+    format!(
+      "{} ({})",
+      built_info::GIT_VERSION
+        .map(|ver| if built_info::GIT_DIRTY.expect("git is true") {
+          format!("{}-MODIFIED", ver)
+        } else {
+          ver.to_string()
+        })
+        .unwrap_or_else(|| built_info::PKG_VERSION.to_string()),
+      // We cannot use `built_info::DEBUG` because that tells us if there are debug symbols,
+      // not if there are optimizations.
+      if cfg!(debug_assertions) { "Debug" } else { "Release" }
+    )
+  });
+  &VERSION_STR
+}
+
+fn get_long_version() -> &'static str {
+  static LONG_VERSION_STR: Lazy<String> = Lazy::new(|| {
+    let mut rustflags = env!("CARGO_ENCODED_RUSTFLAGS");
+    if rustflags.trim().is_empty() {
+      rustflags = "(None)";
+    }
+    format!(
+      "{}\n{} {}\nCompiled CPU Features: {}\nAssembly: {}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}\nBuilt {}",
+      get_version(),
+      built_info::RUSTC_VERSION,
+      built_info::TARGET,
+      env!("CARGO_CFG_TARGET_FEATURE"),
+      if cfg!(feature = "asm") { "Enabled" } else { "Disabled" },
+      if cfg!(feature = "threading") { "Enabled" } else { "Disabled" },
+      if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
+      rustflags,
+      built_info::BUILT_TIME_UTC
+    )
+  });
+  &LONG_VERSION_STR
 }
 
 #[derive(Subcommand)]
