@@ -1,4 +1,4 @@
-# rav1e [![Actions Status](https://github.com/xiph/rav1e/workflows/rav1e/badge.svg)](https://github.com/xiph/rav1e/actions) [![CodeCov](https://codecov.io/gh/xiph/rav1e/branch/master/graph/badge.svg)](https://codecov.io/gh/xiph/rav1e)
+# rav1e [![Actions Status][actions badge]][actions] [![CodeCov][codecov badge]][codecov]
 
 The fastest and safest AV1 encoder.
 
@@ -180,3 +180,12 @@ Please read our guide to [contributing to rav1e](CONTRIBUTING.md).
 
 ## Getting in Touch
 Come chat with us on the IRC channel #daala on [Libera.Chat](https://libera.chat/)! You can also use a [web client](https://web.libera.chat/?channel=#daala) to join with a web browser.
+
+
+<!-- Links -->
+[actions]: https://github.com/xiph/rav1e/actions
+[codecov]: https://codecov.io/gh/xiph/rav1e
+
+<!-- Badges -->
+[actions badge]: https://github.com/xiph/rav1e/workflows/rav1e/badge.svg
+[codecov badge]: https://codecov.io/gh/xiph/rav1e/branch/master/graph/badge.svg
