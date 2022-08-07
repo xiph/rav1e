@@ -12,7 +12,6 @@ cfg_if::cfg_if! {
     pub use crate::asm::x86::dist::*;
   } else if #[cfg(asm_neon)] {
     pub use crate::asm::aarch64::dist::*;
-    pub use self::rust::get_satd;
     pub use self::rust::get_weighted_sse;
     pub use self::rust::cdef_dist_kernel;
   } else {
