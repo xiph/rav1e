@@ -2947,9 +2947,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     let mut partition_types = ArrayVec::<PartitionType, 3>::new();
 
     partition_types.push(PartitionType::PARTITION_SPLIT);
-    if !must_split {
-      partition_types.push(PartitionType::PARTITION_NONE);
-    }
+    partition_types.push(PartitionType::PARTITION_NONE);
     rdo_output = rdo_partition_decision(
       fi,
       ts,
