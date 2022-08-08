@@ -2937,10 +2937,9 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       rd_cost: std::f64::MAX,
       part_modes: ArrayVec::new(),
     });
-  let partition: PartitionType;
 
-  if must_split {
-    partition = PartitionType::PARTITION_SPLIT;
+  let partition = if must_split {
+    PartitionType::PARTITION_SPLIT
   } else if can_split {
     debug_assert!(bsize.is_sqr());
     // Blocks of sizes within the supported range are subjected to a partitioning decision
@@ -2961,11 +2960,11 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       rdo_type,
       inter_cfg,
     );
-    partition = rdo_output.part_type;
+    rdo_output.part_type
   } else {
     // Blocks of sizes below the supported range are encoded directly
-    partition = PartitionType::PARTITION_NONE;
-  }
+    PartitionType::PARTITION_NONE
+  };
 
   assert!(
     PartitionType::PARTITION_NONE <= partition
