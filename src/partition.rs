@@ -110,7 +110,7 @@ pub const REF_FRAMES: usize = 1 << REF_FRAMES_LOG2;
 pub const REF_CONTEXTS: usize = 3;
 pub const MVREF_ROW_COLS: usize = 3;
 
-#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Debug)]
 pub enum PartitionType {
   PARTITION_NONE,
   PARTITION_HORZ,
@@ -575,7 +575,7 @@ pub static RAV1E_PARTITION_TYPES: &[PartitionType] = &[
   PartitionType::PARTITION_SPLIT,
 ];
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum GlobalMVMode {
   IDENTITY = 0,    // identity transformation, 0-parameter
   TRANSLATION = 1, // translational motion 2-parameter
@@ -583,7 +583,7 @@ pub enum GlobalMVMode {
   AFFINE = 3,      // affine, 6-parameter
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum MvSubpelPrecision {
   MV_SUBPEL_NONE = -1,
   MV_SUBPEL_LOW_PRECISION = 0,
@@ -593,7 +593,7 @@ pub enum MvSubpelPrecision {
 /* Symbols for coding which components are zero jointly */
 pub const MV_JOINTS: usize = 4;
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum MvJointType {
   MV_JOINT_ZERO = 0,   /* Zero vector */
   MV_JOINT_HNZVZ = 1,  /* Vert zero, hor nonzero */

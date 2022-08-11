@@ -76,7 +76,7 @@ pub fn write_ivf_frame(
   bw.write_bytes(data).unwrap();
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Header {
   pub tag: [u8; 4],
   pub w: u16,

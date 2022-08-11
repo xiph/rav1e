@@ -61,7 +61,7 @@ pub const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_64X16,
 ];
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TxfmType {
   DCT4,
   DCT8,

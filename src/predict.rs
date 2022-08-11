@@ -461,7 +461,7 @@ impl Default for InterCompoundBuffers {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum InterIntraMode {
   II_DC_PRED,
   II_V_PRED,
@@ -470,7 +470,7 @@ pub enum InterIntraMode {
   INTERINTRA_MODES,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum CompoundType {
   COMPOUND_AVERAGE,
   COMPOUND_WEDGE,
@@ -478,7 +478,7 @@ pub enum CompoundType {
   COMPOUND_TYPES,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum MotionMode {
   SIMPLE_TRANSLATION,
   OBMC_CAUSAL,   // 2-sided OBMC
@@ -486,7 +486,7 @@ pub enum MotionMode {
   MOTION_MODES,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum PaletteSize {
   TWO_COLORS,
   THREE_COLORS,
@@ -498,7 +498,7 @@ pub enum PaletteSize {
   PALETTE_SIZES,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum PaletteColor {
   PALETTE_COLOR_ONE,
   PALETTE_COLOR_TWO,
@@ -511,7 +511,7 @@ pub enum PaletteColor {
   PALETTE_COLORS,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 pub enum FilterIntraMode {
   FILTER_DC_PRED,
   FILTER_V_PRED,

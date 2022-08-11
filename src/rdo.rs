@@ -50,7 +50,7 @@ use itertools::izip;
 use std::fmt;
 use std::mem::MaybeUninit;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum RDOType {
   PixelDistRealRate,
   TxDistRealRate,

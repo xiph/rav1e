@@ -34,7 +34,7 @@ pub const MAX_SB_IN_IMP_B: usize = 1
 
 /// Absolute offset in superblocks, where a superblock is defined
 /// to be an `N*N` square where `N == (1 << SUPERBLOCK_TO_PLANE_SHIFT)`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SuperBlockOffset {
   pub x: usize,
   pub y: usize,
@@ -42,12 +42,12 @@ pub struct SuperBlockOffset {
 
 /// Absolute offset in superblocks inside a plane, where a superblock is defined
 /// to be an `N*N` square where `N == (1 << SUPERBLOCK_TO_PLANE_SHIFT)`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlaneSuperBlockOffset(pub SuperBlockOffset);
 
 /// Absolute offset in superblocks inside a tile, where a superblock is defined
 /// to be an `N*N` square where `N == (1 << SUPERBLOCK_TO_PLANE_SHIFT)`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TileSuperBlockOffset(pub SuperBlockOffset);
 
 impl SuperBlockOffset {

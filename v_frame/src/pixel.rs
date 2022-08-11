@@ -155,7 +155,7 @@ impl Coefficient for i32 {
 /// Chroma subsampling format
 #[wasm_bindgen]
 #[derive(
-  Copy, Clone, Debug, PartialEq, FromPrimitive, Serialize, Deserialize,
+  Copy, Clone, Debug, PartialEq, Eq, FromPrimitive, Serialize, Deserialize,
 )]
 #[repr(C)]
 pub enum ChromaSampling {

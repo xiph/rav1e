@@ -268,7 +268,7 @@ impl TxSize {
   }
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
 pub enum TxSet {
   // DCT only
   TX_SET_DCTONLY,

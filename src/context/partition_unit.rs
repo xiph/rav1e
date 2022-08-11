@@ -60,7 +60,7 @@ pub const PARTITION_CONTEXT_GRANULARITY: usize = 8;
 pub const PARTITION_CONTEXT_MAX_WIDTH: usize =
   MAX_TILE_WIDTH / PARTITION_CONTEXT_GRANULARITY;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CFLSign {
   CFL_SIGN_ZERO = 0,
   CFL_SIGN_NEG = 1,

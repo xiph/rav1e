@@ -240,14 +240,14 @@ pub const TX_PAD_2D: usize = (MAX_CODED_TX_SIZE + TX_PAD_HOR)
 
 const TX_CLASSES: usize = 3;
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TxClass {
   TX_CLASS_2D = 0,
   TX_CLASS_HORIZ = 1,
   TX_CLASS_VERT = 2,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum SegLvl {
   SEG_LVL_ALT_Q = 0,      /* Use alternate Quantizer .... */
   SEG_LVL_ALT_LF_Y_V = 1, /* Use alternate loop filter value on y plane vertical */

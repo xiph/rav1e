@@ -44,7 +44,7 @@ const LEVEL_MINOR_BITS: usize = 2;
 const LEVEL_BITS: usize = LEVEL_MAJOR_BITS + LEVEL_MINOR_BITS;
 
 #[allow(dead_code, non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReferenceMode {
   SINGLE = 0,
   COMPOUND = 1,

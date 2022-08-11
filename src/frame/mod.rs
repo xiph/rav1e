@@ -25,7 +25,7 @@ const LUMA_PADDING: usize = SB_SIZE + FRAME_MARGIN;
 /// Override the frame type decision
 ///
 /// Only certain frame types can be selected.
-#[derive(Debug, PartialEq, Clone, Copy, FromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive)]
 #[repr(C)]
 pub enum FrameTypeOverride {
   /// Do not force any decision.

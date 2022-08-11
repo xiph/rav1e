@@ -95,7 +95,7 @@ impl ops::Add<MotionVector> for MotionVector {
   }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd)]
 #[allow(unused)]
 pub enum FilterMode {
   REGULAR = 0,

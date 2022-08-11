@@ -52,7 +52,7 @@ use crate::rayon::iter::*;
 use rust_hawktracer::*;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CDEFSearchMethod {
   PickFromQ,
   FastSearch,
@@ -104,7 +104,9 @@ impl<T: Pixel> ReferenceFramesSet<T> {
 }
 
 #[wasm_bindgen]
-#[derive(ArgEnum, Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(
+  ArgEnum, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[repr(C)]
 pub enum Tune {
   Psnr,

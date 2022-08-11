@@ -732,7 +732,7 @@ pub struct QualityMetrics {
   pub vmaf: Option<f64>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MetricsEnabled {
   /// Don't calculate any metrics.
   None,
