@@ -12,18 +12,18 @@
 #include "util.S"
 
 .macro butterfly r0, r1, r2, r3
-    add.8h  \r0, \r2, \r3
-    sub.8h  \r1, \r2, \r3
+    add  \r0\().8h, \r2\().8h, \r3\().8h
+    sub  \r1\().8h, \r2\().8h, \r3\().8h
 .endm
 
 .macro interleave r0, r1, r2, r3
-    zip1.8h \r0, \r2, \r3
-    zip2.8h \r1, \r2, \r3
+    zip1 \r0\().8h, \r2\().8h, \r3\().8h
+    zip2 \r1\().8h, \r2\().8h, \r3\().8h
 .endm
 
 .macro interleave_pairs r0, r1, r2, r3
-    zip1.4s \r0, \r2, \r3
-    zip2.4s \r1, \r2, \r3
+    zip1 \r0\().4s, \r2\().4s, \r3\().4s
+    zip2 \r1\().4s, \r2\().4s, \r3\().4s
 .endm
 
 .macro normalize_4
@@ -44,13 +44,13 @@ function satd4x4_neon, export=1
     ldr     s0, [src]
     ldr     s1, [dst]
 
-    // subtract// cast to 16-bit
-    usubl.8h        v0, v0, v1
+    // subtract; cast to 16-bit
+    usubl v0.8h, v0.8b, v1.8b
 
     ldr     s1, [src, src_stride]
     ldr     s2, [dst, dst_stride]
 
-    usubl.8h        v1, v1, v2
+    usubl v1.8h, v1.8b, v2.8b
 
     // stride * 2
     lsl     x8, src_stride, 1
@@ -59,7 +59,7 @@ function satd4x4_neon, export=1
     ldr     s2, [src, x8]
     ldr     s3, [dst, x9]
 
-    usubl.8h        v2, v2, v3
+    usubl v2.8h, v2.8b, v3.8b
 
     // stride * 3
     add     x8, src_stride, src_stride, lsl 1
@@ -68,11 +68,11 @@ function satd4x4_neon, export=1
     ldr     s3, [src, x8]
     ldr     s4, [dst, x9]
 
-    usubl.8h        v3, v3, v4
+    usubl v3.8h, v3.8b, v4.8b
 
     // pack rows 0-2, 1-3
-    mov.d   v0[1], v2[0]
-    mov.d   v1[1], v3[0]
+    mov   v0.d[1], v2.d[0]
+    mov   v1.d[1], v3.d[0]
 
     // Horizontal transform
 
@@ -105,12 +105,12 @@ function satd4x4_neon, export=1
     butterfly v2, v3, v0, v1
 
     // sum up transform
-    abs.8h  v2, v2
-    abs.8h  v3, v3
+    abs   v2.8h, v2.8h
+    abs   v3.8h, v3.8h
 
-    add.8h  v0, v2, v3
+    add v0.8h, v2.8h, v3.8h
 
-    addv.8h h0, v0
+    addv    h0, v0.8h
     fmov    w0, s0
     normalize_4
     ret
@@ -149,16 +149,16 @@ endfunc
 .endm
 
 .macro SUM_DOUBLE_HADAMARD_4X4
-    abs.8h  v2, v2
-    abs.8h  v3, v3
-    abs.8h  v6, v6
-    abs.8h  v7, v7
+    abs     v2.8h, v2.8h
+    abs     v3.8h, v3.8h
+    abs     v6.8h, v6.8h
+    abs     v7.8h, v7.8h
 
-    add.8h  v0, v2, v3
-    add.8h  v1, v6, v7
-    add.8h  v0, v0, v1
+    add     v0.8h, v2.8h, v3.8h
+    add     v1.8h, v6.8h, v7.8h
+    add     v0.8h, v0.8h, v1.8h
 
-    addv.8h h0, v0
+    addv    h0, v0.8h
     fmov    w0, s0
     normalize_4
 .endm
@@ -173,12 +173,12 @@ function satd8x4_neon, export=1
     ldr     d0, [src]
     ldr     d1, [dst]
 
-    usubl.8h    v0, v0, v1
+    usubl v0.8h, v0.8b, v1.8b
 
     ldr     d1, [src, src_stride]
     ldr     d2, [dst, dst_stride]
 
-    usubl.8h    v1, v1, v2
+    usubl v1.8h, v1.8b, v2.8b
 
     lsl     x8, src_stride, 1
     lsl     x9, dst_stride, 1
@@ -186,7 +186,7 @@ function satd8x4_neon, export=1
     ldr     d2, [src, x8]
     ldr     d3, [dst, x9]
 
-    usubl.8h    v2, v2, v3
+    usubl v2.8h, v2.8b, v3.8b
 
     // stride * 3
     add     x8, src_stride, src_stride, lsl 1
@@ -195,21 +195,21 @@ function satd8x4_neon, export=1
     ldr     d3, [src, x8]
     ldr     d4, [dst, x9]
 
-    usubl.8h    v3, v3, v4
+    usubl v3.8h, v3.8b, v4.8b
 
     // extract top 64 bits out of register
     // (4 x 16 bits = 64)
 
-    ext.16b v4, v0, v0, 8
-    ext.16b v5, v1, v1, 8
+    ext v4.16b, v0.16b, v0.16b, 8
+    ext v5.16b, v1.16b, v1.16b, 8
 
     // pack rows 0-2, 1-3 (set 1)
-    mov.d   v0[1], v2[0]
-    mov.d   v1[1], v3[0]
+    mov   v0.d[1], v2.d[0]
+    mov   v1.d[1], v3.d[0]
 
     // pack rows 0-2, 1-3 (set 2)
-    mov.d   v4[1], v2[1]
-    mov.d   v5[1], v3[1]
+    mov   v4.d[1], v2.d[1]
+    mov   v5.d[1], v3.d[1]
 
     // v2-3 temp registers for first 4x4 block//
     // 6-7 for second block
@@ -229,7 +229,7 @@ endfunc
     ldr     s\n0, [\src]
     ldr     s\n1, [\dst]
 
-    usubl.8h    v\n0, v\n0, v\n1
+    usubl v\n0\().8h, v\n0\().8b, v\n1\().8b
 
 .if \should_add != 0
     add     \src, \src, \src_stride
@@ -241,7 +241,7 @@ endfunc
     ldr     s\n0, [\src, \src_stride]
     ldr     s\n1, [\dst, \dst_stride]
 
-    usubl.8h    v\n0, v\n0, v\n1
+    usubl v\n0\().8h, v\n0\().8b, v\n1\().8b
 .endm
 
 function satd4x8_neon, export=1
@@ -272,11 +272,11 @@ function satd4x8_neon, export=1
     load_row2   7, 8, src, dst, src_stride, dst_stride
 
     // pack rows
-    mov.d   v0[1], v2[0]
-    mov.d   v1[1], v3[0]
+    mov   v0.d[1], v2.d[0]
+    mov   v1.d[1], v3.d[0]
 
-    mov.d   v4[1], v6[0]
-    mov.d   v5[1], v7[0]
+    mov   v4.d[1], v6.d[0]
+    mov   v5.d[1], v7.d[0]
 
     DOUBLE_HADAMARD_4X4
 
@@ -319,14 +319,14 @@ function satd16x4_neon, export=1
     ldr     q0, [src]
     ldr     q1, [dst]
 
-    usubl2.8h   v8, v0, v1
-    usubl.8h    v0, v0, v1
+    usubl2  v8.8h, v0.16b, v1.16b
+    usubl   v0.8h, v0.8b, v1.8b
 
     ldr     q1, [src, src_stride]
     ldr     q2, [dst, dst_stride]
 
-    usubl2.8h   v9, v1, v2
-    usubl.8h    v1, v1, v2
+    usubl2  v9.8h, v1.16b, v2.16b
+    usubl   v1.8h, v1.8b, v2.8b
 
     lsl     x8, src_stride, 1
     lsl     x9, dst_stride, 1
@@ -334,8 +334,8 @@ function satd16x4_neon, export=1
     ldr     q2, [src, x8]
     ldr     q3, [dst, x9]
 
-    usubl2.8h   v6, v2, v3
-    usubl.8h    v2, v2, v3
+    usubl2  v6.8h, v2.16b, v3.16b
+    usubl   v2.8h, v2.8b, v3.8b
 
     // stride * 3
     add     x8, src_stride, src_stride, lsl 1
@@ -344,28 +344,28 @@ function satd16x4_neon, export=1
     ldr     q3, [src, x8]
     ldr     q4, [dst, x9]
 
-    usubl2.8h   v7, v3, v4
-    usubl.8h    v3, v3, v4
+    usubl2  v7.8h, v3.16b, v4.16b
+    usubl   v3.8h, v3.8b, v4.8b
 
     // swap high/low 64 bits
-    ext.16b v4, v0, v0, 8
-    ext.16b v5, v1, v1, 8
+    ext v4.16b, v0.16b, v0.16b, 8
+    ext v5.16b, v1.16b, v1.16b, 8
 
-    mov.d   v0[1], v2[0]
-    mov.d   v1[1], v3[0]
+    mov   v0.d[1], v2.d[0]
+    mov   v1.d[1], v3.d[0]
 
-    ext.16b v10, v8, v8, 8
-    ext.16b v11, v9, v9, 8
+    ext v10.16b, v8.16b, v8.16b, 8
+    ext v11.16b, v9.16b, v9.16b, 8
 
-    mov.d   v8[1], v6[0]
-    mov.d   v9[1], v7[0]
+    mov   v8.d[1], v6.d[0]
+    mov   v9.d[1], v7.d[0]
     // 2-3 free
 
-    mov.d   v4[1], v2[1]
-    mov.d   v5[1], v3[1]
+    mov   v4.d[1], v2.d[1]
+    mov   v5.d[1], v3.d[1]
     // 6-7 free
-    mov.d   v10[1], v6[1]
-    mov.d   v11[1], v7[1]
+    mov   v10.d[1], v6.d[1]
+    mov   v11.d[1], v7.d[1]
 
     // 0,1       2,3
     // 4,5       6,7
@@ -410,27 +410,27 @@ function satd16x4_neon, export=1
     butterfly TMP7, TMP8, ROW7, ROW8
 
     // absolute value of transform coefficients
-    abs.8h  TMP1, TMP1
-    abs.8h  TMP2, TMP2
-    abs.8h  TMP3, TMP3
-    abs.8h  TMP4, TMP4
-    abs.8h  TMP5, TMP5
-    abs.8h  TMP6, TMP6
-    abs.8h  TMP7, TMP7
-    abs.8h  TMP8, TMP8
+    abs  TMP1.8h, TMP1.8h
+    abs  TMP2.8h, TMP2.8h
+    abs  TMP3.8h, TMP3.8h
+    abs  TMP4.8h, TMP4.8h
+    abs  TMP5.8h, TMP5.8h
+    abs  TMP6.8h, TMP6.8h
+    abs  TMP7.8h, TMP7.8h
+    abs  TMP8.8h, TMP8.8h
 
     // stage 1 sum
-    add.8h TMP1, TMP1, TMP5
-    add.8h TMP2, TMP2, TMP6
-    add.8h TMP3, TMP3, TMP7
-    add.8h TMP4, TMP4, TMP8
+    add TMP1.8h, TMP1.8h, TMP5.8h
+    add TMP2.8h, TMP2.8h, TMP6.8h
+    add TMP3.8h, TMP3.8h, TMP7.8h
+    add TMP4.8h, TMP4.8h, TMP8.8h
 
     // stage 2 sum
-    add.8h TMP1, TMP1, TMP3
-    add.8h TMP2, TMP2, TMP4
-    add.8h v0,   TMP1, TMP2
+    add TMP1.8h, TMP1.8h, TMP3.8h
+    add TMP2.8h, TMP2.8h, TMP4.8h
+    add v0.8h, TMP1.8h, TMP2.8h
 
-    addv.8h h0, v0
+    addv    h0, v0.8h
     fmov    w0, s0
     normalize_4
     ret
@@ -503,17 +503,17 @@ function satd4x16_neon, export=1
     load_row2   15, 16, src, dst, src_stride, dst_stride
 
     // pack rows
-    mov.d   v0[1], v2[0]
-    mov.d   v1[1], v3[0]
+    mov   v0.d[1], v2.d[0]
+    mov   v1.d[1], v3.d[0]
 
-    mov.d   v4[1], v6[0]
-    mov.d   v5[1], v7[0]
+    mov   v4.d[1], v6.d[0]
+    mov   v5.d[1], v7.d[0]
 
-    mov.d   v8[1], v10[0]
-    mov.d   v9[1], v11[0]
+    mov   v8.d[1], v10.d[0]
+    mov   v9.d[1], v11.d[0]
 
-    mov.d   v12[1], v14[0]
-    mov.d   v13[1], v15[0]
+    mov   v12.d[1], v14.d[0]
+    mov   v13.d[1], v15.d[0]
 
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
@@ -550,25 +550,25 @@ function satd4x16_neon, export=1
     butterfly v10, v11, v8, v9
     butterfly v14, v15, v12, v13
 
-    abs.8h  v2, v2
-    abs.8h  v3, v3
-    abs.8h  v6, v6
-    abs.8h  v7, v7
-    abs.8h  v10, v10
-    abs.8h  v11, v11
-    abs.8h  v14, v14
-    abs.8h  v15, v15
+    abs  v2.8h, v2.8h
+    abs  v3.8h, v3.8h
+    abs  v6.8h, v6.8h
+    abs  v7.8h, v7.8h
+    abs  v10.8h, v10.8h
+    abs  v11.8h, v11.8h
+    abs  v14.8h, v14.8h
+    abs  v15.8h, v15.8h
 
-    add.8h  v2, v2, v3
-    add.8h  v6, v6, v7
-    add.8h  v10, v10, v11
-    add.8h  v14, v14, v15
+    add v2.8h, v2.8h, v3.8h
+    add v6.8h, v6.8h, v7.8h
+    add v10.8h, v10.8h, v11.8h
+    add v14.8h, v14.8h, v15.8h
 
-    add.8h  v2, v2, v6
-    add.8h  v10, v10, v14
-    add.8h  v0, v2, v10
+    add v2.8h, v2.8h, v6.8h
+    add v10.8h, v10.8h, v14.8h
+    add v0.8h, v2.8h, v10.8h
 
-    addv.8h h0, v0
+    addv    h0, v0.8h
     fmov    w0, s0
     normalize_4
     ret
