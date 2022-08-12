@@ -113,7 +113,7 @@ pub fn put_8tap<T: Pixel>(
   //         widths
   unsafe {
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     // SAFETY: Check bounds of dst
     assert!(dst.rect().width >= width && dst.rect().height >= height);
@@ -199,7 +199,7 @@ pub fn prep_8tap<T: Pixel>(
   //         widths
   unsafe {
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     // SAFETY: Check length of tmp
     assert!(tmp.len() >= width * height);
@@ -271,7 +271,7 @@ pub fn mc_avg<T: Pixel>(
   //         widths
   unsafe {
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     // SAFETY: Check bounds of dst
     assert!(dst.rect().width >= width && dst.rect().height >= height);

@@ -1202,7 +1202,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   fn write_delta_q(&mut self, delta_q: i8) -> io::Result<()> {
     self.write_bit(delta_q != 0)?;
     if delta_q != 0 {
-      assert!(delta_q >= -63 && delta_q <= 63);
+      assert!((-63..=63).contains(&delta_q));
       self.write_signed(6 + 1, delta_q)?;
     }
     Ok(())

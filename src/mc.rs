@@ -254,7 +254,7 @@ pub(crate) mod rust {
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -367,7 +367,7 @@ pub(crate) mod rust {
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
@@ -460,7 +460,7 @@ pub(crate) mod rust {
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
-    assert!(width.is_power_of_two() && 2 <= width && width <= 128);
+    assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
     let max_sample_val = ((1 << bit_depth) - 1) as i32;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };

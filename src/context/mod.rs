@@ -192,7 +192,7 @@ impl<'a> ContextWriter<'a> {
     &mut self, w: &mut W, comp: i32, axis: usize, precision: MvSubpelPrecision,
   ) {
     assert!(comp != 0);
-    assert!(MV_LOW <= comp && comp <= MV_UPP);
+    assert!((MV_LOW..=MV_UPP).contains(&comp));
     let mvcomp = &mut self.fc.nmv_context.comps[axis];
     let mut offset: u32 = 0;
     let sign: u32 = if comp < 0 { 1 } else { 0 };
