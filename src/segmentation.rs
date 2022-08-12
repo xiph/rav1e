@@ -36,15 +36,27 @@ pub fn segmentation_optimize<T: Pixel>(
     // We don't change the values between frames.
     fs.segmentation.update_data = fi.primary_ref_frame == PRIMARY_REF_NONE;
 
-    if !fs.segmentation.update_data {
-      return;
-    }
-
     // Avoid going into lossless mode by never bringing qidx below 1.
     // Because base_q_idx changes more frequently than the segmentation
     // data, it is still possible for a segment to enter lossless, so
     // enforcement elsewhere is needed.
     let offset_lower_limit = 1 - fi.base_q_idx as i16;
+
+    if !fs.segmentation.update_data {
+      let mut min_segment = MAX_SEGMENTS;
+      for i in 0..MAX_SEGMENTS {
+        if fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize]
+          && fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize]
+            >= offset_lower_limit
+        {
+          min_segment = i;
+          break;
+        }
+      }
+      assert_ne!(min_segment, MAX_SEGMENTS);
+      fs.segmentation.min_segment = min_segment as u8;
+      return;
+    }
 
     segmentation_optimize_inner(fi, fs, offset_lower_limit);
 
@@ -239,6 +251,10 @@ pub fn select_segment<T: Pixel>(
 
   let sidx = ts.segmentation.segment_map
     [segment_idx_from_distortion(scale) as usize % 8] as u8;
+
+  // Avoid going into lossless mode by never bringing qidx below 1.
+  let sidx = sidx.max(ts.segmentation.min_segment);
+
   sidx..=sidx
 }
 

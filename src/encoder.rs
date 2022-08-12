@@ -571,6 +571,7 @@ pub struct SegmentationState {
   pub features: [[bool; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub data: [[i16; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub segment_map: [usize; 8],
+  pub min_segment: u8,
 }
 
 // Frame Invariants are invariant inside a frame
