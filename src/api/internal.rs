@@ -855,7 +855,7 @@ impl<T: Pixel> ContextInner<T> {
         // otherwise we need to calculate them here.
         estimate_intra_costs(
           temp_plane,
-          &*frame,
+          &**frame,
           fi.sequence.bit_depth,
           fi.cpu_feature_level,
         )

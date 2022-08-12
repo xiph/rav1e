@@ -59,8 +59,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
       }
 
       if let Some((frame_buffer, _)) = &self.downscaled_frame_buffer {
-        let frame_buffer = &*frame_buffer;
-        let delta = self.delta_in_planes(&frame_buffer[0], &frame_buffer[1]);
+        let &[first, second] = &frame_buffer;
+        let delta = self.delta_in_planes(first, second);
 
         ScenecutResult {
           threshold: self.threshold as f64,
