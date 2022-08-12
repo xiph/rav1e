@@ -2633,7 +2633,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   }
 
   let is_square = bsize.is_sqr();
-  let hbs = bsize.width_mi() >> 1;
+  let hbs = bsize.width_mi() / 2;
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
   let is_straddle_x = tile_bo.0.x + bsize.width_mi() > ts.mi_width;
@@ -2914,12 +2914,12 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   }
   let is_square = bsize.is_sqr();
   let rdo_type = RDOType::PixelDistRealRate;
-  let hbs = bsize.width_mi() >> 1;
+  let hbs = bsize.width_mi() / 2;
   let has_cols = tile_bo.0.x + hbs < ts.mi_width;
   let has_rows = tile_bo.0.y + hbs < ts.mi_height;
 
   // TODO: Update for 128x128 superblocks
-  assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
+  debug_assert!(fi.partition_range.max <= BlockSize::BLOCK_64X64);
 
   let must_split =
     is_square && (bsize > fi.partition_range.max || !has_cols || !has_rows);
@@ -2934,7 +2934,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     };
 
   let mut rdo_output =
-    block_output.clone().unwrap_or(PartitionGroupParameters {
+    block_output.clone().unwrap_or_else(|| PartitionGroupParameters {
       part_type: PartitionType::PARTITION_INVALID,
       rd_cost: std::f64::MAX,
       part_modes: ArrayVec::new(),
@@ -2944,11 +2944,8 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     PartitionType::PARTITION_SPLIT
   } else if can_split {
     debug_assert!(bsize.is_sqr());
-    // Blocks of sizes within the supported range are subjected to a partitioning decision
-    let mut partition_types = ArrayVec::<PartitionType, 3>::new();
 
-    partition_types.push(PartitionType::PARTITION_SPLIT);
-    partition_types.push(PartitionType::PARTITION_NONE);
+    // Blocks of sizes within the supported range are subjected to a partitioning decision
     rdo_output = rdo_partition_decision(
       fi,
       ts,
@@ -2958,7 +2955,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       bsize,
       tile_bo,
       &rdo_output,
-      &partition_types,
+      &[PartitionType::PARTITION_SPLIT, PartitionType::PARTITION_NONE],
       rdo_type,
       inter_cfg,
     );
@@ -2968,10 +2965,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     PartitionType::PARTITION_NONE
   };
 
-  assert!(
-    PartitionType::PARTITION_NONE <= partition
-      && partition < PartitionType::PARTITION_INVALID
-  );
+  debug_assert!(partition != PartitionType::PARTITION_INVALID);
 
   let subsize = bsize.subsize(partition).unwrap();
 
@@ -2982,12 +2976,16 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
   match partition {
     PartitionType::PARTITION_NONE => {
-      let part_decision = if !rdo_output.part_modes.is_empty() {
+      let rdo_decision;
+      let part_decision = if let Some(part_mode) = rdo_output.part_modes.get(0)
+      {
         // The optimal prediction mode is known from a previous iteration
-        rdo_output.part_modes[0].clone()
+        part_mode
       } else {
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg)
+        rdo_decision =
+          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
+        &rdo_decision
       };
 
       let mut mode_luma = part_decision.pred_mode_luma;
@@ -3143,7 +3141,6 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
 
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         for mode in rdo_output.part_modes {
-          use std::iter::once;
           // Each block is subjected to a new splitting decision
           encode_partition_topdown(
             fi,
@@ -3156,7 +3153,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
             &Some(PartitionGroupParameters {
               rd_cost: mode.rd_cost,
               part_type: PartitionType::PARTITION_NONE,
-              part_modes: once(mode).collect(),
+              part_modes: [mode][..].try_into().unwrap(),
             }),
             inter_cfg,
             enc_stats,
