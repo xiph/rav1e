@@ -230,6 +230,7 @@ fn segmentation_optimize_inner<T: Pixel>(
 
   fs.segmentation.segment_map = remap_segment_tab;
 
+  fs.segmentation.max_segment = num_segments as u8 - 1;
   for i in 0..num_segments {
     fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
     fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] =
@@ -244,6 +245,11 @@ pub fn select_segment<T: Pixel>(
   // If skip is true or segmentation is turned off, sidx is not coded.
   if skip || !fi.enable_segmentation {
     return 0..=0;
+  }
+
+  use crate::api::SegmentationLevel;
+  if fi.config.speed_settings.segmentation == SegmentationLevel::Full {
+    return ts.segmentation.min_segment..=ts.segmentation.max_segment;
   }
 
   let frame_bo = ts.to_frame_block_offset(tile_bo);
