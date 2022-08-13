@@ -11,7 +11,6 @@ use crate::partition::BlockSize;
 use crate::predict::PREDICTION_MODES;
 use crate::serialize::{Deserialize, Serialize};
 use crate::transform::TX_TYPES;
-use arrayvec::ArrayVec;
 use std::ops::{Add, AddAssign};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,21 +22,15 @@ pub struct EncoderStats {
   /// Stores count of pixels belonging to each transform type in this frame
   pub tx_type_counts: [usize; TX_TYPES],
   /// Stores count of pixels belonging to each luma prediction mode in this frame
-  pub luma_pred_mode_counts: ArrayVec<usize, PREDICTION_MODES>,
+  pub luma_pred_mode_counts: [usize; PREDICTION_MODES],
   /// Stores count of pixels belonging to each chroma prediction mode in this frame
-  pub chroma_pred_mode_counts: ArrayVec<usize, PREDICTION_MODES>,
+  pub chroma_pred_mode_counts: [usize; PREDICTION_MODES],
 }
 
 impl Default for EncoderStats {
   fn default() -> Self {
-    let mut luma_pred_mode_counts = ArrayVec::new();
-    luma_pred_mode_counts
-      .try_extend_from_slice(&[0; PREDICTION_MODES])
-      .unwrap();
-    let mut chroma_pred_mode_counts = ArrayVec::new();
-    chroma_pred_mode_counts
-      .try_extend_from_slice(&[0; PREDICTION_MODES])
-      .unwrap();
+    let luma_pred_mode_counts = [0; PREDICTION_MODES];
+    let chroma_pred_mode_counts = [0; PREDICTION_MODES];
     EncoderStats {
       block_size_counts: [0; BlockSize::BLOCK_SIZES_ALL],
       skip_block_count: 0,
