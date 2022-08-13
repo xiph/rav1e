@@ -109,6 +109,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
         run: |
+          sudo sed -i 's/jammy/kinetic/g' /etc/apt/sources.list
           sudo apt update
           sudo apt install nasm libaom-dev libdav1d-dev
       - name: Install cargo-c
