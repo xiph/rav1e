@@ -7,8 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use std::cmp::Ordering;
-
 use crate::context::*;
 use crate::header::PRIMARY_REF_NONE;
 use crate::partition::BlockSize;
@@ -20,9 +18,6 @@ use crate::FrameInvariants;
 use crate::FrameState;
 
 pub const MAX_SEGMENTS: usize = 8;
-
-// This value was obtained through testing over multiple runs in AWCY.
-const BASE_AQ_MULT: f64 = -9.0;
 
 pub fn segmentation_optimize<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
@@ -80,164 +75,77 @@ pub fn segmentation_optimize<T: Pixel>(
 fn segmentation_optimize_inner<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
-  const AVG_SEG: f64 = 3.0;
+  use crate::quantize::{ac_q, select_ac_qi};
+  use crate::util::kmeans;
+  use arrayvec::ArrayVec;
+  use std::ops::Mul;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
-  let segments: Box<[_]> = coded_data
-    .spatiotemporal_scores
+
+  // Find k-means of log(spatiotemporal scale), k in 3..=8
+  let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
+    let mut l: Box<[i32]> = coded_data
+      .spatiotemporal_scores
+      .iter()
+      .map(|&s| ((f64::from(s)).log2() * (1 << 28) as f64) as i32)
+      .collect();
+    l.sort_unstable();
+    (kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l))
+  };
+
+  // Find variance in spacing between successive log(quantizer)
+  let var = |c: &[i32]| {
+    let delta = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
+      c.iter().skip(1).zip(c).map(|(&a, &b)| b as i64 - a as i64),
+    );
+    let mean = delta.iter().sum::<i64>() / delta.len() as i64;
+    delta.iter().map(|&d| (d - mean).pow(2)).sum::<i64>() as u64
+  };
+  let variance =
+    [var(&c.0), var(&c.1), var(&c.2), var(&c.3), var(&c.4), var(&c.5)];
+
+  // Choose the k value with minimal variance in spacing
+  let min_variance = *variance.iter().min().unwrap();
+  let position = variance.iter().rposition(|&v| v == min_variance).unwrap();
+
+  // Fit to the nearest matching quantizer index deltas
+  let base_ac_q = ac_q(fi.base_q_idx, 0, fi.config.bit_depth);
+  let compute_delta = |centroids: &[i32]| {
+    centroids
+      .iter()
+      .rev()
+      .map(|&delta_log_q| {
+        (-f64::from(delta_log_q) / f64::from(1 << 29))
+          .exp2()
+          .mul(f64::from(base_ac_q))
+          .round() as i64
+      })
+      .map(|q| {
+        // Avoid going into lossless mode by never bringing qidx below 1.
+        select_ac_qi(q, fi.config.bit_depth).max(1) as i16
+          - fi.base_q_idx as i16
+      })
+      .collect::<ArrayVec<_, MAX_SEGMENTS>>()
+  };
+
+  // Compute segment deltas for best value of k
+  let seg_delta = match position {
+    0 => compute_delta(&c.0),
+    1 => compute_delta(&c.1),
+    2 => compute_delta(&c.2),
+    3 => compute_delta(&c.3),
+    4 => compute_delta(&c.4),
+    _ => compute_delta(&c.5),
+  };
+
+  // Update the segmentation data
+  fs.segmentation.max_segment = seg_delta.len() as u8 - 1;
+  for (&delta, (features, data)) in seg_delta
     .iter()
-    .map(|&s| segment_idx_from_distortion(&INIT_THRESHOLD, s))
-    .collect();
-  let mut seg_counts = [0usize; MAX_SEGMENTS];
-  segments.iter().for_each(|&seg| {
-    seg_counts[seg as usize % 8] += 1;
-  });
-
-  let mut num_neg = 0usize;
-  let mut num_pos = 0usize;
-  let mut tmp_delta = [0f64; MAX_SEGMENTS];
-  for i in 0..MAX_SEGMENTS {
-    tmp_delta[i] = (AVG_SEG - i as f64) * BASE_AQ_MULT * fi.config.aq_strength;
-    if tmp_delta[i] > 0f64 {
-      num_pos += 1;
-    } else if tmp_delta[i] < 0f64 {
-      num_neg += 1;
-    }
-  }
-
-  // We want at least 1/12 of the blocks in a segment in order to code it.
-  // In most cases this results in 3-4 segments being coded, which is optimal.
-  let threshold = segments.len() / 12;
-
-  let mut remap_segment_tab: [usize; MAX_SEGMENTS] = [0, 1, 2, 3, 4, 5, 6, 7];
-  let mut num_segments = MAX_SEGMENTS;
-
-  loop {
-    let mut changed = false;
-
-    if num_segments < 4 {
-      break;
-    }
-
-    for i in (0..MAX_SEGMENTS).rev() {
-      if seg_counts[remap_segment_tab[i]] >= threshold {
-        continue;
-      };
-      if seg_counts[remap_segment_tab[i]] == 0 {
-        continue;
-      }; /* Already eliminated */
-
-      let prev_id = remap_segment_tab[i];
-
-      #[derive(Debug, Default, Clone, Copy)]
-      struct ScoreTab {
-        idx: usize,
-        score: f64,
-      }
-      let mut s_array =
-        [ScoreTab { idx: usize::max_value(), score: std::f64::MAX };
-          MAX_SEGMENTS];
-
-      for j in 0..MAX_SEGMENTS {
-        s_array[j].idx = remap_segment_tab[j];
-        if (remap_segment_tab[j] == prev_id)
-          || (seg_counts[remap_segment_tab[j]] == 0)
-          || (((num_neg < 2) || (num_pos < 2))
-            && (tmp_delta[remap_segment_tab[j]].signum()
-              != tmp_delta[prev_id].signum()))
-        {
-          s_array[j].score = std::f64::MAX;
-        } else {
-          s_array[j].score =
-            (tmp_delta[remap_segment_tab[j]] - tmp_delta[prev_id]).abs();
-        }
-      }
-
-      s_array.sort_by(|a, b| {
-        (a.score).partial_cmp(&b.score).unwrap_or(Ordering::Less)
-      });
-
-      if s_array[0].score == std::f64::MAX {
-        continue;
-      }
-
-      /* Remap any old mappings to the current segment as well */
-      for j in 0..MAX_SEGMENTS {
-        if remap_segment_tab[j] == prev_id {
-          remap_segment_tab[j] = s_array[0].idx;
-        }
-      }
-
-      let num_2bins = seg_counts[remap_segment_tab[i]] + seg_counts[prev_id];
-      let mut ratio_new =
-        (seg_counts[remap_segment_tab[i]] as f64) / (num_2bins as f64);
-      let mut ratio_old = (seg_counts[prev_id] as f64) / (num_2bins as f64);
-
-      ratio_new *= tmp_delta[remap_segment_tab[i]];
-      ratio_old *= tmp_delta[prev_id];
-
-      num_pos -= (tmp_delta[prev_id] > 0f64) as usize;
-      num_neg -= (tmp_delta[prev_id] < 0f64) as usize;
-
-      tmp_delta[remap_segment_tab[i]] = ratio_new + ratio_old;
-      tmp_delta[prev_id] = std::f64::MAX;
-
-      seg_counts[remap_segment_tab[i]] += seg_counts[prev_id];
-      seg_counts[prev_id] = 0;
-
-      num_segments -= 1;
-
-      changed = true;
-      break;
-    }
-
-    if !changed {
-      break;
-    }
-  }
-
-  tmp_delta.iter_mut().for_each(|delta| {
-    if *delta > 0.0 {
-      // We want the strength of the bitrate reduction to be
-      // less than the strength of the bitrate increase.
-      *delta *= 0.8;
-    }
-  });
-
-  /* Get all unique values in the intentionally unsorted array (its a LUT) */
-  let mut uniq_array = [0usize; MAX_SEGMENTS];
-  let mut num_segments = 0;
-  for i in 0..MAX_SEGMENTS {
-    let mut seen_match = false;
-    for j in 0..num_segments {
-      if remap_segment_tab[i] == uniq_array[j] {
-        seen_match = true;
-      }
-    }
-    if !seen_match {
-      uniq_array[num_segments] = remap_segment_tab[i];
-      num_segments += 1;
-    }
-  }
-
-  let mut seg_delta = [0f64; MAX_SEGMENTS];
-  for i in 0..num_segments {
-    /* Collect all used segment deltas into the actual segment map */
-    seg_delta[i] = tmp_delta[uniq_array[i]];
-
-    /* Remap the LUT to make it match the layout of the seg deltaq map */
-    for j in 0..MAX_SEGMENTS {
-      if remap_segment_tab[j] == uniq_array[i] {
-        remap_segment_tab[j] = i;
-      }
-    }
-  }
-
-  fs.segmentation.max_segment = num_segments as u8 - 1;
-  for i in 0..num_segments {
-    fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
-    fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] =
-      (seg_delta[i].round() as i16).max(offset_lower_limit);
+    .zip(fs.segmentation.features.iter_mut().zip(&mut fs.segmentation.data))
+  {
+    features[SegLvl::SEG_LVL_ALT_Q as usize] = true;
+    data[SegLvl::SEG_LVL_ALT_Q as usize] = delta.max(offset_lower_limit);
   }
 
   fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
@@ -267,19 +175,6 @@ pub fn select_segment<T: Pixel>(
 
   sidx..=sidx
 }
-
-const fn d3(num: u64) -> DistortionScale {
-  DistortionScale::new(num, 1000)
-}
-
-// These values were obtained based on thorough testing
-// around the idea that the resulting encode filesize
-// with dynamic segment maps should be, on average, the same as
-// with the static segment maps.
-// i.e. These values were found to improve perceptual quality
-// without significantly impacting filesize.
-static INIT_THRESHOLD: [DistortionScale; MAX_SEGMENTS - 1] =
-  [d3(2_000), d3(1_500), d3(1_150), d3(900), d3(800), d3(700), d3(625)];
 
 fn segment_idx_from_distortion(
   threshold: &[DistortionScale; MAX_SEGMENTS - 1], s: DistortionScale,
