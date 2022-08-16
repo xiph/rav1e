@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::mem;
 use std::os::raw::c_char;
 use std::os::raw::c_int;
 use std::os::raw::c_void;
@@ -46,6 +47,7 @@ type TransferCharacteristics = rav1e::TransferCharacteristics;
 type Rational = rav1e::Rational;
 type FrameTypeOverride = rav1e::FrameTypeOverride;
 type FrameOpaqueCb = Option<extern fn(*mut c_void)>;
+type T35 = rav1e::T35;
 
 #[derive(Clone)]
 enum FrameInternal {
@@ -109,6 +111,7 @@ pub struct Frame {
   fi: FrameInternal,
   frame_type: FrameTypeOverride,
   opaque: Option<FrameOpaque>,
+  t35_metadata: Vec<T35>,
 }
 
 /// Status that can be returned by encoder functions.
@@ -198,12 +201,12 @@ impl EncContext {
   }
   fn send_frame(
     &mut self, frame: Option<FrameInternal>, frame_type: FrameTypeOverride,
-    opaque: Option<rav1e::Opaque>,
+    opaque: Option<rav1e::Opaque>, t35_metadata: Box<[T35]>,
   ) -> Result<(), rav1e::EncoderStatus> {
     let info = rav1e::FrameParameters {
       frame_type_override: frame_type,
       opaque,
-      t35_metadata: Box::new([]),
+      t35_metadata,
     };
     if let Some(frame) = frame {
       match (self, frame) {
@@ -249,6 +252,7 @@ impl EncContext {
             fi: rec,
             frame_type: FrameTypeOverride::No,
             opaque: None,
+            t35_metadata: Vec::new(),
           }))
         } else {
           std::ptr::null_mut()
@@ -259,6 +263,7 @@ impl EncContext {
             fi: source,
             frame_type: FrameTypeOverride::No,
             opaque: None,
+            t35_metadata: Vec::new(),
           }))
         } else {
           std::ptr::null_mut()
@@ -811,7 +816,7 @@ pub unsafe extern fn rav1e_context_unref(ctx: *mut Context) {
 pub unsafe extern fn rav1e_frame_new(ctx: *const Context) -> *mut Frame {
   let fi = (*ctx).ctx.new_frame();
   let frame_type = rav1e::FrameTypeOverride::No;
-  let f = Frame { fi, frame_type, opaque: None };
+  let f = Frame { fi, frame_type, opaque: None, t35_metadata: Vec::new() };
   let frame = Box::new(f);
 
   Box::into_raw(frame)
@@ -858,6 +863,25 @@ pub unsafe extern fn rav1e_frame_set_opaque(
   } else {
     (*frame).opaque = Some(FrameOpaque { opaque, cb });
   }
+}
+
+/// Add generic T35 metadata to a frame
+///
+/// The buffer will be copied into the frame and can be freed
+/// immediately after this call.
+///
+/// Can be called multiple times to add multiple T35 metadata
+/// blocks.
+#[no_mangle]
+pub unsafe extern fn rav1e_frame_add_t35_metadata(
+  frame: *mut Frame, country_code: u8, country_code_extension_byte: u8,
+  data: *const u8, data_len: size_t,
+) {
+  (*frame).t35_metadata.push(T35 {
+    country_code,
+    country_code_extension_byte,
+    data: slice::from_raw_parts(data, data_len).into(),
+  });
 }
 
 /// Retrieve the first-pass data of a two-pass encode for the frame that was
@@ -1104,9 +1128,15 @@ pub unsafe extern fn rav1e_send_frame(
     (*frame).opaque.take().map(rav1e::Opaque::new)
   };
 
+  let t35_metadata = if frame.is_null() {
+    Box::new([])
+  } else {
+    mem::take(&mut (*frame).t35_metadata).into_boxed_slice()
+  };
+
   let ret = (*ctx)
     .ctx
-    .send_frame(frame_internal, frame_type, maybe_opaque)
+    .send_frame(frame_internal, frame_type, maybe_opaque, t35_metadata)
     .map(|_v| None)
     .unwrap_or_else(Some);
 
