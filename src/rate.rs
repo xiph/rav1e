@@ -745,7 +745,8 @@ impl QuantizerParameters {
     }
 
     let quantizer = bexp64(log_q_y + scale);
-    let (offset_u, offset_v) = chroma_offset(log_q_y, chroma_sampling);
+    let (offset_u, offset_v) =
+      chroma_offset(log_q_y + log_isqrt_mean_scale, chroma_sampling);
     let mono = chroma_sampling == ChromaSampling::Cs400;
     let log_q_u = log_q_y + offset_u;
     let log_q_v = log_q_y + offset_v;
