@@ -570,9 +570,26 @@ pub struct SegmentationState {
   pub last_active_segid: u8,
   pub features: [[bool; SegLvl::SEG_LVL_MAX as usize]; 8],
   pub data: [[i16; SegLvl::SEG_LVL_MAX as usize]; 8],
-  pub segment_map: [usize; 8],
+  pub threshold: [DistortionScale; 7],
   pub min_segment: u8,
   pub max_segment: u8,
+}
+
+impl SegmentationState {
+  pub fn update_threshold(&mut self, base_q_idx: u8, bd: usize) {
+    let base_ac_q = ac_q(base_q_idx, 0, bd) as u64;
+    let real_ac_q = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
+      self.data[..=self.max_segment as usize].iter().map(|data| {
+        ac_q(base_q_idx, data[SegLvl::SEG_LVL_ALT_Q as usize] as i8, bd) as u64
+      }),
+    );
+    self.threshold.fill(DistortionScale(0));
+    for ((q1, q2), threshold) in
+      real_ac_q.iter().skip(1).zip(&real_ac_q).zip(&mut self.threshold)
+    {
+      *threshold = DistortionScale::new(base_ac_q.pow(2), q1 * q2);
+    }
+  }
 }
 
 // Frame Invariants are invariant inside a frame
@@ -685,9 +702,6 @@ pub struct CodedFrameData<T: Pixel> {
   pub activity_mask: ActivityMask,
   /// Combined metric of activity and distortion
   pub spatiotemporal_scores: Box<[DistortionScale]>,
-  /// Preliminary segmentation decisions, 0-7, at the importance block level.
-  /// These are used for determining how many and how strong the segmentation should be.
-  pub imp_b_segments: Box<[u8]>,
 }
 
 impl<T: Pixel> CodedFrameData<T> {
@@ -716,7 +730,6 @@ impl<T: Pixel> CodedFrameData<T> {
       .into_boxed_slice(),
       activity_mask: Default::default(),
       spatiotemporal_scores: Default::default(),
-      imp_b_segments: Default::default(),
     }
   }
 
@@ -735,15 +748,11 @@ impl<T: Pixel> CodedFrameData<T> {
       *score *= inv_mean;
     }
 
-    let segments =
-      scores.iter().map(|&s| segment_idx_from_distortion(s)).collect();
-
     for scale in self.distortion_scales.iter_mut() {
       *scale *= inv_mean;
     }
 
     self.spatiotemporal_scores = scores;
-    self.imp_b_segments = segments;
 
     inv_mean.0
   }

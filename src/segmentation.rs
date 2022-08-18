@@ -55,6 +55,7 @@ pub fn segmentation_optimize<T: Pixel>(
       }
       assert_ne!(min_segment, MAX_SEGMENTS);
       fs.segmentation.min_segment = min_segment as u8;
+      fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
       return;
     }
 
@@ -82,7 +83,11 @@ fn segmentation_optimize_inner<T: Pixel>(
   const AVG_SEG: f64 = 3.0;
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
-  let segments = &coded_data.imp_b_segments;
+  let segments: Box<[_]> = coded_data
+    .spatiotemporal_scores
+    .iter()
+    .map(|&s| segment_idx_from_distortion(&INIT_THRESHOLD, s))
+    .collect();
   let mut seg_counts = [0usize; MAX_SEGMENTS];
   segments.iter().for_each(|&seg| {
     seg_counts[seg as usize % 8] += 1;
@@ -228,14 +233,14 @@ fn segmentation_optimize_inner<T: Pixel>(
     }
   }
 
-  fs.segmentation.segment_map = remap_segment_tab;
-
   fs.segmentation.max_segment = num_segments as u8 - 1;
   for i in 0..num_segments {
     fs.segmentation.features[i][SegLvl::SEG_LVL_ALT_Q as usize] = true;
     fs.segmentation.data[i][SegLvl::SEG_LVL_ALT_Q as usize] =
       (seg_delta[i].round() as i16).max(offset_lower_limit);
   }
+
+  fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
 }
 
 pub fn select_segment<T: Pixel>(
@@ -255,13 +260,16 @@ pub fn select_segment<T: Pixel>(
   let frame_bo = ts.to_frame_block_offset(tile_bo);
   let scale = spatiotemporal_scale(fi, frame_bo, bsize);
 
-  let sidx = ts.segmentation.segment_map
-    [segment_idx_from_distortion(scale) as usize % 8] as u8;
+  let sidx = segment_idx_from_distortion(&ts.segmentation.threshold, scale);
 
   // Avoid going into lossless mode by never bringing qidx below 1.
   let sidx = sidx.max(ts.segmentation.min_segment);
 
   sidx..=sidx
+}
+
+const fn d3(num: u64) -> DistortionScale {
+  DistortionScale::new(num, 1000)
 }
 
 // These values were obtained based on thorough testing
@@ -270,15 +278,11 @@ pub fn select_segment<T: Pixel>(
 // with the static segment maps.
 // i.e. These values were found to improve perceptual quality
 // without significantly impacting filesize.
-pub fn segment_idx_from_distortion(s: DistortionScale) -> u8 {
-  match f64::from(s) {
-    s if s >= 2.0 => 0,
-    s if s >= 1.5 => 1,
-    s if s >= 1.15 => 2,
-    s if s >= 0.9 => 3,
-    s if s >= 0.8 => 4,
-    s if s >= 0.7 => 5,
-    s if s >= 0.625 => 6,
-    _ => 7,
-  }
+static INIT_THRESHOLD: [DistortionScale; MAX_SEGMENTS - 1] =
+  [d3(2_000), d3(1_500), d3(1_150), d3(900), d3(800), d3(700), d3(625)];
+
+fn segment_idx_from_distortion(
+  threshold: &[DistortionScale; MAX_SEGMENTS - 1], s: DistortionScale,
+) -> u8 {
+  threshold.partition_point(|&t| s.0 < t.0) as u8
 }
