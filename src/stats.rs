@@ -11,6 +11,10 @@ use crate::partition::BlockSize;
 use crate::predict::PREDICTION_MODES;
 use crate::serialize::{Deserialize, Serialize};
 use crate::transform::TX_TYPES;
+
+#[cfg(feature = "serialize")]
+use serde_big_array::BigArray;
+
 use std::ops::{Add, AddAssign};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,8 +26,10 @@ pub struct EncoderStats {
   /// Stores count of pixels belonging to each transform type in this frame
   pub tx_type_counts: [usize; TX_TYPES],
   /// Stores count of pixels belonging to each luma prediction mode in this frame
+  #[serde(with = "BigArray")]
   pub luma_pred_mode_counts: [usize; PREDICTION_MODES],
   /// Stores count of pixels belonging to each chroma prediction mode in this frame
+  #[serde(with = "BigArray")]
   pub chroma_pred_mode_counts: [usize; PREDICTION_MODES],
 }
 
