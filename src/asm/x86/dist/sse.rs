@@ -281,7 +281,7 @@ pub mod test {
     let mut rng = thread_rng();
     for a in scales.iter_mut() {
       *a = rng
-        .gen_range(DistortionScale::new(0.5).0..DistortionScale::new(1.5).0);
+        .gen_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
     }
   }
 
@@ -289,8 +289,7 @@ pub mod test {
   /// TODO: Pair with max difference test
   fn scaling_large(scales: &mut [u32]) {
     for a in scales.iter_mut() {
-      // this works since DistortionScale::new caps its input
-      *a = DistortionScale::new(f64::MAX).0;
+      *a = DistortionScale::from(f64::MAX).0;
     }
   }
 

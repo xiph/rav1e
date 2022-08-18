@@ -552,7 +552,7 @@ pub fn distortion_scale_for(
 
   let strength = 1.0; // empirical, see comment above
   let frac = (intra_cost + propagate_cost) / intra_cost;
-  DistortionScale::new(frac.powf(strength / 3.0))
+  frac.powf(strength / 3.0).into()
 }
 
 /// Fixed point arithmetic version of distortion scale
@@ -575,14 +575,14 @@ impl DistortionScale {
   /// Number of bits used. Determines the max value.
   /// 24 bits is likely excessive.
   const BITS: u32 = 24;
+  /// Maximum internal value
+  const MAX: u64 = (1 << Self::BITS) - 1;
 
   #[inline]
-  pub fn new(scale: f64) -> Self {
-    Self(
-      scale
-        .mul_add((1 << Self::SHIFT) as f64, 0.5)
-        .min(((1 << Self::BITS as u64) - 1) as f64) as u32,
-    )
+  pub const fn new(num: u64, den: u64) -> Self {
+    let raw = (num << Self::SHIFT).saturating_add(den / 2) / den;
+    let mask = (raw <= Self::MAX) as u64;
+    Self((mask * raw + (1 - mask) * Self::MAX) as u32)
   }
 
   pub fn inv_mean(slice: &[Self]) -> Self {
@@ -634,6 +634,14 @@ impl Default for DistortionScale {
 impl fmt::Debug for DistortionScale {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", f64::from(*self))
+  }
+}
+
+impl From<f64> for DistortionScale {
+  #[inline]
+  fn from(scale: f64) -> Self {
+    let den = 1 << (Self::SHIFT + 1);
+    Self::new((scale * den as f64) as u64, den)
   }
 }
 
