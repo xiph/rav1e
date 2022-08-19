@@ -50,13 +50,7 @@ check_asm = []
 capi = []
 tracing = ["rust_hawktracer/profiling_enabled"]
 scenechange = []
-serialize = [
-    "serde",
-    "toml",
-    "v_frame/serialize",
-    "arrayvec/serde",
-    "serde-big-array",
-]
+serialize = ["serde", "toml", "v_frame/serialize", "serde-big-array"]
 wasm = ["wasm-bindgen"]
 
 # Enables debug dumping of lookahead computation results, specifically:
