@@ -259,8 +259,13 @@ fn main() {
     panic!("Unsupported feature on this platform!");
   }
 
-  vergen::generate_cargo_keys(vergen::ConstantsFlags::all())
-    .expect("Unable to generate the cargo keys!");
+  vergen::vergen({
+    let mut config = vergen::Config::default();
+    *config.git_mut().sha_kind_mut() = vergen::ShaKind::Short;
+    *config.git_mut().semver_kind_mut() = vergen::SemverKind::Lightweight;
+    config
+  })
+  .expect("Unable to generate the cargo keys!");
 
   println!("cargo:rustc-env=PROFILE={}", env::var("PROFILE").unwrap());
   println!(

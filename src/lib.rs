@@ -408,7 +408,7 @@ pub mod version {
   /// e.g. `g743d464`
   ///
   pub fn hash() -> String {
-    env!("VERGEN_SHA_SHORT").to_string()
+    env!("VERGEN_GIT_SHA_SHORT").to_string()
   }
 
   /// Version information with the information
@@ -417,7 +417,7 @@ pub mod version {
   /// e.g. `0.1.0 (v0.1.0-1-g743d464)`
   ///
   pub fn full() -> String {
-    let semver = env!("VERGEN_SEMVER_LIGHTWEIGHT");
+    let semver = env!("VERGEN_GIT_SEMVER_LIGHTWEIGHT");
     format!("{} ({})", short(), semver)
   }
 }

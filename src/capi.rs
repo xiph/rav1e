@@ -407,7 +407,7 @@ pub unsafe extern fn rav1e_version_full() -> *const c_char {
   concat!(
     env!("CARGO_PKG_VERSION"),
     " (",
-    env!("VERGEN_SEMVER_LIGHTWEIGHT"),
+    env!("VERGEN_GIT_SEMVER_LIGHTWEIGHT"),
     ")\0"
   )
   .as_ptr() as *const c_char
