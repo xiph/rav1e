@@ -395,6 +395,9 @@ pub unsafe extern fn rav1e_version_short() -> *const c_char {
   concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
 
+static FULL_VERSION_C: once_cell::sync::OnceCell<CString> =
+  once_cell::sync::OnceCell::new();
+
 /// Version information with the information
 /// provided by `git describe --tags`.
 ///
@@ -404,13 +407,11 @@ pub unsafe extern fn rav1e_version_short() -> *const c_char {
 /// of which version the library user was built against.
 #[no_mangle]
 pub unsafe extern fn rav1e_version_full() -> *const c_char {
-  concat!(
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("VERGEN_SEMVER_LIGHTWEIGHT"),
-    ")\0"
-  )
-  .as_ptr() as *const c_char
+  FULL_VERSION_C
+    .get_or_init(|| {
+      CString::new(crate::version::full()).expect("Bogus version data")
+    })
+    .as_ptr() as *const c_char
 }
 
 /// Simple Data
