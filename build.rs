@@ -259,9 +259,6 @@ fn main() {
     panic!("Unsupported feature on this platform!");
   }
 
-  vergen::generate_cargo_keys(vergen::ConstantsFlags::all())
-    .expect("Unable to generate the cargo keys!");
-
   println!("cargo:rustc-env=PROFILE={}", env::var("PROFILE").unwrap());
   println!(
     "cargo:rustc-env=CARGO_CFG_TARGET_FEATURE={}",

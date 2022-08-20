@@ -77,6 +77,11 @@ extern crate pretty_assertions;
 #[macro_use]
 extern crate log;
 
+pub(crate) mod built_info {
+  // The file has been placed there by the build script.
+  include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 mod serialize {
   cfg_if::cfg_if! {
     if #[cfg(feature="serialize")] {
@@ -408,7 +413,7 @@ pub mod version {
   /// e.g. `g743d464`
   ///
   pub fn hash() -> String {
-    env!("VERGEN_SHA_SHORT").to_string()
+    crate::built_info::GIT_COMMIT_HASH.unwrap_or_default().to_string()
   }
 
   /// Version information with the information
@@ -417,8 +422,11 @@ pub mod version {
   /// e.g. `0.1.0 (v0.1.0-1-g743d464)`
   ///
   pub fn full() -> String {
-    let semver = env!("VERGEN_SEMVER_LIGHTWEIGHT");
-    format!("{} ({})", short(), semver)
+    format!(
+      "{} ({})",
+      short(),
+      crate::built_info::GIT_VERSION.unwrap_or_default()
+    )
   }
 }
 #[cfg(all(
