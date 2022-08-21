@@ -756,6 +756,16 @@ impl<T: Pixel> CodedFrameData<T> {
 
     inv_mean.0
   }
+
+  // Assumes that we have already computed distortion_scales
+  pub fn compute_temporal_scores(&mut self) -> u32 {
+    let inv_mean = DistortionScale::inv_mean(&self.distortion_scales);
+    for scale in self.distortion_scales.iter_mut() {
+      *scale *= inv_mean;
+    }
+    self.spatiotemporal_scores = self.distortion_scales.clone();
+    inv_mean.0
+  }
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {

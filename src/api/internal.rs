@@ -1327,6 +1327,7 @@ impl<T: Pixel> ContextInner<T> {
           inv_mean_scale_q12 = coded_data.compute_spatiotemporal_scores();
         } else {
           coded_data.activity_mask = ActivityMask::default();
+          inv_mean_scale_q12 = coded_data.compute_temporal_scores();
         }
       }
 
