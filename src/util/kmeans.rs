@@ -27,9 +27,6 @@ where
   high[K - 1] = data.len();
   sum[K - 1] = means[K - 1].into();
 
-  let data_to = |n: usize| unsafe { data.get_unchecked(..n) }.iter();
-  let data_from = |n: usize| unsafe { data.get_unchecked(n..) }.iter();
-
   // Constrain complexity to O(n log n)
   let limit = 2 * (usize::BITS - data.len().leading_zeros());
   for _ in 0..limit {
@@ -40,31 +37,9 @@ where
       .zip(low.iter_mut().skip(1).zip(&mut high))
       .enumerate()
     {
-      let mut n = *high;
-      let mut s = sum[i];
-      for &d in data_to(n).rev().take_while(|&d| *d > threshold) {
-        s -= d.into();
-        n -= 1;
+      unsafe {
+        scan(high, low, sum.get_unchecked_mut(i..=i + 1), data, threshold);
       }
-      for &d in data_from(n).take_while(|&d| *d <= threshold) {
-        s += d.into();
-        n += 1;
-      }
-      *high = n;
-      sum[i] = s;
-
-      let mut n = *low;
-      let mut s = sum[i + 1];
-      for &d in data_from(n).take_while(|&d| *d < threshold) {
-        s -= d.into();
-        n += 1;
-      }
-      for &d in data_to(n).rev().take_while(|&d| *d >= threshold) {
-        s += d.into();
-        n -= 1;
-      }
-      *low = n;
-      sum[i + 1] = s;
     }
     let mut changed = false;
     for (((m, sum), high), low) in
@@ -88,6 +63,42 @@ where
   }
 
   means
+}
+
+#[inline(never)]
+unsafe fn scan<T>(
+  high: &mut usize, low: &mut usize, sum: &mut [i64], data: &[T], t: T,
+) where
+  T: Copy,
+  T: Into<i64>,
+  T: PartialEq,
+  T: PartialOrd,
+{
+  let mut n = *high;
+  let mut s = *sum.get_unchecked(0);
+  for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d > t) {
+    s -= d.into();
+    n -= 1;
+  }
+  for &d in data.get_unchecked(n..).iter().take_while(|&d| *d <= t) {
+    s += d.into();
+    n += 1;
+  }
+  *high = n;
+  *sum.get_unchecked_mut(0) = s;
+
+  let mut n = *low;
+  let mut s = *sum.get_unchecked(1);
+  for &d in data.get_unchecked(n..).iter().take_while(|&d| *d < t) {
+    s -= d.into();
+    n += 1;
+  }
+  for &d in data.get_unchecked(..n).iter().rev().take_while(|&d| *d >= t) {
+    s += d.into();
+    n -= 1;
+  }
+  *low = n;
+  *sum.get_unchecked_mut(1) = s;
 }
 
 #[cfg(test)]
