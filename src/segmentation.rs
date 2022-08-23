@@ -72,28 +72,26 @@ pub fn segmentation_optimize<T: Pixel>(
   }
 }
 
+// Select target quantizers for each segment by fitting to log(scale).
 fn segmentation_optimize_inner<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
   use crate::quantize::{ac_q, select_ac_qi};
   use crate::util::kmeans;
   use arrayvec::ArrayVec;
-  use std::ops::Mul;
 
-  let coded_data = fi.coded_frame_data.as_ref().unwrap();
-
+  // Minimize the total distance from a small set of values to all scales.
   // Find k-means of log(spatiotemporal scale), k in 3..=8
   let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
-    let mut l: Box<[i32]> = coded_data
-      .spatiotemporal_scores
-      .iter()
-      .map(|&s| ((f64::from(s)).log2() * (1 << 28) as f64) as i32)
-      .collect();
-    l.sort_unstable();
-    (kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l), kmeans(&l))
+    let coded_data = fi.coded_frame_data.as_ref().unwrap();
+    let mut log2_scale_q23: Box<[i32]> =
+      coded_data.spatiotemporal_scores.iter().map(|&s| s.blog32()).collect();
+    log2_scale_q23.sort_unstable();
+    let l = &log2_scale_q23;
+    (kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l))
   };
 
-  // Find variance in spacing between successive log(quantizer)
+  // Find variance in spacing between successive log(scale)
   let var = |c: &[i32]| {
     let delta = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
       c.iter().skip(1).zip(c).map(|(&a, &b)| b as i64 - a as i64),
@@ -108,18 +106,26 @@ fn segmentation_optimize_inner<T: Pixel>(
   let min_variance = *variance.iter().min().unwrap();
   let position = variance.iter().rposition(|&v| v == min_variance).unwrap();
 
-  // Fit to the nearest matching quantizer index deltas
-  let base_ac_q = ac_q(fi.base_q_idx, 0, fi.config.bit_depth);
+  // For the selected centroids, derive a target quantizer:
+  //   scale Q'^2 = Q^2
+  // See `distortion_scale_for` for more information.
+  let log2_base_ac_q =
+    (ac_q(fi.base_q_idx, 0, fi.config.bit_depth) as f32).log2();
   let compute_delta = |centroids: &[i32]| {
     centroids
       .iter()
       .rev()
-      .map(|&delta_log_q| {
-        (-f64::from(delta_log_q) / f64::from(1 << 29))
-          .exp2()
-          .mul(f64::from(base_ac_q))
-          .round() as i64
+      // Rewrite in log form and exponentiate:
+      //   scale Q'^2 = Q^2
+      //           Q' = Q / sqrt(scale)
+      //      log(Q') = log(Q) - 0.5 log(scale)
+      .map(|&log2_scale_q23| {
+        const SCALE: f32 = -0.5 / (1 << 23) as f32;
+        (log2_scale_q23 as f32).mul_add(SCALE, log2_base_ac_q).exp2().round()
+          as i64
       })
+      // Find the index of the nearest quantizer to the target,
+      // and take the delta from the base quantizer index.
       .map(|q| {
         // Avoid going into lossless mode by never bringing qidx below 1.
         select_ac_qi(q, fi.config.bit_depth).max(1) as i16

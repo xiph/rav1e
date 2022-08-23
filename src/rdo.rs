@@ -594,6 +594,14 @@ impl DistortionScale {
     )
   }
 
+  /// Binary logarithm in Q23
+  #[inline]
+  pub fn blog32(self) -> i32 {
+    const SCALE: f32 = (1 << 23) as f32;
+    const OFFSET: f32 = 0.5 - DistortionScale::SHIFT as f32 * SCALE;
+    (self.0 as f32).log2().mul_add(SCALE, OFFSET) as i32
+  }
+
   /// Multiply, round and shift
   /// Internal implementation, so don't use multiply trait.
   #[inline]
