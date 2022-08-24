@@ -7,9 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#[allow(unused)]
 /// Find k-means for a sorted slice of integers that can be summed in `i64`.
-pub fn kmeans<T, const N: usize>(data: &[T]) -> [T; N]
+pub fn kmeans<T, const K: usize>(data: &[T]) -> [T; K]
 where
   T: Copy,
   T: Into<i64>,
@@ -19,14 +18,14 @@ where
   <i64 as std::convert::TryInto<T>>::Error: std::fmt::Debug,
 {
   let mut low = {
-    let mut i = 0..N;
-    [(); N].map(|_| (i.next().unwrap() * (data.len() - 1)) / (N - 1))
+    let mut i = 0..K;
+    [(); K].map(|_| (i.next().unwrap() * (data.len() - 1)) / (K - 1))
   };
-  let mut centroids = low.map(|i| unsafe { *data.get_unchecked(i) });
+  let mut means = low.map(|i| unsafe { *data.get_unchecked(i) });
   let mut high = low;
-  let mut sum = [0i64; N];
-  high[N - 1] = data.len();
-  sum[N - 1] = centroids[N - 1].into();
+  let mut sum = [0i64; K];
+  high[K - 1] = data.len();
+  sum[K - 1] = means[K - 1].into();
 
   let data_to = |n: usize| unsafe { data.get_unchecked(..n) }.iter();
   let data_from = |n: usize| unsafe { data.get_unchecked(n..) }.iter();
@@ -34,13 +33,12 @@ where
   // Constrain complexity to O(n log n)
   let limit = 2 * (usize::BITS - data.len().leading_zeros());
   for _ in 0..limit {
-    for (i, (threshold, (low, high))) in
-      (centroids.iter().skip(1).zip(&centroids))
-        .map(|(&c1, &c2)| unsafe {
-          ((c1.into() + c2.into() + 1) >> 1).try_into().unwrap_unchecked()
-        })
-        .zip(low.iter_mut().skip(1).zip(&mut high))
-        .enumerate()
+    for (i, (threshold, (low, high))) in (means.iter().skip(1).zip(&means))
+      .map(|(&c1, &c2)| unsafe {
+        ((c1.into() + c2.into() + 1) >> 1).try_into().unwrap_unchecked()
+      })
+      .zip(low.iter_mut().skip(1).zip(&mut high))
+      .enumerate()
     {
       let mut n = *high;
       let mut s = sum[i];
@@ -69,27 +67,27 @@ where
       sum[i + 1] = s;
     }
     let mut changed = false;
-    for (c, (sum, (high, low))) in
-      centroids.iter_mut().zip(sum.iter().zip(high.iter().zip(low)))
+    for (((m, sum), high), low) in
+      means.iter_mut().zip(&sum).zip(&high).zip(&low)
     {
       let count = (high - low) as i64;
       if count == 0 {
         continue;
       }
-      let new_centroid = unsafe {
+      let new_mean = unsafe {
         ((sum + (count >> 1)).saturating_div(count))
           .try_into()
           .unwrap_unchecked()
       };
-      changed |= *c != new_centroid;
-      *c = new_centroid;
+      changed |= *m != new_mean;
+      *m = new_mean;
     }
     if !changed {
       break;
     }
   }
 
-  centroids
+  means
 }
 
 #[cfg(test)]
