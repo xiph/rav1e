@@ -9,15 +9,6 @@
 
 use const_fn_assert::cfn_debug_assert;
 
-// Integer binary logarithm of a 64-bit value.
-// v: A 64-bit value.
-// Returns floor(log2(v)) + 1, or 0 if v == 0.
-// This is the number of bits that would be required to represent v in two's
-//  complement notation with all of the leading zeros stripped.
-const fn ilog64(v: i64) -> i32 {
-  64 - v.leading_zeros() as i32
-}
-
 /// Convert an integer into a Q57 fixed-point fraction.
 pub const fn q57(v: i32) -> i64 {
   cfn_debug_assert!(v >= -64 && v <= 63);
@@ -39,9 +30,9 @@ const ATANH_LOG2: &[i64; 32] = &[
   0x2E2A8ECA5705FC2F, 0x2E2A8ECA5705FC2F
 ];
 
-/// Computes the binary exponential of logq57.
-/// input: a log base 2 in Q57 format.
-/// output: a 64 bit integer in Q0 (no fraction).
+/// Computes the binary exponential of `logq57`.
+/// `logq57`: a log base 2 in Q57 format.
+/// Returns a 64 bit integer in Q0 (no fraction).
 pub const fn bexp64(logq57: i64) -> i64 {
   let ipart = (logq57 >> 57) as i32;
   if ipart < 0 {
@@ -135,71 +126,52 @@ pub const fn bexp64(logq57: i64) -> i64 {
   w
 }
 
-/// Computes the binary log of w.
-/// input: a 64-bit integer in Q0 (no fraction).
-/// output: a 64-bit log in Q57.
-/// TODO: Mark const once we can use local variables in a const function.
-pub fn blog64(w: i64) -> i64 {
-  let mut w = w;
-  if w <= 0 {
+/// Computes the binary log of `n`.
+/// `n`: a 64-bit integer in Q0 (no fraction).
+/// Returns a 64-bit log in Q57.
+pub const fn blog64(n: i64) -> i64 {
+  if n <= 0 {
     return -1;
   }
-  let ipart = ilog64(w) - 1;
-  if ipart > 61 {
-    w >>= ipart - 61;
-  } else {
-    w <<= 61 - ipart;
+  let ipart = 63 - n.leading_zeros() as i32;
+  let w = if ipart > 61 { n >> (ipart - 61) } else { n << (61 - ipart) };
+  if (w & (w - 1)) == 0 {
+    return q57(ipart);
   }
   // z is the fractional part of the log in Q61 format.
   let mut z: i64 = 0;
-  if (w & (w - 1)) != 0 {
-    // Rust has 128 bit multiplies, so it should be possible to do this
-    //  faster without losing accuracy.
-    // x and y are the cosh() and sinh(), respectively, in Q61 format.
-    // We are computing z = 2*atanh(y/x) = 2*atanh((w - 1)/(w + 1)).
-    let mut x = w + (1i64 << 61);
-    let mut y = w - (1i64 << 61);
-    for i in 0..4 {
+  // Rust has 128 bit multiplies, so it should be possible to do this
+  //  faster without losing accuracy.
+  // x and y are the cosh() and sinh(), respectively, in Q61 format.
+  // We are computing z = 2*atanh(y/x) = 2*atanh((w - 1)/(w + 1)).
+  let mut x = w + (1i64 << 61);
+  let mut y = w - (1i64 << 61);
+  // Repeat iteration 4.
+  // Repeat iteration 13.
+  // Repeat iteration 40.
+  let bounds = [3, 12, 39, 61];
+  let mut i = 0;
+  let mut j = 0;
+  loop {
+    let end = bounds[j];
+    loop {
       let mask = -((y < 0) as i64);
-      z += ((ATANH_LOG2[i as usize] >> i) + mask) ^ mask;
+      // ATANH_LOG2 has converged at iteration 32.
+      z += ((ATANH_LOG2[if i < 31 { i } else { 31 }] >> i) + mask) ^ mask;
       let u = x >> (i + 1);
       x -= ((y >> (i + 1)) + mask) ^ mask;
       y -= (u + mask) ^ mask;
+      if i == end {
+        break;
+      }
+      i += 1;
     }
-    // Repeat iteration 4.
-    for i in 3..13 {
-      let mask = -((y < 0) as i64);
-      z += ((ATANH_LOG2[i as usize] >> i) + mask) ^ mask;
-      let u = x >> (i + 1);
-      x -= ((y >> (i + 1)) + mask) ^ mask;
-      y -= (u + mask) ^ mask;
+    j += 1;
+    if j == bounds.len() {
+      break;
     }
-    // Repeat iteration 13.
-    for i in 12..32 {
-      let mask = -((y < 0) as i64);
-      z += ((ATANH_LOG2[i as usize] >> i) + mask) ^ mask;
-      let u = x >> (i + 1);
-      x -= ((y >> (i + 1)) + mask) ^ mask;
-      y -= (u + mask) ^ mask;
-    }
-    // OD_ATANH_LOG2 has converged.
-    for i in 32..40 {
-      let mask = -((y < 0) as i64);
-      z += ((ATANH_LOG2[31] >> i) + mask) ^ mask;
-      let u = x >> (i + 1);
-      x -= ((y >> (i + 1)) + mask) ^ mask;
-      y -= (u + mask) ^ mask;
-    }
-    // Repeat iteration 40.
-    for i in 39..62 {
-      let mask = -((y < 0) as i64);
-      z += ((ATANH_LOG2[31] >> i) + mask) ^ mask;
-      let u = x >> (i + 1);
-      x -= ((y >> (i + 1)) + mask) ^ mask;
-      y -= (u + mask) ^ mask;
-    }
-    z = (z + 8) >> 4;
   }
+  z = (z + 8) >> 4;
   q57(ipart) + z
 }
 
@@ -213,7 +185,7 @@ pub const fn q24_to_q57(v: i32) -> i64 {
   (v as i64) << 33
 }
 
-/// Binary exponentiation of a log_scale with 24-bit fractional precision and
+/// Binary exponentiation of a `log_scale` with 24-bit fractional precision and
 ///  saturation.
 /// `log_scale`: A binary logarithm in Q24 format.
 /// Returns the binary exponential in Q24 format, saturated to 2**47 - 1 if
