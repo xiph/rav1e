@@ -84,10 +84,10 @@ fn segmentation_optimize_inner<T: Pixel>(
   // Find k-means of log(spatiotemporal scale), k in 3..=8
   let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
     let coded_data = fi.coded_frame_data.as_ref().unwrap();
-    let mut log2_scale_q23: Box<[i32]> =
+    let mut log2_scale_q24: Box<[i32]> =
       coded_data.spatiotemporal_scores.iter().map(|&s| s.blog32()).collect();
-    log2_scale_q23.sort_unstable();
-    let l = &log2_scale_q23;
+    log2_scale_q24.sort_unstable();
+    let l = &log2_scale_q24;
     (kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l))
   };
 
@@ -109,9 +109,10 @@ fn segmentation_optimize_inner<T: Pixel>(
   // For the selected centroids, derive a target quantizer:
   //   scale Q'^2 = Q^2
   // See `distortion_scale_for` for more information.
-  let log2_base_ac_q =
-    (ac_q(fi.base_q_idx, 0, fi.config.bit_depth) as f32).log2();
   let compute_delta = |centroids: &[i32]| {
+    use crate::util::{bexp64, blog64};
+    let log2_base_ac_q_q57 =
+      blog64(ac_q(fi.base_q_idx, 0, fi.config.bit_depth).into());
     centroids
       .iter()
       .rev()
@@ -119,10 +120,8 @@ fn segmentation_optimize_inner<T: Pixel>(
       //   scale Q'^2 = Q^2
       //           Q' = Q / sqrt(scale)
       //      log(Q') = log(Q) - 0.5 log(scale)
-      .map(|&log2_scale_q23| {
-        const SCALE: f32 = -0.5 / (1 << 23) as f32;
-        (log2_scale_q23 as f32).mul_add(SCALE, log2_base_ac_q).exp2().round()
-          as i64
+      .map(|&log2_scale_q24| {
+        bexp64(log2_base_ac_q_q57 - ((log2_scale_q24 as i64) << (57 - 24 - 1)))
       })
       // Find the index of the nearest quantizer to the target,
       // and take the delta from the base quantizer index.

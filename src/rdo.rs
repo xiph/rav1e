@@ -594,12 +594,11 @@ impl DistortionScale {
     )
   }
 
-  /// Binary logarithm in Q23
+  /// Binary logarithm in Q24
   #[inline]
-  pub fn blog32(self) -> i32 {
-    const SCALE: f32 = (1 << 23) as f32;
-    const OFFSET: f32 = 0.5 - DistortionScale::SHIFT as f32 * SCALE;
-    (self.0 as f32).log2().mul_add(SCALE, OFFSET) as i32
+  pub const fn blog32(self) -> i32 {
+    use crate::util::blog32;
+    blog32(self.0) - ((Self::SHIFT as i32) << 24)
   }
 
   /// Multiply, round and shift

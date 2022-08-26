@@ -175,6 +175,55 @@ pub const fn blog64(n: i64) -> i64 {
   q57(ipart) + z
 }
 
+/// Computes the binary log of `n`.
+/// `n`: an unsigned 32-bit integer in Q0 (no fraction).
+/// Returns a signed 32-bit log in Q24.
+pub const fn blog32(n: u32) -> i32 {
+  if n == 0 {
+    return -1;
+  }
+  let ipart = 31 - n.leading_zeros() as i32;
+  let n = n as i64;
+  let w = if ipart > 61 { n >> (ipart - 61) } else { n << (61 - ipart) };
+  if (w & (w - 1)) == 0 {
+    return ipart << 24;
+  }
+  // z is the fractional part of the log in Q61 format.
+  let mut z: i64 = 0;
+  // Rust has 128 bit multiplies, so it should be possible to do this
+  //  faster without losing accuracy.
+  // x and y are the cosh() and sinh(), respectively, in Q61 format.
+  // We are computing z = 2*atanh(y/x) = 2*atanh((w - 1)/(w + 1)).
+  let mut x = w + (1i64 << 61);
+  let mut y = w - (1i64 << 61);
+  // Repeat iteration 4.
+  // Repeat iteration 13.
+  let bounds = [3, 12, 29];
+  let mut i = 0;
+  let mut j = 0;
+  loop {
+    let end = bounds[j];
+    loop {
+      let mask = -((y < 0) as i64);
+      z += ((ATANH_LOG2[i] >> i) + mask) ^ mask;
+      let u = x >> (i + 1);
+      x -= ((y >> (i + 1)) + mask) ^ mask;
+      y -= (u + mask) ^ mask;
+      if i == end {
+        break;
+      }
+      i += 1;
+    }
+    j += 1;
+    if j == bounds.len() {
+      break;
+    }
+  }
+  const SHIFT: usize = 61 - 24;
+  z = (z + (1 << SHIFT >> 1)) >> SHIFT;
+  (ipart << 24) + z as i32
+}
+
 /// Converts a Q57 fixed-point fraction to Q24 by rounding.
 pub const fn q57_to_q24(v: i64) -> i32 {
   (((v >> 32) + 1) >> 1) as i32
@@ -202,7 +251,7 @@ pub const fn bexp_q24(log_scale: i32) -> i64 {
 
 #[cfg(test)]
 mod test {
-  use super::{bexp64, blog64};
+  use super::*;
 
   #[test]
   fn blog64_vectors() {
@@ -225,6 +274,35 @@ mod test {
       assert!(bexp64(log_a) == a);
       assert!((bexp64(log_b) - b).abs() < 128);
       assert!((bexp64(log_ab) - a * b).abs() < 128);
+    }
+  }
+
+  #[test]
+  fn blog32_vectors() {
+    assert_eq!(blog32(0), -1);
+    assert_eq!(blog32(1793), q57_to_q24(0x159dc71e24d32daf));
+  }
+
+  #[test]
+  fn bexp_q24_vectors() {
+    assert_eq!(bexp_q24(i32::MAX), (1i64 << 47) - 1);
+    assert_eq!(
+      (bexp_q24(q57_to_q24(0x159dc71e24d32daf)) + (1 << 24 >> 1)) >> 24,
+      1793
+    );
+  }
+
+  #[test]
+  fn blog32_bexp_q24_round_trip() {
+    for a in 1..=std::u16::MAX as u32 {
+      let b = (std::u32::MAX >> 9) / a;
+      let (log_a, log_b, log_ab) = (blog32(a), blog32(b), blog32(a * b));
+      assert!((log_a + log_b - log_ab).abs() < 4);
+      assert!((bexp_q24(log_a) - (i64::from(a) << 24)).abs() < (1 << 24 >> 1));
+      assert!(((bexp_q24(log_b) >> 24) - i64::from(b)).abs() < 128);
+      assert!(
+        ((bexp_q24(log_ab) >> 24) - i64::from(a) * i64::from(b)).abs() < 128
+      );
     }
   }
 }
