@@ -27,7 +27,7 @@ use crate::predict::{
 };
 use crate::quantize::*;
 use crate::rate::{
-  bexp64, q57, QuantizerParameters, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, QSCALE,
+  QuantizerParameters, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P, QSCALE,
 };
 use crate::rdo::*;
 use crate::segmentation::*;

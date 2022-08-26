@@ -21,3 +21,4 @@ pub use align::*;
 pub use uninit::*;
 
 pub use kmeans::*;
+pub(crate) use logexp::*;
