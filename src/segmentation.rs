@@ -85,15 +85,15 @@ fn segmentation_optimize_inner<T: Pixel>(
   let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
     let spatiotemporal_scores =
       &fi.coded_frame_data.as_ref().unwrap().spatiotemporal_scores;
-    let mut log2_scale_q24 = Vec::with_capacity(spatiotemporal_scores.len());
-    log2_scale_q24.extend(spatiotemporal_scores.iter().map(|&s| s.blog32()));
-    log2_scale_q24.sort_unstable();
-    let l = &log2_scale_q24;
+    let mut log2_scale_q11 = Vec::with_capacity(spatiotemporal_scores.len());
+    log2_scale_q11.extend(spatiotemporal_scores.iter().map(|&s| s.blog32()));
+    log2_scale_q11.sort_unstable();
+    let l = &log2_scale_q11;
     (kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l))
   };
 
   // Find variance in spacing between successive log(scale)
-  let var = |c: &[i32]| {
+  let var = |c: &[i16]| {
     let delta = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
       c.iter().skip(1).zip(c).map(|(&a, &b)| b as i64 - a as i64),
     );
@@ -110,7 +110,7 @@ fn segmentation_optimize_inner<T: Pixel>(
   // For the selected centroids, derive a target quantizer:
   //   scale Q'^2 = Q^2
   // See `distortion_scale_for` for more information.
-  let compute_delta = |centroids: &[i32]| {
+  let compute_delta = |centroids: &[i16]| {
     use crate::util::{bexp64, blog64};
     let log2_base_ac_q_q57 =
       blog64(ac_q(fi.base_q_idx, 0, fi.config.bit_depth).into());
@@ -121,8 +121,8 @@ fn segmentation_optimize_inner<T: Pixel>(
       //   scale Q'^2 = Q^2
       //           Q' = Q / sqrt(scale)
       //      log(Q') = log(Q) - 0.5 log(scale)
-      .map(|&log2_scale_q24| {
-        bexp64(log2_base_ac_q_q57 - ((log2_scale_q24 as i64) << (57 - 24 - 1)))
+      .map(|&log2_scale_q11| {
+        bexp64(log2_base_ac_q_q57 - ((log2_scale_q11 as i64) << (57 - 11 - 1)))
       })
       // Find the index of the nearest quantizer to the target,
       // and take the delta from the base quantizer index.

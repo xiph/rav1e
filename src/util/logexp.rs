@@ -178,6 +178,7 @@ pub const fn blog64(n: i64) -> i64 {
 /// Computes the binary log of `n`.
 /// `n`: an unsigned 32-bit integer in Q0 (no fraction).
 /// Returns a signed 32-bit log in Q24.
+#[allow(unused)]
 pub const fn blog32(n: u32) -> i32 {
   if n == 0 {
     return -1;
@@ -268,9 +269,8 @@ pub const fn bexp32_q10(z: i32) -> u32 {
 }
 
 /// Polynomial approximation of a binary logarithm.
-/// Q0 input, Q10 output.
-#[allow(unused)]
-pub const fn blog32_q10(w: u32) -> i32 {
+/// Q0 input, Q11 output.
+pub const fn blog32_q11(w: u32) -> i32 {
   if w == 0 {
     return -1;
   }
@@ -284,7 +284,7 @@ pub const fn blog32_q10(w: u32) -> i32 {
       + 15745)
   } >> 15)
     - 6793;
-  (ipart << 10) + (fpart >> 4)
+  (ipart << 11) + (fpart >> 3)
 }
 
 #[cfg(test)]
