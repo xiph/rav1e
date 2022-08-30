@@ -192,7 +192,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
   #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - r.ilog();
+    let d = 16 - ILog::ilog(r);
     let mut s = self.cnt + (d as i16);
 
     self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
@@ -230,7 +230,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - r.ilog();
+    let d = 16 - ILog::ilog(r);
     let mut s = self.cnt + (d as i16);
 
     self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
@@ -271,7 +271,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     let (l, r) = self.lr_compute(fl, fh, nms);
     let mut low = l + self.s.low;
     let mut c = self.cnt;
-    let d = 16 - r.ilog();
+    let d = 16 - ILog::ilog(r);
     let mut s = c + (d as i16);
 
     if s >= 0 {
@@ -596,7 +596,7 @@ where
 
     // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
     let pre = Self::frac_compute((self.cnt + 9) as u32, self.rng as u32);
-    let d = 16 - r.ilog();
+    let d = 16 - ILog::ilog(r);
     let mut c = self.cnt;
     let mut sh = c + (d as i16);
     if sh >= 0 {

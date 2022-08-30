@@ -1507,7 +1507,7 @@ fn get_mv_rate(
   #[inline(always)]
   fn diff_to_rate(diff: i16, allow_high_precision_mv: bool) -> u32 {
     let d = if allow_high_precision_mv { diff } else { diff >> 1 };
-    2 * d.abs().ilog() as u32
+    2 * ILog::ilog(d.abs()) as u32
   }
 
   diff_to_rate(a.row - b.row, allow_high_precision_mv)

@@ -1134,10 +1134,10 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
     }
 
     if !ref_slot_set.contains(&fi.ref_frames[i.to_index()]) {
-      if fwdref == None && i.is_fwd_ref() {
+      if fwdref.is_none() && i.is_fwd_ref() {
         fwdref = Some(ref_frames_set.len());
       }
-      if bwdref == None && i.is_bwd_ref() {
+      if bwdref.is_none() && i.is_bwd_ref() {
         bwdref = Some(ref_frames_set.len());
       }
       ref_frames_set.push([i, NONE_FRAME]);

@@ -288,7 +288,7 @@ pub enum TxSet {
 #[inline]
 pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
   debug_assert!(col > 0 && row > 0);
-  col.ilog() as i8 - row.ilog() as i8
+  ILog::ilog(col) as i8 - ILog::ilog(row) as i8
 }
 
 // performs half a butterfly
