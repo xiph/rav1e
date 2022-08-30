@@ -1564,11 +1564,9 @@ pub fn deblock_filter_frame<T: Pixel>(
   deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize, planes: usize,
 ) {
-  (&mut tile.planes[..planes]).par_iter_mut().enumerate().for_each(
-    |(pli, plane)| {
-      deblock_plane(deblock, plane, pli, blocks, crop_w, crop_h, bd);
-    },
-  );
+  tile.planes[..planes].par_iter_mut().enumerate().for_each(|(pli, plane)| {
+    deblock_plane(deblock, plane, pli, blocks, crop_w, crop_h, bd);
+  });
 }
 
 fn sse_optimize<T: Pixel>(
@@ -1577,8 +1575,8 @@ fn sse_optimize<T: Pixel>(
 ) -> [u8; 4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
-    input.planes[0].plane_cfg.width.ilog()
-      + input.planes[0].plane_cfg.height.ilog()
+    ILog::ilog(input.planes[0].plane_cfg.width)
+      + ILog::ilog(input.planes[0].plane_cfg.height)
       < 35
   );
   let mut level = [0; 4];

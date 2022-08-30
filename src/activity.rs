@@ -111,7 +111,7 @@ fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
   const INSHIFT: u8 = 16;
   const OUTSHIFT: u8 = 14;
 
-  let k = ((x.ilog() - 1) >> 1) as i16;
+  let k = ((ILog::ilog(x) - 1) >> 1) as i16;
   /*t is x in the range [0.25, 1) in QINSHIFT, or x*2^(-s).
   Shift by log2(x) - log2(0.25*(1 << INSHIFT)) to ensure 0.25 lower bound.*/
   let s: i16 = 2 * k - (INSHIFT as i16 - 2);
