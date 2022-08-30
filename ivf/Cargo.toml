@@ -1,11 +1,14 @@
 [package]
 name = "ivf"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
-description = "Simple ivf muxer"
+description = "Deprecated, use av-ivf crate instead"
 license = "BSD-2-Clause"
-homepage = "https://github.com/xiph/rav1e"
+homepage = "https://crates.io/crates/av-ivf"
 
 [dependencies]
-bitstream-io = "1"
+av-ivf = "0.4.1"
+
+[badges]
+maintenance = { status = "deprecated" }

@@ -546,12 +546,34 @@ fn run() -> Result<(), error::CliError> {
     }
   }
 
-  cli.io.output.write_header(
-    video_info.width,
-    video_info.height,
-    cli.enc.time_base.den as usize,
-    cli.enc.time_base.num as usize,
-  );
+  cli
+    .io
+    .output
+    .write_header(
+      video_info.width,
+      video_info.height,
+      cli.enc.time_base.den as usize,
+      cli.enc.time_base.num as usize,
+      cli.enc.chroma_sampling.get_decimation().unwrap_or((0, 0)),
+      cli.enc.bit_depth as u8,
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.color_primaries)
+        .unwrap_or(ColorPrimaries::Unspecified),
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.transfer_characteristics)
+        .unwrap_or(TransferCharacteristics::Unspecified),
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.matrix_coefficients)
+        .unwrap_or(MatrixCoefficients::Unspecified),
+      cli.enc.pixel_range == PixelRange::Full,
+    )
+    .map_err(|e| CliError::Message { msg: e.to_string() })?;
 
   let tiling =
     cfg.tiling_info().map_err(|e| e.context("Invalid configuration"))?;

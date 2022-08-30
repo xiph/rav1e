@@ -172,11 +172,13 @@ fn process_frame<T: Pixel, D: Decoder>(
   let pkt_wrapped = ctx.receive_packet();
   let (ret, emit_pass_data) = match pkt_wrapped {
     Ok(pkt) => {
-      output_file.write_frame(
-        pkt.input_frameno as u64,
-        pkt.data.as_ref(),
-        pkt.frame_type,
-      );
+      output_file
+        .write_frame(
+          pkt.input_frameno as u64,
+          pkt.data.as_ref(),
+          pkt.frame_type,
+        )
+        .map_err(|e| CliError::Message { msg: e.to_string() })?;
       if let (Some(ref mut y4m_enc_uw), Some(ref rec)) =
         (y4m_enc.as_mut(), &pkt.rec)
       {
@@ -528,12 +530,34 @@ fn run() -> Result<(), error::CliError> {
     }
   }
 
-  cli.io.output.write_header(
-    video_info.width,
-    video_info.height,
-    cli.enc.time_base.den as usize,
-    cli.enc.time_base.num as usize,
-  );
+  cli
+    .io
+    .output
+    .write_header(
+      video_info.width,
+      video_info.height,
+      cli.enc.time_base.den as usize,
+      cli.enc.time_base.num as usize,
+      cli.enc.chroma_sampling.get_decimation().unwrap_or((0, 0)),
+      cli.enc.bit_depth as u8,
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.color_primaries)
+        .unwrap_or(ColorPrimaries::Unspecified),
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.transfer_characteristics)
+        .unwrap_or(TransferCharacteristics::Unspecified),
+      cli
+        .enc
+        .color_description
+        .map(|cd| cd.matrix_coefficients)
+        .unwrap_or(MatrixCoefficients::Unspecified),
+      cli.enc.pixel_range == PixelRange::Full,
+    )
+    .map_err(|e| CliError::Message { msg: e.to_string() })?;
 
   let tiling =
     cfg.tiling_info().map_err(|e| e.context("Invalid configuration"))?;
