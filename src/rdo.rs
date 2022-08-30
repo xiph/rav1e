@@ -586,9 +586,12 @@ impl DistortionScale {
   }
 
   pub fn inv_mean(slice: &[Self]) -> Self {
-    let sum = slice.iter().map(|&s| s.0 as u64).sum::<u64>().max(1);
+    use crate::util::{bexp64, blog32_q11};
+    let sum = slice.iter().map(|&s| blog32_q11(s.0) as i64).sum::<i64>();
+    let log_inv_mean_q11 =
+      (Self::SHIFT << 11) as i64 - sum / slice.len() as i64;
     Self(
-      ((((slice.len() as u64) << (2 * Self::SHIFT)) + (sum >> 1)) / sum)
+      bexp64((log_inv_mean_q11 + (Self::SHIFT << 11) as i64) << (57 - 11))
         .min((1 << Self::BITS) - 1)
         .max(1) as u32,
     )
