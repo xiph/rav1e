@@ -274,7 +274,7 @@ pub const fn blog32_q11(w: u32) -> i32 {
   if w == 0 {
     return -1;
   }
-  let ipart = 31 - w.leading_zeros() as i32;
+  let ipart = 32 - w.leading_zeros() as i32;
   let n = if ipart - 16 > 0 { w >> (ipart - 16) } else { w << (16 - ipart) }
     as i32
     - 32768
@@ -341,6 +341,22 @@ mod test {
       assert!(
         ((bexp_q24(log_ab) >> 24) - i64::from(a) * i64::from(b)).abs() < 128
       );
+    }
+  }
+
+  #[test]
+  fn blog32_q11_bexp32_q10_round_trip() {
+    for a in 1..=std::i16::MAX as i32 {
+      let b = std::i16::MAX as i32 / a;
+      let (log_a, log_b, log_ab) = (
+        blog32_q11(a as u32),
+        blog32_q11(b as u32),
+        blog32_q11(a as u32 * b as u32),
+      );
+      assert!((log_a + log_b - log_ab).abs() < 4);
+      assert!((bexp32_q10((log_a + 1) >> 1) as i32 - a).abs() < 18);
+      assert!((bexp32_q10((log_b + 1) >> 1) as i32 - b).abs() < 2);
+      assert!((bexp32_q10((log_ab + 1) >> 1) as i32 - a * b).abs() < 18);
     }
   }
 }
