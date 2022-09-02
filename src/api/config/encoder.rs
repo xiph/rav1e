@@ -106,9 +106,6 @@ pub struct EncoderConfig {
   /// [`tile_rows`]: #structfield.tile_rows
   pub tiles: usize,
 
-  /// Strength of variance AQ. Defaults to 1.0. Disabled automatically by Tune=Psnr.
-  pub aq_strength: f64,
-
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
 }
@@ -165,7 +162,6 @@ impl EncoderConfig {
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,
-      aq_strength: 1.0,
       speed_settings: SpeedSettings::from_preset(speed),
     }
   }
