@@ -15,9 +15,8 @@ cfg_if::cfg_if! {
   }
 }
 
-use v_frame::plane::Plane;
-
 use crate::cpu_features::CpuFeatureLevel;
+use crate::tiling::PlaneRegion;
 use crate::util::{CastFromPrimitive, Pixel};
 
 pub(crate) mod rust {
@@ -26,11 +25,11 @@ pub(crate) mod rust {
 
   #[inline]
   pub(crate) fn sad_plane_internal<T: Pixel>(
-    src: &Plane<T>, dst: &Plane<T>, _cpu: CpuFeatureLevel,
+    src: &PlaneRegion<T>, dst: &PlaneRegion<T>, _cpu: CpuFeatureLevel,
   ) -> u64 {
-    debug_assert!(src.cfg.width == dst.cfg.width);
+    debug_assert!(src.rect().width == dst.rect().width);
 
-    let width = src.cfg.width;
+    let width = src.rect().width;
 
     src
       .rows_iter()
@@ -56,7 +55,7 @@ pub(crate) mod rust {
 /// This differs from other SAD functions in that it operates over a row
 /// (or line) of unknown length rather than a `PlaneRegion<T>`.
 pub(crate) fn sad_plane<T: Pixel>(
-  src: &Plane<T>, dst: &Plane<T>, cpu: CpuFeatureLevel,
+  src: &PlaneRegion<T>, dst: &PlaneRegion<T>, cpu: CpuFeatureLevel,
 ) -> u64 {
   sad_plane_internal(src, dst, cpu)
 }

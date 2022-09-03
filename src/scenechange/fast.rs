@@ -3,7 +3,7 @@ use std::{cmp, sync::Arc};
 use crate::{
   api::SceneDetectionSpeed,
   encoder::Sequence,
-  frame::{Frame, Plane},
+  frame::{AsRegion, Frame, Plane},
   sad_plane,
   scenechange::fast_idiv,
 };
@@ -106,7 +106,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Calculates the average sum of absolute difference (SAD) per pixel between 2 planes
   #[hawktracer(delta_in_planes)]
   fn delta_in_planes(&self, plane1: &Plane<T>, plane2: &Plane<T>) -> f64 {
-    let delta = sad_plane::sad_plane(plane1, plane2, self.cpu_feature_level);
+    let delta = sad_plane::sad_plane(
+      &plane1.as_region(),
+      &plane2.as_region(),
+      self.cpu_feature_level,
+    );
 
     delta as f64 / self.pixels as f64
   }

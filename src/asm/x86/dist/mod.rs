@@ -13,6 +13,7 @@ pub use self::sse::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::partition::BlockSize;
+use crate::sad_plane::sad_plane;
 use crate::tiling::*;
 use crate::util::*;
 
@@ -138,7 +139,11 @@ pub fn get_sad<T: Pixel>(
   let ref_dist = call_rust();
 
   let dist = match (bsize_opt, T::type_enum()) {
-    (Err(_), _) => call_rust(),
+    (Err(_), _) => sad_plane(
+      &src.subregion(Area::Rect { x: 0, y: 0, width: w, height: h }),
+      &dst.subregion(Area::Rect { x: 0, y: 0, width: w, height: h }),
+      cpu,
+    ) as u32,
     (Ok(bsize), PixelType::U8) => {
       match SAD_FNS[cpu.as_index()][to_index(bsize)] {
         // SAFETY: Calls Assembly code.

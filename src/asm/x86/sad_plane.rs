@@ -9,9 +9,8 @@
 
 use crate::cpu_features::CpuFeatureLevel;
 use crate::sad_plane::*;
+use crate::tiling::PlaneRegion;
 use crate::util::{Pixel, PixelType};
-
-use v_frame::plane::Plane;
 
 use std::mem;
 
@@ -31,12 +30,12 @@ macro_rules! decl_sad_plane_fn {
 decl_sad_plane_fn!(rav1e_sad_plane_8bpc_sse2, rav1e_sad_plane_8bpc_avx2);
 
 pub(crate) fn sad_plane_internal<T: Pixel>(
-  src: &Plane<T>, dst: &Plane<T>, cpu: CpuFeatureLevel,
+  src: &PlaneRegion<T>, dst: &PlaneRegion<T>, cpu: CpuFeatureLevel,
 ) -> u64 {
-  debug_assert!(src.cfg.width == dst.cfg.width);
-  debug_assert!(src.cfg.stride == dst.cfg.stride);
-  debug_assert!(src.cfg.height == dst.cfg.height);
-  debug_assert!(src.cfg.width <= src.cfg.stride);
+  debug_assert!(src.rect().width == dst.rect().width);
+  debug_assert!(src.plane_cfg.stride == dst.plane_cfg.stride);
+  debug_assert!(src.rect().height == dst.rect().height);
+  debug_assert!(src.rect().width <= src.plane_cfg.stride);
 
   match T::type_enum() {
     PixelType::U8 => {
@@ -49,11 +48,11 @@ pub(crate) fn sad_plane_internal<T: Pixel>(
           #[allow(clippy::undocumented_unsafe_blocks)]
           unsafe {
             let result = $func(
-              mem::transmute(src.data_origin().as_ptr()),
-              mem::transmute(dst.data_origin().as_ptr()),
-              src.cfg.stride,
-              src.cfg.width,
-              src.cfg.height,
+              mem::transmute(src.data_ptr()),
+              mem::transmute(dst.data_ptr()),
+              src.plane_cfg.stride,
+              src.rect().width,
+              src.rect().height,
             );
 
             #[cfg(feature = "check_asm")]
