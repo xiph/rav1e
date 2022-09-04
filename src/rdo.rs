@@ -688,11 +688,11 @@ impl Distortion {
   }
 }
 
-impl std::ops::Mul<f64> for Distortion {
+impl std::ops::Mul<DistortionScale> for Distortion {
   type Output = ScaledDistortion;
   #[inline]
-  fn mul(self, rhs: f64) -> ScaledDistortion {
-    ScaledDistortion((self.0 as f64 * rhs) as u64)
+  fn mul(self, rhs: DistortionScale) -> ScaledDistortion {
+    ScaledDistortion(rhs.mul_u64(self.0))
   }
 }
 
