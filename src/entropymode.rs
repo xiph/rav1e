@@ -19,7 +19,6 @@ pub const PALETTE_Y_MODE_CONTEXTS: usize = 3;
 pub const PALETTE_UV_MODE_CONTEXTS: usize = 2;
 const PALETTE_COLOR_INDEX_CONTEXTS: usize = 5;
 const CDFMAX: u16 = 32768;
-const BLOCK_SIZE_GROUPS: usize = 4;
 const RESTORE_SWITCHABLE_TYPES: usize = 3;
 pub const TX_SIZE_CONTEXTS: usize = 3;
 
@@ -34,7 +33,6 @@ const TX_SIZE_CTX_MIN: usize = TX_SIZE_LUMA_MIN + 1;
 pub const MAX_TX_CATS: usize = TxSize::TX_SIZES - TX_SIZE_CTX_MIN;
 pub const BIG_TX_CATS: usize = MAX_TX_CATS - 1; // All except 8x8, which has lower max depth.
 pub const MAX_TX_DEPTH: usize = 2;
-pub const TXFM_PARTITION_CONTEXTS: usize = 21; // (TxSize::TX_SIZES - TxSize::TX_8X8) * 6 - 3;
 
 // LUTS ---------------------
 
