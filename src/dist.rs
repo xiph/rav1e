@@ -26,7 +26,7 @@ pub(crate) mod rust {
   use crate::util::*;
 
   use crate::encoder::IMPORTANCE_BLOCK_SIZE;
-  use crate::rdo::{DistortionScale, RawDistortion};
+  use crate::rdo::DistortionScale;
 
   /// Compute the sum of absolute differences over a block.
   /// w and h can be at most 128, the size of the largest block.
@@ -223,6 +223,9 @@ pub(crate) mod rust {
     ((sum + (1 << ln >> 1)) >> ln) as u32
   }
 
+  /// Number of bits rounded off before summing in `get_weighted_sse`
+  pub const GET_WEIGHTED_SSE_SHIFT: u8 = 8;
+
   /// Computes weighted sum of squared error.
   ///
   /// Each scale is applied to a 4x4 region in the provided inputs. Each scale
@@ -263,13 +266,14 @@ pub(crate) mod rust {
             .sum::<u32>();
         }
 
-        sse += (RawDistortion::new(block_sse as u64)
-          * DistortionScale(scale[block_y * scale_stride + block_x]))
-        .0;
+        sse += (block_sse as u64
+          * scale[block_y * scale_stride + block_x] as u64
+          + (1 << GET_WEIGHTED_SSE_SHIFT >> 1))
+          >> GET_WEIGHTED_SSE_SHIFT;
       }
     }
-
-    sse
+    let den = DistortionScale::new(1, 1 << GET_WEIGHTED_SSE_SHIFT).0 as u64;
+    (sse + (den >> 1)) / den
   }
 
   /// Number of bits of precision used in `AREA_DIVISORS`
