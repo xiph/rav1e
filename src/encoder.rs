@@ -734,7 +734,8 @@ impl<T: Pixel> CodedFrameData<T> {
   }
 
   // Assumes that we have already computed activity scales and distortion scales
-  pub fn compute_spatiotemporal_scores(&mut self) -> u32 {
+  // Returns -0.5 log2(mean(scale))
+  pub fn compute_spatiotemporal_scores(&mut self) -> i64 {
     let mut scores = self
       .distortion_scales
       .iter()
@@ -754,17 +755,18 @@ impl<T: Pixel> CodedFrameData<T> {
 
     self.spatiotemporal_scores = scores;
 
-    inv_mean.0
+    inv_mean.blog64() >> 1
   }
 
   // Assumes that we have already computed distortion_scales
-  pub fn compute_temporal_scores(&mut self) -> u32 {
+  // Returns -0.5 log2(mean(scale))
+  pub fn compute_temporal_scores(&mut self) -> i64 {
     let inv_mean = DistortionScale::inv_mean(&self.distortion_scales);
     for scale in self.distortion_scales.iter_mut() {
       *scale *= inv_mean;
     }
     self.spatiotemporal_scores = self.distortion_scales.clone();
-    inv_mean.0
+    inv_mean.blog64() >> 1
   }
 }
 

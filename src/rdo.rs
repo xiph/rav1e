@@ -596,9 +596,16 @@ impl DistortionScale {
 
   /// Binary logarithm in Q11
   #[inline]
-  pub const fn blog32(self) -> i16 {
+  pub const fn blog16(self) -> i16 {
     use crate::util::blog32_q11;
     (blog32_q11(self.0) - ((Self::SHIFT as i32) << 11)) as i16
+  }
+
+  /// Binary logarithm in Q57
+  #[inline]
+  pub const fn blog64(self) -> i64 {
+    use crate::util::{blog64, q57};
+    blog64(self.0 as i64) - q57(Self::SHIFT as i32)
   }
 
   /// Multiply, round and shift
