@@ -458,7 +458,7 @@ fn run() -> Result<(), error::CliError> {
 
   #[cfg(feature = "unstable")]
   if cli.generate_grain_strength > 0 && cli.enc.film_grain_params.is_none() {
-    cli.enc.film_grain_params = Some(vec![generate_grain_params(
+    cli.enc.film_grain_params = Some(vec![generate_photon_noise_params(
       0,
       u64::MAX,
       NoiseGenArgs {
