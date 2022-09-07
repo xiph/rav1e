@@ -1,7 +1,8 @@
 #![allow(clippy::unit_arg)]
 
+use super::new_plane;
 use criterion::*;
-use rand::{Rng, SeedableRng};
+use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
 use rav1e::bench::cpu_features::*;
 use rav1e::bench::frame::{AsRegion, PlaneOffset, PlaneSlice};
@@ -524,26 +525,6 @@ criterion_group!(
   bench_prep_8tap_left_hbd,
   bench_prep_8tap_center_hbd
 );
-
-fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
-  let stride = plane.cfg.stride;
-  for row in plane.data_origin_mut().chunks_mut(stride) {
-    for pixel in row {
-      let v: u8 = ra.gen();
-      *pixel = T::cast_from(v);
-    }
-  }
-}
-
-fn new_plane<T: Pixel>(
-  ra: &mut ChaChaRng, width: usize, height: usize,
-) -> Plane<T> {
-  let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
-
-  fill_plane(ra, &mut p);
-
-  p
-}
 
 fn get_params<T: Pixel>(
   rec_plane: &Plane<T>, po: PlaneOffset, mv: MotionVector,

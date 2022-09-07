@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+mod denoise;
 mod dist;
 mod mc;
 mod plane;
@@ -23,12 +24,15 @@ use rav1e::bench::partition::*;
 use rav1e::bench::predict::*;
 use rav1e::bench::rdo::*;
 use rav1e::bench::transform::*;
+use rav1e::prelude::*;
 
 use crate::plane::plane;
 use crate::rdo::rdo;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
+use rand::Rng;
+use rand_chacha::ChaChaRng;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -193,6 +197,26 @@ fn update_cdf_4(b: &mut Bencher) {
   });
 }
 
+fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
+  let stride = plane.cfg.stride;
+  for row in plane.data_origin_mut().chunks_mut(stride) {
+    for pixel in row {
+      let v: u8 = ra.gen();
+      *pixel = T::cast_from(v);
+    }
+  }
+}
+
+fn new_plane<T: Pixel>(
+  ra: &mut ChaChaRng, width: usize, height: usize,
+) -> Plane<T> {
+  let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
+
+  fill_plane(ra, &mut p);
+
+  p
+}
+
 criterion_group!(intra_prediction, predict::pred_bench,);
 
 criterion_group!(cfl, cfl_rdo);
@@ -217,5 +241,6 @@ criterion_main!(
   ec,
   rdo,
   plane,
-  mc::mc
+  mc::mc,
+  denoise::denoise
 );

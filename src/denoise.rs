@@ -30,7 +30,7 @@ const INC: usize = SB_SIZE - SO_SIZE;
 /// This denoiser is based on the DFTTest plugin from Vapoursynth.
 /// This type of denoising was chosen because it provides
 /// high quality while not being too slow.
-pub(crate) struct DftDenoiser<T>
+pub struct DftDenoiser<T>
 where
   T: Pixel,
 {

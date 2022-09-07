@@ -9,6 +9,7 @@
 
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+use super::new_plane;
 use criterion::*;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
@@ -68,26 +69,6 @@ const DIST_BENCH_SET: &[(BlockSize, usize)] = &[
   (BLOCK_16X64, 10),
   (BLOCK_64X16, 10),
 ];
-
-fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
-  let stride = plane.cfg.stride;
-  for row in plane.data_origin_mut().chunks_mut(stride) {
-    for pixel in row {
-      let v: u8 = ra.gen();
-      *pixel = T::cast_from(v);
-    }
-  }
-}
-
-fn new_plane<T: Pixel>(
-  ra: &mut ChaChaRng, width: usize, height: usize,
-) -> Plane<T> {
-  let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
-
-  fill_plane(ra, &mut p);
-
-  p
-}
 
 type DistFn<T> = fn(
   plane_org: &PlaneRegion<'_, T>,
