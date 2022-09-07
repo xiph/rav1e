@@ -278,7 +278,7 @@ fn get_long_version() -> &'static str {
       get_version(),
       built_info::RUSTC_VERSION,
       built_info::TARGET,
-      env!("CARGO_CFG_TARGET_FEATURE"),
+      option_env!("CARGO_CFG_TARGET_FEATURE").unwrap_or("(None)"),
       if cfg!(feature = "asm") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "threading") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
