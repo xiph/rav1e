@@ -77,12 +77,15 @@ pd_m2106:  dd -2106
 pd_m2598:  dd -2598
 pd_m2751:  dd -2751
 pd_m3344:  dd -3344
+pd_1024:   dd  1024
+pd_1697:   dd  1697
+pd_3072:   dd  3072 ; 1024 + 2048
 pd_3803:   dd  3803
+pd_5120:   dd  5120 ; 1024 + 4096
 pd_5793:   dd  5793
 pd_6144:   dd  6144 ; 2048 + 4096
 pd_10239:  dd 10239 ; 2048 + 8192 - 1
 pd_10240:  dd 10240 ; 2048 + 8192
-pd_11586:  dd 11586 ; 5793 * 2
 pd_34816:  dd 34816 ; 2048 + 32768
 pd_38912:  dd 38912 ; 2048 + 4096 + 32768
 
@@ -658,17 +661,19 @@ INV_TXFM_4X4_12BPC_FN identity, flipadst
 INV_TXFM_4X4_12BPC_FN identity, identity
 
 cglobal iidentity_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
-    vpbroadcastd         m1, [pd_5793]
-    pmulld               m0, m1, [cq+32*0]
-    pmulld               m1,     [cq+32*1]
+    mova                 m1, [itx4_shuf]
+    vpbroadcastd         m3, [pd_1697]
+    vpermd               m0, m1, [cq+32*0]
+    vpermd               m1, m1, [cq+32*1]
     vpbroadcastd         m5, [pd_2048]
-    mova                 m3, [itx4_shuf]
-    paddd                m0, m5
-    paddd                m1, m5
-    psrad                m0, 12
-    psrad                m1, 12
-    vpermd               m2, m3, m0
-    vpermd               m1, m3, m1
+    pmulld               m2, m3, m0
+    pmulld               m3, m1
+    paddd                m2, m5
+    paddd                m3, m5
+    psrad                m2, 12
+    psrad                m3, 12
+    paddd                m2, m0
+    paddd                m1, m3
     jmp m(iadst_4x4_internal_12bpc).pass1_end
 .pass2:
     ; m0 = in0 in1
@@ -1551,7 +1556,6 @@ INV_TXFM_4X16_FN identity, flipadst
 INV_TXFM_4X16_FN identity, identity
 
 cglobal iidentity_4x16_internal_10bpc, 0, 7, 11, dst, stride, c, eob, tx2
-.pass1:
     vpbroadcastd         m7, [pd_5793]
     pmulld               m0, m7, [cq+32*0]
     pmulld               m4, m7, [cq+32*1]
@@ -1778,17 +1782,49 @@ INV_TXFM_4X16_FN identity, flipadst, 12
 INV_TXFM_4X16_FN identity, identity, 12
 
 cglobal iidentity_4x16_internal_12bpc, 0, 7, 14, dst, stride, c, eob, tx2
-    jmp m(iidentity_4x16_internal_10bpc).pass1
+    vpbroadcastd         m8, [pd_1697]
+    mova                 m0, [cq+32*0]
+    mova                 m4, [cq+32*1]
+    mova                 m1, [cq+32*2]
+    mova                 m5, [cq+32*3]
+    vpbroadcastd         m9, [pd_6144]
+    pmulld               m2, m8, m0
+    pmulld               m6, m8, m4
+    pmulld               m3, m8, m1
+    pmulld               m7, m8, m5
+    mova                m10, [cq+32*4]
+    mova                m11, [cq+32*5]
+    mova                m12, [cq+32*6]
+    mova                m13, [cq+32*7]
+    REPX     {paddd  x, m9}, m2, m6, m3, m7
+    REPX     {psrad  x, 12}, m2, m6, m3, m7
+    paddd                m0, m2
+    pmulld               m2, m8, m10
+    paddd                m4, m6
+    pmulld               m6, m8, m11
+    paddd                m1, m3
+    pmulld               m3, m8, m12
+    paddd                m5, m7
+    pmulld               m7, m8, m13
+    REPX     {psrad  x, 1 }, m0, m4, m1, m5
+    REPX     {paddd  x, m9}, m2, m6, m3, m7
+    REPX     {psrad  x, 12}, m2, m6, m3, m7
+    paddd                m2, m10
+    paddd                m6, m11
+    paddd                m3, m12
+    paddd                m7, m13
+    REPX     {psrad  x, 1 }, m2, m6, m3, m7
+    jmp                tx2q
 .pass2:
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
     REPX    {pmaxsd x, m12}, m0, m1, m2, m3, m4, m5, m6, m7
     REPX    {pminsd x, m13}, m0, m1, m2, m3, m4, m5, m6, m7
-    vpbroadcastd         m8, [pd_11586]
-    vpbroadcastd         m9, [pd_2048]
+    vpbroadcastd         m8, [pd_5793]
+    vpbroadcastd         m9, [pd_1024]
     REPX     {pmulld x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
     REPX     {paddd  x, m9}, m0, m1, m2, m3, m4, m5, m6, m7
-    REPX     {psrad  x, 15}, m0, m1, m2, m3, m4, m5, m6, m7
+    REPX     {psrad  x, 14}, m0, m1, m2, m3, m4, m5, m6, m7
     packssdw             m0, m4
     packssdw             m1, m5
     packssdw             m2, m6
@@ -3374,16 +3410,16 @@ ALIGN function_align
                              m8,  m9,  m10, m11, m12, m13, m14
     pminsd              m15, [cq]
     mova               [cq], m7
-    vpbroadcastd         m7, [pd_11586]
+    vpbroadcastd         m7, [pd_5793]
     REPX     {pmulld x, m7}, m0,  m1,  m2,  m3,  m4,  m5,  m6, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     pmulld               m7, [cq]
     mova               [cq], m15
-    vpbroadcastd        m15, [pd_2048]
+    vpbroadcastd        m15, [pd_1024]
     REPX    {paddd  x, m15}, m0,  m1,  m2,  m3,  m4,  m5,  m6, m7, \
                              m8,  m9,  m10, m11, m12, m13, m14
     paddd               m15, [cq]
-    REPX     {psrad  x, 15}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
+    REPX     {psrad  x, 14}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     ret
 
@@ -3685,8 +3721,7 @@ INV_TXFM_16X4_FN identity, flipadst
 INV_TXFM_16X4_FN identity, identity
 
 cglobal iidentity_16x4_internal_10bpc, 0, 7, 14, dst, stride, c, eob, tx2
-.pass1:
-    vpbroadcastd         m8, [pd_11586]
+    vpbroadcastd         m8, [pd_5793]
     vpermq               m0, [cq+32*0], q3120 ; 0 1
     vpermq               m1, [cq+32*1], q3120 ; 2 3
     vpermq               m2, [cq+32*2], q3120 ; 4 5
@@ -3695,10 +3730,10 @@ cglobal iidentity_16x4_internal_10bpc, 0, 7, 14, dst, stride, c, eob, tx2
     vpermq               m5, [cq+32*5], q3120 ; a b
     vpermq               m6, [cq+32*6], q3120 ; c d
     vpermq               m7, [cq+32*7], q3120 ; e f
-    vpbroadcastd         m9, [pd_6144]
+    vpbroadcastd         m9, [pd_3072]
     REPX     {pmulld x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
     REPX     {paddd  x, m9}, m0, m1, m2, m3, m4, m5, m6, m7
-    REPX     {psrad  x, 13}, m0, m1, m2, m3, m4, m5, m6, m7
+    REPX     {psrad  x, 12}, m0, m1, m2, m3, m4, m5, m6, m7
     jmp                tx2q
 .pass2:
     call m(idct_16x4_internal_10bpc).transpose_4x16_packed
@@ -3846,7 +3881,37 @@ INV_TXFM_16X4_FN identity, flipadst, 12
 INV_TXFM_16X4_FN identity, identity, 12
 
 cglobal iidentity_16x4_internal_12bpc, 0, 7, 14, dst, stride, c, eob, tx2
-    jmp m(iidentity_16x4_internal_10bpc).pass1
+    vpbroadcastd         m8, [pd_1697]
+    vpermq               m0, [cq+32*0], q3120 ; 0 1
+    vpermq               m1, [cq+32*1], q3120 ; 2 3
+    vpermq               m2, [cq+32*2], q3120 ; 4 5
+    vpermq               m3, [cq+32*3], q3120 ; 6 7
+    vpbroadcastd         m9, [pd_3072]
+    pmulld               m4, m8, m0
+    pmulld               m5, m8, m1
+    pmulld               m6, m8, m2
+    pmulld               m7, m8, m3
+    vpermq              m10, [cq+32*4], q3120 ; 8 9
+    vpermq              m11, [cq+32*5], q3120 ; a b
+    vpermq              m12, [cq+32*6], q3120 ; c d
+    vpermq              m13, [cq+32*7], q3120 ; e f
+    REPX     {paddd  x, m9}, m4, m5, m6, m7
+    REPX     {psrad  x, 12}, m4, m5, m6, m7
+    paddd                m0, m4
+    pmulld               m4, m8, m10
+    paddd                m1, m5
+    pmulld               m5, m8, m11
+    paddd                m2, m6
+    pmulld               m6, m8, m12
+    paddd                m3, m7
+    pmulld               m7, m8, m13
+    REPX     {paddd  x, m9}, m4, m5, m6, m7
+    REPX     {psrad  x, 12}, m4, m5, m6, m7
+    paddd                m4, m10
+    paddd                m5, m11
+    paddd                m6, m12
+    paddd                m7, m13
+    jmp                tx2q
 .pass2:
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
@@ -4336,16 +4401,16 @@ cglobal iidentity_16x8_internal_10bpc, 0, 7, 16, 32*8, dst, stride, c, eob, tx2
     REPX    {psrad  x, 12 }, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     mova              [rsp], m15
-    vpbroadcastd        m15, [pd_11586]
+    vpbroadcastd        m15, [pd_5793]
     REPX    {pmulld x, m15}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
                              m8,  m9,  m10, m11, m12, m13, m14
     pmulld              m15, [rsp]
     mova              [rsp], m7
-    vpbroadcastd         m7, [pd_6144]
+    vpbroadcastd         m7, [pd_3072]
     REPX    {paddd  x, m7 }, m0,  m1,  m2,  m3,  m4,  m5,  m6, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     paddd                m7, [rsp]
-    REPX    {psrad  x, 13 }, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
+    REPX    {psrad  x, 12 }, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     jmp                tx2q
 .pass2:
@@ -5024,9 +5089,8 @@ INV_TXFM_16X16_FN identity, dct, -92
 INV_TXFM_16X16_FN identity, identity
 
 cglobal iidentity_16x16_internal_10bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
-.pass1:
-    vpbroadcastd        m15, [pd_11586]
-    vpbroadcastd         m7, [pd_10240]
+    vpbroadcastd        m15, [pd_5793]
+    vpbroadcastd         m7, [pd_5120]
     lea                  r6, [rsp+32*4]
     sub                eobd, 36
     jl .fast
@@ -5038,7 +5102,7 @@ cglobal iidentity_16x16_internal_10bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx
     pmulld               m3, m15, [cq+r3+32*39]
     add                  r6, 32*4
     REPX      {paddd x, m7}, m0, m1, m2, m3
-    REPX      {psrad x, 14}, m0, m1, m2, m3
+    REPX      {psrad x, 13}, m0, m1, m2, m3
     mova          [r6+32*0], m0
     mova          [r6+32*1], m1
     mova          [r6+32*2], m2
@@ -5066,7 +5130,7 @@ cglobal iidentity_16x16_internal_10bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx
     REPX      {paddd x, m7}, m0,  m1,  m2,  m3,  m4,  m5,  m6, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     paddd                m7, [cq]
-    REPX      {psrad x, 14}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
+    REPX      {psrad x, 13}, m0,  m1,  m2,  m3,  m4,  m5,  m6,  m7, \
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     jmp                tx2q
 .pass2:
@@ -5403,8 +5467,73 @@ cglobal iflipadst_16x16_internal_12bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx
 INV_TXFM_16X16_FN identity, dct,    -92, 12
 INV_TXFM_16X16_FN identity, identity, 0, 12
 
+%macro IDTX16_12BPC 1 ; src
+    pmulld               m6, m7, m%1
+    paddd                m6, m15
+    psrad                m6, 12
+    paddd                m6, m%1
+    psrad               m%1, m6, 1
+%endmacro
+
 cglobal iidentity_16x16_internal_12bpc, 0, 7, 16, 32*24, dst, stride, c, eob, tx2
-    jmp m(iidentity_16x16_internal_10bpc).pass1
+    vpbroadcastd         m7, [pd_1697]
+    vpbroadcastd        m15, [pd_5120]
+    lea                  r6, [rsp+32*4]
+    sub                eobd, 36
+    jl .fast
+    mov                  r3, -32*8*4
+.righthalf:
+    mova                m10, [cq+r3+32*33]
+    mova                m11, [cq+r3+32*35]
+    mova                m12, [cq+r3+32*37]
+    mova                m13, [cq+r3+32*39]
+    add                  r6, 32*4
+    pmulld               m0, m7, m10
+    pmulld               m1, m7, m11
+    pmulld               m2, m7, m12
+    pmulld               m3, m7, m13
+    REPX     {paddd x, m15}, m0, m1, m2, m3
+    REPX     {psrad x, 12 }, m0, m1, m2, m3
+    paddd                m0, m10
+    paddd                m1, m11
+    paddd                m2, m12
+    paddd                m3, m13
+    REPX     {psrad x, 1  }, m0, m1, m2, m3
+    mova          [r6+32*0], m0
+    mova          [r6+32*1], m1
+    mova          [r6+32*2], m2
+    mova          [r6+32*3], m3
+    add                  r3, 32*8
+    jl .righthalf
+.fast:
+    mova                 m0, [cq+64* 0]
+    mova                 m1, [cq+64* 1]
+    mova                 m2, [cq+64* 2]
+    mova                 m3, [cq+64* 3]
+    mova                 m4, [cq+64* 4]
+    mova                 m5, [cq+64* 5]
+    mova                 m8, [cq+64* 6]
+    mova                 m9, [cq+64* 7]
+    REPX   {IDTX16_12BPC x}, 0, 1, 2, 3, 4, 5, 8, 9
+    mova          [cq+64*0], m8
+    mova          [cq+64*1], m9
+    mova                 m8, [cq+64* 8]
+    mova                 m9, [cq+64* 9]
+    mova                m10, [cq+64*10]
+    mova                m11, [cq+64*11]
+    mova                m12, [cq+64*12]
+    mova                m13, [cq+64*13]
+    mova                m14, [cq+64*14]
+    REPX   {IDTX16_12BPC x}, 8, 9, 10, 11, 12, 13, 14
+    mova                 m6, [cq+64*15]
+    pmulld               m7, m6
+    paddd                m7, m15
+    psrad                m7, 12
+    paddd                m7, m6
+    mova                 m6, [cq+64*0]
+    psrad               m15, m7, 1
+    mova                 m7, [cq+64*1]
+    jmp                tx2q
 .pass2:
     call m(iidentity_8x16_internal_12bpc).pass2_main
     call m(idct_16x16_internal_10bpc).transpose_fast
