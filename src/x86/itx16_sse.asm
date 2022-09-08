@@ -2755,6 +2755,8 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 .round:
 %if ARCH_X86_64
+    REPX    {pmaxsd x, m12}, m0, m1, m2, m3, m4, m5, m6, m7
+    REPX    {pminsd x, m13}, m0, m1, m2, m3, m4, m5, m6, m7
     pcmpeqd              m8, m8
     REPX      {psubd x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
     mova                 m8, [r3+1*16]
@@ -2784,6 +2786,14 @@ cglobal idct_16x4_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     ; and out0-15 is now in m0-15
 %else
+    mova         [r3+ 0*16], m0
+    mova                 m0, [o(clip_18b_min)]
+    REPX     {pmaxsd x, m0}, m1, m2, m3, m4, m5, m6, m7
+    pmaxsd               m0, [r3+ 0*16]
+    mova         [r3+ 0*16], m7
+    mova                 m7, [o(clip_18b_max)]
+    REPX     {pminsd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    pminsd               m7, [r3+ 0*16]
     mova         [r3+ 0*16], m0
     pcmpeqd              m0, m0
     REPX      {psubd x, m0}, m1, m2, m3, m4, m5, m6, m7
@@ -4057,6 +4067,8 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
     ret
 .round:
 %if ARCH_X86_64
+    REPX    {pmaxsd x, m12}, m0, m1, m2, m3, m4, m5, m6, m7
+    REPX    {pminsd x, m13}, m0, m1, m2, m3, m4, m5, m6, m7
     psrld                m8, m11, 10        ; 2
     REPX      {paddd x, m8}, m0, m1, m2, m3, m4, m5, m6, m7
     mova                 m8, [r3+1*16]
@@ -4086,6 +4098,14 @@ cglobal idct_16x16_internal_16bpc, 0, 0, 0, dst, stride, c, eob, tx2
                              m8,  m9,  m10, m11, m12, m13, m14, m15
     ; and out0-15 is now in m0-15
 %else
+    mova         [r3+ 0*16], m0
+    mova                 m0, [o(clip_18b_min)]
+    REPX     {pmaxsd x, m0}, m1, m2, m3, m4, m5, m6, m7
+    pmaxsd               m0, [r3+ 0*16]
+    mova         [r3+ 0*16], m7
+    mova                 m7, [o(clip_18b_max)]
+    REPX     {pminsd x, m7}, m0, m1, m2, m3, m4, m5, m6
+    pminsd               m7, [r3+ 0*16]
     mova         [r3+ 0*16], m0
     mova                 m0, [o(pd_2)]
     REPX      {paddd x, m0}, m1, m2, m3, m4, m5, m6, m7
@@ -5944,6 +5964,8 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
     ; final sumsub for idct16 as well as idct32, plus final downshift
 %macro IDCT32_END 6 ; in/out1, out2-4, tmp, shift, idx
     mova                m%4, [r3+16*(23-%1)]
+    pmaxsd              m%1, m12
+    pminsd              m%1, m13
     psubd               m%3, m%1, m%4 ; idct16 out15 - n
     paddd               m%1, m%4      ; idct16 out0  + n
     pmaxsd              m%1, m12
@@ -6019,6 +6041,8 @@ cglobal inv_txfm_add_dct_dct_32x8_16bpc, 4, 7, 16, 0-(24+8*ARCH_X86_32)*16, \
 .loop_dct32_end:
     mova                 m0, [r3+16*16]
     mova                 m6, [r3+16*24]
+    pmaxsd               m0, m2
+    pminsd               m0, m3
     psubd                m5, m0, m6 ; idct16 out15 - n
     paddd                m0, m6     ; idct16 out0  + n
     pmaxsd               m0, m2
@@ -7537,6 +7561,8 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 16, 0-(64+8*ARCH_X86_32)*16, \
     mova                 m5, [r3-16* 4] ; idct64 48 + n
     mova                 m6, [r4-16*20] ; idct64 47 - n
     mova                 m7, [r3-16*20] ; idct64 32 + n
+    pmaxsd               m0, m12
+    pminsd               m0, m13
     paddd                m8, m0, m1     ; idct16 out0  + n
     psubd                m0, m1         ; idct16 out15 - n
     REPX    {pmaxsd x, m12}, m8, m0
@@ -7565,11 +7591,13 @@ cglobal inv_txfm_add_dct_dct_64x16_16bpc, 4, 7, 16, 0-(64+8*ARCH_X86_32)*16, \
     mova         [r4-16* 4], m6
     mova         [r3+16*12], m8
 %else
-    mova                 m1, [r3+16*44] ; idct16 15 - n
-    paddd                m4, m0, m1     ; idct16 out0  + n
-    psubd                m0, m1         ; idct16 out15 - n
     mova                 m5, [o(clip_18b_min)]
     mova                 m6, [o(clip_18b_max)]
+    mova                 m1, [r3+16*44] ; idct16 15 - n
+    pmaxsd               m0, m5
+    pminsd               m0, m6
+    paddd                m4, m0, m1     ; idct16 out0  + n
+    psubd                m0, m1         ; idct16 out15 - n
     REPX     {pmaxsd x, m5}, m4, m0
     REPX     {pminsd x, m6}, m4, m0
     paddd                m1, m4, m3     ; idct32 out0  + n
