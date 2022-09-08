@@ -174,6 +174,18 @@ pub struct CliOptions {
   /// Still picture mode
   #[clap(long, help_heading = "ENCODE SETTINGS")]
   pub still_picture: bool,
+  /// Quality tuning for the CDEF strength selection algorithm
+  /// ssimulacra2 for the highest quality(experimental, can be changed), default for the fastest mode
+  #[cfg(feature = "unstable")]
+  #[clap(
+    long,
+    value_parser,
+    hide = true,
+    default_value_t = default
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub cdef_tune,
+
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
   #[cfg(feature = "unstable")]
