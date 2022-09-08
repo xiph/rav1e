@@ -2,7 +2,7 @@ use crate::api::FrameQueue;
 use crate::util::Aligned;
 use crate::EncoderStatus;
 use arrayvec::ArrayVec;
-use ndarray::{Array3, ArrayView3, ArrayViewMut3};
+use ndarray::{ArrayView3, ArrayViewMut3};
 use ndrustfft::{
   ndfft, ndfft_r2c, ndifft, ndifft_r2c, Complex, FftHandler, R2cFftHandler,
 };
@@ -525,10 +525,20 @@ where
     &mut self, real: &[f32; BLOCK_VOLUME],
     output: &mut [Complex<f32>; COMPLEX_COUNT],
   ) {
+    let mut temp1_data = [Complex::default(); COMPLEX_COUNT];
+    let mut temp2_data = [Complex::default(); COMPLEX_COUNT];
     let input =
       ArrayView3::from_shape((TB_SIZE, SB_SIZE, SB_SIZE), real).unwrap();
-    let mut temp1 = Array3::zeros((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1));
-    let mut temp2 = Array3::zeros((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1));
+    let mut temp1 = ArrayViewMut3::from_shape(
+      (TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1),
+      &mut temp1_data,
+    )
+    .unwrap();
+    let mut temp2 = ArrayViewMut3::from_shape(
+      (TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1),
+      &mut temp2_data,
+    )
+    .unwrap();
     let mut output =
       ArrayViewMut3::from_shape((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1), output)
         .unwrap();
@@ -543,11 +553,21 @@ where
     &mut self, complex: &[Complex<f32>; COMPLEX_COUNT],
     output: &mut [f32; BLOCK_VOLUME],
   ) {
+    let mut temp0_data = [Complex::default(); COMPLEX_COUNT];
+    let mut temp1_data = [Complex::default(); COMPLEX_COUNT];
     let input =
       ArrayView3::from_shape((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1), complex)
         .unwrap();
-    let mut temp0 = Array3::zeros((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1));
-    let mut temp1 = Array3::zeros((TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1));
+    let mut temp0 = ArrayViewMut3::from_shape(
+      (TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1),
+      &mut temp0_data,
+    )
+    .unwrap();
+    let mut temp1 = ArrayViewMut3::from_shape(
+      (TB_SIZE, SB_SIZE, SB_SIZE / 2 + 1),
+      &mut temp1_data,
+    )
+    .unwrap();
     let mut output =
       ArrayViewMut3::from_shape((TB_SIZE, SB_SIZE, SB_SIZE), output).unwrap();
 
