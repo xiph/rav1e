@@ -176,7 +176,6 @@ pub struct CliOptions {
   pub still_picture: bool,
   /// Uses grain synthesis to add photon noise to the resulting encode.
   /// Takes a strength value 0-64.
-  #[cfg(feature = "unstable")]
   #[clap(
     long,
     conflicts_with = "film-grain-table",
@@ -332,10 +331,9 @@ pub struct ParsedCliOptions {
   pub pass1file_name: Option<PathBuf>,
   pub pass2file_name: Option<PathBuf>,
   pub save_config: Option<PathBuf>,
+  pub photon_noise: u8,
   #[cfg(feature = "unstable")]
   pub slots: usize,
-  #[cfg(feature = "unstable")]
-  pub generate_grain_strength: u8,
 }
 
 #[cfg(feature = "serialize")]
@@ -480,10 +478,9 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     pass1file_name: matches.first_pass.clone(),
     pass2file_name: matches.second_pass.clone(),
     save_config: save_config_path,
+    photon_noise: matches.photon_noise,
     #[cfg(feature = "unstable")]
     slots,
-    #[cfg(feature = "unstable")]
-    generate_grain_strength: matches.photon_noise,
   })
 }
 

@@ -456,13 +456,12 @@ fn run() -> Result<(), error::CliError> {
     cli.enc.time_base = video_info.time_base;
   }
 
-  #[cfg(feature = "unstable")]
-  if cli.generate_grain_strength > 0 && cli.enc.film_grain_params.is_none() {
+  if cli.photon_noise > 0 && cli.enc.film_grain_params.is_none() {
     cli.enc.film_grain_params = Some(vec![generate_photon_noise_params(
       0,
       u64::MAX,
       NoiseGenArgs {
-        iso_setting: cli.generate_grain_strength as u32 * 100,
+        iso_setting: cli.photon_noise as u32 * 100,
         width: video_info.width as u32,
         height: video_info.height as u32,
         transfer_function: if cli.enc.is_hdr() {
