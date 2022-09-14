@@ -1,0 +1,13 @@
+name: post-fuzz
+runs:
+  using: composite
+  steps:
+    - name: Commit changes
+      working-directory: storage
+      run: >
+        git add -A || true;
+        if ! git diff --cached --quiet; then
+        git commit -m 'Corpus upload' &&
+        git pull --rebase origin clusterfuzzlite &&
+        git push origin HEAD:clusterfuzzlite; fi
+      shell: bash

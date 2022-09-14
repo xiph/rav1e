@@ -1,0 +1,5 @@
+[libfuzzer]
+len_control = 0
+max_len = 256
+report_slow_units = 25
+timeout = 600

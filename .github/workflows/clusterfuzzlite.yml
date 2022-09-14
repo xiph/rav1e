@@ -1,0 +1,119 @@
+name: ClusterFuzzLite
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: 0 */6 * * *
+permissions: read-all
+jobs:
+  BuildAddress:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Fuzzers
+      uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+      with:
+        language: rust
+    - name: Pack fuzzers
+      run: tar cf build-out.tar build-out
+    - name: Archive fuzzers
+      uses: actions/upload-artifact@v3
+      with:
+        name: fuzzers-address
+        path: build-out.tar
+  BuildCoverage:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Build Fuzzers
+      uses: google/clusterfuzzlite/actions/build_fuzzers@v1
+      with:
+        language: rust
+        sanitizer: coverage
+    - name: Pack fuzzers
+      run: >
+        find build-out -maxdepth 1 -type f | xargs
+        tar cf build-out.tar --exclude-vcs --exclude=target
+        build-out/src/dav1d build-out/src/rav1e
+    - name: Archive fuzzers
+      uses: actions/upload-artifact@v3
+      with:
+        name: fuzzers-coverage
+        path: build-out.tar
+  Coverage:
+    runs-on: ubuntu-latest
+    needs: [BuildCoverage, Pruning]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Download fuzzers
+      uses: actions/download-artifact@v3
+      with:
+        name: fuzzers-coverage
+    - name: Unpack fuzzers
+      run: tar xf build-out.tar
+    - name: Run Fuzzers
+      uses: ./.github/actions/run_fuzzers
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        fuzz-seconds: 2400
+        mode: coverage
+        sanitizer: coverage
+        storage-token: ${{ secrets.CFL_TOKEN }}
+  Pruning:
+    runs-on: ubuntu-latest
+    needs: [BuildAddress, BatchFuzzing]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Download fuzzers
+      uses: actions/download-artifact@v3
+      with:
+        name: fuzzers-address
+    - name: Unpack fuzzers
+      run: tar xf build-out.tar
+    - name: Download corpus
+      uses: ./.github/actions/pre_fuzz
+      with:
+        mode: prune
+        storage-token: ${{ secrets.CFL_TOKEN }}
+    - name: Run Fuzzers
+      run: >
+        mv storage/corpus/encode_decode corpus.encode_decode;
+        mkdir -p storage/{artifacts,corpus}/encode_decode;
+        timeout 3h build-out/encode_decode -artifact_prefix=storage/artifacts/encode_decode/
+        -timeout=600 -report_slow_units=25 -max_len=256 -len_control=0 -merge=1
+        storage/corpus/encode_decode corpus.encode_decode
+    - name: Upload corpus
+      uses: ./.github/actions/post_fuzz
+  BatchFuzzing:
+    runs-on: ubuntu-latest
+    needs: BuildAddress
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+    - uses: actions/checkout@v3
+    - name: Download fuzzers
+      uses: actions/download-artifact@v3
+      with:
+        name: fuzzers-address
+    - name: Unpack fuzzers
+      run: tar xf build-out.tar
+    - name: Download corpus
+      uses: ./.github/actions/pre_fuzz
+      with:
+        storage-token: ${{ secrets.CFL_TOKEN }}
+    - name: Shard corpus
+      run: |
+        mkdir -p storage/{artifacts,corpus}/encode_decode corpus.encode_decode
+        cd storage/corpus/encode_decode
+        ls | perl -ne 'print if int hex(substr $_,0,14)*3/2**56+1==${{matrix.shard}}' |
+        xargs -r cp -t ../../../corpus.encode_decode
+    - name: Run Fuzzers
+      run: >
+        timeout 1h build-out/encode_decode -artifact_prefix=storage/artifacts/encode_decode/
+        -timeout=600 -report_slow_units=25 -max_len=256 -len_control=0 corpus.encode_decode
+        || true;
+        cp -u corpus.encode_decode/* storage/corpus/encode_decode
+    - name: Random pause for storage sync
+      run: seq 1 60 | shuf -n 1 | xargs sleep
+    - name: Upload corpus
+      uses: ./.github/actions/post_fuzz

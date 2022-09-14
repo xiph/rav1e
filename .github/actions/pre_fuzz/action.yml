@@ -1,0 +1,37 @@
+name: pre-fuzz
+inputs:
+  mode:
+    required: false
+  storage-token:
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        repository: xiph/rav1e
+        ref: clusterfuzzlite
+        token: ${{ inputs.storage-token }}
+        path: storage
+    - name: Set CIFuzz Identity
+      working-directory: storage
+      run: >
+        git config user.name CIFuzz &&
+        git config user.email cifuzz@clusterfuzz.com
+      shell: bash
+    - name: Remove slow units
+      if: inputs.mode == 'prune'
+      working-directory: storage
+      run: >
+        find -name 'slow-unit-*' |
+        sed 'p;s/artifacts/corpus/;s/slow-unit-//' |
+        xargs -r git rm -f --ignore-unmatch
+      shell: bash
+    - name: Commit deletions
+      if: inputs.mode == 'prune'
+      working-directory: storage
+      run: >
+        if ! git diff --cached --quiet; then
+        git commit -m 'Remove slow units' &&
+        git push origin HEAD:clusterfuzzlite; fi
+      shell: bash

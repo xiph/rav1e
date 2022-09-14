@@ -1,0 +1,29 @@
+name: run-fuzzers
+inputs:
+  fuzz-seconds:
+    required: true
+  sanitizer:
+    default: address
+  mode:
+    default: code-change
+  github-token:
+    required: true
+  storage-token:
+    required: true
+runs:
+  using: docker
+  image: ./run_fuzzers.Dockerfile
+  env:
+    FUZZ_SECONDS: ${{ inputs.fuzz-seconds }}
+    MODE: ${{ inputs.mode }}
+    LANGUAGE: rust
+    DRY_RUN: false
+    SANITIZER: ${{ inputs.sanitizer }}
+    GITHUB_TOKEN: ${{ inputs.github-token }}
+    LOW_DISK_SPACE: false
+    GIT_STORE_REPO: https://${{ inputs.storage-token }}@github.com/xiph/rav1e.git
+    GIT_STORE_BRANCH: clusterfuzzlite
+    GIT_STORE_BRANCH_COVERAGE: gh-pages
+    REPORT_UNREPRODUCIBLE_CRASHES: false
+    MINIMIZE_CRASHES: false
+    CFL_PLATFORM: github

@@ -1,0 +1,8 @@
+homepage: "https://docs.rs/rav1e/latest/rav1e/"
+main_repo: 'https://github.com/xiph/rav1e/'
+primary_contact: "tdaede@xiph.org"
+sanitizers:
+  - address
+fuzzing_engines:
+  - libfuzzer
+language: rust
