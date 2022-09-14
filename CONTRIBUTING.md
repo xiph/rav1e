@@ -77,7 +77,8 @@ cargo test --release --features=decode_test_dav1d
 Run regular benchmarks with:
 
 ```sh
-cargo bench --features=bench
+cargo install cargo-criterion
+cargo criterion --features=bench
 ```
 
 ## Fuzzing
