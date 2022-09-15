@@ -287,37 +287,40 @@ ALIGN function_align
 %endif
 %endmacro
 
-%macro INV_TXFM_4X4_FN 2 ; type1, type2
-    INV_TXFM_FN          %1, %2, 0, 4x4
+%macro INV_TXFM_4X4_FN 2-3 10 ; type1, type2, bitdepth
+    INV_TXFM_FN          %1, %2, 0, 4x4, %3
 %ifidn %1_%2, dct_dct
-    imul                r6d, [cq], 2896
-    movd                xm1, [pw_2896x8]
-    mov                [cq], eobd ; 0
-    add                 r6d, 2048
-    sar                 r6d, 12
-    movd                xm0, r6d
-    packssdw            xm0, xm0
-    pmulhrsw            xm0, xm1
-    vpbroadcastw        xm0, xm0
-    mova                xm1, xm0
-    jmp m(iadst_4x4_internal_10bpc).end
-%endif
-%endmacro
-
-%macro INV_TXFM_4X4_12BPC_FN 2 ; type1, type2
-    INV_TXFM_FN          %1, %2, 0, 4x4, 12
-%ifidn %1_%2, dct_dct
+    vpbroadcastd        xm3, [pixel_%3bpc_max]
+%if %3 = 10
+.dconly:
     imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
+    mov                 r3d, 4
+.dconly2:
     add                 r6d, 128
     sar                 r6d, 8
+.dconly3:
     imul                r6d, 181
-    add                 r6d, 128
-    sar                 r6d, 8
+    add                 r6d, 2176
+    sar                 r6d, 12
     movd                xm0, r6d
-    vpbroadcastd         m0, xm0
-    mova                 m1, m0
-    jmp m(iadst_4x4_internal_12bpc).end
+    vpbroadcastw        xm0, xm0
+    pxor                xm2, xm2
+.dconly_loop:
+    movq                xm1, [dstq+strideq*0]
+    movhps              xm1, [dstq+strideq*1]
+    paddw               xm1, xm0
+    pmaxsw              xm1, xm2
+    pminsw              xm1, xm3
+    movq   [dstq+strideq*0], xm1
+    movhps [dstq+strideq*1], xm1
+    lea                dstq, [dstq+strideq*2]
+    sub                 r3d, 2
+    jg .dconly_loop
+    WRAP_XMM RET
+%else
+    jmp m(inv_txfm_add_dct_dct_4x4_10bpc).dconly
+%endif
 %endif
 %endmacro
 
@@ -556,10 +559,10 @@ cglobal iidentity_4x4_internal_10bpc, 0, 7, 6, dst, stride, c, eob, tx2
     movhps [r6  +strideq*1], xm1
     RET
 
-INV_TXFM_4X4_12BPC_FN dct, dct
-INV_TXFM_4X4_12BPC_FN dct, identity
-INV_TXFM_4X4_12BPC_FN dct, adst
-INV_TXFM_4X4_12BPC_FN dct, flipadst
+INV_TXFM_4X4_FN dct, dct,      12
+INV_TXFM_4X4_FN dct, identity, 12
+INV_TXFM_4X4_FN dct, adst,     12
+INV_TXFM_4X4_FN dct, flipadst, 12
 
 cglobal idct_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     call m(idct_4x4_internal_10bpc).main
@@ -576,10 +579,10 @@ cglobal idct_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     vpermq               m1, m1, q2031
     jmp m(iadst_4x4_internal_12bpc).end
 
-INV_TXFM_4X4_12BPC_FN adst, dct
-INV_TXFM_4X4_12BPC_FN adst, adst
-INV_TXFM_4X4_12BPC_FN adst, flipadst
-INV_TXFM_4X4_12BPC_FN adst, identity
+INV_TXFM_4X4_FN adst, dct,      12
+INV_TXFM_4X4_FN adst, adst,     12
+INV_TXFM_4X4_FN adst, flipadst, 12
+INV_TXFM_4X4_FN adst, identity, 12
 
 cglobal iadst_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     call m(iadst_4x4_internal_10bpc).main
@@ -628,10 +631,10 @@ cglobal iadst_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     movhps [r6  +strideq*1], xm1
     RET
 
-INV_TXFM_4X4_12BPC_FN flipadst, dct
-INV_TXFM_4X4_12BPC_FN flipadst, adst
-INV_TXFM_4X4_12BPC_FN flipadst, flipadst
-INV_TXFM_4X4_12BPC_FN flipadst, identity
+INV_TXFM_4X4_FN flipadst, dct,      12
+INV_TXFM_4X4_FN flipadst, adst,     12
+INV_TXFM_4X4_FN flipadst, flipadst, 12
+INV_TXFM_4X4_FN flipadst, identity, 12
 
 cglobal iflipadst_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     call m(iadst_4x4_internal_10bpc).main
@@ -652,10 +655,10 @@ cglobal iflipadst_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     mova                 m1, m2
     jmp m(iadst_4x4_internal_12bpc).end
 
-INV_TXFM_4X4_12BPC_FN identity, dct
-INV_TXFM_4X4_12BPC_FN identity, adst
-INV_TXFM_4X4_12BPC_FN identity, flipadst
-INV_TXFM_4X4_12BPC_FN identity, identity
+INV_TXFM_4X4_FN identity, dct,      12
+INV_TXFM_4X4_FN identity, adst,     12
+INV_TXFM_4X4_FN identity, flipadst, 12
+INV_TXFM_4X4_FN identity, identity, 12
 
 cglobal iidentity_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     mova                 m1, [itx4_shuf]
@@ -690,33 +693,13 @@ cglobal iidentity_4x4_internal_12bpc, 0, 7, 6, dst, stride, c, eob, tx2
     vpbroadcastd        xm3, [pixel_%3bpc_max]
 %if %3 = 10
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 8
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 2048
-    sar                 r6d, 12
-.end:
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
-    movd                xm0, r6d
-    vpbroadcastw        xm0, xm0
-    pxor                xm2, xm2
-.end_loop:
-    movq                xm1, [dstq+strideq*0]
-    movhps              xm1, [dstq+strideq*1]
-    paddw               xm1, xm0
-    pmaxsw              xm1, xm2
-    pminsw              xm1, xm3
-    movq   [dstq+strideq*0], xm1
-    movhps [dstq+strideq*1], xm1
-    lea                dstq, [dstq+strideq*2]
-    sub                 r3d, 2
-    jg .end_loop
-    WRAP_XMM RET
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
+    jmp m(inv_txfm_add_dct_dct_4x4_10bpc).dconly2
 %else
     jmp m(inv_txfm_add_dct_dct_4x8_10bpc).dconly
 %endif
@@ -1188,12 +1171,12 @@ cglobal iidentity_4x8_internal_12bpc, 0, 7, 10, dst, stride, c, eob, tx2
     INV_TXFM_FN          %1, %2, 0, 4x16, %3
 %ifidn %1_%2, dct_dct
     vpbroadcastd        xm3, [pixel_%3bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 16
-    add                 r6d, 6144
-    sar                 r6d, 13
-    jmp m(inv_txfm_add_dct_dct_4x8_10bpc).end
+    add                 r6d, 384
+    sar                 r6d, 9
+    jmp m(inv_txfm_add_dct_dct_4x4_10bpc).dconly3
 %endif
 %endmacro
 
@@ -1834,39 +1817,18 @@ cglobal iidentity_4x16_internal_12bpc, 0, 7, 14, dst, stride, c, eob, tx2
 %macro INV_TXFM_8X4_FN 2-3 10 ; type1, type2, bitdepth
     INV_TXFM_FN          %1, %2, 0, 8x4, %3
 %ifidn %1_%2, dct_dct
-    vpbroadcastd         m4, [pixel_%3bpc_max]
+    vpbroadcastd         m3, [pixel_%3bpc_max]
 %if %3 = 10
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
-    movd                xm0, r6d
-    vpbroadcastw         m0, xm0
-.end:
-    pxor                 m3, m3
-    mova                xm1, [dstq+strideq*0]
-    vinserti128          m1, [dstq+strideq*1], 1
-    lea                  r6, [dstq+strideq*2]
-    mova                xm2, [r6  +strideq*0]
-    vinserti128          m2, [r6  +strideq*1], 1
-    paddw                m1, m0
-    paddw                m2, m0
-    pmaxsw               m1, m3
-    pmaxsw               m2, m3
-    pminsw               m1, m4
-    pminsw               m2, m4
-    mova         [dstq+strideq*0], xm1
-    vextracti128 [dstq+strideq*1], m1, 1
-    mova         [r6  +strideq*0], xm2
-    vextracti128 [r6  +strideq*1], m2, 1
-    RET
+    mov                 r3d, 4
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
+    add                 r6d, 128
+    sar                 r6d, 8
+    jmp m(inv_txfm_add_dct_dct_8x8_10bpc).dconly3
 %else
     jmp m(inv_txfm_add_dct_dct_8x4_10bpc).dconly
 %endif
@@ -2244,16 +2206,16 @@ cglobal iidentity_8x4_internal_12bpc, 0, 7, 10, dst, stride, c, eob, tx2
     vpbroadcastd         m3, [pixel_%3bpc_max]
 %if %3 = 10
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 8
 .dconly2:
-    add                 r6d, 6144
-    sar                 r6d, 13
+    add                 r6d, 384
+    sar                 r6d, 9
 .dconly3:
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
+    imul                r6d, 181
+    add                 r6d, 2176
+    sar                 r6d, 12
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
     pxor                 m2, m2
@@ -2779,12 +2741,12 @@ cglobal iidentity_8x8_internal_12bpc, 0, 7, 14, dst, stride, c, eob, tx2
     INV_TXFM_FN          %1, %2, %3, 8x16, %4
 %ifidn %1_%2, dct_dct
     vpbroadcastd         m3, [pixel_%4bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 16
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
     jmp m(inv_txfm_add_dct_dct_8x8_10bpc).dconly2
 %endif
 %endmacro
@@ -3426,16 +3388,16 @@ ALIGN function_align
     vpbroadcastd         m4, [pixel_%3bpc_max]
 %if %3 = 10
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 4
 .dconly2:
-    add                 r6d, 6144
-    sar                 r6d, 13
+    add                 r6d, 384
+    sar                 r6d, 9
 .dconly3:
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
+    imul                r6d, 181
+    add                 r6d, 2176
+    sar                 r6d, 12
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
     pxor                 m3, m3
@@ -3946,12 +3908,12 @@ cglobal iidentity_16x4_internal_12bpc, 0, 7, 14, dst, stride, c, eob, tx2
     INV_TXFM_FN          %1, %2, 0, 16x8, %3
 %ifidn %1_%2, dct_dct
     vpbroadcastd         m4, [pixel_%3bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 8
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
     jmp m(inv_txfm_add_dct_dct_16x4_10bpc).dconly2
 %endif
 %endmacro
@@ -4590,11 +4552,11 @@ cglobal iidentity_16x8_internal_12bpc, 0, 7, 16, 32*8, dst, stride, c, eob, tx2
     INV_TXFM_FN          %1, %2, %3, 16x16, %4
 %ifidn %1_%2, dct_dct
     vpbroadcastd         m4, [pixel_%4bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 16
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
     jmp m(inv_txfm_add_dct_dct_16x4_10bpc).dconly3
 %endif
 %endmacro
@@ -5748,11 +5710,11 @@ cglobal inv_txfm_add_dct_dct_8x32_10bpc, 4, 7, 0, dst, stride, c, eob
     RET
 .dconly:
     vpbroadcastd         m3, [pixel_10bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 32
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
     jmp m(inv_txfm_add_dct_dct_8x8_10bpc).dconly3
 ALIGN function_align
 .pass1_main_part1:
@@ -6294,11 +6256,11 @@ cglobal inv_txfm_add_dct_dct_8x32_12bpc, 4, 7, 0, dst, stride, c, eob
     RET
 .dconly:
     vpbroadcastd         m3, [pixel_12bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 32
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
     jmp m(inv_txfm_add_dct_dct_8x8_10bpc).dconly3
 ALIGN function_align
 .pass1_main:
@@ -6363,17 +6325,17 @@ cglobal inv_txfm_add_identity_identity_8x32_12bpc, 4, 7, 8, dst, stride, c, eob
 cglobal inv_txfm_add_dct_dct_32x8_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jnz .full
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 8
     vpbroadcastd         m4, [pixel_10bpc_max]
 .dconly:
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
 .dconly2:
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
+    imul                r6d, 181
+    add                 r6d, 2176
+    sar                 r6d, 12
     movd                xm0, r6d
     vpbroadcastw         m0, xm0
     pxor                 m3, m3
@@ -6499,7 +6461,7 @@ cglobal inv_txfm_add_identity_identity_32x8_10bpc, 4, 7, 8, dst, stride, c, eob
 cglobal inv_txfm_add_dct_dct_32x8_12bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jnz .full
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 8
     vpbroadcastd         m4, [pixel_12bpc_max]
@@ -6581,12 +6543,12 @@ cglobal inv_txfm_add_dct_dct_16x32_10bpc, 4, 7, 0, dst, stride, c, eob
     jmp .fast
 .dconly:
     vpbroadcastd         m4, [pixel_10bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 32
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
     jmp m(inv_txfm_add_dct_dct_16x4_10bpc).dconly2
 .eob44:
     mova          [r4+16*0], xm0
@@ -6932,14 +6894,14 @@ cglobal inv_txfm_add_dct_dct_32x16_10bpc, 4, 7, 0, dst, stride, c, eob
     REPX       {mova x, m8}, m9, m10, m11, m12, m13, m14, [rsp]
     jmp .end
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 16
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 6144
-    sar                 r6d, 13
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
+    add                 r6d, 384
+    sar                 r6d, 9
     vpbroadcastd         m4, [pixel_10bpc_max]
     jmp m(inv_txfm_add_dct_dct_32x8_10bpc).dconly2
 .full:
@@ -7203,7 +7165,7 @@ cglobal inv_txfm_add_dct_dct_32x32_10bpc, 4, 7, 0, dst, stride, c, eob
     call .main
     jmp .pass2
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 32
     vpbroadcastd         m4, [pixel_10bpc_max]
@@ -7482,11 +7444,11 @@ cglobal inv_txfm_add_dct_dct_16x64_10bpc, 4, 7, 0, dst, stride, c, eob
     jmp .pass2
 .dconly:
     vpbroadcastd         m4, [pixel_10bpc_max]
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 64
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
     jmp m(inv_txfm_add_dct_dct_16x4_10bpc).dconly3
 .fast:
     lea                  r4, [rsp+32*38]
@@ -7821,14 +7783,14 @@ cglobal inv_txfm_add_dct_dct_32x64_10bpc, 4, 7, 0, dst, stride, c, eob
     call .main
     jmp .pass2
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 64
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 6144
-    sar                 r6d, 13
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
+    add                 r6d, 384
+    sar                 r6d, 9
     vpbroadcastd         m4, [pixel_10bpc_max]
     jmp m(inv_txfm_add_dct_dct_32x8_10bpc).dconly2
 .fast:
@@ -8004,16 +7966,16 @@ ALIGN function_align
 cglobal inv_txfm_add_dct_dct_64x16_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jnz .normal
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 16
 .dconly:
-    add                 r6d, 10240
-    sar                 r6d, 14
+    add                 r6d, 640
+    sar                 r6d, 10
 .dconly2:
-    imul                r6d, 2896
-    add                 r6d, 34816
-    sar                 r6d, 16
+    imul                r6d, 181
+    add                 r6d, 2176
+    sar                 r6d, 12
     movd                xm0, r6d
 %if WIN64
     movaps          [rsp+8], xmm6
@@ -8278,14 +8240,14 @@ cglobal inv_txfm_add_dct_dct_64x32_10bpc, 4, 7, 0, dst, stride, c, eob
     call .main
     jmp .pass2
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 32
-    add                 r6d, 2048
-    sar                 r6d, 12
-    imul                r6d, 2896
-    add                 r6d, 6144
-    sar                 r6d, 13
+    add                 r6d, 128
+    sar                 r6d, 8
+    imul                r6d, 181
+    add                 r6d, 384
+    sar                 r6d, 9
     jmp m(inv_txfm_add_dct_dct_64x16_10bpc).dconly2
 .fast:
     pxor                 m0, m0
@@ -8427,7 +8389,7 @@ cglobal inv_txfm_add_dct_dct_64x64_10bpc, 4, 7, 0, dst, stride, c, eob
     call .main
     jmp .pass2
 .dconly:
-    imul                r6d, [cq], 2896
+    imul                r6d, [cq], 181
     mov                [cq], eobd ; 0
     mov                 r3d, 64
     jmp m(inv_txfm_add_dct_dct_64x16_10bpc).dconly
