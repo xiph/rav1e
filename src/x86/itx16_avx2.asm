@@ -43,10 +43,14 @@ iadst4_dconly2a: dw 10568, 10568, 10568, 10568, 19856, 19856, 19856, 19856
 idct4_shuf:   db  0,  1,  4,  5, 12, 13,  8,  9,  2,  3,  6,  7, 14, 15, 10, 11
 idct32_shuf:  db  0,  1,  8,  9,  4,  5, 12, 13,  2,  3, 10, 11,  6,  7, 14, 15
 
-%macro COEF_PAIR 2
+%macro COEF_PAIR 2-3 0
 pd_%1_%2: dd %1, %1, %2, %2
 %define pd_%1 (pd_%1_%2 + 4*0)
 %define pd_%2 (pd_%1_%2 + 4*2)
+%if %3
+dd -%2, -%2
+%define pd_%2_m%2 pd_%2
+%endif
 %endmacro
 
 COEF_PAIR  201,  995
@@ -56,8 +60,8 @@ COEF_PAIR 1380,  601
 COEF_PAIR 1751, 2440
 COEF_PAIR 2598, 1189
 COEF_PAIR 2751, 2106
-COEF_PAIR 2896, 1567
-COEF_PAIR 2896, 3784
+COEF_PAIR 2896, 1567, 1
+COEF_PAIR 2896, 3784, 1
 COEF_PAIR 3035, 3513
 COEF_PAIR 3166, 3920
 COEF_PAIR 3703, 3290
@@ -217,7 +221,7 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c, eob, bdmax
 
 ; dst1 = (src1 * coef1 - src2 * coef2 + rnd) >> 12
 ; dst2 = (src1 * coef2 + src2 * coef1 + rnd) >> 12
-; flags: 1 = packed, 2 = inv_dst1, 4 = inv_dst2
+; flags: 1 = packed, 2 = inv_dst2
 ; skip round/shift if rnd is not a number
 %macro ITX_MULSUB_2D 8-9 0 ; dst/src[1-2], tmp[1-3], rnd, coef[1-2], flags
 %if %8 < 32
@@ -244,7 +248,7 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c, eob, bdmax
     pmulld              m%1, m%5
     pmulld              m%2, m%5
 %endif
-%if %9 & 4
+%if %9 & 2
     psubd               m%4, m%6, m%4
     psubd               m%2, m%4, m%2
 %else
@@ -253,17 +257,10 @@ cglobal inv_txfm_add_wht_wht_4x4_16bpc, 3, 7, 6, dst, stride, c, eob, bdmax
 %endif
     paddd               m%2, m%4
 %endif
-%if %9 & 2 ; invert the upper half of dst1 before rounding
-    vbroadcasti128      m%4, [pw_2048_m2048]
-    psubd               m%1, m%3
-    psignd              m%1, m%4
-    paddd               m%1, m%6
-%else
 %ifnum %6
     paddd               m%1, m%6
 %endif
     psubd               m%1, m%3
-%endif
 %ifnum %6
     psrad               m%2, 12
     psrad               m%1, 12
@@ -2957,7 +2954,7 @@ ALIGN function_align
     vpbroadcastd        m15, [pd_3784]
     vpbroadcastd        m10, [pd_1567]
     ITX_MULSUB_2D         1, 8, 3, 9, _, 11, 10, 15
-    ITX_MULSUB_2D         6, 4, 3, 9, _, 11, 10, 15, 4
+    ITX_MULSUB_2D         6, 4, 3, 9, _, 11, 10, 15, 2
     psubd                m3, m1, m4 ; t10
     paddd                m1, m4     ; t9
     psubd                m4, m0, m2 ; t11a
@@ -3538,13 +3535,30 @@ ALIGN function_align
 .pass1_main2:
     ITX_MULSUB_2D        10, 11, 4, 12, 13, 7,  401_1931, 4076_3612, 1
     ITX_MULSUB_2D         5,  6, 4, 12, 13, 7, 3166_3920, 2598_1189, 1
-    psubd                m4, m10, m5  ;  t9 -t10
+    vbroadcasti128      m12, [pd_3784_m3784]
+    psubd                m4, m10, m5
     paddd               m10, m5       ;  t8  t11
-    psubd                m5, m11, m6  ; t14 -t13
+    psignd               m4, m12      ;  t9  t10
+    psubd                m5, m11, m6
     paddd               m11, m6       ; t15  t12
-    REPX     {pmaxsd x, m8}, m4, m5, m10, m11
-    REPX     {pminsd x, m9}, m4, m5, m10, m11
-    ITX_MULSUB_2D         5, 4, 6, 12, 13, 7, 1567, 3784, 2
+    psignd               m5, m12      ; t14  t13
+    vpbroadcastd         m6, [pd_1567]
+    vpbroadcastd        m13, [pd_3784]
+    REPX     {pmaxsd x, m8}, m5, m4
+    REPX     {pminsd x, m9}, m5, m4
+    pmulld              m12, m5
+    pmulld               m5, m6
+    vbroadcasti128       m6, [pd_1567_m1567]
+    pmulld              m13, m4
+    pmulld               m4, m6
+    REPX     {pmaxsd x, m8}, m10, m11, m0, m1
+    REPX     {pminsd x, m9}, m10, m11, m0, m1
+    paddd               m12, m7
+    paddd                m5, m7
+    paddd                m4, m12
+    psubd                m5, m13
+    psrad                m4, 12       ; t14a t10a
+    psrad                m5, 12       ; t9a  t13a
     vpbroadcastd        m12, [pd_2896]
     punpckhqdq           m6, m11, m5
     punpcklqdq          m11, m4
@@ -3558,8 +3572,8 @@ ALIGN function_align
     REPX     {pminsd x, m9}, m5, m6
     pmulld               m5, m12
     pmulld               m6, m12
-    REPX     {pmaxsd x, m8}, m0, m1, m2, m3, m11, m10
-    REPX     {pminsd x, m9}, m0, m1, m2, m3, m11, m10
+    REPX     {pmaxsd x, m8}, m2, m3, m11, m10
+    REPX     {pminsd x, m9}, m2, m3, m11, m10
     ret
 ALIGN function_align
 .pass1_main3:
@@ -5829,7 +5843,7 @@ ALIGN function_align
     vpbroadcastd        m15, [pd_4017]
     vpbroadcastd        m10, [pd_799]
     ITX_MULSUB_2D         5, 8, 3, 9, _, 11, 10, 15    ; t17a, t30a
-    ITX_MULSUB_2D         2, 4, 3, 9, _, 11, 10, 15, 4 ; t29a, t18a
+    ITX_MULSUB_2D         2, 4, 3, 9, _, 11, 10, 15, 2 ; t29a, t18a
     psubd                m3, m0, m6 ; t19a
     paddd                m0, m6     ; t16a
     psubd                m6, m7, m1 ; t28a
@@ -5898,7 +5912,7 @@ ALIGN function_align
     vpbroadcastd        m15, [pd_2276]
     vpbroadcastd        m10, [pd_3406]
     ITX_MULSUB_2D         4, 2, 3, 9, _, 11, 10, 15    ; t21a, t26a
-    ITX_MULSUB_2D         8, 5, 3, 9, _, 11, 10, 15, 4 ; t25a, t22a
+    ITX_MULSUB_2D         8, 5, 3, 9, _, 11, 10, 15, 2 ; t25a, t22a
     psubd                m3, m0, m6 ; t27a
     paddd                m0, m6     ; t24a
     psubd                m6, m7, m1 ; t20a
@@ -5911,8 +5925,8 @@ ALIGN function_align
     REPX    {pminsd x, m13}, m3, m6, m1, m4, m0, m7, m5, m8
     vpbroadcastd        m15, [pd_3784]
     vpbroadcastd        m10, [pd_1567]
-    ITX_MULSUB_2D         4, 1, 2, 9, _, 11, 10, 15, 4 ; t26a, t21a
-    ITX_MULSUB_2D         3, 6, 2, 9, _, 11, 10, 15, 4 ; t27,  t20
+    ITX_MULSUB_2D         4, 1, 2, 9, _, 11, 10, 15, 2 ; t26a, t21a
+    ITX_MULSUB_2D         3, 6, 2, 9, _, 11, 10, 15, 2 ; t27,  t20
     mova                 m9, [r6-32*4] ; t16a
     mova                m10, [r6-32*3] ; t17
     psubd                m2, m9, m7    ; t23
@@ -7695,7 +7709,7 @@ ALIGN function_align
     REPX    {pmaxsd x, m12}, m8, m1, m6, m2
     REPX    {pminsd x, m13}, m8, m1, m6, m2
     ITX_MULSUB_2D         1, 8, 5, 9, _, 11, 10, 15    ; t33a, t62a
-    ITX_MULSUB_2D         2, 6, 5, 9, _, 11, 10, 15, 4 ; t61a, t34a
+    ITX_MULSUB_2D         2, 6, 5, 9, _, 11, 10, 15, 2 ; t61a, t34a
     REPX    {pmaxsd x, m12}, m0, m3, m7, m4
     REPX    {pminsd x, m13}, m0, m3, m7, m4
     vpbroadcastd        m10, [r5+4*10]
@@ -7750,7 +7764,7 @@ ALIGN function_align
     REPX    {pmaxsd x, m12}, m8, m1, m3, m4
     REPX    {pminsd x, m13}, m8, m1, m3, m4
     ITX_MULSUB_2D         1, 8, 6, 9, _, 11, 10, 15    ; t39a, t56a
-    ITX_MULSUB_2D         4, 3, 6, 9, _, 11, 10, 15, 4 ; t55a, t40a
+    ITX_MULSUB_2D         4, 3, 6, 9, _, 11, 10, 15, 2 ; t55a, t40a
     REPX    {pmaxsd x, m12}, m0, m2, m5, m7
     REPX    {pminsd x, m13}, m0, m5, m2, m7
     psubd                m6, m2, m7 ; t48a
