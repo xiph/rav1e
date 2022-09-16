@@ -715,6 +715,8 @@ pub struct CodedFrameData<T: Pixel> {
   /// Pre-computed activity_scale.
   pub activity_scales: Box<[DistortionScale]>,
   pub activity_mask: ActivityMask,
+  /// Pre-computed average brightness of each importance block
+  pub block_brightnesses: Box<[u16]>,
   /// Combined metric of activity and distortion
   pub spatiotemporal_scores: Box<[DistortionScale]>,
 }
@@ -744,6 +746,7 @@ impl<T: Pixel> CodedFrameData<T> {
       ]
       .into_boxed_slice(),
       activity_mask: Default::default(),
+      block_brightnesses: Default::default(),
       spatiotemporal_scores: Default::default(),
     }
   }
