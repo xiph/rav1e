@@ -228,10 +228,10 @@ pub struct CliOptions {
   #[clap(long, help_heading = "DEBUGGING")]
   pub benchmark: bool,
   /// Verbose logging; outputs info for every frame
-  #[clap(long, help_heading = "DEBUGGING")]
+  #[clap(long, short, help_heading = "DEBUGGING")]
   pub verbose: bool,
   /// Do not output any status message
-  #[clap(long, conflicts_with = "verbose", help_heading = "DEBUGGING")]
+  #[clap(long, short, conflicts_with = "verbose", help_heading = "DEBUGGING")]
   pub quiet: bool,
   /// Calculate and display PSNR metrics
   #[clap(long, help_heading = "DEBUGGING")]
