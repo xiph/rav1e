@@ -85,7 +85,6 @@ pub struct CliOptions {
     long,
     value_parser,
     value_name = "STATS_FILE",
-    conflicts_with = "first-pass",
     help_heading = "ENCODE SETTINGS"
   )]
   pub second_pass: Option<PathBuf>,
