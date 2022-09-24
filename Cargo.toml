@@ -57,7 +57,11 @@ wasm = ["wasm-bindgen"]
 # - i-qres.png: quarter-resolution luma planes,
 # - i-hres.png: half-resolution luma planes,
 # - i-mvs.bin: motion vectors,
-# - i-imps.bin: block importances.
+# - i-imps.bin: block importances,
+# - i-activity_scales.bin: spatial scales,
+# - i-distortion_scales.bin: temporal scales,
+# - i-spatiotemporal_scales.bin,
+# - i-thresholds.bin: segmentation thresholds.
 dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]

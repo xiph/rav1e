@@ -590,6 +590,23 @@ impl SegmentationState {
       *threshold = DistortionScale::new(base_ac_q.pow(2), q1 * q2);
     }
   }
+
+  #[cfg(feature = "dump_lookahead_data")]
+  pub fn dump_threshold(
+    &self, data_location: std::path::PathBuf, input_frameno: u64,
+  ) {
+    use byteorder::{NativeEndian, WriteBytesExt};
+    let file_name = format!("{:010}-thresholds", input_frameno);
+    let max_segment = self.max_segment;
+    // dynamic allocation: debugging only
+    let mut buf = vec![];
+    buf.write_u64::<NativeEndian>(max_segment as u64).unwrap();
+    for &v in &self.threshold[..max_segment as usize] {
+      buf.write_u32::<NativeEndian>(v.0).unwrap();
+    }
+    ::std::fs::write(data_location.join(file_name).with_extension("bin"), buf)
+      .unwrap();
+  }
 }
 
 // Frame Invariants are invariant inside a frame
@@ -768,6 +785,43 @@ impl<T: Pixel> CodedFrameData<T> {
     self.spatiotemporal_scores = self.distortion_scales.clone();
     inv_mean.blog64() >> 1
   }
+
+  #[cfg(feature = "dump_lookahead_data")]
+  pub fn dump_scales(
+    &self, data_location: std::path::PathBuf, scales: Scales,
+    input_frameno: u64,
+  ) {
+    use byteorder::{NativeEndian, WriteBytesExt};
+    let file_name = format!(
+      "{:010}-{}",
+      input_frameno,
+      match scales {
+        Scales::ActivityScales => "activity_scales",
+        Scales::DistortionScales => "distortion_scales",
+        Scales::SpatiotemporalScales => "spatiotemporal_scales",
+      }
+    );
+    // dynamic allocation: debugging only
+    let mut buf = vec![];
+    buf.write_u64::<NativeEndian>(self.w_in_imp_b as u64).unwrap();
+    buf.write_u64::<NativeEndian>(self.h_in_imp_b as u64).unwrap();
+    for &v in match scales {
+      Scales::ActivityScales => &self.activity_scales[..],
+      Scales::DistortionScales => &self.distortion_scales[..],
+      Scales::SpatiotemporalScales => &self.spatiotemporal_scores[..],
+    } {
+      buf.write_u32::<NativeEndian>(v.0).unwrap();
+    }
+    ::std::fs::write(data_location.join(file_name).with_extension("bin"), buf)
+      .unwrap();
+  }
+}
+
+#[cfg(feature = "dump_lookahead_data")]
+pub enum Scales {
+  ActivityScales,
+  DistortionScales,
+  SpatiotemporalScales,
 }
 
 pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
