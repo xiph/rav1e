@@ -571,10 +571,10 @@ pub struct ScaledDistortion(u64);
 
 impl DistortionScale {
   /// Bits past the radix point
-  const SHIFT: u32 = 12;
+  const SHIFT: u32 = 14;
   /// Number of bits used. Determines the max value.
-  /// 24 bits is likely excessive.
-  const BITS: u32 = 24;
+  /// 28 bits is quite excessive.
+  const BITS: u32 = 28;
   /// Maximum internal value
   const MAX: u64 = (1 << Self::BITS) - 1;
 
@@ -586,9 +586,12 @@ impl DistortionScale {
   }
 
   pub fn inv_mean(slice: &[Self]) -> Self {
-    let sum = slice.iter().map(|&s| s.0 as u64).sum::<u64>().max(1);
+    use crate::util::{bexp64, blog32_q11};
+    let sum = slice.iter().map(|&s| blog32_q11(s.0) as i64).sum::<i64>();
+    let log_inv_mean_q11 =
+      (Self::SHIFT << 11) as i64 - sum / slice.len() as i64;
     Self(
-      ((((slice.len() as u64) << (2 * Self::SHIFT)) + (sum >> 1)) / sum)
+      bexp64((log_inv_mean_q11 + (Self::SHIFT << 11) as i64) << (57 - 11))
         .min((1 << Self::BITS) - 1)
         .max(1) as u32,
     )
@@ -596,9 +599,16 @@ impl DistortionScale {
 
   /// Binary logarithm in Q11
   #[inline]
-  pub const fn blog32(self) -> i16 {
+  pub const fn blog16(self) -> i16 {
     use crate::util::blog32_q11;
     (blog32_q11(self.0) - ((Self::SHIFT as i32) << 11)) as i16
+  }
+
+  /// Binary logarithm in Q57
+  #[inline]
+  pub const fn blog64(self) -> i64 {
+    use crate::util::{blog64, q57};
+    blog64(self.0 as i64) - q57(Self::SHIFT as i32)
   }
 
   /// Multiply, round and shift
@@ -681,11 +691,11 @@ impl Distortion {
   }
 }
 
-impl std::ops::Mul<f64> for Distortion {
+impl std::ops::Mul<DistortionScale> for Distortion {
   type Output = ScaledDistortion;
   #[inline]
-  fn mul(self, rhs: f64) -> ScaledDistortion {
-    ScaledDistortion((self.0 as f64 * rhs) as u64)
+  fn mul(self, rhs: DistortionScale) -> ScaledDistortion {
+    ScaledDistortion(rhs.mul_u64(self.0))
   }
 }
 

@@ -38,17 +38,15 @@ pub fn bench_pred_fn<F>(c: &mut Criterion, id: &str, f: F)
 where
   F: FnMut(&mut Bencher) + 'static,
 {
-  let b = Benchmark::new(id, f);
-  c.bench(
-    id,
-    if id.ends_with("_4x4_u8") {
-      b.throughput(Throughput::Bytes(16))
-    } else if id.ends_with("_4x4") {
-      b.throughput(Throughput::Bytes(32))
-    } else {
-      b
-    },
-  );
+  let mut b = c.benchmark_group(id);
+
+  if id.ends_with("_4x4_u8") {
+    b.throughput(Throughput::Bytes(16));
+  } else if id.ends_with("_4x4") {
+    b.throughput(Throughput::Bytes(32));
+  }
+
+  b.bench_function(BenchmarkId::from_parameter(id), f);
 }
 
 pub fn pred_bench(c: &mut Criterion) {

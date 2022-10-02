@@ -156,9 +156,6 @@ impl SpeedSettings {
 
     if speed >= 7 {
       settings.prediction.prediction_modes = PredictionModesSetting::Simple;
-    }
-
-    if speed >= 8 {
       // Multiref is enabled automatically if low_latency is false.
       //
       // If low_latency is true, enabling multiref allows using multiple
@@ -168,14 +165,17 @@ impl SpeedSettings {
       settings.fast_deblock = true;
     }
 
-    if speed >= 9 {
+    if speed >= 8 {
       settings.rdo_lookahead_frames = 10;
+      settings.lrf = false;
+    }
 
+    if speed >= 9 {
       // 8x8 is fast enough to use until very high speed levels,
       // because 8x8 with reduced TX set is faster but with equivalent
       // or better quality compared to 16x16 (to which reduced TX set does not apply).
       settings.partition.partition_range =
-        PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_64X64);
+        PartitionRange::new(BlockSize::BLOCK_16X16, BlockSize::BLOCK_32X32);
 
       // FIXME: With unknown reasons, inter_tx_split does not work if reduced_tx_set is false
       settings.transform.enable_inter_tx_split = true;
@@ -183,7 +183,6 @@ impl SpeedSettings {
 
     if speed >= 10 {
       settings.scene_detection_mode = SceneDetectionSpeed::Fast;
-      settings.lrf = false;
 
       settings.partition.partition_range =
         PartitionRange::new(BlockSize::BLOCK_32X32, BlockSize::BLOCK_32X32);

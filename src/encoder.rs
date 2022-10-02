@@ -651,7 +651,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub ac_delta_q: [i8; 3],
   pub lambda: f64,
   pub me_lambda: f64,
-  pub dist_scale: [f64; 3],
+  pub dist_scale: [DistortionScale; 3],
   pub me_range_scale: u8,
   pub use_tx_domain_distortion: bool,
   pub use_tx_domain_rate: bool,
@@ -734,7 +734,8 @@ impl<T: Pixel> CodedFrameData<T> {
   }
 
   // Assumes that we have already computed activity scales and distortion scales
-  pub fn compute_spatiotemporal_scores(&mut self) -> u32 {
+  // Returns -0.5 log2(mean(scale))
+  pub fn compute_spatiotemporal_scores(&mut self) -> i64 {
     let mut scores = self
       .distortion_scales
       .iter()
@@ -754,17 +755,18 @@ impl<T: Pixel> CodedFrameData<T> {
 
     self.spatiotemporal_scores = scores;
 
-    inv_mean.0
+    inv_mean.blog64() >> 1
   }
 
   // Assumes that we have already computed distortion_scales
-  pub fn compute_temporal_scores(&mut self) -> u32 {
+  // Returns -0.5 log2(mean(scale))
+  pub fn compute_temporal_scores(&mut self) -> i64 {
     let inv_mean = DistortionScale::inv_mean(&self.distortion_scales);
     for scale in self.distortion_scales.iter_mut() {
       *scale *= inv_mean;
     }
     self.spatiotemporal_scores = self.distortion_scales.clone();
-    inv_mean.0
+    inv_mean.blog64() >> 1
   }
 }
 
@@ -876,7 +878,7 @@ impl<T: Pixel> FrameInvariants<T> {
       dc_delta_q: [0; 3],
       ac_delta_q: [0; 3],
       lambda: 0.0,
-      dist_scale: [1.0; 3],
+      dist_scale: Default::default(),
       me_lambda: 0.0,
       me_range_scale: 1,
       use_tx_domain_distortion,
@@ -1205,7 +1207,7 @@ impl<T: Pixel> FrameInvariants<T> {
     self.lambda =
       qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
     self.me_lambda = self.lambda.sqrt();
-    self.dist_scale = qps.dist_scale;
+    self.dist_scale = qps.dist_scale.map(DistortionScale::from);
 
     match self.cdef_search_method {
       CDEFSearchMethod::PickFromQ => {

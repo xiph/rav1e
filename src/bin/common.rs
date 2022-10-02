@@ -85,7 +85,6 @@ pub struct CliOptions {
     long,
     value_parser,
     value_name = "STATS_FILE",
-    conflicts_with = "first-pass",
     help_heading = "ENCODE SETTINGS"
   )]
   pub second_pass: Option<PathBuf>,
@@ -239,10 +238,10 @@ pub struct CliOptions {
   #[clap(long, help_heading = "DEBUGGING")]
   pub benchmark: bool,
   /// Verbose logging; outputs info for every frame
-  #[clap(long, help_heading = "DEBUGGING")]
+  #[clap(long, short, help_heading = "DEBUGGING")]
   pub verbose: bool,
   /// Do not output any status message
-  #[clap(long, conflicts_with = "verbose", help_heading = "DEBUGGING")]
+  #[clap(long, short, conflicts_with = "verbose", help_heading = "DEBUGGING")]
   pub quiet: bool,
   /// Calculate and display PSNR metrics
   #[clap(long, help_heading = "DEBUGGING")]
@@ -261,17 +260,18 @@ pub struct CliOptions {
 fn get_version() -> &'static str {
   static VERSION_STR: Lazy<String> = Lazy::new(|| {
     format!(
-      "{} ({})",
+      "{} ({}) ({})",
+      built_info::PKG_VERSION,
       built_info::GIT_VERSION
         .map(|ver| if built_info::GIT_DIRTY.expect("git is true") {
           format!("{}-MODIFIED", ver)
         } else {
           ver.to_string()
         })
-        .unwrap_or_else(|| built_info::PKG_VERSION.to_string()),
+        .unwrap_or_else(|| "UNKNOWN".to_string()),
       // We cannot use `built_info::DEBUG` because that tells us if there are debug symbols,
       // not if there are optimizations.
-      if cfg!(debug_assertions) { "Debug" } else { "Release" }
+      if cfg!(debug_assertions) { "debug" } else { "release" }
     )
   });
   &VERSION_STR
@@ -288,7 +288,7 @@ fn get_long_version() -> &'static str {
       get_version(),
       built_info::RUSTC_VERSION,
       built_info::TARGET,
-      env!("CARGO_CFG_TARGET_FEATURE"),
+      option_env!("CARGO_CFG_TARGET_FEATURE").unwrap_or("(None)"),
       if cfg!(feature = "asm") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "threading") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
@@ -342,9 +342,9 @@ pub struct ParsedCliOptions {
   pub pass1file_name: Option<PathBuf>,
   pub pass2file_name: Option<PathBuf>,
   pub save_config: Option<PathBuf>,
+  pub photon_noise: u8,
   #[cfg(feature = "unstable")]
   pub slots: usize,
-  pub generate_grain_strength: u8,
 }
 
 #[cfg(feature = "serialize")]
@@ -489,9 +489,9 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     pass1file_name: matches.first_pass.clone(),
     pass2file_name: matches.second_pass.clone(),
     save_config: save_config_path,
+    photon_noise: matches.photon_noise,
     #[cfg(feature = "unstable")]
     slots,
-    generate_grain_strength: matches.photon_noise,
   })
 }
 

@@ -86,7 +86,7 @@ fn segmentation_optimize_inner<T: Pixel>(
     let spatiotemporal_scores =
       &fi.coded_frame_data.as_ref().unwrap().spatiotemporal_scores;
     let mut log2_scale_q11 = Vec::with_capacity(spatiotemporal_scores.len());
-    log2_scale_q11.extend(spatiotemporal_scores.iter().map(|&s| s.blog32()));
+    log2_scale_q11.extend(spatiotemporal_scores.iter().map(|&s| s.blog16()));
     log2_scale_q11.sort_unstable();
     let l = &log2_scale_q11;
     (kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l), kmeans(l))

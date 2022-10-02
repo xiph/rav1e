@@ -101,7 +101,7 @@ fn run_dist_bench<T: Pixel>(
   })
 }
 
-fn bench_get_sad(b: &mut Bencher, &&(bs, bit_depth): &&(BlockSize, usize)) {
+fn bench_get_sad(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
   if bit_depth <= 8 {
     run_dist_bench::<u8>(b, &(bs, bit_depth), dist::get_sad::<u8>)
   } else {
@@ -110,10 +110,18 @@ fn bench_get_sad(b: &mut Bencher, &&(bs, bit_depth): &&(BlockSize, usize)) {
 }
 
 pub fn get_sad(c: &mut Criterion) {
-  c.bench_function_over_inputs("get_sad", bench_get_sad, DIST_BENCH_SET);
+  let mut b = c.benchmark_group("get_sad");
+
+  for i in DIST_BENCH_SET.iter() {
+    b.bench_with_input(
+      BenchmarkId::new(i.0.to_string(), i.1),
+      i,
+      bench_get_sad,
+    );
+  }
 }
 
-fn bench_get_satd(b: &mut Bencher, &&(bs, bit_depth): &&(BlockSize, usize)) {
+fn bench_get_satd(b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize)) {
   if bit_depth <= 8 {
     run_dist_bench::<u8>(b, &(bs, bit_depth), dist::get_satd::<u8>)
   } else {
@@ -122,7 +130,15 @@ fn bench_get_satd(b: &mut Bencher, &&(bs, bit_depth): &&(BlockSize, usize)) {
 }
 
 pub fn get_satd(c: &mut Criterion) {
-  c.bench_function_over_inputs("get_satd", bench_get_satd, DIST_BENCH_SET);
+  let mut b = c.benchmark_group("get_satd");
+
+  for i in DIST_BENCH_SET.iter() {
+    b.bench_with_input(
+      BenchmarkId::new(i.0.to_string(), i.1),
+      i,
+      bench_get_satd,
+    );
+  }
 }
 
 /// Fill data for scaling of one
@@ -181,7 +197,7 @@ fn run_weighted_sse_bench<T: Pixel>(
 }
 
 fn bench_get_weighted_sse(
-  b: &mut Bencher, &&(bs, bit_depth): &&(BlockSize, usize),
+  b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize),
 ) {
   if bit_depth <= 8 {
     run_weighted_sse_bench::<u8>(
@@ -199,9 +215,13 @@ fn bench_get_weighted_sse(
 }
 
 pub fn get_weighted_sse(c: &mut Criterion) {
-  c.bench_function_over_inputs(
-    "get_weighted_sse",
-    bench_get_weighted_sse,
-    DIST_BENCH_SET,
-  );
+  let mut b = c.benchmark_group("get_weighted_sse");
+
+  for i in DIST_BENCH_SET.iter() {
+    b.bench_with_input(
+      BenchmarkId::new(i.0.to_string(), i.1),
+      i,
+      bench_get_weighted_sse,
+    );
+  }
 }

@@ -1558,8 +1558,7 @@ mod test {
       }
     }
 
-    // SAFETY: ???
-    let above_left = unsafe { *above.as_ptr().offset(-1) };
+    let above_left = max12bit;
 
     pred_paeth(
       &mut o.as_region_mut(),

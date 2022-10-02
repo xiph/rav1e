@@ -10,9 +10,13 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
+; Must match crate::dist::rust::GET_WEIGHTED_SSE_SHIFT
+%define get_weighted_sse_shift 8
+%define get_weighted_sse_round (1 << get_weighted_sse_shift >> 1)
+
 SECTION_RODATA 32
 addsub: times 16 db 1, -1
-rounding: times 4 dq 0x800
+rounding: times 4 dq get_weighted_sse_round
 
 SECTION .text
 
@@ -24,8 +28,8 @@ SECTION .text
     ; Multiply and shift using scalar code
     mov             scaled, [scaleq]
     imul               rax, scaleq
-    add                rax, 0x800
-    shr                rax, 12
+    add                rax, get_weighted_sse_round
+    shr                rax, get_weighted_sse_shift
 %endmacro
 
 ; 1 is the input and output register.
@@ -39,11 +43,9 @@ SECTION .text
 
     ; Multiply and shift with rounding.
     pmuludq            m%1, m%2
-    ; TODO: Alter rust source so that rounding can always done at the end (i.e.
-    ; only do it once)
     mova               m%2, [rounding]
     paddq              m%1, m%2
-    psrlq              m%1, 12
+    psrlq              m%1, get_weighted_sse_shift
 %endmacro
 
 %macro LOAD_SCALES_4X8 2
@@ -90,8 +92,8 @@ SECTION .text
     mova               m%3, [rounding]
     paddq              m%1, m%3
     paddq              m%2, m%3
-    psrlq              m%1, 12
-    psrlq              m%2, 12
+    psrlq              m%1, get_weighted_sse_shift
+    psrlq              m%2, get_weighted_sse_shift
     paddq              m%1, m%2
 %endmacro
 

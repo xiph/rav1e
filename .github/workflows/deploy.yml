@@ -26,7 +26,9 @@ jobs:
 
     - name: Build rav1e-ch (unstable)
       env:
-        RUSTFLAGS: "-C target-feature=+avx2,+fma"
+        RUSTFLAGS: "-C target-cpu=x86-64-v3"
+        CARGO_PROFILE_RELEASE_LTO: "true"
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
       run: cargo build --release --features=unstable,channel-api --bin=rav1e-ch
 
     - name: Upload rav1e-ch msvc binary (unstable)

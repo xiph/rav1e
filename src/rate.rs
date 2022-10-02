@@ -735,10 +735,8 @@ impl RCState {
   // TODO: Separate quantizers for Cb and Cr.
   pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
-    maybe_prev_log_base_q: Option<i64>, inv_mean_scale_q12: u32,
+    maybe_prev_log_base_q: Option<i64>, log_isqrt_mean_scale: i64,
   ) -> QuantizerParameters {
-    let log_isqrt_mean_scale =
-      (blog64(inv_mean_scale_q12 as i64) - q57(12)) >> 1;
     // Is rate control active?
     if self.target_bitrate <= 0 {
       // Rate control is not active.
@@ -1279,7 +1277,7 @@ impl RCState {
     if !self.pass1_data_retrieved {
       if self.twopass_state == PASS_SINGLE {
         pass1_log_base_q = self
-          .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 1u32 << 12)
+          .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0)
           .log_base_q;
       }
     } else {
