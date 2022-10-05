@@ -109,10 +109,8 @@ fn segmentation_optimize_inner<T: Pixel>(
           fi.config.bit_depth as u8,
           is_hdr,
         );
-        // Don't expand the frame level scales too much or we create too much variance in segments.
-        DistortionScale::from(
-          score.max(frame_score_min * 0.9).min(frame_score_max * 1.1),
-        )
+        // We need to maintain the overall range of values within the frame
+        DistortionScale::from(score.max(frame_score_min).min(frame_score_max))
       })
       .collect();
 
