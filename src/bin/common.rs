@@ -419,7 +419,7 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
 
   let rec = match matches.reconstruction.as_ref() {
     Some(f) => Some(Box::new(
-      File::create(&f)
+      File::create(f)
         .map_err(|e| e.context("Cannot create reconstruction file"))?,
     ) as Box<dyn Write + Send>),
     None => None,

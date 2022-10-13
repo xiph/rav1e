@@ -530,11 +530,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     assert!(
       fi.force_integer_mv
-        == if fi.frame_type == FrameType::KEY || fi.intra_only {
-          1
-        } else {
-          0
-        }
+        == u32::from(fi.frame_type == FrameType::KEY || fi.intra_only)
     );
 
     if fi.sequence.frame_id_numbers_present_flag {
@@ -1136,13 +1132,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if use_lrf {
         // The Y shift value written here indicates shift up from superblock size
         if !fi.sequence.use_128x128_superblock {
-          self
-            .write(1, if rs.planes[0].cfg.unit_size > 64 { 1 } else { 0 })?;
+          self.write(1, u8::from(rs.planes[0].cfg.unit_size > 64))?;
         }
 
         if rs.planes[0].cfg.unit_size > 64 {
-          self
-            .write(1, if rs.planes[0].cfg.unit_size > 128 { 1 } else { 0 })?;
+          self.write(1, u8::from(rs.planes[0].cfg.unit_size > 128))?;
         }
 
         if use_chroma_lrf
@@ -1150,11 +1144,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         {
           self.write(
             1,
-            if rs.planes[0].cfg.unit_size > rs.planes[1].cfg.unit_size {
-              1
-            } else {
-              0
-            },
+            u8::from(rs.planes[0].cfg.unit_size > rs.planes[1].cfg.unit_size),
           )?;
         }
       }

@@ -1470,7 +1470,7 @@ impl RCState {
       return 0;
     }
     if self.frame_metrics.is_empty() {
-      return if self.pass2_data_ready { 0 } else { 1 };
+      return i32::from(!self.pass2_data_ready);
     }
     let mut cur_scale_window_nframes = 0;
     let mut cur_nframes_left = 0;

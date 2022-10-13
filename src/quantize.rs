@@ -266,13 +266,9 @@ impl QuantizationContext {
       // We skip the DC coefficient since it has its own quantizer index.
       let eob_minus_two =
         scan[1..].iter().rposition(|&i| coeffs[i as usize].abs() >= deadzone);
-      eob_minus_two.map(|n| n + 2).unwrap_or_else(|| {
-        if qcoeffs[0] == T::cast_from(0) {
-          0
-        } else {
-          1
-        }
-      })
+      eob_minus_two
+        .map(|n| n + 2)
+        .unwrap_or_else(|| usize::from(qcoeffs[0] != T::cast_from(0)))
     };
 
     // Here we use different rounding biases depending on whether we've
