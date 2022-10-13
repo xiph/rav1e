@@ -25,15 +25,7 @@ use crate::rayon::iter::*;
 fn deblock_adjusted_level(
   deblock: &DeblockState, block: &Block, pli: usize, vertical: bool,
 ) -> usize {
-  let idx = if pli == 0 {
-    if vertical {
-      0
-    } else {
-      1
-    }
-  } else {
-    pli + 1
-  };
+  let idx = if pli == 0 { usize::from(!vertical) } else { pli + 1 };
 
   let level = if deblock.block_deltas_enabled {
     // By-block filter strength delta, if the feature is active.
@@ -58,12 +50,9 @@ fn deblock_adjusted_level(
   if deblock.deltas_enabled {
     let mode = block.mode;
     let reference = block.ref_frames[0];
-    let mode_type =
-      if mode >= NEARESTMV && mode != GLOBALMV && mode != GLOBAL_GLOBALMV {
-        1
-      } else {
-        0
-      };
+    let mode_type = usize::from(
+      mode >= NEARESTMV && mode != GLOBALMV && mode != GLOBAL_GLOBALMV,
+    );
     let l5 = level >> 5;
     clamp(
       level as i32

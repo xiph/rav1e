@@ -221,10 +221,8 @@ impl Sequence {
       || config.chroma_sampling == ChromaSampling::Cs422
     {
       2
-    } else if config.chroma_sampling == ChromaSampling::Cs444 {
-      1
     } else {
-      0
+      u8::from(config.chroma_sampling == ChromaSampling::Cs444)
     };
 
     let mut operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS] =

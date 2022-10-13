@@ -494,7 +494,7 @@ where
   fn bool(&mut self, val: bool, f: u16) {
     debug_assert!(0 < f);
     debug_assert!(f < 32768);
-    self.symbol(if val { 1 } else { 0 }, &[f, 0]);
+    self.symbol(u32::from(val), &[f, 0]);
   }
   /// Encode a single boolean value.
   ///
