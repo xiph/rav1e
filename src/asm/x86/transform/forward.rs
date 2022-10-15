@@ -14,7 +14,6 @@ use crate::transform::*;
 use crate::util::*;
 use std::mem::MaybeUninit;
 
-use arrayref::{array_mut_ref, array_ref};
 use debug_unreachable::debug_unreachable;
 
 #[cfg(target_arch = "x86")]
@@ -317,6 +316,20 @@ impl SizeClass1D {
   }
 }
 
+fn cast<const N: usize, T>(x: &[T]) -> &[T; N] {
+  // SAFETY: we perform a bounds check with [..N],
+  // so casting to *const [T; N] is valid because the bounds
+  // check guarantees that x has N elements
+  unsafe { &*(&x[..N] as *const [T] as *const [T; N]) }
+}
+
+fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
+  // SAFETY: we perform a bounds check with [..N],
+  // so casting to *mut [T; N] is valid because the bounds
+  // check guarantees that x has N elements
+  unsafe { &mut *(&mut x[..N] as *mut [T] as *mut [T; N]) }
+}
+
 #[allow(clippy::identity_op, clippy::erasing_op)]
 #[target_feature(enable = "avx2")]
 unsafe fn forward_transform_avx2<T: Coefficient>(
@@ -385,32 +398,32 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
       (SizeClass1D::X8UP, SizeClass1D::X8UP) => {
         for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = array_mut_ref!(buf, 0, 8);
+          let buf = cast_mut::<8, _>(buf);
           let input = &col_coeffs[rg..];
-          let input = array_ref!(input, 0, 8);
+          let input = cast::<8, _>(input);
           transpose_8x8_avx2(input, buf);
         }
       }
       (SizeClass1D::X8UP, SizeClass1D::X4) => {
         for rg in (0..txfm_size_row).step_by(8) {
           let buf = &mut buf[(rg / 8 * txfm_size_col) + cg..];
-          let buf = array_mut_ref!(buf, 0, 4);
+          let buf = cast_mut::<4, _>(buf);
           let input = &col_coeffs[rg..];
-          let input = array_ref!(input, 0, 8);
+          let input = cast::<8, _>(input);
           transpose_8x4_avx2(input, buf);
         }
       }
       (SizeClass1D::X4, SizeClass1D::X8UP) => {
         // Don't need to loop over rows
         let buf = &mut buf[cg..];
-        let buf = array_mut_ref!(buf, 0, 8);
-        let input = array_ref!(col_coeffs, 0, 4);
+        let buf = cast_mut::<8, _>(buf);
+        let input = cast::<4, _>(col_coeffs);
         transpose_4x8_avx2(input, buf);
       }
       (SizeClass1D::X4, SizeClass1D::X4) => {
         // Don't need to loop over rows
-        let buf = array_mut_ref!(buf, 0, 4);
-        let input = array_ref!(col_coeffs, 0, 4);
+        let buf = cast_mut::<4, _>(buf);
+        let input = cast::<4, _>(col_coeffs);
         transpose_4x4_avx2(input, buf);
       }
     }
