@@ -36,7 +36,13 @@ type SadHBDFn = unsafe extern fn(
   dst_stride: isize,
 ) -> u32;
 
-type SatdHBDFn = SadHBDFn;
+type SatdHBDFn = unsafe extern fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+  bdmax: u32,
+) -> u32;
 
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
@@ -214,9 +220,10 @@ pub fn get_satd<T: Pixel>(
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
-            src.plane_cfg.stride as isize,
+            T::to_asm_stride(src.plane_cfg.stride),
             dst.data_ptr() as *const _,
-            dst.plane_cfg.stride as isize,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            (1 << bit_depth) - 1,
           )
         },
         None => call_rust(),
@@ -677,6 +684,35 @@ mod test {
     (64, 16),
     satd,
     10,
+    avx2,
+    "avx2"
+  );
+
+  test_dist_fns!(
+    (4, 4),
+    (8, 8),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (16, 64),
+    (64, 16),
+    satd,
+    12,
     avx2,
     "avx2"
   );
