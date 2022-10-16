@@ -10,6 +10,8 @@
 %include "config.asm"
 %include "ext/x86/x86inc.asm"
 
+%define m(x) mangle(private_prefix %+ _ %+ x %+ SUFFIX)
+
 %if ARCH_X86_64
 
 SECTION_RODATA 32
@@ -428,6 +430,7 @@ cglobal satd_8x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
     psubd       m2, m6
     psubd       m3, m7
 
+.12bpc_main:
     vperm2i128      m4, m0, m2, 0x31
     vperm2i128      m5, m1, m3, 0x31
     vinserti128     m0, m0, xm2, 1
@@ -514,75 +517,54 @@ cglobal satd_4x8_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
 
     ; jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
     ; by deduplicating the shared code.
-    jmp mangle(private_prefix %+ _satd_8x4_hbd %+ SUFFIX).10bpc_main
+    jmp m(satd_8x4_hbd).10bpc_main
     ; no return; we return in the other function.
 
 .12bpc:
     RESET_MM_PERMUTATION
 
-    ; we can't interleave rows (4px*4 bytes per coefficient*4 rows
-    ; per register = 64 bytes, which exceeds our register size of 32 bytes),
-    ; so just do each 4x4 block separately
-
     pmovzxwd    xm0, [srcq + 0*src_strideq]
     pmovzxwd    xm1, [srcq + 1*src_strideq]
     pmovzxwd    xm2, [srcq + 2*src_strideq]
     pmovzxwd    xm3, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
 
     pmovzxwd    xm4, [dstq + 0*dst_strideq]
     pmovzxwd    xm5, [dstq + 1*dst_strideq]
     pmovzxwd    xm6, [dstq + 2*dst_strideq]
     pmovzxwd    xm7, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
 
     ; src -= dst
-    psubd       m0, m4
-    psubd       m1, m5
-    psubd       m2, m6
-    psubd       m3, m7
+    psubd       xm0, xm4
+    psubd       xm1, xm5
+    psubd       xm2, xm6
+    psubd       xm3, xm7
 
-    lea srcq, [srcq+4*src_strideq]
-    lea dstq, [dstq+4*dst_strideq]
+    pmovzxwd    xm4, [srcq + 0*src_strideq]
+    pmovzxwd    xm5, [srcq + 1*src_strideq]
+    pmovzxwd    xm6, [srcq + 2*src_strideq]
+    pmovzxwd    xm7, [srcq + src_stride3q ]
 
-    HADAMARD_4X4_PACKED 32, 32
-    ; transform coefficients are now in m0,m1
-    ; move them to m5,m6 for later use, since we need m0-3 free
-    ; for the next transform
-    SWAP 0, 5
-    SWAP 1, 6
+    pmovzxwd    xm8, [dstq + 0*dst_strideq]
+    pmovzxwd    xm9, [dstq + 1*dst_strideq]
+    pmovzxwd   xm10, [dstq + 2*dst_strideq]
+    pmovzxwd   xm11, [dstq + dst_stride3q ]
 
-    HADAMARD_4X4_PACKED 32, 32
+    ; src -= dst (second block)
+    psubd       xm4, xm8
+    psubd       xm5, xm9
+    psubd       xm6, xm10
+    psubd       xm7, xm11
 
-    ; interleave subtraction this time to save registers
-    pmovzxwd    xm0, [srcq + 0*src_strideq]
-    pmovzxwd    xm1, [dstq + 0*dst_strideq]
-    psubd       xm0, xm1
+    vinserti128 m0, m0, xm4, 1
+    vinserti128 m1, m1, xm5, 1
+    vinserti128 m2, m2, xm6, 1
+    vinserti128 m3, m3, xm7, 1
 
-    pmovzxwd    xm1, [srcq + 1*src_strideq]
-    pmovzxwd    xm2, [dstq + 1*dst_strideq]
-    psubd       xm1, xm2
-
-    pmovzxwd    xm2, [srcq + 2*src_strideq]
-    pmovzxwd    xm3, [dstq + 2*dst_strideq]
-    psubd       xm2, xm3
-
-    pmovzxwd    xm3, [srcq + src_stride3q ]
-    pmovzxwd    xm4, [dstq + dst_stride3q ]
-    psubd       xm3, xm4
-
-    HADAMARD_4X4_PACKED 32, 32
-
-    ; old transform coefficients are in m5,m6
-    pabsd   m0, m0
-    pabsd   m1, m1
-    pabsd   m5, m5
-    pabsd   m6, m6
-
-    paddd   m0, m1
-    paddd   m5, m6
-    paddd   m0, m5
-
-    HSUM 32, 32, 0, 1, eax
-    NORMALIZE4PT
-    RET
+    ; jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
+    ; by deduplicating the shared code.
+    jmp m(satd_8x4_hbd).12bpc_main
+    ; no return; we return in the other function.
 
 %endif ; ARCH_X86_64
