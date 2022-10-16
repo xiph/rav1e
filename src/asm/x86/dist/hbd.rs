@@ -7,8 +7,12 @@ macro_rules! satd_hbd_avx2 {
       paste::item! {
         #[target_feature(enable = "avx2")]
         pub(crate) unsafe extern fn [<rav1e_satd_ $W x $H _hbd_avx2>](
-          src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+          src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize, _bdmax: u32
         ) -> u32 {
+          // required for compatibility with hand-written ASM
+          let src_stride = src_stride >> 1;
+          let dst_stride = dst_stride >> 1;
+
           // Size of hadamard transform should be 4x4 or 8x8.
           // 4x* and *x4 use 4x4 and all other use 8x8.
           // Because these are constants via the macro system,
@@ -117,11 +121,24 @@ macro_rules! satd_kernel_hbd_avx2 {
 
 satd_kernel_hbd_avx2!((4, 4), (8, 8));
 
+macro_rules! declare_asm_satd_hbd_fn {
+  ($($name: ident),+) => (
+    $(
+      extern { pub(crate) fn $name (
+        src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize, bdmax: u32
+      ) -> u32; }
+    )+
+  )
+}
+
+declare_asm_satd_hbd_fn![
+  rav1e_satd_4x4_hbd_avx2,
+  rav1e_satd_8x4_hbd_avx2,
+  rav1e_satd_4x8_hbd_avx2
+];
+
 satd_hbd_avx2!(
-  (4, 4),
-  (4, 8),
   (4, 16),
-  (8, 4),
   (8, 8),
   (8, 16),
   (8, 32),
