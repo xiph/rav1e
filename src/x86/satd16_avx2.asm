@@ -382,7 +382,7 @@ cglobal satd_4x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
     RET
 
 INIT_YMM avx2
-cglobal satd_8x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
+cglobal satd_8x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
                                src_stride3, dst_stride3
     lea         src_stride3q, [3*src_strideq]
     lea         dst_stride3q, [3*dst_strideq]
@@ -472,7 +472,7 @@ cglobal satd_8x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
     RET
 
 INIT_YMM avx2
-cglobal satd_4x8_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
+cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
                                src_stride3, dst_stride3
     lea         src_stride3q, [3*src_strideq]
     lea         dst_stride3q, [3*dst_strideq]
