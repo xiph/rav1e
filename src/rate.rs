@@ -1274,13 +1274,12 @@ impl RCState {
   ) -> TwoPassOutParams {
     let mut pass1_log_base_q = 0;
     let mut done_processing = false;
-    if !self.pass1_data_retrieved {
-      if self.twopass_state == PASS_SINGLE {
-        pass1_log_base_q = self
-          .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0)
-          .log_base_q;
-      }
-    } else {
+    if self.twopass_state == PASS_SINGLE {
+      pass1_log_base_q = self
+        .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0)
+        .log_base_q;
+    }
+    if self.pass1_data_retrieved {
       done_processing = ctx.done_processing();
     }
     TwoPassOutParams { pass1_log_base_q, done_processing }
