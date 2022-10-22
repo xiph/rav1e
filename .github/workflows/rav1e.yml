@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
       - name: Install stable
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable
@@ -125,7 +125,7 @@ jobs:
           curl -L "$LINK/grcov-x86_64-unknown-linux-musl.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
       - name: Install ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
@@ -292,7 +292,7 @@ jobs:
         run: |
           brew install cargo-c
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable
@@ -368,7 +368,7 @@ jobs:
           tar xzf "$SCCACHE_FILE.tar.gz"
           echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable-${{ matrix.target }}
