@@ -238,8 +238,9 @@ impl Config {
     // First-pass parameters depend on whether second-pass is in effect.
     // So `init_first_pass` must follow `init_second_pass`.
     if self.rate_control.emit_pass_data {
-      let params = inner.rc_state.get_twopass_out_params(&inner, 0);
-      inner.rc_state.init_first_pass(params.pass1_log_base_q);
+      let maybe_pass1_log_base_q = (self.rate_control.summary.is_none())
+        .then(|| inner.rc_state.select_pass1_log_base_q(&inner, 0));
+      inner.rc_state.init_first_pass(maybe_pass1_log_base_q);
     }
 
     Ok(inner)

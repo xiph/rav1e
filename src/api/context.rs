@@ -158,11 +158,7 @@ impl<T: Pixel> Context<T> {
   /// enum.EncoderStatus.html#variant.LimitReached
   #[inline]
   pub fn twopass_out(&mut self) -> Option<&[u8]> {
-    let params = self
-      .inner
-      .rc_state
-      .get_twopass_out_params(&self.inner, self.inner.output_frameno);
-    self.inner.rc_state.twopass_out(params)
+    self.inner.rc_state.twopass_out(self.inner.done_processing())
   }
 
   /// Returns the number of bytes of the stats file needed before the next
