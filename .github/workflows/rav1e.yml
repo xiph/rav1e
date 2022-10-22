@@ -26,10 +26,8 @@ jobs:
           override: true
           components: clippy, rustfmt
       - name: Run rustfmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: -- --check --verbose
+        run: |
+          cargo fmt -- --check --verbose
       - name: Run clippy
         uses: actions-rs/clippy-check@v1
         with:
@@ -215,9 +213,9 @@ jobs:
           cargo fuzz build --sanitizer none
       - name: Run cargo clean
         if: matrix.conf == 'grcov-codecov'
-        uses: actions-rs/cargo@v1
-        with:
-          command: clean
+        run: |
+          cargo clean
+
       - name: Run tests with coverage
         if: matrix.conf == 'grcov-codecov'
         env:
