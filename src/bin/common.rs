@@ -11,7 +11,7 @@ use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
-use clap::{ArgMatches, IntoApp, Parser as Clap, Subcommand};
+use clap::{CommandFactory, Parser as Clap, Subcommand};
 use clap_complete::{generate, Shell};
 use once_cell::sync::Lazy;
 use rav1e::prelude::*;
@@ -60,8 +60,8 @@ pub struct CliOptions {
   #[clap(
     long,
     value_parser,
-    conflicts_with = "tile-rows",
-    conflicts_with = "tile-cols",
+    conflicts_with = "tile_rows",
+    conflicts_with = "tile_cols",
     help_heading = "THREADING"
   )]
   pub tiles: Option<usize>,
@@ -177,7 +177,7 @@ pub struct CliOptions {
   /// Takes a strength value 0-64.
   #[clap(
     long,
-    conflicts_with = "film-grain-table",
+    conflicts_with = "film_grain_table",
     value_parser = clap::value_parser!(u8).range(0..=64),
     default_value_t = 0,
     help_heading = "ENCODE SETTINGS"
@@ -482,18 +482,6 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     #[cfg(feature = "unstable")]
     slots,
   })
-}
-
-pub trait MatchGet {
-  fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>>;
-}
-
-impl MatchGet for ArgMatches {
-  fn value_of_int(&self, name: &str) -> Option<Result<i32, CliError>> {
-    self
-      .value_of(name)
-      .map(|v| v.parse().map_err(|e: std::num::ParseIntError| e.context(name)))
-  }
 }
 
 fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
