@@ -12,7 +12,6 @@ on:
 
 jobs:
   rustfmt-clippy:
-
     runs-on: ubuntu-22.04
 
     steps:
@@ -193,7 +192,7 @@ jobs:
       - name: Check extra features
         if: matrix.toolchain == 'stable' && matrix.conf == 'check-extra-feats'
         run: |
-          cargo check --features=check_asm,capi,dump_lookahead_data,serialize,bench --all-targets
+          cargo check --features=check_asm,capi,dump_lookahead_data,serialize,bench,devel --all-targets
       - name: Check extra features
         if: matrix.toolchain == 'stable' && matrix.conf == 'check-unstable-feats'
         run: |

@@ -455,6 +455,7 @@ pub fn distortion_scale<T: Pixel>(
 
   let coded_data = fi.coded_frame_data.as_ref().unwrap();
   coded_data.distortion_scales[y * coded_data.w_in_imp_b + x]
+    .strength_adjusted(fi.config.advanced_flags.temporal_rdo_strength as f64)
 }
 
 /// # Panics
@@ -504,6 +505,7 @@ pub fn spatiotemporal_scale<T: Pixel>(
     .sum::<u64>();
   }
   DistortionScale(((sum + (den >> 1)) / den) as u32)
+    .strength_adjusted(fi.config.advanced_flags.temporal_rdo_strength as f64)
 }
 
 pub fn distortion_scale_for(
@@ -616,6 +618,22 @@ impl DistortionScale {
   #[inline]
   pub const fn mul_u64(self, dist: u64) -> u64 {
     (self.0 as u64 * dist + (1 << Self::SHIFT >> 1)) >> Self::SHIFT
+  }
+
+  #[inline]
+  #[cfg(feature = "devel")]
+  pub fn strength_adjusted(self, strength: f64) -> Self {
+    let diff = 1.0 - f64::from(self);
+    let add = diff * strength;
+    DistortionScale::from((1.0 + add).max(0.0))
+  }
+
+  #[inline(always)]
+  #[cfg(not(feature = "devel"))]
+  pub fn strength_adjusted(self, _strength: f64) -> Self {
+    // If we aren't using a devel build, just return self
+    // so we do not add any performance cost.
+    self
   }
 }
 

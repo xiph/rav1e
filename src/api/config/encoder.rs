@@ -114,6 +114,50 @@ pub struct EncoderConfig {
 
   /// Settings which affect the encoding speed vs. quality trade-off.
   pub speed_settings: SpeedSettings,
+
+  /// Advanced settings which are intended for use by developers.
+  /// Non-developers should use the default values.
+  pub advanced_flags: AdvancedTuning,
+}
+
+/// Advanced settings that are intended for use by developers
+/// for tuning compiler internals.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct AdvancedTuning {
+  /// Controls the strength of the deblock filter, as a multiplier to the default.
+  pub deblock_strength: f32,
+  /// Controls the sharpness of the deblock filter. Accepts a value from 0-7.
+  pub deblock_sharpness: u8,
+  /// Controls the ratio between intra frame and inter frame quantizers, as a multiplier.
+  /// Default is 1.0. Higher values create a higher quantizer difference, while lower values
+  /// create a lower quantizer difference. A value of 0.0 would mean that I and P quantizers
+  /// are the same.
+  pub ip_ratio: f32,
+  /// Controls the ratio between "P"-frame and "B"-frame quantizers, as a multiplier.
+  /// Default is 1.0. Higher values create a higher quantizer difference, while lower values
+  /// create a lower quantizer difference. A value of 0.0 would mean that P and B quantizers
+  /// are the same.
+  pub pb_ratio: f32,
+  /// Controls the ratio between frame quantizers in the levels of the pyramid betweem "B"-frames,
+  /// as a multiplier. Default is 1.0. Higher values create a higher quantizer difference,
+  /// while lower values create a lower quantizer difference. A value of 0.0 would mean that
+  /// B0 and B1 quantizers are the same.
+  pub b_ratio: f32,
+  /// Controls the strength of temporal RDO, as a multiplier to the default.
+  pub temporal_rdo_strength: f32,
+}
+
+impl Default for AdvancedTuning {
+  fn default() -> Self {
+    Self {
+      deblock_strength: 1.0,
+      deblock_sharpness: 0,
+      ip_ratio: 1.0,
+      pb_ratio: 1.0,
+      b_ratio: 1.0,
+      temporal_rdo_strength: 1.0,
+    }
+  }
 }
 
 /// Default preset for `EncoderConfig`: it is a balance between quality and
@@ -171,6 +215,7 @@ impl EncoderConfig {
       tile_rows: 0,
       tiles: 0,
       speed_settings: SpeedSettings::from_preset(speed),
+      advanced_flags: Default::default(),
     }
   }
 

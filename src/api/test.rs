@@ -2165,6 +2165,7 @@ fn log_q_exp_overflow() {
       },
       ..Default::default()
     },
+    advanced_flags: Default::default(),
   };
   let config = Config::new().with_encoder_config(enc).with_threads(1);
 
@@ -2242,6 +2243,7 @@ fn guess_frame_subtypes_assert() {
       },
       ..Default::default()
     },
+    advanced_flags: Default::default(),
   };
   let config = Config::new().with_encoder_config(enc).with_threads(1);
 

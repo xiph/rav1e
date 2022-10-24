@@ -14,6 +14,7 @@ use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{
   bexp64, bexp_q24, blog64, clamp, q24_to_q57, q57, q57_to_q24, Pixel,
 };
+use debug_unreachable::debug_unreachable;
 use std::cmp;
 
 // The number of frame sub-types for which we track distinct parameters.
@@ -71,14 +72,30 @@ const MQP_Q12: &[i32; FRAME_NSUBTYPES] = &[
   (1.0 * (1 << 12) as f64) as i32,
 ];
 
-// The ratio 33_810_170.0 / 86_043_287.0 was derived by approximating the median
-// of a change of 15 quantizer steps in the quantizer tables.
-const DQP_Q57: &[i64; FRAME_NSUBTYPES] = &[
-  (-(33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
-  (0.0 * (1i64 << 57) as f64) as i64,
-  ((33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
-  (2.0 * (33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64) as i64,
-];
+#[cfg_attr(not(feature = "devel"), allow(unused_variables))]
+fn dqp_q57(fti: usize, ip_ratio: f64, pb_ratio: f64, b_ratio: f64) -> i64 {
+  // The ratio 33_810_170.0 / 86_043_287.0 was derived by approximating the median
+  // of a change of 15 quantizer steps in the quantizer tables.
+  const BASE: f64 = (33_810_170.0 / 86_043_287.0) * (1i64 << 57) as f64;
+
+  // If we are not in devel mode, hardcode these as constants to the compiler
+  // can optimize better.
+  #[cfg(not(feature = "devel"))]
+  let ip_ratio = 1.0;
+  #[cfg(not(feature = "devel"))]
+  let pb_ratio = 1.0;
+  #[cfg(not(feature = "devel"))]
+  let b_ratio = 1.0;
+
+  match fti {
+    FRAME_SUBTYPE_I => (-ip_ratio * BASE) as i64,
+    FRAME_SUBTYPE_P => 0i64,
+    FRAME_SUBTYPE_B0 => (pb_ratio * BASE) as i64,
+    FRAME_SUBTYPE_B1 => ((pb_ratio + b_ratio) * BASE) as i64,
+    // SAFETY: This branch should never occur, if it does the macro will catch it in debug mode.
+    _ => unsafe { debug_unreachable!("Unsupported frame subtype") },
+  }
+}
 
 // For 8-bit-depth inter frames, log_q_y is derived from log_target_q with a
 //  linear model:
@@ -703,11 +720,12 @@ impl RCState {
 
   pub(crate) fn select_first_pass_qi(
     &self, bit_depth: usize, fti: usize, chroma_sampling: ChromaSampling,
+    ip_ratio: f64, pb_ratio: f64, b_ratio: f64,
   ) -> QuantizerParameters {
     // Adjust the quantizer for the frame type, result is Q57:
     let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
       * (MQP_Q12[fti] as i64)
-      + DQP_Q57[fti];
+      + dqp_q57(fti, ip_ratio, pb_ratio, b_ratio);
     QuantizerParameters::new_from_log_q(
       self.pass1_log_base_q,
       log_q,
@@ -723,14 +741,24 @@ impl RCState {
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
     maybe_prev_log_base_q: Option<i64>, log_isqrt_mean_scale: i64,
   ) -> QuantizerParameters {
+    let ip_ratio = ctx.config.advanced_flags.ip_ratio as f64;
+    let pb_ratio = ctx.config.advanced_flags.pb_ratio as f64;
+    let b_ratio = ctx.config.advanced_flags.b_ratio as f64;
+
     // Is rate control active?
     if self.target_bitrate <= 0 {
       // Rate control is not active.
       // Derive quantizer directly from frame type.
       let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
-      let (log_base_q, log_q) =
-        Self::calc_flat_quantizer(ctx.config.quantizer as u8, bit_depth, fti);
+      let (log_base_q, log_q) = Self::calc_flat_quantizer(
+        ctx.config.quantizer as u8,
+        bit_depth,
+        fti,
+        ip_ratio,
+        pb_ratio,
+        b_ratio,
+      );
       QuantizerParameters::new_from_log_q(
         log_base_q,
         log_q,
@@ -752,6 +780,9 @@ impl RCState {
             ctx.config.bit_depth,
             fti,
             ctx.config.chroma_sampling,
+            ip_ratio,
+            pb_ratio,
+            b_ratio,
           );
         }
         // Second pass of 2-pass mode: we know exactly how much of each frame
@@ -925,7 +956,7 @@ impl RCState {
           // Modulate base quantizer by frame type.
           let log_q = ((log_base_q + (1i64 << 11)) >> 12)
             * (MQP_Q12[ftj] as i64)
-            + DQP_Q57[ftj];
+            + dqp_q57(ftj, ip_ratio, pb_ratio, b_ratio);
           // All the fields here are Q57 except for the exponent, which is
           //  Q6.
           bits += (nframes[ftj] as i64)
@@ -959,7 +990,7 @@ impl RCState {
       // Modulate base quantizer by frame type.
       let mut log_q = ((log_base_q + (1i64 << 11)) >> 12)
         * (MQP_Q12[fti] as i64)
-        + DQP_Q57[fti];
+        + dqp_q57(fti, ip_ratio, pb_ratio, b_ratio);
       // The above allocation looks only at the total rate we'll accumulate
       //  in the next reservoir_frame_delay frames.
       // However, we could overflow the bit reservoir on the very next
@@ -1019,14 +1050,26 @@ impl RCState {
       }
 
       if let Some(qi_max) = self.maybe_ac_qi_max {
-        let (max_log_base_q, max_log_q) =
-          Self::calc_flat_quantizer(qi_max, ctx.config.bit_depth, fti);
+        let (max_log_base_q, max_log_q) = Self::calc_flat_quantizer(
+          qi_max,
+          ctx.config.bit_depth,
+          fti,
+          ip_ratio,
+          pb_ratio,
+          b_ratio,
+        );
         log_base_q = cmp::min(log_base_q, max_log_base_q);
         log_q = cmp::min(log_q, max_log_q);
       }
       if self.ac_qi_min > 0 {
-        let (min_log_base_q, min_log_q) =
-          Self::calc_flat_quantizer(self.ac_qi_min, ctx.config.bit_depth, fti);
+        let (min_log_base_q, min_log_q) = Self::calc_flat_quantizer(
+          self.ac_qi_min,
+          ctx.config.bit_depth,
+          fti,
+          ip_ratio,
+          pb_ratio,
+          b_ratio,
+        );
         log_base_q = cmp::max(log_base_q, min_log_base_q);
         log_q = cmp::max(log_q, min_log_q);
       }
@@ -1044,7 +1087,8 @@ impl RCState {
   // Computes a quantizer directly from the frame type and base quantizer index,
   // without consideration for rate control.
   fn calc_flat_quantizer(
-    base_qi: u8, bit_depth: usize, fti: usize,
+    base_qi: u8, bit_depth: usize, fti: usize, ip_ratio: f64, pb_ratio: f64,
+    b_ratio: f64,
   ) -> (i64, i64) {
     // TODO: Rename "quantizer" something that indicates it is a quantizer
     //  index, and move it somewhere more sensible (or choose a better way to
@@ -1063,7 +1107,7 @@ impl RCState {
     let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
     // Adjust the quantizer for the frame type, result is Q57:
     let log_q = ((log_base_q + (1i64 << 11)) >> 12) * (MQP_Q12[fti] as i64)
-      + DQP_Q57[fti];
+      + dqp_q57(fti, ip_ratio, pb_ratio, b_ratio);
     (log_base_q, log_q)
   }
 

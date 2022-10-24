@@ -249,8 +249,51 @@ pub struct CliOptions {
   #[clap(long, short, value_parser, help_heading = "DEBUGGING")]
   pub reconstruction: Option<PathBuf>,
 
+  /// Controls the strength of the deblock filter, as a multiplier to the default.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = positive_float, default_value_t=1.0f32, help_heading = "ADVANCED")]
+  pub deblock_strength: f32,
+  /// Controls the sharpness of the deblock filter. Accepts a value from 0-7.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = clap::value_parser!(u8).range(0..=7), default_value_t=0, help_heading = "ADVANCED")]
+  pub deblock_sharpness: u8,
+  /// Controls the ratio between intra frame and inter frame quantizers, as a multiplier.
+  /// Higher values create a higher quantizer difference, while lower values
+  /// create a lower quantizer difference. A value of 0.0 would mean that I and P quantizers
+  /// are the same.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = positive_float, default_value_t=1.0f32, help_heading = "ADVANCED")]
+  pub ip_ratio: f32,
+  /// Controls the ratio between "P"-frame and "B"-frame quantizers, as a multiplier.
+  /// Default is 1.0. Higher values create a higher quantizer difference, while lower values
+  /// create a lower quantizer difference. A value of 0.0 would mean that P and B quantizers
+  /// are the same.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = positive_float, default_value_t=1.0f32, help_heading = "ADVANCED")]
+  pub pb_ratio: f32,
+  /// Controls the ratio between frame quantizers in the levels of the pyramid betweem "B"-frames,
+  /// as a multiplier. Default is 1.0. Higher values create a higher quantizer difference,
+  /// while lower values create a lower quantizer difference. A value of 0.0 would mean that
+  /// B0 and B1 quantizers are the same.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = positive_float, default_value_t=1.0f32, help_heading = "ADVANCED")]
+  pub b_ratio: f32,
+  /// Controls the strength of temporal RDO, as a multiplier to the default.
+  #[cfg(feature = "devel")]
+  #[clap(long, value_parser = positive_float, default_value_t=1.0f32, help_heading = "ADVANCED")]
+  pub temporal_rdo_strength: f32,
+
   #[clap(subcommand)]
   pub command: Option<Commands>,
+}
+
+#[cfg(feature = "devel")]
+fn positive_float(input: &str) -> Result<f32, String> {
+  let value = input.parse::<f32>().map_err(|e| e.to_string())?;
+  if value < 0.0 {
+    return Err("Value must not be negative".to_string());
+  }
+  Ok(value)
 }
 
 fn get_version() -> &'static str {
@@ -299,7 +342,7 @@ pub enum Commands {
     #[clap(long, short, value_parser)]
     save_config: Option<PathBuf>,
     /// Load the encoder configuration from a toml file
-    #[clap(long, short, value_parser, conflicts_with = "save-config")]
+    #[clap(long, short, value_parser, conflicts_with = "save_config")]
     load_config: Option<PathBuf>,
   },
 }
@@ -482,6 +525,18 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     #[cfg(feature = "unstable")]
     slots,
   })
+}
+
+#[cfg(feature = "devel")]
+const fn parse_advanced_flags(cli: &CliOptions) -> AdvancedTuning {
+  AdvancedTuning {
+    deblock_strength: cli.deblock_strength,
+    deblock_sharpness: cli.deblock_sharpness,
+    ip_ratio: cli.ip_ratio,
+    pb_ratio: cli.pb_ratio,
+    b_ratio: cli.b_ratio,
+    temporal_rdo_strength: cli.temporal_rdo_strength,
+  }
 }
 
 fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
@@ -687,6 +742,11 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
   // Disables scene_detection
   if matches.no_scene_detection {
     cfg.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+  }
+
+  #[cfg(feature = "devel")]
+  {
+    cfg.advanced_flags = parse_advanced_flags(matches);
   }
 
   Ok(cfg)

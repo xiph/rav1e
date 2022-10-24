@@ -24,6 +24,9 @@ default-run = "rav1e"
 
 [features]
 unstable = []
+# Exposes extra flags for tuning compiler internals.
+# Intended to be used by developers to find ideal internal settings.
+devel = []
 channel-api = ["crossbeam"]
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
