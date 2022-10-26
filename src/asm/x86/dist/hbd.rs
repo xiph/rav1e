@@ -61,9 +61,14 @@ macro_rules! satd_kernel_hbd_avx2 {
           let input1 = &mut Aligned::<[i32; 8 * 8]>::uninitialized().data[..size * size];
           let input2 = &mut Aligned::<[i32; 8 * 8]>::uninitialized().data[..size * size];
           for y in 0..(sizei) {
-            for x in 0..(sizei) {
-              input1.as_mut_ptr().offset(y * sizei + x).write(src.offset(y * src_stride + x).read() as i32);
-              input2.as_mut_ptr().offset(y * sizei + x).write(dst.offset(y * dst_stride + x).read() as i32);
+            if size == 8 {
+              // Upcast 8 u16 values from src and dst into 8 i32 values in input1 and input2
+              _mm256_store_si256(input1.as_mut_ptr().offset(y * sizei).cast(), _mm256_cvtepi16_epi32(*src.offset(y * src_stride).cast()));
+              _mm256_store_si256(input2.as_mut_ptr().offset(y * sizei).cast(), _mm256_cvtepi16_epi32(*dst.offset(y * dst_stride).cast()));
+            } else {
+              // Upcast 4 u16 values from src and dst into 4 i32 values in input1 and input2
+              _mm_store_si128(input1.as_mut_ptr().offset(y * sizei).cast(), _mm_cvtepi16_epi32(*src.offset(y * src_stride).cast()));
+              _mm_store_si128(input2.as_mut_ptr().offset(y * sizei).cast(), _mm_cvtepi16_epi32(*dst.offset(y * dst_stride).cast()));
             }
           }
 
