@@ -43,10 +43,31 @@ pub(crate) mod rust {
     for (slice_org, slice_ref) in
       plane_org.rows_iter().take(h).zip(plane_ref.rows_iter())
     {
-      sum += slice_org
+      let mut iter_org = slice_org[..w].chunks_exact(4);
+      let mut iter_ref = slice_ref[..w].chunks_exact(4);
+      for chunk_org in iter_org.by_ref() {
+        let chunk_ref = iter_ref.next().expect("rows are same size");
+        let chunk_org = wide::i32x4::from([
+          i32::cast_from(chunk_org[0]),
+          i32::cast_from(chunk_org[1]),
+          i32::cast_from(chunk_org[2]),
+          i32::cast_from(chunk_org[3]),
+        ]);
+        let chunk_ref = wide::i32x4::from([
+          i32::cast_from(chunk_ref[0]),
+          i32::cast_from(chunk_ref[1]),
+          i32::cast_from(chunk_ref[2]),
+          i32::cast_from(chunk_ref[3]),
+        ]);
+        let sad = (chunk_org - chunk_ref).abs();
+        for i in sad.to_array() {
+          sum += i as u32;
+        }
+      }
+      sum += iter_org
+        .remainder()
         .iter()
-        .take(w)
-        .zip(slice_ref)
+        .zip(iter_ref.remainder().iter())
         .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).unsigned_abs())
         .sum::<u32>();
     }
