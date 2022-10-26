@@ -134,30 +134,27 @@ macro_rules! declare_asm_satd_hbd_fn {
 declare_asm_satd_hbd_fn![
   rav1e_satd_4x4_hbd_avx2,
   rav1e_satd_8x4_hbd_avx2,
-  rav1e_satd_4x8_hbd_avx2
+  rav1e_satd_4x8_hbd_avx2,
+  rav1e_satd_8x8_hbd_avx2,
+  rav1e_satd_16x8_hbd_avx2,
+  rav1e_satd_16x16_hbd_avx2,
+  rav1e_satd_32x32_hbd_avx2,
+  rav1e_satd_64x64_hbd_avx2,
+  rav1e_satd_128x128_hbd_avx2,
+  rav1e_satd_16x32_hbd_avx2,
+  rav1e_satd_16x64_hbd_avx2,
+  rav1e_satd_32x16_hbd_avx2,
+  rav1e_satd_32x64_hbd_avx2,
+  rav1e_satd_64x16_hbd_avx2,
+  rav1e_satd_64x32_hbd_avx2,
+  rav1e_satd_64x128_hbd_avx2,
+  rav1e_satd_128x64_hbd_avx2,
+  rav1e_satd_32x8_hbd_avx2,
+  rav1e_satd_8x16_hbd_avx2,
+  rav1e_satd_8x32_hbd_avx2
 ];
 
-satd_hbd_avx2!(
-  (4, 16),
-  (8, 8),
-  (8, 16),
-  (8, 32),
-  (16, 4),
-  (16, 8),
-  (16, 16),
-  (16, 32),
-  (16, 64),
-  (32, 8),
-  (32, 16),
-  (32, 32),
-  (32, 64),
-  (64, 16),
-  (64, 32),
-  (64, 64),
-  (64, 128),
-  (128, 64),
-  (128, 128)
-);
+satd_hbd_avx2!((16, 4), (4, 16));
 
 #[inline(always)]
 const fn butterfly(a: i32, b: i32) -> (i32, i32) {

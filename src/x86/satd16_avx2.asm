@@ -26,6 +26,11 @@ SECTION .text
     shr eax, 2
 %endmacro
 
+%macro NORMALIZE8PT 0
+    add eax, 4
+    shr eax, 3
+%endmacro
+
 ; Add and subtract registers
 ;
 ; Takes m0 and m1 as both input and output.
@@ -320,6 +325,206 @@ SECTION .text
     movd        OUTPUT,      xm%+INPUT
 %endmacro
 
+; given m0-7, do butterfly as follows:
+; (m0, m1) = butterfly(m0, m1)
+; (m2, m3) = butterfly(m2, m3)
+; (m4, m5) = butterfly(m4, m5)
+; (m6, m7) = butterfly(m6, m7)
+%macro BUTTERFLY_8X8 0
+    ; m8 is free
+    paddd   m8, m0, m1
+    psubd   m0, m1
+    SWAP    8,1,0
+
+    ; m8 is free
+    paddd   m8, m2, m3
+    psubd   m2, m3
+    SWAP    8,3,2
+
+    paddd   m8, m4, m5
+    psubd   m4, m5
+    SWAP    8,5,4
+
+    paddd   m8, m6, m7
+    psubd   m6, m7
+    SWAP    8,7,6
+%endmacro
+
+%macro HADAMARD_8X8_VERTICAL 0
+    BUTTERFLY_8X8
+    ; m0-7 contain a0-7
+
+    SWAP 2,1
+    SWAP 6,5
+
+    BUTTERFLY_8X8
+
+    SWAP 1, 4
+    SWAP 3, 6
+
+    BUTTERFLY_8X8
+
+    SWAP 2,1
+    SWAP 2,4
+    SWAP 3,6
+    SWAP 5,6
+%endmacro
+
+; Transpose rows m0-7.
+; Output is also contained in m0-7.
+;
+; Uses m8, m10-15 as temporary registers (i.e. m9 is left unchanged.)
+%macro TRANSPOSE8X8D 0
+    SWAP 9,  0
+    SWAP 10, 1
+    SWAP 11, 2
+    SWAP 12, 3
+    SWAP 13, 4
+    SWAP 14, 5
+    SWAP 15, 6
+    SWAP 2,  7
+
+    punpckldq    m6,  m9,  m10
+    punpckldq    m1,  m11, m12
+    punpckhdq    m8,  m9,  m10
+    punpckldq    m4,  m13, m14
+    punpckldq    m9,  m15, m2
+    vshufps      m3,  m6,  m1,  0x4e
+    vpblendd     m10, m6,  m3,  0xcc
+    vshufps      m6,  m4,  m9,  0x4e
+    punpckhdq    m7,  m11, m12
+    vpblendd     m11, m4,  m6,  0xcc
+    vpblendd     m12, m3,  m1,  0xcc
+    vperm2i128   m3,  m10, m11, 0x20
+    punpckhdq    m5,  m13, m14
+    vpblendd     m13, m6,  m9,  0xcc
+    punpckhdq    m4,  m15, m2
+    vperm2i128   m2,  m12, m13, 0x20
+    vshufps      m14, m8,  m7,  0x4e
+    vpblendd     m15, m14, m7,  0xcc
+    vshufps      m7,  m5,  m4,  0x4e
+    vpblendd     m8,  m8,  m14, 0xcc
+    vpblendd     m5,  m5,  m7,  0xcc
+    vperm2i128   m6,  m8,  m5,  0x20
+    vpblendd     m4,  m7,  m4,  0xcc
+    vperm2i128   m7,  m15, m4,  0x20
+    vperm2i128   m1,  m10, m11, 0x31
+    vperm2i128   m9,  m12, m13, 0x31
+    vperm2i128   m5,  m8,  m5,  0x31
+    vperm2i128   m4,  m15, m4,  0x31
+
+    SWAP 0,9
+
+    ; Output order is as follows:
+    ; 3 2 6 7 1 0 5 4
+
+    ; sort rows
+    SWAP 3,0
+    ; 0 2 6 7 1 3 5 4
+    SWAP 1,2
+    ; 0 1 6 7 2 3 5 4
+    SWAP 6,2
+    ; 0 1 2 7 6 3 5 4
+    SWAP 7,3
+    ; 0 1 2 3 6 7 5 4
+    SWAP 6,4
+    ; 0 1 2 3 4 7 5 6
+    SWAP 7,5
+    ; 0 1 2 3 4 5 7 6
+    SWAP 6,7
+    ; 0 1 2 3 4 5 6 7
+%endmacro
+
+; m0-7 as input; add coefficients to ymm9.
+INIT_YMM avx2
+cglobal satd_8x8_hbd_internal, 0, 0, 0, src, src_stride, dst, dst_stride, bdmax, \
+                                        src_stride3, dst_stride3
+    HADAMARD_8X8_VERTICAL
+
+    TRANSPOSE8X8D
+
+    HADAMARD_8X8_VERTICAL
+
+    REPX    {pabsd x, x}, m0, m1, m2, m3, m4, m5, m6, m7
+
+    ; Add m0-7
+    paddd   m0, m4
+    paddd   m1, m5
+    paddd   m2, m6
+    paddd   m3, m7
+
+    paddd   m0, m2
+    paddd   m1, m3
+
+    paddd   m0, m1
+    paddd   ymm9, m0
+    ret
+
+%macro LOAD_DIFF_8X8 0
+    movu        xm0, [srcq + 0*src_strideq]
+    movu        xm1, [srcq + 1*src_strideq]
+    movu        xm2, [srcq + 2*src_strideq]
+    movu        xm3, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+    movu        xm4, [srcq + 0*src_strideq]
+    movu        xm5, [srcq + 1*src_strideq]
+    movu        xm6, [srcq + 2*src_strideq]
+    movu        xm7, [srcq + src_stride3q ]
+
+    psubw       xm0, [dstq + 0*dst_strideq]
+    psubw       xm1, [dstq + 1*dst_strideq]
+    psubw       xm2, [dstq + 2*dst_strideq]
+    psubw       xm3, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+    psubw       xm4, [dstq + 0*dst_strideq]
+    psubw       xm5, [dstq + 1*dst_strideq]
+    psubw       xm6, [dstq + 2*dst_strideq]
+    psubw       xm7, [dstq + dst_stride3q ]
+
+    pmovsxwd    m0, xm0
+    pmovsxwd    m1, xm1
+    pmovsxwd    m2, xm2
+    pmovsxwd    m3, xm3
+    pmovsxwd    m4, xm4
+    pmovsxwd    m5, xm5
+    pmovsxwd    m6, xm6
+    pmovsxwd    m7, xm7
+%endmacro
+
+INIT_YMM avx2
+cglobal satd_8x8_hbd, 5, 7, 16, src, src_stride, dst, dst_stride, bdmax, \
+                                src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    LOAD_DIFF_8X8
+
+    ; m0-7 contain rows of 8x8 block to transform
+    ; with 32-bit coefficients
+
+    HADAMARD_8X8_VERTICAL
+
+    TRANSPOSE8X8D
+
+    HADAMARD_8X8_VERTICAL
+
+    REPX    {pabsd x, x}, m0, m1, m2, m3, m4, m5, m6, m7
+
+    ; Add m0-7
+    paddd   m0, m4
+    paddd   m1, m5
+    paddd   m2, m6
+    paddd   m3, m7
+
+    paddd   m0, m2
+    paddd   m1, m3
+
+    paddd   m0, m1
+
+    HSUM 32, 32, 0, 1, eax
+    NORMALIZE8PT
+    RET
+
 INIT_YMM avx2
 cglobal satd_4x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
                                src_stride3, dst_stride3
@@ -566,5 +771,125 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     ; by deduplicating the shared code.
     jmp m(satd_8x4_hbd).12bpc_main
     ; no return; we return in the other function.
+
+
+; width, height
+%macro SATD_NXM 2
+
+INIT_YMM avx2
+cglobal satd_%1x%2_hbd, 5, 10, 16, src, src_stride, dst, dst_stride, bdmax, \
+                                 src_stride3, dst_stride3, nsrc_stride4, ndst_stride4, rows
+    lea         nsrc_stride4q, [4*src_strideq]
+    lea         ndst_stride4q, [4*dst_strideq]
+
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    neg         nsrc_stride4q
+    neg         ndst_stride4q
+
+    pxor m9, m9
+
+    ; height contains the number of rows
+    mov rowsd, %2/8
+.outer:
+    mov bdmaxd, %1/8
+
+; loops over blocks in same row
+.loop:
+
+    LOAD_DIFF_8X8
+
+    ; fix up pointers and go to next block in same row
+    lea       srcq, [srcq + nsrc_stride4q + 16]
+    lea       dstq, [dstq + ndst_stride4q + 16]
+
+    call m(satd_8x8_hbd_internal)
+    dec bdmaxd
+    jnz .loop
+
+    lea       srcq, [srcq + 8*src_strideq - (%1*16)/8]
+    lea       dstq, [dstq + 8*dst_strideq - (%1*16)/8]
+
+    dec rowsd
+    jnz .outer
+
+    HSUM 32, 32, 9, 0, eax
+    NORMALIZE8PT
+    RET
+%endmacro
+
+%macro SATD_NX8 1
+INIT_YMM avx2
+cglobal satd_%1x8_hbd, 5, 9, 16, src, src_stride, dst, dst_stride, bdmax, \
+                                 src_stride3, dst_stride3, nsrc_stride4, ndst_stride4
+    lea         nsrc_stride4q, [4*src_strideq]
+    lea         ndst_stride4q, [4*dst_strideq]
+
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    neg         nsrc_stride4q
+    neg         ndst_stride4q
+
+    pxor m9, m9
+    mov bdmaxd, %1/8
+
+.loop:
+    LOAD_DIFF_8X8
+
+    lea       srcq, [srcq + nsrc_stride4q + 16]
+    lea       dstq, [dstq + ndst_stride4q + 16]
+
+    call m(satd_8x8_hbd_internal)
+    dec bdmaxd
+    jnz .loop
+
+    HSUM 32, 32, 9, 0, eax
+    NORMALIZE8PT
+    RET
+%endmacro
+
+%macro SATD_8XM 1
+INIT_YMM avx2
+cglobal satd_8x%1_hbd, 5, 7, 16, src, src_stride, dst, dst_stride, bdmax, \
+                                 src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    pxor m9, m9
+    mov bdmaxd, %1/8
+
+.loop:
+    LOAD_DIFF_8X8
+
+    lea       srcq, [srcq + 4*src_strideq]
+    lea       dstq, [dstq + 4*dst_strideq]
+
+    call m(satd_8x8_hbd_internal)
+    dec bdmaxd
+    jnz .loop
+
+    HSUM 32, 32, 9, 0, eax
+    NORMALIZE8PT
+    RET
+%endmacro
+
+SATD_NXM 16, 16
+SATD_NXM 32, 32
+SATD_NXM 64, 64
+SATD_NXM 128, 128
+SATD_NXM 16, 32
+SATD_NXM 16, 64
+SATD_NXM 32, 16
+SATD_NXM 32, 64
+SATD_NXM 64, 16
+SATD_NXM 64, 32
+SATD_NXM 64, 128
+SATD_NXM 128, 64
+SATD_NX8 16
+SATD_NX8 32
+SATD_8XM 16
+SATD_8XM 32
 
 %endif ; ARCH_X86_64
