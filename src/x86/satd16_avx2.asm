@@ -52,9 +52,9 @@ SECTION .text
     %define USE_ALT %3
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 
     %if VEC_SIZE == 32
@@ -78,9 +78,9 @@ SECTION .text
     SWAP 2, 1, 0
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 %endmacro
 
@@ -105,9 +105,9 @@ SECTION .text
     %define USE_ALT %3
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 
     %if VEC_SIZE == 16
@@ -135,9 +135,9 @@ SECTION .text
     %endif
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 %endmacro
 
@@ -149,9 +149,9 @@ SECTION .text
     %define USE_ALT %3
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 
     %if VEC_SIZE == 16
@@ -174,9 +174,9 @@ SECTION .text
     SWAP 2, 1, 0
 
     %if USE_ALT == 1
-        SWAP 3,0
-        SWAP 4,1
-        SWAP 5,2
+        SWAP 3, 0
+        SWAP 4, 1
+        SWAP 5, 2
     %endif
 %endmacro
 
@@ -270,9 +270,9 @@ SECTION .text
 
     ; Horizontal transform; since the output is transposed from the original order,
     ; we can do the same steps as the vertical transform and the result will be the same.
-    BUTTERFLY %1, %2, 0
-    INTERLEAVE %1, %2, 0
-    BUTTERFLY %1, %2, 0
+    BUTTERFLY   %1, %2, 0
+    INTERLEAVE  %1, %2, 0
+    BUTTERFLY   %1, %2, 0
 
     ; Finished horizontal transform except for the last step (interleaving pairs),
     ; which we skip, because after this we add up the absolute value of the
@@ -334,28 +334,28 @@ SECTION .text
     ; m8 is free
     paddd   m8, m0, m1
     psubd   m0, m1
-    SWAP    8,1,0
+    SWAP    8, 1, 0
 
     ; m8 is free
     paddd   m8, m2, m3
     psubd   m2, m3
-    SWAP    8,3,2
+    SWAP    8, 3, 2
 
     paddd   m8, m4, m5
     psubd   m4, m5
-    SWAP    8,5,4
+    SWAP    8, 5, 4
 
     paddd   m8, m6, m7
     psubd   m6, m7
-    SWAP    8,7,6
+    SWAP    8, 7, 6
 %endmacro
 
 %macro HADAMARD_8X8_VERTICAL 0
     BUTTERFLY_8X8
     ; m0-7 contain a0-7
 
-    SWAP 2,1
-    SWAP 6,5
+    SWAP 2, 1
+    SWAP 6, 5
 
     BUTTERFLY_8X8
 
@@ -364,10 +364,10 @@ SECTION .text
 
     BUTTERFLY_8X8
 
-    SWAP 2,1
-    SWAP 2,4
-    SWAP 3,6
-    SWAP 5,6
+    SWAP 2, 1
+    SWAP 2, 4
+    SWAP 3, 6
+    SWAP 5, 6
 %endmacro
 
 ; Transpose rows m0-7.
@@ -375,14 +375,14 @@ SECTION .text
 ;
 ; Uses m8, m10-15 as temporary registers (i.e. m9 is left unchanged.)
 %macro TRANSPOSE8X8D 0
-    SWAP 9,  0
-    SWAP 10, 1
-    SWAP 11, 2
-    SWAP 12, 3
-    SWAP 13, 4
-    SWAP 14, 5
-    SWAP 15, 6
-    SWAP 2,  7
+    SWAP   9, 0
+    SWAP  10, 1
+    SWAP  11, 2
+    SWAP  12, 3
+    SWAP  13, 4
+    SWAP  14, 5
+    SWAP  15, 6
+    SWAP   2, 7
 
     punpckldq    m6,  m9,  m10
     punpckldq    m1,  m11, m12
@@ -413,25 +413,25 @@ SECTION .text
     vperm2i128   m5,  m8,  m5,  0x31
     vperm2i128   m4,  m15, m4,  0x31
 
-    SWAP 0,9
+    SWAP 0, 9
 
     ; Output order is as follows:
     ; 3 2 6 7 1 0 5 4
 
     ; sort rows
-    SWAP 3,0
+    SWAP 3, 0
     ; 0 2 6 7 1 3 5 4
-    SWAP 1,2
+    SWAP 1, 2
     ; 0 1 6 7 2 3 5 4
-    SWAP 6,2
+    SWAP 6, 2
     ; 0 1 2 7 6 3 5 4
-    SWAP 7,3
+    SWAP 7, 3
     ; 0 1 2 3 6 7 5 4
-    SWAP 6,4
+    SWAP 6, 4
     ; 0 1 2 3 4 7 5 6
-    SWAP 7,5
+    SWAP 7, 5
     ; 0 1 2 3 4 5 7 6
-    SWAP 6,7
+    SWAP 6, 7
     ; 0 1 2 3 4 5 6 7
 %endmacro
 
@@ -457,7 +457,7 @@ cglobal satd_8x8_hbd_internal, 0, 0, 0, src, src_stride, dst, dst_stride, bdmax,
     paddd   m1, m3
 
     paddd   m0, m1
-    paddd   ymm9, m0
+    paddd ymm9, m0
     ret
 
 %macro LOAD_DIFF_8X8 0
@@ -586,14 +586,291 @@ cglobal satd_4x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
     NORMALIZE4PT
     RET
 
+; 32-bit input rows are in m0-3; result is in m0.
+; Uses m0-5 as temporary registers.
+%macro HADAMARD_8X4_12BPC 0
+    vperm2i128      m4, m0, m2, 0x31
+    vperm2i128      m5, m1, m3, 0x31
+    vinserti128     m0, m0, xm2, 1
+    vinserti128     m1, m1, xm3, 1
+
+    ; Swap so m3,m4 are used as inputs.
+    SWAP 3, 4, 5
+
+    ; instead of using HADAMARD_4X4_PACKED twice, we interleave
+    ; 2 transforms operating over different registers for more
+    ; opportunity for instruction level parallelism.
+
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE          32, 32, 0
+    INTERLEAVE          32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE_PAIRS    32, 32, 0
+    INTERLEAVE_PAIRS    32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE          32, 32, 0
+    INTERLEAVE          32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+
+    pabsd       m0, m0
+    pabsd       m1, m1
+    pabsd       m3, m3
+    pabsd       m4, m4
+
+    paddd       m0, m1
+    paddd       m3, m4
+    paddd       m0, m3
+%endmacro
+
+INIT_YMM avx2
+cglobal satd_16x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
+                               src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    cmp         bdmaxd, (1 << 10) - 1
+    jne         .12bpc
+
+    ; Load src rows
+    movu         m0, [srcq + 0*src_strideq]
+    movu         m1, [srcq + 1*src_strideq]
+    movu         m2, [srcq + 2*src_strideq]
+    movu         m3, [srcq + src_stride3q ]
+
+    ; src -= dst
+    psubw        m0, [dstq + 0*dst_strideq]
+    psubw        m1, [dstq + 1*dst_strideq]
+    psubw        m2, [dstq + 2*dst_strideq]
+    psubw        m3, [dstq + dst_stride3q ]
+
+.10bpc_main:
+
+    ; Original permutation
+    ; m0    0   1   2   3      4   5   6   7      8   9  10  11     12  13  14  15
+    ; m1   16  17  18  19     20  21  22  23     24  25  26  27     28  29  30  31
+    ; m2   32  33  34  35     36  37  38  39     40  41  42  43     44  45  46  47
+    ; m3   48  49  50  51     52  53  54  55     56  57  58  59     60  61  62  63
+
+    ; Two registers perform 2 4x4 transforms in parallel
+
+    punpcklqdq  m4, m0, m2
+    punpcklqdq  m5, m1, m3
+
+    punpckhqdq  m0, m0, m2
+    punpckhqdq  m1, m1, m3
+
+    SWAP 4, 3
+    SWAP 5, 4
+
+    ; New permutation
+    ; m0    0   1   2   3     32  33  34  35      8   9  10  11     40  41  42  43
+    ; m1   16  17  18  19     48  49  50  51     24  25  26  27     56  57  58  59
+    ; m3    4   5   6   7     36  37  38  39     12  13  14  15     44  45  46  47
+    ; m4   20  21  22  23     52  53  54  55     28  29  30  31     60  61  62  63
+
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE          16, 32, 0
+    INTERLEAVE          16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE_PAIRS    16, 32, 0
+    INTERLEAVE_PAIRS    16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE          16, 32, 0
+    INTERLEAVE          16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+
+    pabsw       m0, m0
+    pabsw       m1, m1
+    pabsw       m3, m3
+    pabsw       m4, m4
+
+    paddw       m0, m1
+    paddw       m3, m4
+    paddw       m0, m3
+
+    HSUM 16, 32, 0, 1, eax
+    NORMALIZE4PT
+    RET
+.12bpc:
+    RESET_MM_PERMUTATION
+
+    mov        bdmaxd, 2
+    pxor       m6, m6
+.12bpc_loop:
+    movu       xm0, [srcq + 0*src_strideq]
+    movu       xm1, [srcq + 1*src_strideq]
+    movu       xm2, [srcq + 2*src_strideq]
+    movu       xm3, [srcq + src_stride3q ]
+
+    psubw      xm0, [dstq + 0*dst_strideq]
+    psubw      xm1, [dstq + 1*dst_strideq]
+    psubw      xm2, [dstq + 2*dst_strideq]
+    psubw      xm3, [dstq + dst_stride3q ]
+
+    pmovsxwd    m0, xm0
+    pmovsxwd    m1, xm1
+    pmovsxwd    m2, xm2
+    pmovsxwd    m3, xm3
+
+    add     srcq, 16
+    add     dstq, 16
+
+    HADAMARD_8X4_12BPC
+    paddd   m6, m0
+    dec     bdmaxd
+    jnz     .12bpc_loop
+
+    HSUM 32, 32, 6, 1, eax
+    NORMALIZE4PT
+    RET
+
+INIT_YMM avx2
+cglobal satd_4x16_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
+                               src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    cmp         bdmaxd, (1 << 10) - 1
+    jne         .12bpc
+
+    ; BLOCK 1
+    movq        xm0, [srcq + 0*src_strideq]
+    movq        xm1, [srcq + 1*src_strideq]
+    movq        xm2, [srcq + 2*src_strideq]
+    movq        xm3, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm0, [dstq + 0*dst_strideq]
+    psubw       xm1, [dstq + 1*dst_strideq]
+    psubw       xm2, [dstq + 2*dst_strideq]
+    psubw       xm3, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    ; BLOCK 2
+    movq        xm4, [srcq + 0*src_strideq]
+    movq        xm5, [srcq + 1*src_strideq]
+    movq        xm6, [srcq + 2*src_strideq]
+    movq        xm7, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm4, [dstq + 0*dst_strideq]
+    psubw       xm5, [dstq + 1*dst_strideq]
+    psubw       xm6, [dstq + 2*dst_strideq]
+    psubw       xm7, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    vinserti128 m0, m0, xm4, 1
+    vinserti128 m1, m1, xm5, 1
+    vinserti128 m2, m2, xm6, 1
+    vinserti128 m3, m3, xm7, 1
+
+    ; BLOCK 3
+    movq        xm4, [srcq + 0*src_strideq]
+    movq        xm5, [srcq + 1*src_strideq]
+    movq        xm6, [srcq + 2*src_strideq]
+    movq        xm7, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm4, [dstq + 0*dst_strideq]
+    psubw       xm5, [dstq + 1*dst_strideq]
+    psubw       xm6, [dstq + 2*dst_strideq]
+    psubw       xm7, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    ; BLOCK 4
+    movq        xm8, [srcq + 0*src_strideq]
+    movq        xm9, [srcq + 1*src_strideq]
+    movq       xm10, [srcq + 2*src_strideq]
+    movq       xm11, [srcq + src_stride3q ]
+
+    psubw       xm8, [dstq + 0*dst_strideq]
+    psubw       xm9, [dstq + 1*dst_strideq]
+    psubw      xm10, [dstq + 2*dst_strideq]
+    psubw      xm11, [dstq + dst_stride3q ]
+
+    vinserti128  m4, m4, xm8,  1
+    vinserti128  m5, m5, xm9,  1
+    vinserti128  m6, m6, xm10, 1
+    vinserti128  m7, m7, xm11, 1
+
+    punpcklqdq   m0, m0, m4
+    punpcklqdq   m1, m1, m5
+    punpcklqdq   m2, m2, m6
+    punpcklqdq   m3, m3, m7
+
+    jmp     m(satd_16x4_hbd).10bpc_main
+
+.12bpc:
+    mov     bdmaxd, 2
+    pxor    m8, m8
+
+.12bpc_loop:
+    ; BLOCK 1
+    movq       xm0, [srcq + 0*src_strideq]
+    movq       xm1, [srcq + 1*src_strideq]
+    movq       xm2, [srcq + 2*src_strideq]
+    movq       xm3, [srcq + src_stride3q ]
+    lea       srcq, [srcq + 4*src_strideq]
+
+    psubw      xm0, [dstq + 0*dst_strideq]
+    psubw      xm1, [dstq + 1*dst_strideq]
+    psubw      xm2, [dstq + 2*dst_strideq]
+    psubw      xm3, [dstq + dst_stride3q ]
+    lea       dstq, [dstq + 4*dst_strideq]
+
+    pmovsxwd    xm0, xm0
+    pmovsxwd    xm1, xm1
+    pmovsxwd    xm2, xm2
+    pmovsxwd    xm3, xm3
+
+    ; BLOCK 2
+    movq       xm4, [srcq + 0*src_strideq]
+    movq       xm5, [srcq + 1*src_strideq]
+    movq       xm6, [srcq + 2*src_strideq]
+    movq       xm7, [srcq + src_stride3q ]
+    lea       srcq, [srcq + 4*src_strideq]
+
+    psubw      xm4, [dstq + 0*dst_strideq]
+    psubw      xm5, [dstq + 1*dst_strideq]
+    psubw      xm6, [dstq + 2*dst_strideq]
+    psubw      xm7, [dstq + dst_stride3q ]
+    lea       dstq, [dstq + 4*dst_strideq]
+
+    pmovsxwd    xm4, xm4
+    pmovsxwd    xm5, xm5
+    pmovsxwd    xm6, xm6
+    pmovsxwd    xm7, xm7
+
+    vinserti128 m0, m0, xm4, 1
+    vinserti128 m1, m1, xm5, 1
+    vinserti128 m2, m2, xm6, 1
+    vinserti128 m3, m3, xm7, 1
+
+    HADAMARD_8X4_12BPC
+    paddd   m8, m0
+    dec     bdmaxd
+    jnz     .12bpc_loop
+
+    HSUM 32, 32, 8, 0, eax
+    NORMALIZE4PT
+    RET
+
 INIT_YMM avx2
 cglobal satd_8x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
                                src_stride3, dst_stride3
     lea         src_stride3q, [3*src_strideq]
     lea         dst_stride3q, [3*dst_strideq]
 
-    cmp bdmaxd, (1 << 10) - 1
-    jne .12bpc
+    cmp         bdmaxd, (1 << 10) - 1
+    jne         .12bpc
 
     ; Load src rows
     movu        xm0, [srcq + 0*src_strideq]
@@ -636,42 +913,7 @@ cglobal satd_8x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     psubd       m3, m7
 
 .12bpc_main:
-    vperm2i128      m4, m0, m2, 0x31
-    vperm2i128      m5, m1, m3, 0x31
-    vinserti128     m0, m0, xm2, 1
-    vinserti128     m1, m1, xm3, 1
-
-    ; Swap so m3,m4 are used as inputs.
-    SWAP 3, 4, 5
-
-    ; instead of using HADAMARD_4X4_PACKED twice, we interleave
-    ; 2 transforms operating over different registers for more
-    ; opportunity for instruction level parallelism.
-
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE          32, 32, 0
-    INTERLEAVE          32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE_PAIRS    32, 32, 0
-    INTERLEAVE_PAIRS    32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE          32, 32, 0
-    INTERLEAVE          32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-
-    pabsd       m0, m0
-    pabsd       m1, m1
-    pabsd       m3, m3
-    pabsd       m4, m4
-
-    paddd       m0, m1
-    paddd       m3, m4
-    paddd       m0, m3
-
+    HADAMARD_8X4_12BPC
     HSUM 32, 32, 0, 1, eax
     NORMALIZE4PT
     RET
@@ -682,8 +924,8 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     lea         src_stride3q, [3*src_strideq]
     lea         dst_stride3q, [3*dst_strideq]
 
-    cmp bdmaxd, (1 << 10) - 1
-    jne .12bpc
+    cmp         bdmaxd, (1 << 10) - 1
+    jne         .12bpc
 
     movq        xm0, [srcq + 0*src_strideq]
     movq        xm1, [srcq + 1*src_strideq]
@@ -695,9 +937,9 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     movq        xm6, [srcq + 2*src_strideq]
     movq        xm7, [srcq + src_stride3q ]
 
-    ; this loads past the number of elements we are technically supposed
-    ; to read, however this should still be safe, since as long at least 1
-    ; valid element is in the memory address, we are fine
+    ; This loads past the number of elements we are technically supposed
+    ; to read, however, this should still be safe, since at least one
+    ; valid element is in the memory address.
     psubw       xm0, [dstq + 0*dst_strideq]
     psubw       xm1, [dstq + 1*dst_strideq]
     psubw       xm2, [dstq + 2*dst_strideq]
@@ -708,22 +950,15 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     psubw       xm6, [dstq + 2*dst_strideq]
     psubw       xm7, [dstq + dst_stride3q ]
 
-    ; swaps 2 halves of 64 bits
-    REPX {pshufd x, x, q1032}, xm4, xm5, xm6, xm7
+    punpcklqdq  xm0, xm0, xm4
+    punpcklqdq  xm1, xm1, xm5
+    punpcklqdq  xm2, xm2, xm6
+    punpcklqdq  xm3, xm3, xm7
 
-    ; using vpblendd here saves some instructions compared to
-    ; using and + or. an alternative is to movq every src and dst
-    ; memory address and use psubw on registers only, but this
-    ; approach seems better.
-    vpblendd xm0, xm0, xm4, 0b1100
-    vpblendd xm1, xm1, xm5, 0b1100
-    vpblendd xm2, xm2, xm6, 0b1100
-    vpblendd xm3, xm3, xm7, 0b1100
-
-    ; jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
+    ; Jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
     ; by deduplicating the shared code.
     jmp m(satd_8x4_hbd).10bpc_main
-    ; no return; we return in the other function.
+    ; No return; we return in the other function.
 
 .12bpc:
     RESET_MM_PERMUTATION
@@ -767,52 +1002,51 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     vinserti128 m2, m2, xm6, 1
     vinserti128 m3, m3, xm7, 1
 
-    ; jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
+    ; Jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
     ; by deduplicating the shared code.
     jmp m(satd_8x4_hbd).12bpc_main
-    ; no return; we return in the other function.
+    ; No return; we return in the other function.
 
 
-; width, height
+; <width>, <height>
 %macro SATD_NXM 2
 
 INIT_YMM avx2
 cglobal satd_%1x%2_hbd, 5, 10, 16, src, src_stride, dst, dst_stride, bdmax, \
                                  src_stride3, dst_stride3, nsrc_stride4, ndst_stride4, rows
-    lea         nsrc_stride4q, [4*src_strideq]
-    lea         ndst_stride4q, [4*dst_strideq]
+    lea     nsrc_stride4q, [4*src_strideq]
+    lea     ndst_stride4q, [4*dst_strideq]
 
-    lea         src_stride3q, [3*src_strideq]
-    lea         dst_stride3q, [3*dst_strideq]
+    lea     src_stride3q, [3*src_strideq]
+    lea     dst_stride3q, [3*dst_strideq]
 
-    neg         nsrc_stride4q
-    neg         ndst_stride4q
+    neg     nsrc_stride4q
+    neg     ndst_stride4q
 
-    pxor m9, m9
+    pxor    m9, m9
 
-    ; height contains the number of rows
-    mov rowsd, %2/8
+    ; Height contains the number of rows.
+    mov     rowsd, %2/8
 .outer:
-    mov bdmaxd, %1/8
+    mov     bdmaxd, %1/8
 
-; loops over blocks in same row
+; Loop over blocks in same row.
 .loop:
-
     LOAD_DIFF_8X8
 
-    ; fix up pointers and go to next block in same row
-    lea       srcq, [srcq + nsrc_stride4q + 16]
-    lea       dstq, [dstq + ndst_stride4q + 16]
+    ; Fix up pointers and go to next block in same row.
+    lea     srcq, [srcq + nsrc_stride4q + 16]
+    lea     dstq, [dstq + ndst_stride4q + 16]
 
-    call m(satd_8x8_hbd_internal)
-    dec bdmaxd
-    jnz .loop
+    call    m(satd_8x8_hbd_internal)
+    dec     bdmaxd
+    jnz     .loop
 
-    lea       srcq, [srcq + 8*src_strideq - (%1*16)/8]
-    lea       dstq, [dstq + 8*dst_strideq - (%1*16)/8]
+    lea     srcq, [srcq + 8*src_strideq - (%1*16)/8]
+    lea     dstq, [dstq + 8*dst_strideq - (%1*16)/8]
 
-    dec rowsd
-    jnz .outer
+    dec     rowsd
+    jnz     .outer
 
     HSUM 32, 32, 9, 0, eax
     NORMALIZE8PT
@@ -823,27 +1057,27 @@ cglobal satd_%1x%2_hbd, 5, 10, 16, src, src_stride, dst, dst_stride, bdmax, \
 INIT_YMM avx2
 cglobal satd_%1x8_hbd, 5, 9, 16, src, src_stride, dst, dst_stride, bdmax, \
                                  src_stride3, dst_stride3, nsrc_stride4, ndst_stride4
-    lea         nsrc_stride4q, [4*src_strideq]
-    lea         ndst_stride4q, [4*dst_strideq]
+    lea     nsrc_stride4q, [4*src_strideq]
+    lea     ndst_stride4q, [4*dst_strideq]
 
-    lea         src_stride3q, [3*src_strideq]
-    lea         dst_stride3q, [3*dst_strideq]
+    lea     src_stride3q, [3*src_strideq]
+    lea     dst_stride3q, [3*dst_strideq]
 
-    neg         nsrc_stride4q
-    neg         ndst_stride4q
+    neg     nsrc_stride4q
+    neg     ndst_stride4q
 
-    pxor m9, m9
-    mov bdmaxd, %1/8
+    pxor    m9, m9
+    mov     bdmaxd, %1/8
 
 .loop:
     LOAD_DIFF_8X8
 
-    lea       srcq, [srcq + nsrc_stride4q + 16]
-    lea       dstq, [dstq + ndst_stride4q + 16]
+    lea     srcq, [srcq + nsrc_stride4q + 16]
+    lea     dstq, [dstq + ndst_stride4q + 16]
 
-    call m(satd_8x8_hbd_internal)
-    dec bdmaxd
-    jnz .loop
+    call    m(satd_8x8_hbd_internal)
+    dec     bdmaxd
+    jnz     .loop
 
     HSUM 32, 32, 9, 0, eax
     NORMALIZE8PT
@@ -854,21 +1088,21 @@ cglobal satd_%1x8_hbd, 5, 9, 16, src, src_stride, dst, dst_stride, bdmax, \
 INIT_YMM avx2
 cglobal satd_8x%1_hbd, 5, 7, 16, src, src_stride, dst, dst_stride, bdmax, \
                                  src_stride3, dst_stride3
-    lea         src_stride3q, [3*src_strideq]
-    lea         dst_stride3q, [3*dst_strideq]
+    lea     src_stride3q, [3*src_strideq]
+    lea     dst_stride3q, [3*dst_strideq]
 
-    pxor m9, m9
-    mov bdmaxd, %1/8
+    pxor    m9, m9
+    mov     bdmaxd, %1/8
 
 .loop:
     LOAD_DIFF_8X8
 
-    lea       srcq, [srcq + 4*src_strideq]
-    lea       dstq, [dstq + 4*dst_strideq]
+    lea     srcq, [srcq + 4*src_strideq]
+    lea     dstq, [dstq + 4*dst_strideq]
 
-    call m(satd_8x8_hbd_internal)
-    dec bdmaxd
-    jnz .loop
+    call    m(satd_8x8_hbd_internal)
+    dec     bdmaxd
+    jnz     .loop
 
     HSUM 32, 32, 9, 0, eax
     NORMALIZE8PT
