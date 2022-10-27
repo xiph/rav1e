@@ -313,3 +313,23 @@ mod ssim_boost_tests {
     );
   }
 }
+
+pub(crate) fn adjust_spatiotemporal_for_lightness(
+  score: f64, mean_lightness: f32,
+) -> f64 {
+  // We want to use a lower scale for low luma areas,
+  // because lower scales are given more bits.
+  let multiplier = if mean_lightness >= 0.75 {
+    // Very light areas do not need as many bits.
+    // This results in up to a 1.25 multiplier for the lightest areas.
+    mean_lightness + 0.25
+  } else if mean_lightness <= 0.5 {
+    // Dark areas get more bits.
+    // This results in as low as a 0.5 multiplier for the darkest areas.
+    mean_lightness + 0.5
+  } else {
+    // Areas in the mid range can remain unadjusted
+    1.0
+  } as f64;
+  score * multiplier
+}
