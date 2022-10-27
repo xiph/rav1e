@@ -34,6 +34,7 @@ jobs:
     - name: Upload rav1e-ch msvc binary (unstable)
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e-ch (unstable) (AVX2)
         path: target/release/rav1e-ch.exe
 
 
@@ -45,11 +46,35 @@ jobs:
          - gnu
         include:
          - conf: msvc
+           name: msvc-generic
            toolchain: stable
            profile: release
+           target_cpu: x86_64
+         - conf: msvc
+           name: msvc-sse4
+           toolchain: stable
+           profile: release
+           target_cpu: x86_64-v2
+         - conf: msvc
+           name: msvc-avx2
+           toolchain: stable
+           profile: release
+           target_cpu: x86_64-v3
          - conf: gnu
+           name: gnu-generic
            toolchain: stable-x86_64-pc-windows-gnu
            profile: release-no-lto
+           target_cpu: x86_64
+         - conf: gnu
+           name: gnu-sse4
+           toolchain: stable-x86_64-pc-windows-gnu
+           profile: release-no-lto
+           target_cpu: x86_64-v2
+         - conf: gnu
+           name: gnu-avx2
+           toolchain: stable
+           profile: release
+           target_cpu: x86_64-v3
 
     if: github.repository_owner == 'xiph'
     runs-on: windows-latest
@@ -73,6 +98,8 @@ jobs:
         override: true
 
     - name: Build rav1e
+      env:
+        RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: cargo build --profile ${{ matrix.profile }}
 
     - name: Strip rav1e gnu-binary
@@ -80,6 +107,8 @@ jobs:
       run: strip target/${{ matrix.profile }}/rav1e.exe
 
     - name: Run cargo-c
+      env:
+        RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: |
         cargo fetch
         cargo cinstall --profile ${{ matrix.profile }} --destdir="C:\" --offline
@@ -113,6 +142,7 @@ jobs:
       if: matrix.conf == 'msvc'
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e (Windows-${{ matrix.name }})
         path: target/${{ matrix.profile }}/rav1e.exe
 
     - name: Upload pre-release binaries
@@ -120,12 +150,14 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e (Windows-${{ matrix.name }})
         path: rav1e-windows-${{ matrix.conf }}.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e ${{ steps.tagName.outputs.version }} (Windows-${{ matrix.name }})
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
 
 
@@ -137,11 +169,22 @@ jobs:
          - aarch64-unknown-linux-musl
         include:
          - target: x86_64-unknown-linux-musl
-           name: linux
+           name: linux-generic
            binaries: rav1e
            strip: strip
+           target_cpu: x86_64
+         - target: x86_64-unknown-linux-musl
+           name: linux-sse4
+           binaries: rav1e
+           strip: strip
+           target_cpu: x86_64-v2
+         - target: x86_64-unknown-linux-musl
+           name: linux-avx2
+           binaries: rav1e
+           strip: strip
+           target_cpu: x86_64-v3
          - target: aarch64-unknown-linux-musl
-           name: aarch64-linux
+           name: linux-aarch64
            binaries: rav1e
            strip: aarch64-linux-gnu-strip
 
@@ -184,10 +227,14 @@ jobs:
 
     - name: Build rav1e for aarch64-musl
       if: matrix.target == 'aarch64-unknown-linux-musl'
+      env:
+        RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: cross build --target ${{ matrix.target }} --release
 
     - name: Build rav1e
       if: matrix.target != 'aarch64-unknown-linux-musl'
+      env:
+        RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: cargo build --target ${{ matrix.target }} --release
 
     - name: Strip musl rav1e
@@ -221,12 +268,14 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e (${{ matrix.name }})
         path: rav1e-${{ matrix.name }}.tar.gz
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e ${{ steps.tagName.outputs.version }} (${{ matrix.name }})
         path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
 
   macos-binaries:
@@ -278,12 +327,14 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e (MacOS)
         path: rav1e-macos.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v3
       with:
+        name: rav1e ${{ steps.tagName.outputs.version }} (MacOS)
         path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
 
   deploy:
@@ -334,11 +385,17 @@ jobs:
           Cargo.lock
           rav1e.exe
           rav1e-ch.exe
-          rav1e-linux.tar.gz
-          rav1e-aarch64-linux.tar.gz
+          rav1e-linux-generic.zip
+          rav1e-linux-sse4.zip
+          rav1e-linux-avx2.zip
+          rav1e-linux-aarch64.tar.gz
           rav1e-macos.zip
-          rav1e-windows-msvc.zip
-          rav1e-windows-gnu.zip
+          rav1e-windows-msvc-generic.zip
+          rav1e-windows-msvc-sse4.zip
+          rav1e-windows-msvc-avx2.zip
+          rav1e-windows-gnu-generic.zip
+          rav1e-windows-gnu-sse4.zip
+          rav1e-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -352,11 +409,17 @@ jobs:
           Cargo.lock
           rav1e.exe
           rav1e-ch.exe
-          rav1e-linux.tar.gz
-          rav1e-aarch64-linux.tar.gz
+          rav1e-linux-generic.zip
+          rav1e-linux-sse4.zip
+          rav1e-linux-avx2.zip
+          rav1e-linux-aarch64.tar.gz
           rav1e-macos.zip
-          rav1e-windows-msvc.zip
-          rav1e-windows-gnu.zip
+          rav1e-windows-msvc-generic.zip
+          rav1e-windows-msvc-sse4.zip
+          rav1e-windows-msvc-avx2.zip
+          rav1e-windows-gnu-generic.zip
+          rav1e-windows-gnu-sse4.zip
+          rav1e-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -368,10 +431,16 @@ jobs:
         files: |
           Cargo.lock
           rav1e.exe
-          rav1e-${{ steps.tagName.outputs.version }}-linux.tar.gz
-          rav1e-${{ steps.tagName.outputs.version }}-aarch64-linux.tar.gz
+          rav1e-${{ steps.tagName.outputs.version }}-linux-generic.zip
+          rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.zip
+          rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.zip
+          rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
           rav1e-${{ steps.tagName.outputs.version }}-macos.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-generic.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-sse4.zip
+          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
