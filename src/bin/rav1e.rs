@@ -356,6 +356,9 @@ fn init_logger() {
     // parameter:
     // `info!(target="special_target", "This log message is about special_target");`
     .level_for("rav1e", level)
+    // Currently this outputs a warning for every frame if the colorimetry args
+    // are not set. That gets pretty annoying.
+    .level_for("yuvxyb", log::LevelFilter::Error)
     // output to stdout
     .chain(std::io::stderr())
     .apply()
