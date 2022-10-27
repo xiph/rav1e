@@ -19,6 +19,9 @@ use std::sync::Arc;
 use v_frame::frame::Frame;
 use v_frame::pixel::CastFromPrimitive;
 use v_frame::plane::Plane;
+use yuvxyb::YuvConfig;
+
+use super::PixelRange;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
 pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
@@ -279,4 +282,29 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
       let ts = &mut ctx.ts;
       estimate_tile_motion(fi, ts, inter_cfg);
     });
+}
+
+/// Produces a Vec of lightness values for each pixel within the frame,
+/// on a scale of 0.0 to 1.0, where 0.0 is black and 1.0 is white.
+/// The values in the Vec are in row-major order and do not include frame padding.
+pub(crate) fn compute_frame_lightness<T: Pixel>(
+  frame: &Frame<T>, enc: EncoderConfig,
+) -> Vec<f32> {
+  let chroma = enc.chroma_sampling.get_decimation().unwrap_or((0, 0));
+  let yuv = yuvxyb::Yuv::new(
+    frame.clone(),
+    YuvConfig {
+      bit_depth: enc.bit_depth as u8,
+      subsampling_x: chroma.0 as u8,
+      subsampling_y: chroma.1 as u8,
+      full_range: enc.pixel_range == PixelRange::Full,
+      matrix_coefficients: enc
+        .color_description
+        .map(|cd| cd.matrix_coefficients)
+        .unwrap_or(super::MatrixCoefficients::Unspecified),
+      transfer_characteristics: todo!(),
+      color_primaries: todo!(),
+    },
+  )
+  .unwrap();
 }
