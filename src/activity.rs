@@ -206,14 +206,16 @@ pub(crate) fn compute_block_brightnesses<T: Pixel>(
 
   let mut brightnesses = Vec::with_capacity(w_in_imp_b * h_in_imp_b);
 
-  for y in 0..w_in_imp_b {
-    for x in 0..h_in_imp_b {
-      let bheight = 8.min(height - y * IMPORTANCE_BLOCK_SIZE);
-      let bwidth = 8.min(width - x * IMPORTANCE_BLOCK_SIZE);
+  for y in 0..h_in_imp_b {
+    for x in 0..w_in_imp_b {
+      let block_start_y = y * IMPORTANCE_BLOCK_SIZE;
+      let block_start_x = x * IMPORTANCE_BLOCK_SIZE;
+      let bheight = 8.min(height - block_start_y);
+      let bwidth = 8.min(width - block_start_x);
       let mut sum = 0f32;
       for j in 0..bheight {
-        let slice = &hsl[((y * IMPORTANCE_BLOCK_SIZE + j) * width
-          + x * IMPORTANCE_BLOCK_SIZE)..];
+        let row_start = (block_start_y + j) * width;
+        let slice = &hsl[(row_start + block_start_x)..];
         sum += slice.iter().take(bwidth).copied().sum::<f32>();
       }
       brightnesses.push(sum / (bwidth * bheight) as f32);
