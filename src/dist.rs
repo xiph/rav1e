@@ -45,8 +45,7 @@ pub(crate) mod rust {
     {
       let mut iter_org = slice_org[..w].chunks_exact(4);
       let mut iter_ref = slice_ref[..w].chunks_exact(4);
-      for chunk_org in iter_org.by_ref() {
-        let chunk_ref = iter_ref.next().expect("rows are same size");
+      for (chunk_org, chunk_ref) in iter_org.by_ref().zip(iter_ref.by_ref()) {
         let chunk_org = wide::i32x4::from([
           i32::cast_from(chunk_org[0]),
           i32::cast_from(chunk_org[1]),
