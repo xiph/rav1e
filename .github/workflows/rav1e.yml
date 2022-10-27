@@ -12,7 +12,6 @@ on:
 
 jobs:
   rustfmt-clippy:
-
     runs-on: ubuntu-22.04
 
     steps:
@@ -39,7 +38,7 @@ jobs:
       matrix:
         conf:
           - beta-build
-          - 1.60.0-tests
+          - 1.61.0-tests
           - aom-tests
           - dav1d-tests
           - no-asm-tests
@@ -54,8 +53,8 @@ jobs:
         include:
           - conf: beta-build
             toolchain: beta
-          - conf: 1.60.0-tests
-            toolchain: 1.60.0
+          - conf: 1.61.0-tests
+            toolchain: 1.61.0
           - conf: aom-tests
             toolchain: stable
           - conf: dav1d-tests
@@ -157,8 +156,8 @@ jobs:
       - name: Start sccache server
         run: |
           sccache --start-server
-      - name: Run 1.60.0 tests
-        if: matrix.toolchain == '1.60.0' && matrix.conf == '1.60.0-tests'
+      - name: Run 1.61.0 tests
+        if: matrix.toolchain == '1.61.0' && matrix.conf == '1.61.0-tests'
         run: |
           cargo test --workspace --verbose \
                      --features=decode_test,decode_test_dav1d,quick_test,capi
