@@ -19,6 +19,7 @@ use std::sync::Arc;
 use v_frame::frame::Frame;
 use v_frame::pixel::CastFromPrimitive;
 use v_frame::plane::Plane;
+use yuvxyb::FromPrimitive;
 use yuvxyb::YuvConfig;
 
 use super::PixelRange;
@@ -288,7 +289,7 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
 /// on a scale of 0.0 to 1.0, where 0.0 is black and 1.0 is white.
 /// The values in the Vec are in row-major order and do not include frame padding.
 pub(crate) fn compute_frame_lightness<T: Pixel>(
-  frame: &Frame<T>, enc: EncoderConfig,
+  frame: &Frame<T>, enc: &EncoderConfig,
 ) -> Vec<f32> {
   let chroma = enc.chroma_sampling.get_decimation().unwrap_or((0, 0));
   let yuv = yuvxyb::Yuv::new(
@@ -300,11 +301,30 @@ pub(crate) fn compute_frame_lightness<T: Pixel>(
       full_range: enc.pixel_range == PixelRange::Full,
       matrix_coefficients: enc
         .color_description
-        .map(|cd| cd.matrix_coefficients)
-        .unwrap_or(super::MatrixCoefficients::Unspecified),
-      transfer_characteristics: todo!(),
-      color_primaries: todo!(),
+        .map(|cd| {
+          yuvxyb::MatrixCoefficients::from_u8(cd.matrix_coefficients as u8)
+            .unwrap()
+        })
+        .unwrap_or(yuvxyb::MatrixCoefficients::Unspecified),
+      transfer_characteristics: enc
+        .color_description
+        .map(|cd| {
+          yuvxyb::TransferCharacteristic::from_u8(
+            cd.transfer_characteristics as u8,
+          )
+          .unwrap()
+        })
+        .unwrap_or(yuvxyb::TransferCharacteristic::Unspecified),
+      color_primaries: enc
+        .color_description
+        .map(|cd| {
+          yuvxyb::ColorPrimaries::from_u8(cd.color_primaries as u8).unwrap()
+        })
+        .unwrap_or(yuvxyb::ColorPrimaries::Unspecified),
     },
   )
   .unwrap();
+  let lrgb = yuvxyb::LinearRgb::try_from(yuv).unwrap();
+  let hsl = yuvxyb::Hsl::from(lrgb);
+  hsl.data().iter().map(|hsl| hsl[2]).collect()
 }

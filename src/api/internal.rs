@@ -1325,7 +1325,7 @@ impl<T: Pixel> ContextInner<T> {
             &mut coded_data.activity_scales,
           );
           coded_data.block_brightnesses =
-            compute_block_brightnesses(&frame.planes[0]);
+            compute_block_brightnesses(frame, &self.config);
           log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
         } else {
           coded_data.activity_mask = ActivityMask::default();

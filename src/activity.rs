@@ -7,10 +7,13 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::api::lookahead::compute_frame_lightness;
+use crate::encoder::IMPORTANCE_BLOCK_SIZE;
 use crate::frame::*;
 use crate::rdo::DistortionScale;
 use crate::tiling::*;
 use crate::util::*;
+use crate::EncoderConfig;
 use itertools::izip;
 use rust_hawktracer::*;
 
@@ -189,69 +192,35 @@ pub fn apply_ssim_boost(
 }
 
 /// Computes the average brightness for each importance block.
-/// Returns the mean as a raw pixel value, does not adjust for bit-depth.
+/// Returns the mean as a value between 0.0 to 1.0,
+/// where 0.0 is pure black and 1.0 is pure white.
 pub(crate) fn compute_block_brightnesses<T: Pixel>(
-  luma_plane: &Plane<T>,
-) -> Box<[u16]> {
-  let PlaneConfig { width, height, .. } = luma_plane.cfg;
+  frame: &Frame<T>, enc: &EncoderConfig,
+) -> Box<[f32]> {
+  let hsl = compute_frame_lightness(frame, enc);
+  let PlaneConfig { width, height, .. } = frame.planes[0].cfg;
 
   // Width and height are padded to 8×8 block size.
   let w_in_imp_b = width.align_power_of_two_and_shift(3);
   let h_in_imp_b = height.align_power_of_two_and_shift(3);
 
-  let aligned_luma = Rect {
-    x: 0_isize,
-    y: 0_isize,
-    width: w_in_imp_b << 3,
-    height: h_in_imp_b << 3,
-  };
-  let luma = PlaneRegion::new(luma_plane, aligned_luma);
-
   let mut brightnesses = Vec::with_capacity(w_in_imp_b * h_in_imp_b);
 
-  for y in 0..h_in_imp_b {
-    for x in 0..w_in_imp_b {
-      let block_rect = Area::Rect {
-        x: (x << 3) as isize,
-        y: (y << 3) as isize,
-        width: 8,
-        height: 8,
-      };
-
-      let block = luma.subregion(block_rect);
-      brightnesses.push(mean_8x8(&block));
+  for y in 0..w_in_imp_b {
+    for x in 0..h_in_imp_b {
+      let bheight = 8.min(height - y * IMPORTANCE_BLOCK_SIZE);
+      let bwidth = 8.min(width - x * IMPORTANCE_BLOCK_SIZE);
+      let mut sum = 0f32;
+      for j in 0..bheight {
+        let slice = &hsl[((y * IMPORTANCE_BLOCK_SIZE + j) * width
+          + x * IMPORTANCE_BLOCK_SIZE)..];
+        sum += slice.iter().take(bwidth).copied().sum::<f32>();
+      }
+      brightnesses.push(sum / (bwidth * bheight) as f32);
     }
   }
 
   brightnesses.into_boxed_slice()
-}
-
-#[inline(never)]
-fn mean_8x8<T: Pixel>(src: &PlaneRegion<'_, T>) -> u16 {
-  debug_assert!(src.plane_cfg.xdec == 0);
-  debug_assert!(src.plane_cfg.ydec == 0);
-
-  // Sum into columns to improve auto-vectorization
-  let mut sum_s_cols: [u16; 8] = [0; 8];
-
-  // Check upfront that 8 rows are available.
-  let _row = &src[7];
-
-  for j in 0..8 {
-    let row = &src[j][0..8];
-    for (sum_s, s) in izip!(&mut sum_s_cols, row) {
-      // Don't convert directly to u32 to allow better vectorization
-      // This supports up to 12-bit encoding
-      let s: u16 = u16::cast_from(*s);
-      *sum_s += s;
-    }
-  }
-
-  // Sum together the sum of columns
-  let sum_s = sum_s_cols.iter().copied().map(u32::from).sum::<u32>();
-
-  // Compute the mean
-  (sum_s / (8 * 8)) as u16
 }
 
 #[cfg(test)]

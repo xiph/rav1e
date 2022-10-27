@@ -82,7 +82,6 @@ fn segmentation_optimize_inner<T: Pixel>(
 
   // Minimize the total distance from a small set of values to all scales.
   // Find k-means of log(spatiotemporal scale), k in 3..=8
-  let is_hdr = fi.config.is_hdr();
   let c: ([_; 8], [_; 7], [_; 6], [_; 5], [_; 4], [_; 3]) = {
     let frame_data = &fi.coded_frame_data.as_ref().unwrap();
 
@@ -103,12 +102,7 @@ fn segmentation_optimize_inner<T: Pixel>(
       .iter()
       .zip(frame_data.block_brightnesses.iter())
       .map(|(score, brightness)| {
-        let score = aq_luma_adjust(
-          f64::from(*score),
-          *brightness,
-          fi.config.bit_depth as u8,
-          is_hdr,
-        );
+        let score = aq_lightness_adjust(f64::from(*score), *brightness);
         // We need to maintain the overall range of values within the frame
         DistortionScale::from(score.max(frame_score_min).min(frame_score_max))
       })
@@ -218,16 +212,20 @@ fn segment_idx_from_distortion(
   threshold.partition_point(|&t| s.0 < t.0) as u8
 }
 
-fn aq_luma_adjust(
-  score: f64, mean_luma: u16, bit_depth: u8, is_hdr: bool,
-) -> f64 {
+fn aq_lightness_adjust(score: f64, mean_lightness: f32) -> f64 {
   // We want to use a lower scale for low luma areas,
   // because lower scales are given more bits.
-  let mean_luma = mean_luma >> (bit_depth - 8);
-  let centroid = if is_hdr { 195.0 } else { 160.0 };
-  let min_multi = if is_hdr { 0.5 } else { 0.6 };
-  let multiplier = (1.0
-    + 2.5 * (mean_luma as f64 - centroid).powi(3) / 255u32.pow(3) as f64)
-    .max(min_multi);
+  let multiplier = if mean_lightness >= 0.75 {
+    // Very light areas do not need as many bits.
+    // This results in up to a 1.25 multiplier for the lightest areas.
+    mean_lightness + 0.25
+  } else if mean_lightness <= 0.5 {
+    // Dark areas get more bits.
+    // This results in as low as a 0.5 multiplier for the darkest areas.
+    mean_lightness + 0.5
+  } else {
+    // Areas in the mid range can remain unadjusted
+    1.0
+  } as f64;
   score * multiplier
 }

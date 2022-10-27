@@ -715,8 +715,9 @@ pub struct CodedFrameData<T: Pixel> {
   /// Pre-computed activity_scale.
   pub activity_scales: Box<[DistortionScale]>,
   pub activity_mask: ActivityMask,
-  /// Pre-computed average brightness of each importance block
-  pub block_brightnesses: Box<[u16]>,
+  /// Pre-computed average brightness of each importance block.
+  /// These are on a scale of 0.0 for black to 1.0 for white.
+  pub block_brightnesses: Box<[f32]>,
   /// Combined metric of activity and distortion
   pub spatiotemporal_scores: Box<[DistortionScale]>,
 }
