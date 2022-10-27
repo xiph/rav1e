@@ -586,6 +586,282 @@ cglobal satd_4x4_hbd, 5, 7, 8, src, src_stride, dst, dst_stride, bdmax, \
     NORMALIZE4PT
     RET
 
+; 32-bit input rows are in m0-3; result is in m0.
+; Uses m0-5 as temporary registers.
+%macro HADAMARD_8X4_12BPC 0
+    vperm2i128      m4, m0, m2, 0x31
+    vperm2i128      m5, m1, m3, 0x31
+    vinserti128     m0, m0, xm2, 1
+    vinserti128     m1, m1, xm3, 1
+
+    ; Swap so m3,m4 are used as inputs.
+    SWAP 3, 4, 5
+
+    ; instead of using HADAMARD_4X4_PACKED twice, we interleave
+    ; 2 transforms operating over different registers for more
+    ; opportunity for instruction level parallelism.
+
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE          32, 32, 0
+    INTERLEAVE          32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE_PAIRS    32, 32, 0
+    INTERLEAVE_PAIRS    32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+    INTERLEAVE          32, 32, 0
+    INTERLEAVE          32, 32, 1
+    BUTTERFLY           32, 32, 0
+    BUTTERFLY           32, 32, 1
+
+    pabsd       m0, m0
+    pabsd       m1, m1
+    pabsd       m3, m3
+    pabsd       m4, m4
+
+    paddd       m0, m1
+    paddd       m3, m4
+    paddd       m0, m3
+%endmacro
+
+INIT_YMM avx2
+cglobal satd_16x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
+                               src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    cmp bdmaxd, (1 << 10) - 1
+    jne .12bpc
+
+    ; Load src rows
+    movu         m0, [srcq + 0*src_strideq]
+    movu         m1, [srcq + 1*src_strideq]
+    movu         m2, [srcq + 2*src_strideq]
+    movu         m3, [srcq + src_stride3q ]
+
+    ; src -= dst
+    psubw        m0, [dstq + 0*dst_strideq]
+    psubw        m1, [dstq + 1*dst_strideq]
+    psubw        m2, [dstq + 2*dst_strideq]
+    psubw        m3, [dstq + dst_stride3q ]
+
+.10bpc_main:
+
+    ; Original permutation
+    ; m0    0   1   2   3      4   5   6   7      8   9  10  11     12  13  14  15
+    ; m1   16  17  18  19     20  21  22  23     24  25  26  27     28  29  30  31
+    ; m2   32  33  34  35     36  37  38  39     40  41  42  43     44  45  46  47
+    ; m3   48  49  50  51     52  53  54  55     56  57  58  59     60  61  62  63
+
+    ; two registers can do one 8x4 transform (16x2)
+
+    ; New permutation
+    ; m0    0   1   2   3     32  33  34  35      8   9  10  11     40  41  42  43
+    ; m1   16  17  18  19     48  49  50  51     24  25  26  27     56  57  58  59
+    ; m2    4   5   6   7     36  37  38  39     12  13  14  15     44  45  46  47
+    ; m3   20  21  22  23     52  53  54  55     28  29  30  31     60  61  62  63
+
+    punpcklqdq  m4, m0, m2
+    punpcklqdq  m5, m1, m3
+
+    punpckhqdq  m0, m0, m2
+    punpckhqdq  m1, m1, m3
+
+    SWAP 4,3
+    SWAP 5,4
+
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE          16, 32, 0
+    INTERLEAVE          16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE_PAIRS    16, 32, 0
+    INTERLEAVE_PAIRS    16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+    INTERLEAVE          16, 32, 0
+    INTERLEAVE          16, 32, 1
+    BUTTERFLY           16, 32, 0
+    BUTTERFLY           16, 32, 1
+
+    pabsw       m0, m0
+    pabsw       m1, m1
+    pabsw       m3, m3
+    pabsw       m4, m4
+
+    paddw       m0, m1
+    paddw       m3, m4
+    paddw       m0, m3
+
+    HSUM 16, 32, 0, 1, eax
+    NORMALIZE4PT
+    RET
+.12bpc:
+    mov bdmaxd, 2
+    pxor m6,m6
+.12bpc_loop:
+    movu       xm0, [srcq + 0*src_strideq]
+    movu       xm1, [srcq + 1*src_strideq]
+    movu       xm2, [srcq + 2*src_strideq]
+    movu       xm3, [srcq + src_stride3q ]
+
+    psubw      xm0, [dstq + 0*dst_strideq]
+    psubw      xm1, [dstq + 1*dst_strideq]
+    psubw      xm2, [dstq + 2*dst_strideq]
+    psubw      xm3, [dstq + dst_stride3q ]
+
+    pmovsxwd    m0, xm0
+    pmovsxwd    m1, xm1
+    pmovsxwd    m2, xm2
+    pmovsxwd    m3, xm3
+
+    add         srcq, 16
+    add         dstq, 16
+
+    HADAMARD_8X4_12BPC
+    paddd       m6,m0
+    dec bdmaxd
+    jnz .12bpc_loop
+
+    HSUM 32, 32, 6, 1, eax
+    NORMALIZE4PT
+    RET
+
+INIT_YMM avx2
+cglobal satd_4x16_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
+                               src_stride3, dst_stride3
+    lea         src_stride3q, [3*src_strideq]
+    lea         dst_stride3q, [3*dst_strideq]
+
+    cmp bdmaxd, (1 << 10) - 1
+    jne .12bpc
+
+    ; BLOCK 1
+    movq        xm0, [srcq + 0*src_strideq]
+    movq        xm1, [srcq + 1*src_strideq]
+    movq        xm2, [srcq + 2*src_strideq]
+    movq        xm3, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm0, [dstq + 0*dst_strideq]
+    psubw       xm1, [dstq + 1*dst_strideq]
+    psubw       xm2, [dstq + 2*dst_strideq]
+    psubw       xm3, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    ; BLOCK 2
+    movq        xm4, [srcq + 0*src_strideq]
+    movq        xm5, [srcq + 1*src_strideq]
+    movq        xm6, [srcq + 2*src_strideq]
+    movq        xm7, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm4, [dstq + 0*dst_strideq]
+    psubw       xm5, [dstq + 1*dst_strideq]
+    psubw       xm6, [dstq + 2*dst_strideq]
+    psubw       xm7, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    vinserti128 m0, m0, xm4, 1
+    vinserti128 m1, m1, xm5, 1
+    vinserti128 m2, m2, xm6, 1
+    vinserti128 m3, m3, xm7, 1
+
+    ; BLOCK 3
+    movq        xm4, [srcq + 0*src_strideq]
+    movq        xm5, [srcq + 1*src_strideq]
+    movq        xm6, [srcq + 2*src_strideq]
+    movq        xm7, [srcq + src_stride3q ]
+    lea        srcq, [srcq + 4*src_strideq]
+
+    psubw       xm4, [dstq + 0*dst_strideq]
+    psubw       xm5, [dstq + 1*dst_strideq]
+    psubw       xm6, [dstq + 2*dst_strideq]
+    psubw       xm7, [dstq + dst_stride3q ]
+    lea        dstq, [dstq + 4*dst_strideq]
+
+    ; BLOCK 4
+    movq        xm8, [srcq + 0*src_strideq]
+    movq        xm9, [srcq + 1*src_strideq]
+    movq       xm10, [srcq + 2*src_strideq]
+    movq       xm11, [srcq + src_stride3q ]
+
+    psubw       xm8, [dstq + 0*dst_strideq]
+    psubw       xm9, [dstq + 1*dst_strideq]
+    psubw      xm10, [dstq + 2*dst_strideq]
+    psubw      xm11, [dstq + dst_stride3q ]
+
+    vinserti128 m4, m4, xm8,  1
+    vinserti128 m5, m5, xm9,  1
+    vinserti128 m6, m6, xm10, 1
+    vinserti128 m7, m7, xm11, 1
+
+    punpcklqdq  m0, m0, m4
+    punpcklqdq  m1, m1, m5
+    punpcklqdq  m2, m2, m6
+    punpcklqdq  m3, m3, m7
+
+    jmp m(satd_16x4_hbd).10bpc_main
+
+.12bpc:
+    mov bdmaxd, 2
+    pxor m8, m8
+
+.12bpc_loop:
+    ; BLOCK 1
+    movq       xm0, [srcq + 0*src_strideq]
+    movq       xm1, [srcq + 1*src_strideq]
+    movq       xm2, [srcq + 2*src_strideq]
+    movq       xm3, [srcq + src_stride3q ]
+    lea       srcq, [srcq + 4*src_strideq]
+
+    psubw      xm0, [dstq + 0*dst_strideq]
+    psubw      xm1, [dstq + 1*dst_strideq]
+    psubw      xm2, [dstq + 2*dst_strideq]
+    psubw      xm3, [dstq + dst_stride3q ]
+    lea       dstq, [dstq + 4*dst_strideq]
+
+    pmovsxwd    xm0, xm0
+    pmovsxwd    xm1, xm1
+    pmovsxwd    xm2, xm2
+    pmovsxwd    xm3, xm3
+
+    ; BLOCK 2
+    movq       xm4, [srcq + 0*src_strideq]
+    movq       xm5, [srcq + 1*src_strideq]
+    movq       xm6, [srcq + 2*src_strideq]
+    movq       xm7, [srcq + src_stride3q ]
+    lea       srcq, [srcq + 4*src_strideq]
+
+    psubw      xm4, [dstq + 0*dst_strideq]
+    psubw      xm5, [dstq + 1*dst_strideq]
+    psubw      xm6, [dstq + 2*dst_strideq]
+    psubw      xm7, [dstq + dst_stride3q ]
+    lea       dstq, [dstq + 4*dst_strideq]
+
+    pmovsxwd    xm4, xm4
+    pmovsxwd    xm5, xm5
+    pmovsxwd    xm6, xm6
+    pmovsxwd    xm7, xm7
+
+    vinserti128 m0, m0, xm4, 1
+    vinserti128 m1, m1, xm5, 1
+    vinserti128 m2, m2, xm6, 1
+    vinserti128 m3, m3, xm7, 1
+
+    HADAMARD_8X4_12BPC
+    paddd   m8, m0
+
+    dec bdmaxd
+    jnz .12bpc_loop
+
+    HSUM 32, 32, 8, 0, eax
+    NORMALIZE4PT
+    RET
+
 INIT_YMM avx2
 cglobal satd_8x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
                                src_stride3, dst_stride3
@@ -636,42 +912,7 @@ cglobal satd_8x4_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     psubd       m3, m7
 
 .12bpc_main:
-    vperm2i128      m4, m0, m2, 0x31
-    vperm2i128      m5, m1, m3, 0x31
-    vinserti128     m0, m0, xm2, 1
-    vinserti128     m1, m1, xm3, 1
-
-    ; Swap so m3,m4 are used as inputs.
-    SWAP 3, 4, 5
-
-    ; instead of using HADAMARD_4X4_PACKED twice, we interleave
-    ; 2 transforms operating over different registers for more
-    ; opportunity for instruction level parallelism.
-
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE          32, 32, 0
-    INTERLEAVE          32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE_PAIRS    32, 32, 0
-    INTERLEAVE_PAIRS    32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-    INTERLEAVE          32, 32, 0
-    INTERLEAVE          32, 32, 1
-    BUTTERFLY           32, 32, 0
-    BUTTERFLY           32, 32, 1
-
-    pabsd       m0, m0
-    pabsd       m1, m1
-    pabsd       m3, m3
-    pabsd       m4, m4
-
-    paddd       m0, m1
-    paddd       m3, m4
-    paddd       m0, m3
-
+    HADAMARD_8X4_12BPC
     HSUM 32, 32, 0, 1, eax
     NORMALIZE4PT
     RET
@@ -708,17 +949,10 @@ cglobal satd_4x8_hbd, 5, 7, 12, src, src_stride, dst, dst_stride, bdmax, \
     psubw       xm6, [dstq + 2*dst_strideq]
     psubw       xm7, [dstq + dst_stride3q ]
 
-    ; swaps 2 halves of 64 bits
-    REPX {pshufd x, x, q1032}, xm4, xm5, xm6, xm7
-
-    ; using vpblendd here saves some instructions compared to
-    ; using and + or. an alternative is to movq every src and dst
-    ; memory address and use psubw on registers only, but this
-    ; approach seems better.
-    vpblendd xm0, xm0, xm4, 0b1100
-    vpblendd xm1, xm1, xm5, 0b1100
-    vpblendd xm2, xm2, xm6, 0b1100
-    vpblendd xm3, xm3, xm7, 0b1100
+    punpcklqdq  xm0, xm0, xm4
+    punpcklqdq  xm1, xm1, xm5
+    punpcklqdq  xm2, xm2, xm6
+    punpcklqdq  xm3, xm3, xm7
 
     ; jump to HADAMARD_4X4_PACKED in 8x4 satd, this saves us some binary size
     ; by deduplicating the shared code.
