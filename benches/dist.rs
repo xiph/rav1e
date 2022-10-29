@@ -93,7 +93,7 @@ fn run_dist_bench<T: Pixel>(
   let plane_ref = rec_plane.as_region();
 
   let blk_w = bs.width();
-  let blk_h = bs.width();
+  let blk_h = bs.height();
 
   b.iter(|| {
     let _ =

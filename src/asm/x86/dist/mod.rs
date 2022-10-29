@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 pub use self::cdef_dist::*;
-use self::hbd::*;
 pub use self::sse::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
@@ -17,7 +16,6 @@ use crate::tiling::*;
 use crate::util::*;
 
 mod cdef_dist;
-mod hbd;
 mod sse;
 
 type SadFn = unsafe extern fn(
@@ -36,13 +34,29 @@ type SadHBDFn = unsafe extern fn(
   dst_stride: isize,
 ) -> u32;
 
-type SatdHBDFn = SadHBDFn;
+type SatdHBDFn = unsafe extern fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+  bdmax: u32,
+) -> u32;
 
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
       extern { fn $name (
         src: *const $T, src_stride: isize, dst: *const $T, dst_stride: isize
+      ) -> u32; }
+    )+
+  )
+}
+
+macro_rules! declare_asm_satd_hbd_fn {
+  ($($name: ident),+) => (
+    $(
+      extern { pub(crate) fn $name (
+        src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize, bdmax: u32
       ) -> u32; }
     )+
   )
@@ -111,6 +125,31 @@ declare_asm_dist_fn![
   (rav1e_satd_32x8_avx2, u8),
   (rav1e_satd_16x64_avx2, u8),
   (rav1e_satd_64x16_avx2, u8)
+];
+
+declare_asm_satd_hbd_fn![
+  rav1e_satd_4x4_hbd_avx2,
+  rav1e_satd_8x4_hbd_avx2,
+  rav1e_satd_4x8_hbd_avx2,
+  rav1e_satd_8x8_hbd_avx2,
+  rav1e_satd_16x8_hbd_avx2,
+  rav1e_satd_16x16_hbd_avx2,
+  rav1e_satd_32x32_hbd_avx2,
+  rav1e_satd_64x64_hbd_avx2,
+  rav1e_satd_128x128_hbd_avx2,
+  rav1e_satd_16x32_hbd_avx2,
+  rav1e_satd_16x64_hbd_avx2,
+  rav1e_satd_32x16_hbd_avx2,
+  rav1e_satd_32x64_hbd_avx2,
+  rav1e_satd_64x16_hbd_avx2,
+  rav1e_satd_64x32_hbd_avx2,
+  rav1e_satd_64x128_hbd_avx2,
+  rav1e_satd_128x64_hbd_avx2,
+  rav1e_satd_32x8_hbd_avx2,
+  rav1e_satd_8x16_hbd_avx2,
+  rav1e_satd_8x32_hbd_avx2,
+  rav1e_satd_16x4_hbd_avx2,
+  rav1e_satd_4x16_hbd_avx2
 ];
 
 // BlockSize::BLOCK_SIZES.next_power_of_two();
@@ -210,13 +249,13 @@ pub fn get_satd<T: Pixel>(
     (Ok(bsize), PixelType::U16) => {
       match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
         // SAFETY: Calls Assembly code.
-        // Because these are Rust intrinsics, don't use `T::to_asm_stride`.
         Some(func) => unsafe {
           (func)(
             src.data_ptr() as *const _,
-            src.plane_cfg.stride as isize,
+            T::to_asm_stride(src.plane_cfg.stride),
             dst.data_ptr() as *const _,
-            dst.plane_cfg.stride as isize,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            (1 << bit_depth) - 1,
           )
         },
         None => call_rust(),
@@ -677,6 +716,35 @@ mod test {
     (64, 16),
     satd,
     10,
+    avx2,
+    "avx2"
+  );
+
+  test_dist_fns!(
+    (4, 4),
+    (8, 8),
+    (16, 16),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (16, 64),
+    (64, 16),
+    satd,
+    12,
     avx2,
     "avx2"
   );

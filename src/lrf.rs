@@ -1302,7 +1302,7 @@ impl RestorationState {
   pub fn new<T: Pixel>(fi: &FrameInvariants<T>, input: &Frame<T>) -> Self {
     let PlaneConfig { xdec, ydec, .. } = input.planes[1].cfg;
     // stripe size is decimated in 4:2:0 (and only 4:2:0)
-    let stripe_uv_decimate = if xdec > 0 && ydec > 0 { 1 } else { 0 };
+    let stripe_uv_decimate = usize::from(xdec > 0 && ydec > 0);
     let y_sb_log2 = if fi.sequence.use_128x128_superblock { 7 } else { 6 };
     let uv_sb_h_log2 = y_sb_log2 - xdec;
     let uv_sb_v_log2 = y_sb_log2 - ydec;
@@ -1341,11 +1341,9 @@ impl RestorationState {
             <= lrf_unit_size / 4
             || ((fi.height >> ydec) - 1) % (lrf_unit_size >> 1)
               <= lrf_unit_size / 4;
-          if unshifted_stretch && !shifted_stretch {
-            1 // shift to eliminate stretch
-          } else {
-            0 // don't shift; save the signaling bits
-          }
+          // shift to eliminate stretch if needed,
+          // otherwise do not shift and save the signaling bits
+          usize::from(unshifted_stretch && !shifted_stretch)
         }
       } else {
         0

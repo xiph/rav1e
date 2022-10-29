@@ -1327,7 +1327,7 @@ fn subpel_diamond_search<T: Pixel>(
 
   // start at 1/2 pel and end at 1/4 or 1/8 pel
   let (mut diamond_radius_log2, diamond_radius_end_log2) =
-    (2u8, if fi.allow_high_precision_mv { 0u8 } else { 1u8 });
+    (2u8, u8::from(!fi.allow_high_precision_mv));
 
   loop {
     // Find the best candidate from the diamond pattern.

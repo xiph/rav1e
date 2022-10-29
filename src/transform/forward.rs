@@ -52,7 +52,7 @@ pub mod rust {
     }
 
     fn rshift1(self) -> Self {
-      (self + if self < 0 { 1 } else { 0 }) >> 1
+      (self + i32::from(self < 0)) >> 1
     }
 
     fn add(self, b: Self) -> Self {

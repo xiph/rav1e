@@ -145,6 +145,7 @@ fn segmentation_optimize_inner<T: Pixel>(
   };
 
   // Update the segmentation data
+  fs.segmentation.min_segment = 0;
   fs.segmentation.max_segment = seg_delta.len() as u8 - 1;
   for (&delta, (features, data)) in seg_delta
     .iter()

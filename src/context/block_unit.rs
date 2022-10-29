@@ -1213,8 +1213,7 @@ impl<'a> ContextWriter<'a> {
       row_match |= found_match;
     }
 
-    let nearest_match =
-      if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+    let nearest_match = usize::from(row_match) + usize::from(col_match);
 
     Self::add_offset(mv_stack);
 
@@ -1271,8 +1270,7 @@ impl<'a> ContextWriter<'a> {
       }
     }
 
-    let total_match =
-      if row_match { 1 } else { 0 } + if col_match { 1 } else { 0 };
+    let total_match = usize::from(row_match) + usize::from(col_match);
 
     assert!(total_match >= nearest_match);
 
@@ -1296,8 +1294,7 @@ impl<'a> ContextWriter<'a> {
       let h4 = bsize.height_mi().min(16).min(self.bc.blocks.rows() - bo.0.y);
       let num4x4 = w4.min(h4);
 
-      let passes =
-        if up_avail { 0 } else { 1 }..if left_avail { 2 } else { 1 };
+      let passes = i32::from(!up_avail)..=i32::from(left_avail);
 
       let mut ref_id_count: [usize; 2] = [0; 2];
       let mut ref_diff_count: [usize; 2] = [0; 2];
@@ -1836,7 +1833,7 @@ impl<'a> ContextWriter<'a> {
     self.txb_init_levels(coeffs_in, height, levels, height + TX_PAD_HOR);
 
     let tx_class = tx_type_to_class[tx_type as usize];
-    let plane_type = if plane == 0 { 0 } else { 1 } as usize;
+    let plane_type = usize::from(plane != 0);
 
     // Signal tx_type for luma plane only
     if plane == 0 {
@@ -1867,7 +1864,7 @@ impl<'a> ContextWriter<'a> {
     let mut eob_extra: u32 = 0;
     let eob_pt = Self::get_eob_pos_token(eob, &mut eob_extra);
     let eob_multi_size: usize = tx_size.area_log2() - 4;
-    let eob_multi_ctx: usize = if tx_class == TX_CLASS_2D { 0 } else { 1 };
+    let eob_multi_ctx: usize = usize::from(tx_class != TX_CLASS_2D);
 
     match eob_multi_size {
       0 => {
@@ -1904,14 +1901,13 @@ impl<'a> ContextWriter<'a> {
 
     if eob_offset_bits > 0 {
       let mut eob_shift = eob_offset_bits - 1;
-      let mut bit: u32 =
-        if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 };
+      let mut bit: u32 = u32::from((eob_extra & (1 << eob_shift)) != 0);
       let cdf =
         &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize];
       symbol_with_update!(self, w, bit, cdf, 2);
       for i in 1..eob_offset_bits {
         eob_shift = eob_offset_bits as u16 - 1 - i as u16;
-        bit = if (eob_extra & (1 << eob_shift)) != 0 { 1 } else { 0 };
+        bit = u32::from((eob_extra & (1 << eob_shift)) != 0);
         w.bit(bit as u16);
       }
     }
@@ -1995,7 +1991,7 @@ impl<'a> ContextWriter<'a> {
       }
 
       let level = v.abs();
-      let sign = if v < T::cast_from(0) { 1 } else { 0 };
+      let sign = u32::from(v < T::cast_from(0));
       if c == 0 {
         let cdf = &mut self.fc.dc_sign_cdf[plane_type][txb_ctx.dc_sign_ctx];
         symbol_with_update!(self, w, sign, cdf, 2);

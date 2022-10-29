@@ -195,7 +195,7 @@ impl<'a> ContextWriter<'a> {
     assert!((MV_LOW..=MV_UPP).contains(&comp));
     let mvcomp = &mut self.fc.nmv_context.comps[axis];
     let mut offset: u32 = 0;
-    let sign: u32 = if comp < 0 { 1 } else { 0 };
+    let sign: u32 = u32::from(comp < 0);
     let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
     let mv_class = get_mv_class(mag - 1, &mut offset);
     let d = offset >> 3; // int mv data

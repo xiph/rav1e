@@ -3,7 +3,7 @@ name = "rav1e"
 version = "0.6.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
-rust-version = "1.59.0"
+rust-version = "1.60.0"
 build = "build.rs"
 include = [
     "/Cargo.toml",
@@ -38,7 +38,7 @@ binaries = [
     "av-metrics",
 ]
 default = ["binaries", "asm", "threading", "signal_support"]
-asm = ["nasm-rs", "cc", "regex"]
+asm = ["nasm-rs", "cc"]
 threading = ["rayon/threads"]
 signal_support = ["signal-hook"]
 dump_ivf = ["ivf"]
@@ -56,20 +56,24 @@ wasm = ["wasm-bindgen"]
 # - i-qres.png: quarter-resolution luma planes,
 # - i-hres.png: half-resolution luma planes,
 # - i-mvs.bin: motion vectors,
-# - i-imps.bin: block importances.
+# - i-imps.bin: block importances,
+# - i-activity_scales.bin: spatial scales,
+# - i-distortion_scales.bin: temporal scales,
+# - i-spatiotemporal_scales.bin,
+# - i-thresholds.bin: segmentation thresholds.
 dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3"
 bitstream-io = "1"
 cfg-if = "1.0"
-clap = { version = "3.2.6", optional = true, default-features = false, features = [
+clap = { version = "4.0.18", optional = true, default-features = false, features = [
     "color",
     "std",
     "wrap_help",
     "derive",
 ] }
-clap_complete = { version = "3", optional = true }
+clap_complete = { version = "4.0.3", optional = true }
 libc = "0.2"
 y4m = { version = "0.7", optional = true }
 backtrace = { version = "0.3", optional = true }
@@ -82,8 +86,8 @@ dav1d-sys = { version = "0.5.0", optional = true }
 aom-sys = { version = "0.3.0", optional = true }
 scan_fmt = { version = "0.2.3", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
-v_frame = { version = "0.2.5", path = "v_frame/" }
-av-metrics = { version = "0.8.1", optional = true, default-features = false }
+v_frame = "0.3.0"
+av-metrics = { version = "0.9.0", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
 crossbeam = { version = "0.8", optional = true }
 toml = { version = "0.5", optional = true }
@@ -97,7 +101,6 @@ itertools = "0.10"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.63", optional = true }
 rust_hawktracer = "0.7.0"
-arrayref = "0.3.6"
 const_fn_assert = "0.1.2"
 # `unreachable!` macro which panics in debug mode
 # and optimizes away in release mode
@@ -121,7 +124,6 @@ features = ["png"]
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
 rustc_version = "0.4"
-regex = { version = "1", optional = true }
 built = { version = "0.5.1", features = ["git2", "chrono"] }
 
 [build-dependencies.nasm-rs]
@@ -189,10 +191,7 @@ lto = "off"
 incremental = true
 
 [workspace]
-members = [".", "ivf", "v_frame"]
+members = [".", "ivf"]
 
 [package.metadata.docs.rs]
 no-default-features = true
-
-[patch.crates-io]
-v_frame = { path = "v_frame" }

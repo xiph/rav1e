@@ -1361,6 +1361,28 @@ impl<T: Pixel> ContextInner<T> {
           coded_data.activity_mask = ActivityMask::default();
           log_isqrt_mean_scale = coded_data.compute_temporal_scores();
         }
+        #[cfg(feature = "dump_lookahead_data")]
+        {
+          use crate::encoder::Scales::*;
+          let input_frameno = frame_data.fi.input_frameno;
+          if self.config.tune == Tune::Psychovisual {
+            coded_data.dump_scales(
+              Self::build_dump_properties(),
+              ActivityScales,
+              input_frameno,
+            );
+            coded_data.dump_scales(
+              Self::build_dump_properties(),
+              SpatiotemporalScales,
+              input_frameno,
+            );
+          }
+          coded_data.dump_scales(
+            Self::build_dump_properties(),
+            DistortionScales,
+            input_frameno,
+          );
+        }
       }
 
       let fti = frame_data.fi.get_frame_subtype();
@@ -1397,6 +1419,15 @@ impl<T: Pixel> ContextInner<T> {
 
       let data =
         encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+      #[cfg(feature = "dump_lookahead_data")]
+      {
+        let input_frameno = frame_data.fi.input_frameno;
+        let data_location = Self::build_dump_properties();
+        frame_data
+          .fs
+          .segmentation
+          .dump_threshold(data_location, input_frameno);
+      }
       let enc_stats = frame_data.fs.enc_stats.clone();
       self.maybe_prev_log_base_q = Some(qps.log_base_q);
       // TODO: Add support for dropping frames.

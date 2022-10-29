@@ -19,17 +19,15 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ilammy/setup-nasm@v1
       - name: Install stable
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable
           override: true
           components: clippy, rustfmt
       - name: Run rustfmt
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: -- --check --verbose
+        run: |
+          cargo fmt -- --check --verbose
       - name: Run clippy
         uses: actions-rs/clippy-check@v1
         with:
@@ -41,7 +39,7 @@ jobs:
       matrix:
         conf:
           - beta-build
-          - 1.59.0-tests
+          - 1.60.0-tests
           - aom-tests
           - dav1d-tests
           - no-asm-tests
@@ -56,8 +54,8 @@ jobs:
         include:
           - conf: beta-build
             toolchain: beta
-          - conf: 1.59.0-tests
-            toolchain: 1.59.0
+          - conf: 1.60.0-tests
+            toolchain: 1.60.0
           - conf: aom-tests
             toolchain: stable
           - conf: dav1d-tests
@@ -127,7 +125,7 @@ jobs:
           curl -L "$LINK/grcov-x86_64-unknown-linux-musl.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
       - name: Install ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: ${{ matrix.toolchain }}
@@ -159,8 +157,8 @@ jobs:
       - name: Start sccache server
         run: |
           sccache --start-server
-      - name: Run 1.59.0 tests
-        if: matrix.toolchain == '1.59.0' && matrix.conf == '1.59.0-tests'
+      - name: Run 1.60.0 tests
+        if: matrix.toolchain == '1.60.0' && matrix.conf == '1.60.0-tests'
         run: |
           cargo test --workspace --verbose \
                      --features=decode_test,decode_test_dav1d,quick_test,capi
@@ -215,9 +213,9 @@ jobs:
           cargo fuzz build --sanitizer none
       - name: Run cargo clean
         if: matrix.conf == 'grcov-codecov'
-        uses: actions-rs/cargo@v1
-        with:
-          command: clean
+        run: |
+          cargo clean
+
       - name: Run tests with coverage
         if: matrix.conf == 'grcov-codecov'
         env:
@@ -294,7 +292,7 @@ jobs:
         run: |
           brew install cargo-c
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable
@@ -370,7 +368,7 @@ jobs:
           tar xzf "$SCCACHE_FILE.tar.gz"
           echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Install ${{ matrix.toolchain }}
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           profile: minimal
           toolchain: stable-${{ matrix.target }}

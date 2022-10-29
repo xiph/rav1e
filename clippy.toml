@@ -1,5 +1,5 @@
 too-many-arguments-threshold = 16
 cognitive-complexity-threshold = 40
-trivial-copy-size-limit = 16 # 128-bits = 2 64-bit registers
-doc-valid-idents = ["DFTTest"]
-msrv = "1.59"
+trivial-copy-size-limit = 16        # 128-bits = 2 64-bit registers
+doc-valid-idents = ["DFTTest"]      # 128-bits = 2 64-bit registers
+msrv = "1.60"
