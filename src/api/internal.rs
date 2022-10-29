@@ -15,7 +15,7 @@ use crate::api::{
 };
 use crate::color::ChromaSampling::Cs400;
 use crate::cpu_features::CpuFeatureLevel;
-use crate::denoise::{DftDenoiser, TB_MIDPOINT};
+use crate::denoise::{DftDenoiser, TEMPORAL_RADIUS};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -378,7 +378,7 @@ impl<T: Pixel> ContextInner<T> {
       loop {
         let denoiser_frame = denoiser.cur_frameno;
         if (!is_flushing
-          && input_frameno >= denoiser_frame + TB_MIDPOINT as u64)
+          && input_frameno >= denoiser_frame + TEMPORAL_RADIUS as u64)
           || (is_flushing && Some(denoiser_frame) < self.limit)
         {
           self.frame_q.insert(

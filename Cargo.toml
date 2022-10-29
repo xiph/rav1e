@@ -114,6 +114,7 @@ nom = "7.0.0"
 ndarray = "0.15.4"
 # Used for running FFTs during denoising
 ndrustfft = "0.3.0"
+wide = "0.7.5"
 
 [dependencies.image]
 version = "0.24.3"
