@@ -110,11 +110,8 @@ av1-grain = { version = "0.2.0", features = ["serialize"] }
 serde-big-array = { version = "0.4.1", optional = true }
 # Used for parsing film grain table files
 nom = "7.0.0"
-# Used as a data holder during denoising
-ndarray = "0.15.4"
-# Used for running FFTs during denoising
-ndrustfft = "0.3.0"
 wide = "0.7.5"
+num-complex = "0.4.2"
 
 [dependencies.image]
 version = "0.24.3"

@@ -1,21 +1,25 @@
 use crate::api::FrameQueue;
-use crate::util::Aligned;
+use crate::util::{cast, Aligned};
 use crate::EncoderStatus;
 use arrayvec::ArrayVec;
+use num_complex::Complex64;
+use num_traits::Zero;
 use std::f32::consts::PI;
+use std::f64::consts::PI as PI64;
 use std::iter::once;
-use std::mem::{size_of, transmute, MaybeUninit};
+use std::ptr::copy_nonoverlapping;
 use std::sync::Arc;
 use v_frame::frame::Frame;
-use v_frame::pixel::{ChromaSampling, Pixel};
+use v_frame::pixel::Pixel;
 use v_frame::plane::Plane;
+use wide::f32x8;
 
 pub const TEMPORAL_RADIUS: usize = 1;
 const TEMPORAL_SIZE: usize = TEMPORAL_RADIUS * 2 + 1;
 const BLOCK_SIZE: usize = 16;
 const BLOCK_STEP: usize = 12;
-const REAL_TOTAL: usize = TEMPORAL_SIZE * BLOCK_SIZE * BLOCK_SIZE;
-const COMPLEX_TOTAL: usize = TEMPORAL_SIZE * BLOCK_SIZE * (BLOCK_SIZE / 2 + 1);
+const REAL_SIZE: usize = TEMPORAL_SIZE * BLOCK_SIZE * BLOCK_SIZE;
+const COMPLEX_SIZE: usize = TEMPORAL_SIZE * BLOCK_SIZE * (BLOCK_SIZE / 2 + 1);
 
 /// This denoiser is based on the DFTTest2 plugin from Vapoursynth.
 /// This type of denoising was chosen because it provides
@@ -29,9 +33,9 @@ where
   prev_frame: Option<Arc<Frame<T>>>,
   pub(crate) cur_frameno: u64,
   // Local values
-  sigma: Aligned<[f32; COMPLEX_TOTAL]>,
-  window: Aligned<[f32; REAL_TOTAL]>,
-  window_freq: Aligned<[f32; REAL_TOTAL]>,
+  sigma: Aligned<[f32; COMPLEX_SIZE]>,
+  window: Aligned<[f32; REAL_SIZE]>,
+  window_freq: Aligned<[Complex64; COMPLEX_SIZE]>,
   pmin: f32,
   pmax: f32,
 }
@@ -41,34 +45,18 @@ where
   T: Pixel,
 {
   // This should only need to run once per video.
-  pub fn new(
-    sigma: f32, width: usize, height: usize, bit_depth: u8,
-    chroma_sampling: ChromaSampling,
-  ) -> Self {
-    if size_of::<T>() == 1 {
-      assert!(bit_depth <= 8);
-    } else {
-      assert!(bit_depth > 8);
-    }
-
+  pub fn new(sigma: f32) -> Self {
     let window = build_window();
     let wscale = window.iter().copied().map(|w| w * w).sum::<f32>();
     let sigma = sigma as f32 * wscale;
     let pmin = 0.0f32;
     let pmax = 500.0f32 * wscale;
-    // SAFETY: The `assume_init` is safe because the type we are claiming to have
-    // initialized here is a bunch of `MaybeUninit`s, which do not require initialization.
-    let mut window_freq_temp: Aligned<[MaybeUninit<f32>; REAL_TOTAL]> =
-      Aligned::new(unsafe { MaybeUninit::uninit().assume_init() });
-    window_freq_temp.iter_mut().zip(window.iter()).for_each(|(freq, w)| {
-      freq.write(*w * 255.0);
+    let mut window_freq_real = Aligned::new([0f64; REAL_SIZE]);
+    window_freq_real.iter_mut().zip(window.iter()).for_each(|(freq, w)| {
+      *freq = *w as f64 * 255.0;
     });
-    // SAFETY: Everything is initialized. Transmute the array to the
-    // initialized type.
-    let window_freq_temp: Aligned<[f32; REAL_TOTAL]> =
-      unsafe { transmute(window_freq_temp) };
-    let window_freq = rdft(&window_freq_temp);
-    let sigma = Aligned::new([sigma; COMPLEX_TOTAL]);
+    let window_freq = rdft(&window_freq_real);
+    let sigma = Aligned::new([sigma; COMPLEX_SIZE]);
 
     Self {
       prev_frame: None,
@@ -159,47 +147,52 @@ const fn temporal_window_value() -> f32 {
   1.0
 }
 
-pub fn build_window() -> Aligned<[f32; REAL_TOTAL]> {
+fn build_window() -> Aligned<[f32; REAL_SIZE]> {
   let temporal_window = [temporal_window_value(); TEMPORAL_SIZE];
 
-  // SAFETY: The `assume_init` is safe because the type we are claiming to have
-  // initialized here is a bunch of `MaybeUninit`s, which do not require initialization.
-  let mut spatial_window: [MaybeUninit<f32>; BLOCK_SIZE] =
-    unsafe { MaybeUninit::uninit().assume_init() };
+  let mut spatial_window = [0f32; BLOCK_SIZE];
   spatial_window.iter_mut().enumerate().for_each(|(i, val)| {
-    val.write(spatial_window_value(i as f32 + 0.5));
+    *val = spatial_window_value(i as f32 + 0.5);
   });
-  // SAFETY: Everything is initialized. Transmute the array to the
-  // initialized type.
-  let spatial_window: [f32; BLOCK_SIZE] = unsafe { transmute(spatial_window) };
   let spatial_window = normalize(&spatial_window);
 
-  let mut window: Aligned<[MaybeUninit<f32>; REAL_TOTAL]> =
-    Aligned::new(unsafe { MaybeUninit::uninit().assume_init() });
-  let mut window_iter = window.iter_mut();
+  let mut window = Aligned::new([0f32; REAL_SIZE]);
+  let mut i = 0;
   for t_val in temporal_window {
     for s_val1 in spatial_window {
-      for s_val2 in spatial_window {
+      for s_vals2 in spatial_window.chunks_exact(8) {
+        let s_val2 = f32x8::new(*cast::<8, _>(s_vals2));
         let mut value = t_val * s_val1 * s_val2;
         // normalize for unnormalized FFT implementation
-        value /= (TEMPORAL_SIZE as f32).sqrt() * BLOCK_SIZE as f32;
-        window_iter.next().unwrap().write(value);
+        value /=
+          f32x8::from((TEMPORAL_SIZE as f32).sqrt() * BLOCK_SIZE as f32);
+        // SAFETY: We know the slices are valid sizes
+        unsafe {
+          copy_nonoverlapping(
+            value.as_array_ref().as_ptr(),
+            window.as_mut_ptr().add(i),
+            8usize,
+          )
+        };
+        i += 8;
       }
     }
   }
-  // SAFETY: Everything is initialized. Transmute the array to the
-  // initialized type.
-  unsafe { transmute(window) }
+  window
 }
 
-pub fn normalize(window: &[f32; BLOCK_SIZE]) -> [f32; BLOCK_SIZE] {
+fn normalize(window: &[f32; BLOCK_SIZE]) -> [f32; BLOCK_SIZE] {
   let mut new_window = [0f32; BLOCK_SIZE];
-  for q in 0..BLOCK_SIZE {
-    for h in (0..=q).rev().step_by(BLOCK_STEP) {
-      new_window[q] += window[h].powi(2);
-    }
-    for h in ((q + BLOCK_STEP)..BLOCK_SIZE).step_by(BLOCK_STEP) {
-      new_window[q] += window[h].powi(2);
+  // SAFETY: We know all of the sizes, so bound checks are not needed.
+  unsafe {
+    for q in 0..BLOCK_SIZE {
+      let nw = new_window.get_unchecked_mut(q);
+      for h in (0..=q).rev().step_by(BLOCK_STEP) {
+        *nw += window.get_unchecked(h).powi(2);
+      }
+      for h in ((q + BLOCK_STEP)..BLOCK_SIZE).step_by(BLOCK_STEP) {
+        *nw += window.get_unchecked(h).powi(2);
+      }
     }
   }
   for (w, nw) in window.iter().zip(new_window.iter_mut()) {
@@ -225,6 +218,75 @@ fn bitblt<T: Pixel>(
   }
 }
 
-fn rdft(data: &Aligned<[f32; REAL_TOTAL]>) -> Aligned<[f32; REAL_TOTAL]> {
-  todo!();
+fn rdft(
+  input: &Aligned<[f64; REAL_SIZE]>,
+) -> Aligned<[Complex64; COMPLEX_SIZE]> {
+  const SHAPE: [usize; 3] = [TEMPORAL_SIZE, BLOCK_SIZE, BLOCK_SIZE];
+
+  let mut output = Aligned::new([Complex64::zero(); COMPLEX_SIZE]);
+
+  for i in 0..(SHAPE[0] * SHAPE[1]) {
+    dft(
+      &mut output[(i * (SHAPE[1] / 2 + 1))..],
+      DftInput::Real(&input[(i * SHAPE[1])..]),
+      SHAPE[2],
+      1,
+    );
+  }
+
+  let mut output2 = Aligned::new([Complex64::zero(); COMPLEX_SIZE]);
+
+  let stride = SHAPE[2] / 2 + 1;
+  for i in 0..SHAPE[0] {
+    for j in 0..stride {
+      dft(
+        &mut output2[(i * SHAPE[1] * stride + j)..],
+        DftInput::Complex(&output[(i * SHAPE[1] * stride + j)..]),
+        SHAPE[1],
+        stride,
+      );
+    }
+  }
+
+  let stride = SHAPE[1] * stride;
+  for i in 0..stride {
+    dft(&mut output[i..], DftInput::Complex(&output2[i..]), SHAPE[0], stride);
+  }
+
+  output
+}
+
+enum DftInput<'a> {
+  Real(&'a [f64]),
+  Complex(&'a [Complex64]),
+}
+
+#[inline(always)]
+fn dft(output: &mut [Complex64], input: DftInput, n: usize, stride: usize) {
+  match input {
+    DftInput::Real(input) => {
+      let out_num = n / 2 + 1;
+      for i in 0..out_num {
+        let mut sum = Complex64::zero();
+        for j in 0..n {
+          let imag = -2f64 * i as f64 * j as f64 * PI64 / n as f64;
+          let weight = Complex64::new(imag.cos(), imag.sin());
+          sum += input[j * stride] * weight;
+        }
+        output[i * stride] = sum;
+      }
+    }
+    DftInput::Complex(input) => {
+      let out_num = n;
+      for i in 0..out_num {
+        let mut sum = Complex64::zero();
+        for j in 0..n {
+          let imag = -2f64 * i as f64 * j as f64 * PI64 / n as f64;
+          let weight = Complex64::new(imag.cos(), imag.sin());
+          sum += input[j * stride] * weight;
+        }
+        output[i * stride] = sum;
+      }
+    }
+  }
 }
