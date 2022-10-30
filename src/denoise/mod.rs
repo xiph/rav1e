@@ -1,3 +1,4 @@
+mod blend;
 mod kernel;
 
 use crate::api::FrameQueue;
@@ -14,7 +15,7 @@ use std::ptr::copy_nonoverlapping;
 use std::sync::Arc;
 use v_frame::frame::Frame;
 use v_frame::pixel::Pixel;
-use wide::f32x8;
+use wide::{f32x8, f64x4};
 
 pub const TEMPORAL_RADIUS: usize = 1;
 const TEMPORAL_SIZE: usize = TEMPORAL_RADIUS * 2 + 1;
@@ -27,6 +28,8 @@ const COMPLEX_SIZE: usize = TEMPORAL_SIZE * BLOCK_SIZE * (BLOCK_SIZE / 2 + 1);
 // for non-avx512 systems. `wide` doesn't have a f32x16 type, so we mimic it.
 #[allow(non_camel_case_types)]
 type f32x16 = [f32x8; 2];
+#[allow(non_camel_case_types)]
+type f64x8 = [f64x4; 2];
 
 /// This denoiser is based on the DFTTest2 plugin from Vapoursynth.
 /// This type of denoising was chosen because it provides

@@ -3,11 +3,11 @@ use std::{
   ptr::copy_nonoverlapping,
 };
 
-use crate::util::cast;
-
+use super::blend::{blend16, blend8};
 use super::{
   bitblt, calc_pad_size, f32x16, BLOCK_SIZE, TEMPORAL_RADIUS, TEMPORAL_SIZE,
 };
+use crate::util::cast;
 use av_metrics::video::Pixel;
 use num_traits::clamp;
 use wide::{f32x8, u16x8, u8x16};
@@ -119,7 +119,7 @@ pub fn fused(
   window_freq: &[f32x16],
 ) {
   for i in 0..TEMPORAL_SIZE {
-    transpose_16x16(&mut block[(i * 32)..]);
+    transpose_16x16::<1>(&mut block[(i * 32)..]);
     rdft::<16>(&mut block[(i * 32)..]);
     transpose_32x16(&mut block[(i * 32)..]);
     dft::<16>(&mut block[(i * 32)..]);
@@ -142,7 +142,7 @@ pub fn fused(
   transpose_32x16(&mut block[(TEMPORAL_RADIUS * 32)..]);
   irdft::<16>(&mut block[(TEMPORAL_RADIUS * 32)..]);
   post_irdft::<16>(&mut block[(TEMPORAL_RADIUS * 32)..]);
-  transpose_16x16(&mut block[(TEMPORAL_RADIUS * 32)..]);
+  transpose_16x16::<1>(&mut block[(TEMPORAL_RADIUS * 32)..]);
 }
 
 pub fn store_block(
@@ -185,12 +185,142 @@ pub fn store_frame<T: Pixel>(
   }
 }
 
-fn transpose_16x16() {
-  todo!()
+fn transpose_16x16<const STRIDE: usize>(block: &mut [f32x16]) {
+  for i in 0..2 {
+    for j in 0..2 {
+      for k in 0..2 {
+        let id1 = ((i * 2 + j) * 2 + k) * 2 * STRIDE;
+        let id2 = (((i * 2 + j) * 2 + k) * 2 + 1) * STRIDE;
+        let temp1 = blend16::<
+          0,
+          2,
+          16,
+          18,
+          4,
+          6,
+          20,
+          22,
+          8,
+          10,
+          24,
+          26,
+          12,
+          14,
+          28,
+          30,
+        >(block[id1], block[id2]);
+        let temp2 = blend16::<
+          1,
+          3,
+          17,
+          19,
+          5,
+          7,
+          21,
+          23,
+          9,
+          11,
+          25,
+          27,
+          13,
+          15,
+          29,
+          31,
+        >(block[id1], block[id2]);
+        block[id1] = temp1;
+        block[id2] = temp2;
+      }
+
+      for k in 0..2 {
+        let id1 = (((i * 2 + j) * 2) * 2 + k) * STRIDE;
+        let id2 = (((i * 2 + j) * 2 + 1) * 2 + k) * STRIDE;
+        let temp1 = blend16::<
+          0,
+          2,
+          16,
+          18,
+          4,
+          6,
+          20,
+          22,
+          8,
+          10,
+          24,
+          26,
+          12,
+          14,
+          28,
+          30,
+        >(block[id1], block[id2]);
+        let temp2 = blend16::<
+          1,
+          3,
+          17,
+          19,
+          5,
+          7,
+          21,
+          23,
+          9,
+          11,
+          25,
+          27,
+          13,
+          15,
+          29,
+          31,
+        >(block[id1], block[id2]);
+        block[id1] = temp1;
+        block[id2] = temp2;
+      }
+    }
+
+    for j in 0..4 {
+      let id1 = (i * 8 + j) * STRIDE;
+      let id2 = (i * 8 + 4 + j) * STRIDE;
+      // SAFETY: Types are the same size
+      let temp1 = unsafe {
+        transmute(blend8::<0, 1, 8, 9, 4, 5, 12, 13>(
+          transmute(block[id1]),
+          transmute(block[id2]),
+        ))
+      };
+      // SAFETY: Types are the same size
+      let temp2 = unsafe {
+        transmute(blend8::<2, 3, 10, 11, 6, 7, 14, 15>(
+          transmute(block[id1]),
+          transmute(block[id2]),
+        ))
+      };
+      block[id1] = temp1;
+      block[id2] = temp2;
+    }
+  }
+
+  for i in 0..8 {
+    // SAFETY: Types are the same size
+    let temp1 = unsafe {
+      transmute(blend8::<0, 1, 2, 3, 8, 9, 10, 11>(
+        transmute(block[i * STRIDE]),
+        transmute(block[(i + 8) * STRIDE]),
+      ))
+    };
+    // SAFETY: Types are the same size
+    let temp2 = unsafe {
+      transmute(blend8::<4, 5, 6, 7, 12, 13, 14, 15>(
+        transmute(block[i * STRIDE]),
+        transmute(block[(i + 8) * STRIDE]),
+      ))
+    };
+    block[i * STRIDE] = temp1;
+    block[(i + 8) * STRIDE] = temp2;
+  }
 }
 
-fn transpose_32x16() {
-  todo!()
+fn transpose_32x16(block: &mut [f32x16]) {
+  const STRIDE: usize = 1;
+  transpose_16x16::<2>(block);
+  transpose_16x16::<2>(&mut block[STRIDE..]);
 }
 
 fn remove_mean() {
@@ -205,11 +335,11 @@ fn add_mean() {
   todo!()
 }
 
-fn rdft<const SIZE: usize>() {
+fn rdft<const SIZE: usize>(block: &mut [f32x16]) {
   todo!()
 }
 
-fn dft<const SIZE: usize>() {
+fn dft<const SIZE: usize>(block: &mut [f32x16]) {
   todo!()
 }
 
