@@ -298,7 +298,12 @@ impl<T: Pixel> ContextInner<T> {
         seq.clone(),
       ),
       denoiser: if enc.denoise_strength > 0 {
-        Some(DftDenoiser::new(enc.denoise_strength as f32 / 10.0))
+        Some(DftDenoiser::<T>::new(
+          enc.denoise_strength as f32 / 10.0,
+          enc.width,
+          enc.height,
+          enc.bit_depth,
+        ))
       } else {
         None
       },

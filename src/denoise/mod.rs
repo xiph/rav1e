@@ -1,17 +1,19 @@
+mod kernel;
+
 use crate::api::FrameQueue;
 use crate::util::{cast, Aligned};
 use crate::EncoderStatus;
 use arrayvec::ArrayVec;
-use num_complex::Complex64;
+use kernel::*;
+use num_complex::Complex32;
 use num_traits::Zero;
 use std::f32::consts::PI;
-use std::f64::consts::PI as PI64;
 use std::iter::once;
+use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
 use std::sync::Arc;
 use v_frame::frame::Frame;
 use v_frame::pixel::Pixel;
-use v_frame::plane::Plane;
 use wide::f32x8;
 
 pub const TEMPORAL_RADIUS: usize = 1;
@@ -20,6 +22,11 @@ const BLOCK_SIZE: usize = 16;
 const BLOCK_STEP: usize = 12;
 const REAL_SIZE: usize = TEMPORAL_SIZE * BLOCK_SIZE * BLOCK_SIZE;
 const COMPLEX_SIZE: usize = TEMPORAL_SIZE * BLOCK_SIZE * (BLOCK_SIZE / 2 + 1);
+
+// The C implementation uses this f32x16 type, which is implemented the same way
+// for non-avx512 systems. `wide` doesn't have a f32x16 type, so we mimic it.
+#[allow(non_camel_case_types)]
+type f32x16 = [f32x8; 2];
 
 /// This denoiser is based on the DFTTest2 plugin from Vapoursynth.
 /// This type of denoising was chosen because it provides
@@ -32,12 +39,15 @@ where
   // External values
   prev_frame: Option<Arc<Frame<T>>>,
   pub(crate) cur_frameno: u64,
+  bit_depth: usize,
   // Local values
-  sigma: Aligned<[f32; COMPLEX_SIZE]>,
+  sigma: f32,
   window: Aligned<[f32; REAL_SIZE]>,
-  window_freq: Aligned<[Complex64; COMPLEX_SIZE]>,
+  window_freq: Aligned<[Complex32; COMPLEX_SIZE]>,
   pmin: f32,
   pmax: f32,
+  padded: Vec<T>,
+  padded2: Vec<f32>,
 }
 
 impl<T> DftDenoiser<T>
@@ -45,27 +55,42 @@ where
   T: Pixel,
 {
   // This should only need to run once per video.
-  pub fn new(sigma: f32) -> Self {
+  pub fn new(
+    sigma: f32, width: usize, height: usize, bit_depth: usize,
+  ) -> Self {
+    if size_of::<T>() == 1 {
+      assert!(bit_depth <= 8);
+    } else {
+      assert!(bit_depth > 8);
+    }
+
     let window = build_window();
     let wscale = window.iter().copied().map(|w| w * w).sum::<f32>();
     let sigma = sigma as f32 * wscale;
     let pmin = 0.0f32;
     let pmax = 500.0f32 * wscale;
-    let mut window_freq_real = Aligned::new([0f64; REAL_SIZE]);
+    let mut window_freq_real = Aligned::new([0f32; REAL_SIZE]);
     window_freq_real.iter_mut().zip(window.iter()).for_each(|(freq, w)| {
-      *freq = *w as f64 * 255.0;
+      *freq = *w as f32 * 255.0;
     });
     let window_freq = rdft(&window_freq_real);
-    let sigma = Aligned::new([sigma; COMPLEX_SIZE]);
+    let w_pad_size = calc_pad_size(width);
+    let h_pad_size = calc_pad_size(height);
+    let pad_size = w_pad_size * h_pad_size;
+    let padded = vec![T::zero(); pad_size * TEMPORAL_SIZE];
+    let padded2 = vec![0f32; pad_size];
 
     Self {
       prev_frame: None,
       cur_frameno: 0,
+      bit_depth,
       sigma,
       window,
       window_freq,
       pmin,
       pmax,
+      padded,
+      padded2,
     }
   }
 
@@ -79,58 +104,80 @@ where
       return Err(EncoderStatus::NeedMoreData);
     }
 
+    let next_frame = next_frame.cloned().flatten();
     let orig_frame = frame_q.get(&self.cur_frameno).unwrap().as_ref().unwrap();
-    let frames = once(self.prev_frame.clone())
-      .chain(once(Some(Arc::clone(orig_frame))))
-      .chain(next_frame.cloned())
-      .collect::<ArrayVec<Option<_>, 3>>();
+    let frames =
+      once(self.prev_frame.clone().unwrap_or_else(|| Arc::clone(orig_frame)))
+        .chain(once(Arc::clone(orig_frame)))
+        .chain(once(next_frame.unwrap_or_else(|| Arc::clone(orig_frame))))
+        .collect::<ArrayVec<_, 3>>();
 
-    todo!();
-    // let mut dest = (**orig_frame).clone();
-    // let mut pad = ArrayVec::<_, TB_SIZE>::new();
-    // for i in 0..TB_SIZE {
-    //   let dec = self.chroma_sampling.get_decimation().unwrap_or((0, 0));
-    //   let mut pad_frame = [
-    //     Plane::new(
-    //       self.pad_dimensions[0].0,
-    //       self.pad_dimensions[0].1,
-    //       0,
-    //       0,
-    //       0,
-    //       0,
-    //     ),
-    //     Plane::new(
-    //       self.pad_dimensions[1].0,
-    //       self.pad_dimensions[1].1,
-    //       dec.0,
-    //       dec.1,
-    //       0,
-    //       0,
-    //     ),
-    //     Plane::new(
-    //       self.pad_dimensions[2].0,
-    //       self.pad_dimensions[2].1,
-    //       dec.0,
-    //       dec.1,
-    //       0,
-    //       0,
-    //     ),
-    //   ];
+    let mut dest = (**orig_frame).clone();
+    for p in 0..3 {
+      let width = frames[0].planes[p].cfg.width;
+      let height = frames[0].planes[p].cfg.height;
+      let stride = frames[0].planes[p].cfg.stride;
+      let w_pad_size = calc_pad_size(width);
+      let h_pad_size = calc_pad_size(height);
+      let pad_size_spatial = w_pad_size * h_pad_size;
+      for i in 0..TEMPORAL_SIZE {
+        let src = &frames[i].planes[p];
+        reflection_padding(
+          &mut self.padded[(i * pad_size_spatial)..],
+          src.data_origin(),
+          width,
+          height,
+          stride,
+        )
+      }
 
-    //   let frame = frames.get(&i).unwrap_or(&frames[&TEMP_RADIUS]);
-    //   self.copy_pad(frame, &mut pad_frame);
-    //   pad.push(pad_frame);
-    // }
-    // self.do_filtering(&pad, &mut dest);
+      for i in 0..h_pad_size {
+        for j in 0..w_pad_size {
+          let mut block = [f32x16::default(); 7 * BLOCK_SIZE * 2];
+          let offset_x = w_pad_size;
+          load_block(
+            &mut block,
+            &self.padded[((i * offset_x + j) * BLOCK_STEP)..],
+            width,
+            height,
+            self.bit_depth,
+            &self.window.data,
+          );
+          fused(
+            &mut block,
+            self.sigma,
+            self.pmin,
+            self.pmax,
+            &self.window_freq.data,
+          );
+          store_block(
+            &mut self.padded2[((i * offset_x + j) * BLOCK_STEP)..],
+            &block[(TEMPORAL_RADIUS * BLOCK_SIZE * 2)..],
+            width,
+            height,
+            &self.window[(TEMPORAL_RADIUS * BLOCK_SIZE * 2 * 16)..],
+          );
+          todo!()
+        }
+      }
+
+      let offset_y = (h_pad_size - height) / 2;
+      let offset_x = (w_pad_size - width) / 2;
+      let dest_plane = &mut dest.planes[p];
+      store_frame(
+        dest_plane.data_origin_mut(),
+        &self.padded2[(offset_y * w_pad_size + offset_x)..],
+        width,
+        height,
+        stride,
+        w_pad_size,
+      );
+    }
 
     self.prev_frame = Some(Arc::clone(orig_frame));
     self.cur_frameno += 1;
 
-    // Ok(dest)
-  }
-
-  fn do_filtering(&mut self, src: &[[Plane<T>; 3]], dest: &mut Frame<T>) {
-    todo!();
+    Ok(dest)
   }
 }
 
@@ -203,7 +250,7 @@ fn normalize(window: &[f32; BLOCK_SIZE]) -> [f32; BLOCK_SIZE] {
 
 // Identical to Vapoursynth's implementation `vs_bitblt`
 // which basically copies the pixels in a plane.
-fn bitblt<T: Pixel>(
+pub fn bitblt<T: Pixel>(
   mut dest: &mut [T], dest_stride: usize, mut src: &[T], src_stride: usize,
   width: usize, height: usize,
 ) {
@@ -219,11 +266,11 @@ fn bitblt<T: Pixel>(
 }
 
 fn rdft(
-  input: &Aligned<[f64; REAL_SIZE]>,
-) -> Aligned<[Complex64; COMPLEX_SIZE]> {
+  input: &Aligned<[f32; REAL_SIZE]>,
+) -> Aligned<[Complex32; COMPLEX_SIZE]> {
   const SHAPE: [usize; 3] = [TEMPORAL_SIZE, BLOCK_SIZE, BLOCK_SIZE];
 
-  let mut output = Aligned::new([Complex64::zero(); COMPLEX_SIZE]);
+  let mut output = Aligned::new([Complex32::zero(); COMPLEX_SIZE]);
 
   for i in 0..(SHAPE[0] * SHAPE[1]) {
     dft(
@@ -234,7 +281,7 @@ fn rdft(
     );
   }
 
-  let mut output2 = Aligned::new([Complex64::zero(); COMPLEX_SIZE]);
+  let mut output2 = Aligned::new([Complex32::zero(); COMPLEX_SIZE]);
 
   let stride = SHAPE[2] / 2 + 1;
   for i in 0..SHAPE[0] {
@@ -257,20 +304,20 @@ fn rdft(
 }
 
 enum DftInput<'a> {
-  Real(&'a [f64]),
-  Complex(&'a [Complex64]),
+  Real(&'a [f32]),
+  Complex(&'a [Complex32]),
 }
 
 #[inline(always)]
-fn dft(output: &mut [Complex64], input: DftInput, n: usize, stride: usize) {
+fn dft(output: &mut [Complex32], input: DftInput, n: usize, stride: usize) {
   match input {
     DftInput::Real(input) => {
       let out_num = n / 2 + 1;
       for i in 0..out_num {
-        let mut sum = Complex64::zero();
+        let mut sum = Complex32::zero();
         for j in 0..n {
-          let imag = -2f64 * i as f64 * j as f64 * PI64 / n as f64;
-          let weight = Complex64::new(imag.cos(), imag.sin());
+          let imag = -2f32 * i as f32 * j as f32 * PI / n as f32;
+          let weight = Complex32::new(imag.cos(), imag.sin());
           sum += input[j * stride] * weight;
         }
         output[i * stride] = sum;
@@ -279,14 +326,22 @@ fn dft(output: &mut [Complex64], input: DftInput, n: usize, stride: usize) {
     DftInput::Complex(input) => {
       let out_num = n;
       for i in 0..out_num {
-        let mut sum = Complex64::zero();
+        let mut sum = Complex32::zero();
         for j in 0..n {
-          let imag = -2f64 * i as f64 * j as f64 * PI64 / n as f64;
-          let weight = Complex64::new(imag.cos(), imag.sin());
+          let imag = -2f32 * i as f32 * j as f32 * PI / n as f32;
+          let weight = Complex32::new(imag.cos(), imag.sin());
           sum += input[j * stride] * weight;
         }
         output[i * stride] = sum;
       }
     }
   }
+}
+
+#[inline(always)]
+fn calc_pad_size(size: usize) -> usize {
+  size
+    + if size % BLOCK_SIZE > 0 { BLOCK_SIZE - size % BLOCK_SIZE } else { 0 }
+    + BLOCK_SIZE
+    - BLOCK_STEP.max(BLOCK_STEP) * 2
 }
