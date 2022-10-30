@@ -9,7 +9,7 @@ use num_complex::Complex32;
 use num_traits::Zero;
 use std::f32::consts::PI;
 use std::iter::once;
-use std::mem::size_of;
+use std::mem::{size_of, transmute};
 use std::ptr::copy_nonoverlapping;
 use std::sync::Arc;
 use v_frame::frame::Frame;
@@ -141,21 +141,28 @@ where
             width,
             height,
             self.bit_depth,
-            &self.window.data,
+            // SAFETY: We know that the window size is a multiple of 16
+            unsafe { transmute(&self.window[..]) },
           );
           fused(
             &mut block,
             self.sigma,
             self.pmin,
             self.pmax,
-            &self.window_freq.data,
+            // SAFETY: We know that the window size is a multiple of 16
+            unsafe { transmute(&self.window_freq[..]) },
           );
           store_block(
             &mut self.padded2[((i * offset_x + j) * BLOCK_STEP)..],
             &block[(TEMPORAL_RADIUS * BLOCK_SIZE * 2)..],
             width,
             height,
-            &self.window[(TEMPORAL_RADIUS * BLOCK_SIZE * 2 * 16)..],
+            // SAFETY: We know that the window size is a multiple of 16
+            unsafe {
+              transmute(
+                &self.window[(TEMPORAL_RADIUS * BLOCK_SIZE * 2 * 16)..],
+              )
+            },
           );
           todo!()
         }
@@ -169,6 +176,7 @@ where
         &self.padded2[(offset_y * w_pad_size + offset_x)..],
         width,
         height,
+        self.bit_depth,
         stride,
         w_pad_size,
       );

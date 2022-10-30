@@ -6,10 +6,10 @@ use std::{
 use crate::util::cast;
 
 use super::{
-  bitblt, calc_pad_size, f32x16, BLOCK_SIZE, BLOCK_STEP, TEMPORAL_SIZE,
+  bitblt, calc_pad_size, f32x16, BLOCK_SIZE, TEMPORAL_RADIUS, TEMPORAL_SIZE,
 };
 use av_metrics::video::Pixel;
-use num_complex::Complex32;
+use num_traits::clamp;
 use wide::{f32x8, u16x8, u8x16};
 
 pub fn reflection_padding<T: Pixel>(
@@ -72,7 +72,7 @@ pub fn reflection_padding<T: Pixel>(
 
 pub fn load_block<T: Pixel>(
   block: &mut [f32x16], shifted_src: &[T], width: usize, height: usize,
-  bit_depth: usize, window: &[f32],
+  bit_depth: usize, window: &[f32x16],
 ) {
   let scale = 1.0f32 / (1 << (bit_depth - 8)) as f32;
   let offset_x = calc_pad_size(width);
@@ -106,33 +106,121 @@ pub fn load_block<T: Pixel>(
         let f32_lower = u16x8::new(*cast(&u16s[8..])).to_u32x8().to_f32x8();
         [f32_upper, f32_lower]
       };
-      let window = &window[(i * BLOCK_SIZE + j)..];
-      let window_upper = f32x8::new(*cast(&window[..8]));
-      let window_lower = f32x8::new(*cast(&window[8..16]));
-      let result_upper = scale * window_upper * vec_input[0];
-      let result_lower = scale * window_lower * vec_input[1];
+      let window = &window[i * BLOCK_SIZE + j];
+      let result_upper = scale * window[0] * vec_input[0];
+      let result_lower = scale * window[1] * vec_input[1];
       block[i * BLOCK_SIZE * 2 + j] = [result_upper, result_lower];
     }
   }
 }
 
 pub fn fused(
-  output: &mut [f32x16], sigma: f32, pmin: f32, pmax: f32,
-  window_freq: &[Complex32],
+  block: &mut [f32x16], sigma: f32, pmin: f32, pmax: f32,
+  window_freq: &[f32x16],
 ) {
-  todo!()
+  for i in 0..TEMPORAL_SIZE {
+    transpose_16x16(&mut block[(i * 32)..]);
+    rdft::<16>(&mut block[(i * 32)..]);
+    transpose_32x16(&mut block[(i * 32)..]);
+    dft::<16>(&mut block[(i * 32)..]);
+  }
+  for i in 0..16 {
+    dft::<3>(&mut block[(i * 2)..], 16);
+  }
+
+  let gf = block[0].extract(0) / window_freq[0].extract(0);
+  remove_mean(block, gf, window_freq);
+
+  frequency_filtering(block, sigma, pmin, pmax);
+
+  add_mean(block, gf, window_freq);
+
+  for i in 0..16 {
+    idft::<3>(&mut block[(i * 2)..], 16);
+  }
+  idft::<16>(&mut block[(TEMPORAL_RADIUS * 32)..]);
+  transpose_32x16(&mut block[(TEMPORAL_RADIUS * 32)..]);
+  irdft::<16>(&mut block[(TEMPORAL_RADIUS * 32)..]);
+  post_irdft::<16>(&mut block[(TEMPORAL_RADIUS * 32)..]);
+  transpose_16x16(&mut block[(TEMPORAL_RADIUS * 32)..]);
 }
 
 pub fn store_block(
-  output: &mut [f32], input: &[f32x16], width: usize, height: usize,
-  window: &[f32],
+  shifted_dst: &mut [f32], shifted_block: &[f32x16], width: usize,
+  height: usize, shifted_window: &[f32x16],
 ) {
-  todo!()
+  let pad_size = calc_pad_size(width);
+  for i in 0..BLOCK_SIZE {
+    let acc = &mut shifted_dst[(i * pad_size)..];
+    let mut acc_simd =
+      [f32x8::new(*cast(&acc[..8])), f32x8::new(*cast(&acc[8..16]))];
+    acc_simd[0] =
+      shifted_block[i][0].mul_add(shifted_window[i][0], acc_simd[0]);
+    acc_simd[1] =
+      shifted_block[i][1].mul_add(shifted_window[i][1], acc_simd[1]);
+    acc[..8].copy_from_slice(acc_simd[0].as_array_ref());
+    acc[8..16].copy_from_slice(acc_simd[1].as_array_ref());
+  }
 }
 
 pub fn store_frame<T: Pixel>(
   output: &mut [T], shifted_src: &[f32], width: usize, height: usize,
-  dst_stride: usize, src_stride: usize,
+  bit_depth: usize, dst_stride: usize, src_stride: usize,
 ) {
+  let scale = 1.0f32 / (1 << (bit_depth - 8)) as f32;
+  let peak = (1u32 << bit_depth) - 1;
+  for y in 0..height {
+    for x in 0..width {
+      // SAFETY: We know the bounds of the planes for src and dest
+      unsafe {
+        let clamped = clamp(
+          (*shifted_src.get_unchecked(y * src_stride + x) / scale + 0.5f32)
+            as u32,
+          0u32,
+          peak,
+        );
+        *output.get_unchecked_mut(y * dst_stride + x) = T::cast_from(clamped);
+      }
+    }
+  }
+}
+
+fn transpose_16x16() {
+  todo!()
+}
+
+fn transpose_32x16() {
+  todo!()
+}
+
+fn remove_mean() {
+  todo!()
+}
+
+fn frequency_filtering() {
+  todo!()
+}
+
+fn add_mean() {
+  todo!()
+}
+
+fn rdft<const SIZE: usize>() {
+  todo!()
+}
+
+fn dft<const SIZE: usize>() {
+  todo!()
+}
+
+fn idft<const SIZE: usize>() {
+  todo!()
+}
+
+fn irdft<const SIZE: usize>() {
+  todo!()
+}
+
+fn post_irdft<const SIZE: usize>() {
   todo!()
 }
