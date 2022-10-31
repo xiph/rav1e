@@ -108,7 +108,6 @@ new_debug_unreachable = "1.0.4"
 once_cell = "1.13.0"
 av1-grain = { version = "0.2.0", features = ["serialize"] }
 serde-big-array = { version = "0.4.1", optional = true }
-wide = "0.7.5"
 
 [dependencies.image]
 version = "0.24.3"
