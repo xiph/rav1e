@@ -118,4 +118,37 @@ mod binary {
       .assert()
       .success();
   }
+
+  #[test]
+  fn three_pass_bitrate_based() {
+    let outfile = get_tempfile_path("ivf");
+    let pass1file = get_tempfile_path("pass1");
+    let pass2file = get_tempfile_path("pass2");
+
+    get_common_cmd(&outfile)
+      .arg("--first-pass")
+      .arg(&pass1file)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+
+    get_common_cmd(&outfile)
+      .arg("--second-pass")
+      .arg(&pass1file)
+      .arg("--first-pass")
+      .arg(&pass2file)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+
+    get_common_cmd(&outfile)
+      .arg("--second-pass")
+      .arg(&pass2file)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+  }
 }
