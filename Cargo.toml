@@ -110,7 +110,7 @@ av1-grain = { version = "0.2.0", features = ["serialize"] }
 serde-big-array = { version = "0.4.1", optional = true }
 # Used for parsing film grain table files
 nom = "7.0.0"
-wide = { git = "https://github.com/shssoichiro/wide", branch = "fast-cast-fns" }
+wide = { git = "https://github.com/shssoichiro/wide", branch = "additional-functions" }
 num-complex = "0.4.2"
 
 [dependencies.image]

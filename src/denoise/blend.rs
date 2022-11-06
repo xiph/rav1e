@@ -139,40 +139,52 @@ fn blend8_f32(indexes: &[i32; 8], a: f32x8, b: f32x8) -> f32x8 {
     // nothing from b. just permute a
     return permute8(indexes, a);
   } else if flags & BLEND_A == 0 {
-    let l = blend_perm_indexes::<8, 2>(indexes);
+    let l = blend_perm_indexes::<8, 16, 2>(indexes);
     return permute8(cast(&l[8..]), b);
   } else if flags & (BLEND_PERMA | BLEND_PERMB) == 0 {
     // no permutation, only blending
-    let mb = make_bit_mask::<8>(0x303, indexes) as u8;
-    y = mb.blend(b, a);
+    let mb = make_bit_mask::<8, 0x303>(indexes) as u8;
+    y = f32x8::new([
+      if mb & 0b10000000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b01000000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00100000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00010000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00001000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000100 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000010 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000001 > 0 { -1f32 } else { 0f32 },
+    ])
+    .blend(b, a);
   } else if flags & BLEND_PUNPCKLAB > 0 {
-    // y = _mm256_unpacklo_ps(a, b);
-    todo!();
+    y = a.interleave_low(b);
   } else if flags & BLEND_PUNPCKLBA > 0 {
-    // y = _mm256_unpacklo_ps(b, a);
-    todo!();
+    y = b.interleave_low(a);
   } else if flags & BLEND_PUNPCKHAB > 0 {
-    // y = _mm256_unpackhi_ps(a, b);
-    todo!();
+    y = a.interleave_high(b);
   } else if flags & BLEND_PUNPCKHBA > 0 {
-    // y = _mm256_unpackhi_ps(b, a);
-    todo!();
+    y = b.interleave_high(a);
   } else if flags & BLEND_SHUFAB > 0 {
-    // use floating point instruction shufpd
-    // y = _mm256_shuffle_ps(a, b, (flags >> BLEND_SHUFPATTERN) as u8);
-    todo!();
+    y = a.shuffle_nonconst(b, (flags >> BLEND_SHUFPATTERN) as u8);
   } else if flags & BLEND_SHUFBA > 0 {
-    // use floating point instruction shufpd
-    // y = _mm256_shuffle_ps(b, a, (flags >> BLEND_SHUFPATTERN) as u8);
-    todo!();
+    y = b.shuffle_nonconst(a, (flags >> BLEND_SHUFPATTERN) as u8);
   } else {
     // No special cases
     // permute a and b separately, then blend.
-    let l = blend_perm_indexes::<8, 0>(indexes);
+    let l = blend_perm_indexes::<8, 16, 0>(indexes);
     let ya = permute8(cast(&l[..8]), a);
     let yb = permute8(cast(&l[8..]), b);
-    let mb = make_bit_mask::<8>(0x303, indexes) as u8;
-    y = mb.blend(yb, ya);
+    let mb = make_bit_mask::<8, 0x303>(indexes) as u8;
+    y = f32x8::new([
+      if mb & 0b10000000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b01000000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00100000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00010000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00001000 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000100 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000010 > 0 { -1f32 } else { 0f32 },
+      if mb & 0b00000001 > 0 { -1f32 } else { 0f32 },
+    ])
+    .blend(yb, ya);
   }
   if flags & BLEND_ZEROING > 0 {
     // additional zeroing needed
@@ -307,7 +319,78 @@ fn select_blend8(action: Option<usize>, a: f64x8, b: f64x8) -> f64x4 {
 
 #[inline(always)]
 fn blend4_f64(indexes: &[i32; 4], a: f64x4, b: f64x4) -> f64x4 {
-  todo!()
+  let flags = blend_flags::<4, { size_of::<f64x4>() }>(indexes);
+  assert!(
+    flags & BLEND_OUTOFRANGE == 0,
+    "Index out of range in blend function"
+  );
+
+  if flags & BLEND_ALLZERO != 0 {
+    return f64x4::ZERO;
+  }
+
+  if flags & BLEND_B == 0 {
+    return permute4(indexes, a);
+  }
+  if flags & BLEND_A == 0 {
+    return permute4(
+      &[
+        if i[0] < 0 { i[0] } else { i[0] & 3 },
+        if i[1] < 0 { i[1] } else { i[1] & 3 },
+        if i[2] < 0 { i[2] } else { i[2] & 3 },
+        if i[3] < 0 { i[3] } else { i[3] & 3 },
+      ],
+      b,
+    );
+  }
+
+  if flags & (BLEND_PERMA | BLEND_PERMB) == 0 {
+    // no permutation, only blending
+
+    //   constexpr uint8_t mb =
+    //     (uint8_t)make_bit_mask<4, 0x302>(indexs); // blend mask
+    //   y = _mm256_blend_pd(a, b, mb); // duplicate each bit
+    todo!();
+  } else if flags & BLEND_LARGEBLOCK != 0 {
+    // blend and permute 128-bit blocks
+    //   constexpr EList<int, 2> L =
+    //     largeblock_perm<4>(indexs); // get 128-bit blend pattern
+    //   constexpr uint8_t pp = (L.a[0] & 0xF) | uint8_t(L.a[1] & 0xF) << 4;
+    //   y = _mm256_permute2f128_pd(a, b, pp);
+    todo!();
+  } else if flags & BLEND_PUNPCKLAB != 0 {
+    y = a.interleave_low(b);
+  } else if flags & BLEND_PUNPCKLBA != 0 {
+    y = b.interleave_low(a);
+  } else if flags & BLEND_PUNPCKHAB != 0 {
+    y = a.interleave_high(b);
+  } else if flags & BLEND_PUNPCKHBA != 0 {
+    y = b.interleave_high(a);
+  } else if flags & BLEND_SHUFAB != 0 {
+    y = a.shuffle_nonconst(b, ((flags >> BLEND_SHUFPATTERN) as u8) & 0xF);
+  } else if flags & BLEND_SHUFBA != 0 {
+    y = b.shuffle_nonconst(a, ((flags >> BLEND_SHUFPATTERN) as u8) & 0xF);
+  } else {
+    // No special cases
+    //   constexpr EList<int, 8> L =
+    //     blend_perm_indexes<4, 0>(indexs); // get permutation indexes
+    //   __m256d ya = permute4<L.a[0], L.a[1], L.a[2], L.a[3]>(a);
+    //   __m256d yb = permute4<L.a[4], L.a[5], L.a[6], L.a[7]>(b);
+    //   constexpr uint8_t mb =
+    //     (uint8_t)make_bit_mask<4, 0x302>(indexs); // blend mask
+    //   y = _mm256_blend_pd(ya, yb, mb);
+    todo!();
+  }
+
+  if flags & BLEND_ZEROING != 0 {
+    // additional zeroing needed
+    //   constexpr EList<int64_t, 4> bm = zero_mask_broad<Vec4q>(indexs);
+    //   __m256i bm1 = _mm256_loadu_si256((const __m256i *)(bm.a));
+    //   y = _mm256_and_pd(_mm256_castsi256_pd(bm1), y);
+    todo!();
+  }
+
+  y
 }
 
 // blend_flags: returns information about how a blend function can be implemented
@@ -500,7 +583,7 @@ fn blend_flags<const N: usize, const V: usize>(a: &[i32; N]) -> u64 {
       let ix = lane_pattern[iu as usize];
       if ix >= 0 {
         let ix = ix as u32;
-        let t = ix & !(N as u32);
+        let mut t = ix & !(N as u32);
         if (ix & N as u32) > 0 {
           t += lane_size as u32;
         }
@@ -549,7 +632,7 @@ fn blend_flags<const N: usize, const V: usize>(a: &[i32; N]) -> u64 {
       }
       if ret & (BLEND_SHUFAB | BLEND_SHUFBA) > 0 {
         // fits shufps/shufpd
-        let shuf_pattern = 0u8;
+        let mut shuf_pattern = 0u8;
         for iu in 0..lane_size {
           shuf_pattern |= ((lane_pattern[iu] & 3) as u8) << (iu * 2);
         }
@@ -689,10 +772,9 @@ fn permute8(indexes: &[i32; 8], a: f32x8) -> f32x8 {
 
   if flags & PERM_PERM > 0 {
     if flags & PERM_LARGEBLOCK > 0 {
-      // constexpr EList<int, 4> L =
-      // largeblock_perm<8>(indexs);
-      // y = _mm256_castpd_ps(
-      //     permute4<L.a[0], L.a[1], L.a[2], L.a[3]>(Vec4d(_mm256_castps_pd(a))));
+      let l = largeblock_perm::<8, 4>(indexes);
+      // SAFETY: Types are of same size
+      let b4: f32x8 = unsafe { transmute(permute4_f64(&l, transmute(a))) };
       if flags & PERM_ADDZ == 0 {
         // no remaining zeroing
         return y;
@@ -700,19 +782,17 @@ fn permute8(indexes: &[i32; 8], a: f32x8) -> f32x8 {
     } else if flags & PERM_SAME_PATTERN > 0 {
       if flags & PERM_PUNPCKH != 0 {
         // fits punpckhi
-        y = _mm256_unpackhi_ps(y, y);
+        y = y.interleave_high(y);
       } else if flags & PERM_PUNPCKL != 0 {
         // fits punpcklo
-        y = _mm256_unpacklo_ps(y, y);
+        y = y.interleave_low(y);
       } else {
         // general permute, same pattern in both lanes
-        y = _mm256_shuffle_ps(a, a, flags >> PERM_IPATTERN as u8);
+        y = a.shuffle_nonconst(a, (flags >> PERM_IPATTERN) as u8);
       }
     } else if flags & PERM_BROADCAST > 0 && flags >> PERM_ROT_COUNT == 0 {
       // broadcast first element
-      //      y = _mm256_broadcastss_ps(
-      // _mm256_castps256_ps128(y));
-      todo!();
+      y = f32x8::from(y.to_array()[0]);
     } else if flags & PERM_ZEXT > 0 {
       // zero extension
       //       y = _mm256_castsi256_ps(_mm256_cvtepu32_epi64(
@@ -1057,4 +1137,60 @@ fn perm_flags<const ELEM_SIZE: usize, const ELEMS: usize>(
   }
 
   ret
+}
+
+fn make_bit_mask<const LEN: usize, const BITS: i32>(a: &[i32; LEN]) -> u64 {
+  let mut ret = 0u64;
+  let sel_bit_idx = (BITS & 0xFF) as u8;
+  let mut ret_bit_idx = 0u64;
+  let mut flip = 0u64;
+  for i in 0..LEN {
+    let ix = a[i];
+    if ix < 0 {
+      ret_bit_idx = ((BITS >> 10) & 1) as u64;
+    } else {
+      ret_bit_idx = (((ix as u32) >> sel_bit_idx) & 1) as u64;
+      if i < LEN / 2 {
+        flip = ((BITS >> 8) & 1) as u64;
+      } else {
+        flip = ((BITS >> 9) & 1) as u64;
+      }
+      ret_bit_idx ^= flip ^ 1;
+    }
+    ret |= ret_bit_idx << i;
+  }
+  ret
+}
+
+// blend_perm_indexes: return an Indexlist for implementing a blend function as
+// two permutations. N = vector size.
+// dozero = 0: let unused elements be don't care. The two permutation results must be blended
+// dozero = 1: zero unused elements in each permuation. The two permutation results can be OR'ed
+// dozero = 2: indexes that are -1 or V_DC are preserved
+fn blend_perm_indexes<const N: usize, const N2: usize, const DO_ZERO: u8>(
+  a: &[i32; N],
+) -> [i32; N2] {
+  assert!(N * 2 == N2);
+  assert!(DO_ZERO <= 2);
+  let mut list = [0i32; N2];
+  let u = if DO_ZERO > 0 { -1 } else { V_DC };
+  for j in 0..N {
+    let ix = a[j];
+    if ix < 0 {
+      if DO_ZERO == 2 {
+        a[j] = ix;
+        a[j + N] = ix;
+      } else {
+        a[j] = u;
+        a[j + N] = u;
+      }
+    } else if ix < N as i32 {
+      a[j] = ix;
+      a[j + N] = u;
+    } else {
+      a[j] = u;
+      a[j + N] = ix - N as i32;
+    }
+  }
+  list
 }
