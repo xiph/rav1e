@@ -197,8 +197,7 @@ pub struct Sequence {
   pub operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS],
   pub display_model_info_present_flag: bool,
   pub decoder_model_info_present_flag: bool,
-  /// minor, major
-  pub level: [[usize; 2]; MAX_NUM_OPERATING_POINTS],
+  pub level_idx: [u8; MAX_NUM_OPERATING_POINTS],
   /// seq_tier in the spec. One bit: 0 or 1.
   pub tier: [usize; MAX_NUM_OPERATING_POINTS],
   pub film_grain_params_present: bool,
@@ -225,19 +224,12 @@ impl Sequence {
       u8::from(config.chroma_sampling == ChromaSampling::Cs444)
     };
 
-    let mut operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS] =
+    let operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS] =
       [0; MAX_NUM_OPERATING_POINTS];
-    let mut level: [[usize; 2]; MAX_NUM_OPERATING_POINTS] =
-      [[1, 2]; MAX_NUM_OPERATING_POINTS];
-    let mut tier: [usize; MAX_NUM_OPERATING_POINTS] =
+    let level_idx: [u8; MAX_NUM_OPERATING_POINTS] =
+      [31; MAX_NUM_OPERATING_POINTS];
+    let tier: [usize; MAX_NUM_OPERATING_POINTS] =
       [0; MAX_NUM_OPERATING_POINTS];
-
-    for i in 0..MAX_NUM_OPERATING_POINTS {
-      operating_point_idc[i] = 0;
-      level[i][0] = 1; // minor
-      level[i][1] = 2; // major
-      tier[i] = 0;
-    }
 
     // Restoration filters are not useful for very small frame sizes,
     // so disable them in that case.
@@ -330,7 +322,7 @@ impl Sequence {
       operating_point_idc,
       display_model_info_present_flag: false,
       decoder_model_info_present_flag: false,
-      level,
+      level_idx,
       tier,
       film_grain_params_present: config
         .film_grain_params
