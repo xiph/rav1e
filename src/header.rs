@@ -287,12 +287,13 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(fi.sequence.still_picture)?; // still_picture
     self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
 
+    assert!(fi.sequence.level_idx[0] <= 31);
     if fi.sequence.reduced_still_picture_hdr {
       assert!(!fi.sequence.timing_info_present);
       assert!(!fi.sequence.decoder_model_info_present_flag);
       assert_eq!(fi.sequence.operating_points_cnt_minus_1, 0);
       assert_eq!(fi.sequence.operating_point_idc[0], 0);
-      self.write(5, 31)?; // level
+      self.write(5, fi.sequence.level_idx[0])?; // level
       assert_eq!(fi.sequence.tier[0], 0);
     } else {
       self.write_bit(fi.sequence.timing_info_present)?; // timing info present
@@ -309,7 +310,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(false)?; // initial display delay present flag
       self.write(5, 0)?; // one operating point
       self.write(12, 0)?; // idc
-      self.write(5, 31)?; // level
+      self.write(5, fi.sequence.level_idx[0])?; // level
       self.write(1, 0)?; // tier
     }
 
