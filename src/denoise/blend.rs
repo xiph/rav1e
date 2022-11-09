@@ -3,7 +3,7 @@
 use std::mem::{size_of, transmute};
 
 use arrayvec::ArrayVec;
-use wide::{f32x8, f64x4};
+use wide::{f32x8, f64x4, i32x8, i64x4};
 
 use crate::util::cast;
 
@@ -129,8 +129,7 @@ fn blend8_f32(indexes: &[i32; 8], a: f32x8, b: f32x8) -> f32x8 {
     // blend and permute 32-bit blocks
     let l = largeblock_perm::<8, 4>(indexes);
     // SAFETY: Types are of same size
-    let b4: f32x8 =
-      unsafe { transmute(blend4_f64(&l, transmute(a), transmute(b))) };
+    y = unsafe { transmute(blend4_f64(&l, transmute(a), transmute(b))) };
     if flags & BLEND_ADDZ == 0 {
       // no remaining zeroing
       return y;
@@ -145,14 +144,14 @@ fn blend8_f32(indexes: &[i32; 8], a: f32x8, b: f32x8) -> f32x8 {
     // no permutation, only blending
     let mb = make_bit_mask::<8, 0x303>(indexes) as u8;
     y = f32x8::new([
-      if mb & 0b10000000 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b01000000 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00100000 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00010000 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00001000 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00000100 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00000010 > 0 { -1f32 } else { 0f32 },
-      if mb & 0b00000001 > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 0) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 1) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 2) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 3) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 4) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 5) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 6) > 0 { -1f32 } else { 0f32 },
+      if mb & (1 << 7) > 0 { -1f32 } else { 0f32 },
     ])
     .blend(b, a);
   } else if flags & BLEND_PUNPCKLAB > 0 {
@@ -188,10 +187,10 @@ fn blend8_f32(indexes: &[i32; 8], a: f32x8, b: f32x8) -> f32x8 {
   }
   if flags & BLEND_ZEROING > 0 {
     // additional zeroing needed
-    // let bm = zero_mask_broad::<8>(indexes);
-    // let bm1 = _mm256_loadu_si256(bm as __m256i);
-    // y = _mm256_and_ps(_mm256_castsi256_ps(bm1), y);
-    todo!();
+    let bm = i32x8::new(zero_mask_broad_8x32(indexes));
+    // SAFETY: Types have the same size
+    let bm1: f32x8 = unsafe { transmute(bm) };
+    y = bm1 & y;
   }
 
   y
@@ -344,18 +343,21 @@ fn blend4_f64(indexes: &[i32; 4], a: f64x4, b: f64x4) -> f64x4 {
     );
   }
 
+  let mut y = a;
   if flags & (BLEND_PERMA | BLEND_PERMB) == 0 {
     // no permutation, only blending
-
-    //   constexpr uint8_t mb =
-    //     (uint8_t)make_bit_mask<4, 0x302>(indexs); // blend mask
-    //   y = _mm256_blend_pd(a, b, mb); // duplicate each bit
-    todo!();
+    let mb = make_bit_mask::<4, 0x302>(indexes);
+    y = f64x4::new([
+      if mb & (1 << 0) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 1) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 2) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 3) > 0 { -1f64 } else { 0f64 },
+    ])
+    .blend(b, a);
   } else if flags & BLEND_LARGEBLOCK != 0 {
     // blend and permute 128-bit blocks
-    //   constexpr EList<int, 2> L =
-    //     largeblock_perm<4>(indexs); // get 128-bit blend pattern
-    //   constexpr uint8_t pp = (L.a[0] & 0xF) | uint8_t(L.a[1] & 0xF) << 4;
+    let l = largeblock_perm::<4, 2>(indexes);
+    let pp = (l[0] & 0xF) as u8 | ((l[1] & 0xF) as u8) << 4;
     //   y = _mm256_permute2f128_pd(a, b, pp);
     todo!();
   } else if flags & BLEND_PUNPCKLAB != 0 {
@@ -372,22 +374,25 @@ fn blend4_f64(indexes: &[i32; 4], a: f64x4, b: f64x4) -> f64x4 {
     y = b.shuffle_nonconst(a, ((flags >> BLEND_SHUFPATTERN) as u8) & 0xF);
   } else {
     // No special cases
-    //   constexpr EList<int, 8> L =
-    //     blend_perm_indexes<4, 0>(indexs); // get permutation indexes
-    //   __m256d ya = permute4<L.a[0], L.a[1], L.a[2], L.a[3]>(a);
-    //   __m256d yb = permute4<L.a[4], L.a[5], L.a[6], L.a[7]>(b);
-    //   constexpr uint8_t mb =
-    //     (uint8_t)make_bit_mask<4, 0x302>(indexs); // blend mask
-    //   y = _mm256_blend_pd(ya, yb, mb);
-    todo!();
+    let l = blend_perm_indexes::<4, 8, 0>(indexes);
+    let ya = permute4(cast(&l[..4]), a);
+    let yb = permute4(cast(&l[4..]), b);
+    let mb = make_bit_mask::<4, 0x302>(indexes);
+    y = f64x4::new([
+      if mb & (1 << 0) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 1) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 2) > 0 { -1f64 } else { 0f64 },
+      if mb & (1 << 3) > 0 { -1f64 } else { 0f64 },
+    ])
+    .blend(yb, ya);
   }
 
   if flags & BLEND_ZEROING != 0 {
     // additional zeroing needed
-    //   constexpr EList<int64_t, 4> bm = zero_mask_broad<Vec4q>(indexs);
-    //   __m256i bm1 = _mm256_loadu_si256((const __m256i *)(bm.a));
-    //   y = _mm256_and_pd(_mm256_castsi256_pd(bm1), y);
-    todo!();
+    let bm = i64x4::new(zero_mask_broad_4x64(indexes));
+    // SAFETY: Types have the same size
+    let bm1: f64x4 = unsafe { transmute(bm) };
+    y = bm1 & y;
   }
 
   y
@@ -774,7 +779,7 @@ fn permute8(indexes: &[i32; 8], a: f32x8) -> f32x8 {
     if flags & PERM_LARGEBLOCK > 0 {
       let l = largeblock_perm::<8, 4>(indexes);
       // SAFETY: Types are of same size
-      let b4: f32x8 = unsafe { transmute(permute4_f64(&l, transmute(a))) };
+      y = unsafe { transmute(permute4(&l, transmute(a))) };
       if flags & PERM_ADDZ == 0 {
         // no remaining zeroing
         return y;
@@ -817,10 +822,10 @@ fn permute8(indexes: &[i32; 8], a: f32x8) -> f32x8 {
   }
 
   if flags & PERM_ZEROING > 0 {
-    //    constexpr EList<int32_t, 8> bm = zero_mask_broad<Vec8i>(indexs);
-    // __m256i bm1 = _mm256_loadu_si256((const __m256i *)(bm.a));
-    // y = _mm256_and_ps(_mm256_castsi256_ps(bm1), y);
-    todo!();
+    let bm = i32x8::new(zero_mask_broad_8x32(indexes));
+    // SAFETY: Types have the same size
+    let bm1: f32x8 = unsafe { transmute(bm) };
+    y = bm1 & y;
   }
 
   y
@@ -1178,19 +1183,126 @@ fn blend_perm_indexes<const N: usize, const N2: usize, const DO_ZERO: u8>(
     let ix = a[j];
     if ix < 0 {
       if DO_ZERO == 2 {
-        a[j] = ix;
-        a[j + N] = ix;
+        list[j] = ix;
+        list[j + N] = ix;
       } else {
-        a[j] = u;
-        a[j + N] = u;
+        list[j] = u;
+        list[j + N] = u;
       }
     } else if ix < N as i32 {
-      a[j] = ix;
-      a[j + N] = u;
+      list[j] = ix;
+      list[j + N] = u;
     } else {
-      a[j] = u;
-      a[j + N] = ix - N as i32;
+      list[j] = u;
+      list[j + N] = ix - N as i32;
     }
   }
   list
+}
+
+#[inline(always)]
+fn zero_mask_broad_8x32(a: &[i32; 8]) -> [i32; 8] {
+  let mut u = [0i32; 8];
+  for i in 0..8 {
+    u[i] = if a[i] >= 0 { -1 } else { 0 };
+  }
+  u
+}
+
+#[inline(always)]
+fn zero_mask_broad_4x64(a: &[i32; 4]) -> [i64; 4] {
+  let mut u = [0i64; 4];
+  for i in 0..4 {
+    u[i] = if a[i] >= 0 { -1 } else { 0 };
+  }
+  u
+}
+
+fn permute4(indexes: &[i32; 4], a: f64x4) -> f64x4 {
+  let mut y = a;
+  let flags = perm_flags::<64, 4>(indexes);
+
+  assert!(
+    flags & PERM_OUTOFRANGE == 0,
+    "Index out of range in permute function"
+  );
+
+  if flags & PERM_ALLZERO != 0 {
+    return f64x4::ZERO;
+  }
+
+  if flags & PERM_LARGEBLOCK != 0 {
+    // permute 128-bit blocks
+    let l = largeblock_perm::<4, 2>(indexes);
+    let j0 = l[0];
+    let j1 = l[1];
+
+    if j0 == 0 && j1 == -1 && flags & PERM_ADDZ == 0 {
+      // zero extend
+      //       return _mm256_zextpd128_pd256(_mm256_castpd256_pd128(y));
+      todo!();
+    }
+    if j0 == 1 && j1 < 0 && flags & PERM_ADDZ == 0 {
+      // extract upper part, zero extend
+      //       return _mm256_zextpd128_pd256(_mm256_extractf128_pd(y, 1));
+      todo!();
+    }
+    if flags & PERM_PERM != 0 && flags & PERM_ZEROING == 0 {
+      //       return _mm256_permute2f128_pd(y, y, (j0 & 1) | (j1 & 1) << 4);
+      todo!();
+    }
+  }
+
+  if flags & PERM_PERM != 0 {
+    // permutation needed
+    if flags & PERM_SAME_PATTERN != 0 {
+      // same pattern in both lanes
+      if flags & PERM_PUNPCKH != 0 {
+        y = y.interleave_high(y);
+      } else if flags & PERM_PUNPCKL != 0 {
+        y = y.interleave_low(y);
+      } else {
+        // general permute
+        let mm0 = (indexes[0] & 1)
+          | (indexes[1] & 1) << 1
+          | (indexes[2] & 1) << 2
+          | (indexes[3] & 1) << 3;
+        // select within same lane
+        //         y = _mm256_permute_pd(a, mm0);
+        todo!();
+      }
+    } else if flags & PERM_BROADCAST != 0 && (flags >> PERM_ROT_COUNT) == 0 {
+      // broadcast first element
+      //       y = _mm256_broadcastsd_pd(
+      //           _mm256_castpd256_pd128(y));
+      todo!();
+    } else {
+      // different patterns in two lanes
+      if flags & PERM_CROSS_LANE == 0 {
+        // no lane crossing
+        //         constexpr uint8_t mm0 =
+        //             (i0 & 1) | (i1 & 1) << 1 | (i2 & 1) << 2 | (i3 & 1) << 3;
+        //         y = _mm256_permute_pd(a, mm0); // select within same lane
+        todo!();
+      } else {
+        //         // full permute
+        //         constexpr uint8_t mms =
+        //             (i0 & 3) | (i1 & 3) << 2 | (i2 & 3) << 4 | (i3 & 3) << 6;
+        //         y = _mm256_permute4x64_pd(a, mms);
+        todo!();
+      }
+    }
+  }
+
+  if flags & PERM_ZEROING != 0 {
+    // additional zeroing needed
+    // use broad mask
+    //     constexpr EList<int64_t, 4> bm = zero_mask_broad<Vec4q>(indexs);
+    //     // y = _mm256_and_pd(_mm256_castsi256_pd( Vec4q().load(bm.a) ), y);  // does
+    //     // not work with INSTRSET = 7
+    //     __m256i bm1 = _mm256_loadu_si256((const __m256i *)(bm.a));
+    //     y = _mm256_and_pd(_mm256_castsi256_pd(bm1), y);
+    todo!();
+  }
+  y
 }
