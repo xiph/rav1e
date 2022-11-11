@@ -253,6 +253,7 @@ impl Arbitrary for ArbitraryEncoder {
       color_description: arbitrary_color_description(u)?,
       mastering_display: arbitrary_mastering_display(u)?,
       content_light: arbitrary_content_light(u)?,
+      level_idx: Some(31),
       enable_timing_info: Arbitrary::arbitrary(u)?,
       switch_frame_interval: u.int_in_range(0..=3)?,
       tune: *u.choose(&[Tune::Psnr, Tune::Psychovisual])?,

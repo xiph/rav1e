@@ -259,6 +259,7 @@ pub mod context;
 mod deblock;
 mod encoder;
 mod entropymode;
+mod levels;
 mod lrf;
 mod mc;
 mod me;

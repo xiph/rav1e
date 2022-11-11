@@ -51,6 +51,12 @@ pub struct EncoderConfig {
   /// HDR content light parameters.
   pub content_light: Option<ContentLight>,
 
+  /// AV1 level index to target (0-31).
+  /// If None, allow the encoder to decide.
+  /// Currently, rav1e is unable to guarantee that the output bitstream
+  /// meets the rate limitations of the specified level.
+  pub level_idx: Option<u8>,
+
   /// Enable signaling timing info in the bitstream.
   pub enable_timing_info: bool,
 
@@ -142,6 +148,8 @@ impl EncoderConfig {
       color_description: None,
       mastering_display: None,
       content_light: None,
+
+      level_idx: None,
 
       enable_timing_info: false,
 

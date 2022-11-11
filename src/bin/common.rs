@@ -211,6 +211,11 @@ pub struct CliOptions {
   /// Content light level used to describe content luminosity (cll,fall)
   #[clap(long, help_heading = "VIDEO METADATA")]
   pub content_light: Option<String>,
+  /// AV1 level to target in the form <major>.<minor>, e.g. 3.1.
+  /// Specify "unconstrained" for no level constraints or "auto" to let
+  /// the encoder choose (default)
+  #[clap(long, help_heading = "LEVEL")]
+  pub level: Option<String>,
   /// Constant frame rate to set at the output (inferred from input when omitted)
   #[clap(long, value_parser, help_heading = "VIDEO METADATA")]
   pub frame_rate: Option<u64>,
@@ -526,6 +531,21 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
   let matrix_coefficients = matches.matrix.unwrap_or_default();
 
   let mut cfg = EncoderConfig::with_speed_preset(speed);
+
+  if let Some(level_str) = &matches.level {
+    cfg.level_idx = match level_str.as_str() {
+      "auto" => None,
+      "unconstrained" => Some(31),
+      _ => {
+        let (major, minor) = scan_fmt!(level_str, "{}.{}", u8, u8)
+          .expect("Could not parse AV1 level");
+        if major > 7 || minor > 3 {
+          panic!("Invalid AV1 level")
+        }
+        Some(((major - 2) << 2) + minor)
+      }
+    };
+  };
 
   if let Some(scd_speed) = scene_detection_speed {
     cfg.speed_settings.scene_detection_mode = if scd_speed == 0 {
