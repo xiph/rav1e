@@ -109,13 +109,13 @@ jobs:
         run: |
           sudo sed -i 's/jammy/kinetic/g' /etc/apt/sources.list
           sudo apt update
-          sudo apt install nasm libaom-dev libdav1d-dev
+          sudo apt install nasm libaom-dev libdav1d-dev musl
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         env:
           LINK: https://github.com/lu-zero/cargo-c/releases/latest/download
         run: |
-          curl -L "$LINK/cargo-c-linux.tar.gz" |
+          curl -L "$LINK/cargo-c-x86_64-unknown-linux-musl.tar.gz" |
           tar xz -C $HOME/.cargo/bin
       - name: Install grcov
         if: matrix.conf == 'grcov-codecov'
