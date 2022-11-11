@@ -20,6 +20,8 @@ pub use encoder::*;
 
 pub use av1_grain::*;
 
+use crate::levels::*;
+
 mod rate;
 pub use rate::Error as RateControlError;
 pub use rate::{RateControlConfig, RateControlSummary};
@@ -117,6 +119,14 @@ pub enum InvalidConfig {
   /// The color configuration mismatches AV1 constraints.
   #[error("Mismatch in the color configuration")]
   ColorConfigurationMismatch,
+
+  /// The specified level is undefined in the current version of AV1.
+  #[error("Specified level is undefined")]
+  LevelUndefined,
+
+  /// The configuration exceeded the specified level constraints.
+  #[error("Constraints exceeded for specified level")]
+  LevelConstraintsExceeded,
 }
 
 /// Contains the encoder configuration.
@@ -393,6 +403,36 @@ impl Config {
         }
         if config.chroma_sampling != ChromaSampling::Cs444 {
           return Err(ColorConfigurationMismatch);
+        }
+      }
+    }
+
+    if let Some(level_idx) = config.level_idx {
+      if level_idx > 31 {
+        return Err(LevelUndefined);
+      }
+      if level_idx < 31 {
+        if !AV1_LEVEL_DEFINED[level_idx as usize] {
+          return Err(LevelUndefined);
+        }
+        if config.width * config.height
+          > AV1_LEVEL_MAX_PIC_SIZE[level_idx as usize]
+        {
+          return Err(LevelConstraintsExceeded);
+        }
+        if config.width > AV1_LEVEL_MAX_H_SIZE[level_idx as usize] {
+          return Err(LevelConstraintsExceeded);
+        }
+        if config.height > AV1_LEVEL_MAX_V_SIZE[level_idx as usize] {
+          return Err(LevelConstraintsExceeded);
+        }
+        if ((config.width * config.height) as u64 * config.time_base.num
+          + config.time_base.den
+          - 1)
+          / config.time_base.den
+          > AV1_LEVEL_MAX_DISPLAY_RATE[level_idx as usize] as u64
+        {
+          return Err(LevelConstraintsExceeded);
         }
       }
     }

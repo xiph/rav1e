@@ -227,7 +227,11 @@ impl Sequence {
     let operating_point_idc: [u16; MAX_NUM_OPERATING_POINTS] =
       [0; MAX_NUM_OPERATING_POINTS];
     let level_idx: [u8; MAX_NUM_OPERATING_POINTS] =
-      [31; MAX_NUM_OPERATING_POINTS];
+      if let Some(level_idx) = config.level_idx {
+        [level_idx; MAX_NUM_OPERATING_POINTS]
+      } else {
+        [31; MAX_NUM_OPERATING_POINTS]
+      };
     let tier: [usize; MAX_NUM_OPERATING_POINTS] =
       [0; MAX_NUM_OPERATING_POINTS];
 
