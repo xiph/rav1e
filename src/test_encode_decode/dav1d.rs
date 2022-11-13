@@ -64,7 +64,7 @@ impl<T: Pixel> TestDecoder<T> for Dav1dDecoder<T> {
         debug!("Retrieving frame");
         let ret = pic.get(self.dec);
         debug!("Retrieved.");
-        if ret == -(EAGAIN as i32) {
+        if ret == DAV1D_ERR_AGAIN {
           return DecodeResult::Done;
         }
         if ret != 0 {
