@@ -32,7 +32,7 @@ jobs:
       run: cargo build --release --features=unstable,channel-api --bin=rav1e-ch
 
     - name: Upload rav1e-ch msvc binary (unstable)
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: target/release/rav1e-ch.exe
 
@@ -111,20 +111,20 @@ jobs:
 
     - name: Upload rav1e msvc binary
       if: matrix.conf == 'msvc'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: target/${{ matrix.profile }}/rav1e.exe
 
     - name: Upload pre-release binaries
       if: >
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-windows-${{ matrix.conf }}.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
 
@@ -219,13 +219,13 @@ jobs:
     - name: Upload pre-release binaries
       if: >
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-${{ matrix.name }}.tar.gz
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
 
@@ -276,13 +276,13 @@ jobs:
     - name: Upload pre-release binaries
       if: >
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-macos.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
 
