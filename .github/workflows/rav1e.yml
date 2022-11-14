@@ -139,7 +139,7 @@ jobs:
           cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: ~/.cargo/registry/cache
@@ -147,7 +147,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
       - name: Cache sccache output
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: /home/runner/.cache/sccache
@@ -304,7 +304,7 @@ jobs:
           cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: ~/.cargo/registry/cache
@@ -312,7 +312,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.conf }}-cargo-registry-
       - name: Cache sccache output
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: /Users/runner/Library/Caches/Mozilla.sccache
@@ -385,7 +385,7 @@ jobs:
           cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: ~/.cargo/registry/cache
@@ -393,7 +393,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.conf }}-${{ matrix.target }}-cargo-registry-
       - name: Cache sccache output
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         continue-on-error: true
         with:
           path: C:\sccache
