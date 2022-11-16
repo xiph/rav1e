@@ -49,32 +49,32 @@ jobs:
            name: msvc-generic
            toolchain: stable
            profile: release
-           target_cpu: x86_64
+           target_cpu: x86-64
          - conf: msvc
            name: msvc-sse4
            toolchain: stable
            profile: release
-           target_cpu: x86_64-v2
+           target_cpu: x86-64-v2
          - conf: msvc
            name: msvc-avx2
            toolchain: stable
            profile: release
-           target_cpu: x86_64-v3
+           target_cpu: x86-64-v3
          - conf: gnu
            name: gnu-generic
            toolchain: stable-x86_64-pc-windows-gnu
            profile: release-no-lto
-           target_cpu: x86_64
+           target_cpu: x86-64
          - conf: gnu
            name: gnu-sse4
            toolchain: stable-x86_64-pc-windows-gnu
            profile: release-no-lto
-           target_cpu: x86_64-v2
+           target_cpu: x86-64-v2
          - conf: gnu
            name: gnu-avx2
            toolchain: stable
            profile: release
-           target_cpu: x86_64-v3
+           target_cpu: x86-64-v3
 
     if: github.repository_owner == 'xiph'
     runs-on: windows-latest
@@ -172,17 +172,17 @@ jobs:
            name: linux-generic
            binaries: rav1e
            strip: strip
-           target_cpu: x86_64
+           target_cpu: x86-64
          - target: x86_64-unknown-linux-musl
            name: linux-sse4
            binaries: rav1e
            strip: strip
-           target_cpu: x86_64-v2
+           target_cpu: x86-64-v2
          - target: x86_64-unknown-linux-musl
            name: linux-avx2
            binaries: rav1e
            strip: strip
-           target_cpu: x86_64-v3
+           target_cpu: x86-64-v3
          - target: aarch64-unknown-linux-musl
            name: linux-aarch64
            binaries: rav1e
@@ -227,8 +227,6 @@ jobs:
 
     - name: Build rav1e for aarch64-musl
       if: matrix.target == 'aarch64-unknown-linux-musl'
-      env:
-        RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: cross build --target ${{ matrix.target }} --release
 
     - name: Build rav1e
