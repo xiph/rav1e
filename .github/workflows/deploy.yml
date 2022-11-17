@@ -44,6 +44,10 @@ jobs:
         conf:
          - msvc
          - gnu
+        target_cpu:
+         - x86-64
+         - x86-64-v2
+         - x86-64-v3
         include:
          - conf: msvc
            name: msvc-generic
@@ -128,14 +132,14 @@ jobs:
       if: >
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       run: |
-        7z a rav1e-windows-${{ matrix.conf }}.zip `
+        7z a rav1e-windows-${{ matrix.name }}.zip `
              "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Package release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       run: |
         $ZIP_PREFIX = "rav1e-${{ steps.tagName.outputs.version }}-windows"
-        7z a "$ZIP_PREFIX-${{ matrix.conf }}.zip" `
+        7z a "$ZIP_PREFIX-${{ matrix.name }}.zip" `
              "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
 
     - name: Upload rav1e msvc binary
@@ -151,14 +155,14 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: rav1e (Windows-${{ matrix.name }})
-        path: rav1e-windows-${{ matrix.conf }}.zip
+        path: rav1e-windows-${{ matrix.name }}.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v3
       with:
         name: rav1e ${{ steps.tagName.outputs.version }} (Windows-${{ matrix.name }})
-        path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.conf }}.zip
+        path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.name }}.zip
 
 
   linux-binaries:
@@ -167,6 +171,11 @@ jobs:
         target:
          - x86_64-unknown-linux-musl
          - aarch64-unknown-linux-musl
+        target_cpu:
+         - default
+         - x86-64
+         - x86-64-v2
+         - x86-64-v3
         include:
          - target: x86_64-unknown-linux-musl
            name: linux-generic
@@ -184,9 +193,19 @@ jobs:
            strip: strip
            target_cpu: x86-64-v3
          - target: aarch64-unknown-linux-musl
+           target_cpu: default
            name: linux-aarch64
            binaries: rav1e
            strip: aarch64-linux-gnu-strip
+        exclude:
+         - target: x86_64-unknown-linux-musl
+           target_cpu: default
+         - target: aarch64-unknown-linux-musl
+           target_cpu: x86-64
+         - target: aarch64-unknown-linux-musl
+           target_cpu: x86-64-v2
+         - target: aarch64-unknown-linux-musl
+           target_cpu: x86-64-v3
 
     if: github.repository_owner == 'xiph'
     runs-on: ubuntu-latest
@@ -345,8 +364,6 @@ jobs:
 
     - name: Download artifacts
       uses: actions/download-artifact@v3
-      with:
-        name: artifact
 
     - name: Install Rust stable
       uses: dtolnay/rust-toolchain@stable
@@ -381,19 +398,19 @@ jobs:
         tag_name: p${{ steps.tagDate.outputs.date }}
         files: |
           Cargo.lock
-          rav1e.exe
-          rav1e-ch.exe
-          rav1e-linux-generic.zip
-          rav1e-linux-sse4.zip
-          rav1e-linux-avx2.zip
-          rav1e-linux-aarch64.tar.gz
-          rav1e-macos.zip
-          rav1e-windows-msvc-generic.zip
-          rav1e-windows-msvc-sse4.zip
-          rav1e-windows-msvc-avx2.zip
-          rav1e-windows-gnu-generic.zip
-          rav1e-windows-gnu-sse4.zip
-          rav1e-windows-gnu-avx2.zip
+          rav1e (Windows-msvc-generic)/rav1e.exe
+          rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
+          rav1e (linux-generic)/rav1e-linux-generic.tar.gz
+          rav1e (linux-sse4)/rav1e-linux-sse4.tar.gz
+          rav1e (linux-avx2)/rav1e-linux-avx2.tar.gz
+          rav1e (linux-aarch64)/rav1e-linux-aarch64.tar.gz
+          rav1e (MacOS)/rav1e-macos.zip
+          rav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
+          rav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
+          rav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
+          rav1e (Windows-gnu-generic)/rav1e-windows-gnu-generic.zip
+          rav1e (Windows-gnu-sse4)/rav1e-windows-gnu-sse4.zip
+          rav1e (Windows-gnu-avx2)/rav1e-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -405,19 +422,19 @@ jobs:
         prerelease: true
         files: |
           Cargo.lock
-          rav1e.exe
-          rav1e-ch.exe
-          rav1e-linux-generic.zip
-          rav1e-linux-sse4.zip
-          rav1e-linux-avx2.zip
-          rav1e-linux-aarch64.tar.gz
-          rav1e-macos.zip
-          rav1e-windows-msvc-generic.zip
-          rav1e-windows-msvc-sse4.zip
-          rav1e-windows-msvc-avx2.zip
-          rav1e-windows-gnu-generic.zip
-          rav1e-windows-gnu-sse4.zip
-          rav1e-windows-gnu-avx2.zip
+          rav1e (Windows-msvc-generic)/rav1e.exe
+          rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
+          rav1e (linux-generic)/rav1e-linux-generic.tar.gz
+          rav1e (linux-sse4)/rav1e-linux-sse4.tar.gz
+          rav1e (linux-avx2)/rav1e-linux-avx2.tar.gz
+          rav1e (linux-aarch64)/rav1e-linux-aarch64.tar.gz
+          rav1e (MacOS)/rav1e-macos.zip
+          rav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
+          rav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
+          rav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
+          rav1e (Windows-gnu-generic)/rav1e-windows-gnu-generic.zip
+          rav1e (Windows-gnu-sse4)/rav1e-windows-gnu-sse4.zip
+          rav1e (Windows-gnu-avx2)/rav1e-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -428,17 +445,18 @@ jobs:
         name: v${{ steps.tagName.outputs.version }}
         files: |
           Cargo.lock
-          rav1e.exe
-          rav1e-${{ steps.tagName.outputs.version }}-linux-generic.zip
-          rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.zip
-          rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.zip
-          rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
-          rav1e-${{ steps.tagName.outputs.version }}-macos.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-generic.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-sse4.zip
-          rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-avx2.zip
+          rav1e (Windows-msvc-generic)/rav1e.exe
+          rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
+          rav1e (linux-generic)/rav1e-${{ steps.tagName.outputs.version }}-linux-generic.tar.gz
+          rav1e (linux-sse4)/rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.tar.gz
+          rav1e (linux-avx2)/rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.tar.gz
+          rav1e (linux-aarch64)/rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
+          rav1e (MacOS)/rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+          rav1e (Windows-msvc-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
+          rav1e (Windows-msvc-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
+          rav1e (Windows-msvc-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
+          rav1e (Windows-gnu-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-generic.zip
+          rav1e (Windows-gnu-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-sse4.zip
+          rav1e (Windows-gnu-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
