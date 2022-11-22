@@ -36,6 +36,8 @@ use libc::size_t;
 use num_derive::*;
 use num_traits::cast::FromPrimitive;
 
+use scan_fmt::scan_fmt;
+
 use crate::prelude as rav1e;
 
 type PixelRange = rav1e::PixelRange;
@@ -717,6 +719,21 @@ unsafe fn option_match(
     }
     "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
 
+    "level" => {
+      enc.level_idx = match value {
+        "auto" => None,
+        "unconstrained" => Some(31),
+        _ => {
+          let (major, minor) =
+            scan_fmt!(value, "{}.{}", u8, u8).map_err(|_| ())?;
+          if major > 7 || minor > 3 {
+            return Err(());
+          }
+          Some(((major - 2) << 2) + minor)
+        }
+      };
+    }
+
     _ => return Err(()),
   }
 
@@ -1333,6 +1350,9 @@ mod test {
       rav1e_config_parse_int(rac, h.as_ptr(), 64);
       let s = CString::new("speed").unwrap();
       rav1e_config_parse_int(rac, s.as_ptr(), 10);
+      let l = CString::new("level").unwrap();
+      let lo = CString::new("6.2").unwrap();
+      rav1e_config_parse(rac, l.as_ptr(), lo.as_ptr());
 
       let rax = rav1e_context_new(rac);
 
@@ -1474,6 +1494,17 @@ mod test {
 
       rav1e_frame_unref(f);
       rav1e_context_unref(rax);
+      rav1e_config_unref(rac);
+    }
+  }
+
+  #[test]
+  fn invalid_level() {
+    unsafe {
+      let rac = rav1e_config_default();
+      let l = CString::new("level").unwrap();
+      let lo = CString::new("8.3").unwrap();
+      assert_eq!(rav1e_config_parse(rac, l.as_ptr(), lo.as_ptr()), -1);
       rav1e_config_unref(rac);
     }
   }
