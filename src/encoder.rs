@@ -1588,7 +1588,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     fi.cpu_feature_level,
   );
 
-  if !fi.use_tx_domain_distortion || need_recon_pixel {
+  if eob == 0 {
+    // All zero coefficients is a no-op
+  } else if !fi.use_tx_domain_distortion || need_recon_pixel {
     inverse_transform_add(
       rcoeffs,
       &mut rec.subregion_mut(area),

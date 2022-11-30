@@ -43,7 +43,7 @@ pub fn call_inverse_func<T: Pixel>(
       output.data_ptr_mut() as *mut _,
       output.plane_cfg.stride as isize,
       copied.data.as_mut_ptr() as *mut _,
-      eob as i32,
+      eob as i32 - 1,
     );
   }
 }
@@ -75,7 +75,7 @@ pub fn call_inverse_hbd_func<T: Pixel>(
       output.data_ptr_mut() as *mut _,
       T::to_asm_stride(output.plane_cfg.stride) as isize,
       copied.data.as_mut_ptr() as *mut _,
-      eob as i32,
+      eob as i32 - 1,
     );
   }
 }
@@ -125,7 +125,7 @@ pub mod test {
     if eob != 0 {
       eob += thread_rng().gen_range(0..(exit - eob).min(1));
     }
-    for &pos in scan.iter().skip(eob + 1) {
+    for &pos in scan.iter().skip(eob) {
       coeffs[pos as usize] = T::cast_from(0);
     }
 
