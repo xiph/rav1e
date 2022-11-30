@@ -1,6 +1,6 @@
 [package]
 name = "rav1e"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
 rust-version = "1.60.0"
@@ -47,7 +47,7 @@ quick_test = []
 desync_finder = ["backtrace"]
 bench = []
 check_asm = []
-capi = []
+capi = ["scan_fmt"]
 tracing = ["rust_hawktracer/profiling_enabled"]
 scenechange = []
 serialize = ["serde", "toml", "v_frame/serialize", "serde-big-array"]
