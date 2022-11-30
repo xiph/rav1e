@@ -318,7 +318,7 @@ impl_itx_hbd_fns!(
   // 16x
   [],
   [(16, 16), (16, 8), (16, 4)],
-  // 8x and 4x (minus 8x16)
+  // 8x and 4x
   [
     (TxType::DCT_ADST, dct, adst),
     (TxType::ADST_DCT, adst, dct),
@@ -331,7 +331,7 @@ impl_itx_hbd_fns!(
     (TxType::FLIPADST_ADST, flipadst, adst),
     (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
   ],
-  [(4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+  [(8, 16), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
   _10,
   [(16, sse4, SSE4_1)]
 );
