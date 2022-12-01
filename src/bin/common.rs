@@ -256,15 +256,8 @@ pub struct CliOptions {
 fn get_version() -> &'static str {
   static VERSION_STR: Lazy<String> = Lazy::new(|| {
     format!(
-      "{} ({}) ({})",
-      built_info::PKG_VERSION,
-      built_info::GIT_VERSION
-        .map(|ver| if built_info::GIT_DIRTY.expect("git is true") {
-          format!("{}-MODIFIED", ver)
-        } else {
-          ver.to_string()
-        })
-        .unwrap_or_else(|| "UNKNOWN".to_string()),
+      "{} ({})",
+      rav1e::version::full(),
       // We cannot use `built_info::DEBUG` because that tells us if there are debug symbols,
       // not if there are optimizations.
       if cfg!(debug_assertions) { "debug" } else { "release" }
