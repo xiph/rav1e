@@ -38,7 +38,8 @@ binaries = [
     "av-metrics",
     "nom",
 ]
-default = ["binaries", "asm", "threading", "signal_support"]
+default = ["binaries", "asm", "threading", "signal_support", "git_version"]
+git_version = ["built/git2"]
 asm = ["nasm-rs", "cc"]
 threading = ["rayon/threads"]
 signal_support = ["signal-hook"]
@@ -118,7 +119,7 @@ features = ["png"]
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
 rustc_version = "0.4"
-built = { version = "0.5.1", features = ["git2", "chrono"] }
+built = { version = "0.5.1", features = ["chrono"] }
 
 [build-dependencies.nasm-rs]
 version = "0.2"
