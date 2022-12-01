@@ -407,6 +407,25 @@ pub mod version {
     }
   }
 
+  cfg_if::cfg_if! {
+    if #[cfg(feature="git_version")] {
+      fn git_version() -> &'static str {
+        crate::built_info::GIT_VERSION.unwrap_or_default()
+      }
+
+      fn git_hash() -> &'static str {
+        crate::built_info::GIT_COMMIT_HASH.unwrap_or_default()
+      }
+    } else {
+      fn git_version() -> &'static str {
+        "UNKNOWN"
+      }
+
+      fn git_hash() -> &'static str {
+        "UNKNOWN"
+      }
+    }
+  }
   /// Commit hash (short)
   ///
   /// Short hash of the git commit used by this build
@@ -414,7 +433,7 @@ pub mod version {
   /// e.g. `g743d464`
   ///
   pub fn hash() -> String {
-    crate::built_info::GIT_COMMIT_HASH.unwrap_or_default().to_string()
+    git_hash().to_string()
   }
 
   /// Version information with the information
@@ -423,11 +442,7 @@ pub mod version {
   /// e.g. `0.1.0 (v0.1.0-1-g743d464)`
   ///
   pub fn full() -> String {
-    format!(
-      "{} ({})",
-      short(),
-      crate::built_info::GIT_VERSION.unwrap_or_default()
-    )
+    format!("{} ({})", short(), git_version(),)
   }
 }
 #[cfg(all(
