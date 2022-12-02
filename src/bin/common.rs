@@ -46,7 +46,9 @@ pub struct CliOptions {
   #[clap(short = 'y', help_heading = "INPUT/OUTPUT")]
   pub overwrite: bool,
 
-  /// Set the threadpool size
+  /// Set the threadpool size. If 0, will use the number of logical CPUs.
+  /// rav1e will use up to this many threads. Additional tiles may be needed to
+  /// increase thread utilization.
   #[clap(long, value_parser, default_value_t = 0, help_heading = "THREADING")]
   pub threads: usize,
   /// Number of tile rows. Must be a power of 2. rav1e may override this based on video resolution.
