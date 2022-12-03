@@ -333,6 +333,11 @@ macro_rules! decl_mc_fns {
             dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
             w: i32, h: i32, mx: i32, my: i32
           );
+
+          fn [<$func_name _avx512icl>](
+            dst: *mut u8, dst_stride: isize, src: *const u8, src_stride: isize,
+            w: i32, h: i32, mx: i32, my: i32
+          );
         )*
       }
 
@@ -348,6 +353,14 @@ macro_rules! decl_mc_fns {
         let mut out: [Option<PutFn>; 16] = [None; 16];
         $(
           out[get_2d_mode_idx($mode_x, $mode_y)] = Some([<$func_name _avx2>]);
+        )*
+        out
+      };
+
+      static PUT_FNS_AVX512ICL: [Option<PutFn>; 16] = {
+        let mut out: [Option<PutFn>; 16] = [None; 16];
+        $(
+          out[get_2d_mode_idx($mode_x, $mode_y)] = Some([<$func_name _avx512icl>]);
         )*
         out
       };
@@ -371,7 +384,7 @@ decl_mc_fns!(
 cpu_function_lookup_table!(
   PUT_FNS: [[Option<PutFn>; 16]],
   default: [None; 16],
-  [SSSE3, AVX2]
+  [SSSE3, AVX2, AVX512ICL]
 );
 
 macro_rules! decl_mc_hbd_fns {
@@ -434,6 +447,11 @@ macro_rules! decl_mct_fns {
     paste::item! {
       extern {
         $(
+          fn [<$func_name _sse2>](
+            tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
+            h: i32, mx: i32, my: i32
+          );
+
           fn [<$func_name _ssse3>](
             tmp: *mut i16, src: *const u8, src_stride: libc::ptrdiff_t, w: i32,
             h: i32, mx: i32, my: i32
@@ -450,6 +468,14 @@ macro_rules! decl_mct_fns {
           );
         )*
       }
+
+      static PREP_FNS_SSE2: [Option<PrepFn>; 16] = {
+        let mut out: [Option<PrepFn>; 16] = [None; 16];
+        $(
+            out[get_2d_mode_idx($mode_x, $mode_y)] = Some([<$func_name _sse2>]);
+        )*
+        out
+      };
 
       static PREP_FNS_SSSE3: [Option<PrepFn>; 16] = {
         let mut out: [Option<PrepFn>; 16] = [None; 16];
@@ -494,7 +520,7 @@ decl_mct_fns!(
 cpu_function_lookup_table!(
   PREP_FNS: [[Option<PrepFn>; 16]],
   default: [None; 16],
-  [SSSE3, AVX2, AVX512ICL]
+  [SSE2, SSSE3, AVX2, AVX512ICL]
 );
 
 macro_rules! decl_mct_hbd_fns {
@@ -563,6 +589,11 @@ extern {
     tmp2: *const i16, w: i32, h: i32,
   );
 
+  fn rav1e_avg_8bpc_avx512icl(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
+    tmp2: *const i16, w: i32, h: i32,
+  );
+
   fn rav1e_avg_16bpc_ssse3(
     dst: *mut u16, dst_stride: libc::ptrdiff_t, tmp1: *const i16,
     tmp2: *const i16, w: i32, h: i32, bitdepth_max: i32,
@@ -577,7 +608,11 @@ extern {
 cpu_function_lookup_table!(
   AVG_FNS: [Option<AvgFn>],
   default: None,
-  [(SSSE3, Some(rav1e_avg_8bpc_ssse3)), (AVX2, Some(rav1e_avg_8bpc_avx2))]
+  [
+    (SSSE3, Some(rav1e_avg_8bpc_ssse3)),
+    (AVX2, Some(rav1e_avg_8bpc_avx2)),
+    (AVX512ICL, Some(rav1e_avg_8bpc_avx512icl))
+  ]
 );
 
 cpu_function_lookup_table!(
