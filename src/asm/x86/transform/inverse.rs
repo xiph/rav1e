@@ -51,7 +51,21 @@ pub fn inverse_transform_add<T: Pixel>(
         );
       }
     }
-    PixelType::U16 => {}
+    PixelType::U16 => {
+      if let Some(func) = INV_TXFM_HBD_FNS_12[cpu.as_index()]
+        [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
+      {
+        return call_inverse_hbd_func(
+          func,
+          input,
+          output,
+          eob,
+          tx_size.width(),
+          tx_size.height(),
+          bd,
+        );
+      }
+    }
   };
 
   rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
@@ -345,6 +359,45 @@ cpu_function_lookup_table!(
   INV_TXFM_HBD_FNS_10: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
   default: [[None; TX_TYPES]; 32],
   [SSE4_1, AVX2]
+);
+
+impl_itx_hbd_fns!(
+  // 64x
+  [(TxType::DCT_DCT, dct, dct)],
+  [],
+  // 32x
+  [(TxType::IDTX, identity, identity)],
+  [],
+  // 16x16
+  [
+    (TxType::DCT_ADST, dct, adst),
+    (TxType::ADST_DCT, adst, dct),
+    (TxType::DCT_FLIPADST, dct, flipadst),
+    (TxType::FLIPADST_DCT, flipadst, dct),
+    (TxType::V_DCT, dct, identity),
+    (TxType::H_DCT, identity, dct),
+    (TxType::ADST_ADST, adst, adst),
+    (TxType::ADST_FLIPADST, adst, flipadst),
+    (TxType::FLIPADST_ADST, flipadst, adst),
+    (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
+  ],
+  [(16, 16)],
+  // 8x, 4x and 16x (minus 16x16)
+  [
+    (TxType::V_ADST, adst, identity),
+    (TxType::H_ADST, identity, adst),
+    (TxType::V_FLIPADST, flipadst, identity),
+    (TxType::H_FLIPADST, identity, flipadst)
+  ],
+  [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+  _12,
+  [(12, avx2, AVX2)]
+);
+
+cpu_function_lookup_table!(
+  INV_TXFM_HBD_FNS_12: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
+  default: [[None; TX_TYPES]; 32],
+  [AVX2]
 );
 
 #[cfg(test)]
