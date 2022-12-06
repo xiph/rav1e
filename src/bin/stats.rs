@@ -676,20 +676,20 @@ impl fmt::Display for ProgressInfo {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     if let Some(total_frames) = self.total_frames {
       write!(
-                f,
-                "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est. size: {:.2} MB, est. time: {},  elap. time: {}",
-                self.frames_encoded(),
-                total_frames,
-                self.encoding_fps(),
-                self.bitrate() as f64 / 1000f64,
-                self.estimated_size() as f64 / (1024 * 1024) as f64,
-                secs_to_human_time(self.estimated_time()),
-                secs_to_human_time(self.elapsed_time())
-            )
+        f,
+        "encoded {}/{} frames, {:.3} fps, {:.2} Kb/s, est: {}, {:.2} MB, elapsed: {}",
+        self.frames_encoded(),
+        total_frames,
+        self.encoding_fps(),
+        self.bitrate() as f64 / 1000f64,
+        secs_to_human_time(self.estimated_time()),
+        self.estimated_size() as f64 / (1024 * 1024) as f64,
+        secs_to_human_time(self.elapsed_time())
+      )
     } else {
       write!(
         f,
-        "encoded {} frames, {:.3} fps, {:.2} Kb/s, elap. time: {}",
+        "encoded {} frames, {:.3} fps, {:.2} Kb/s, elapsed: {}",
         self.frames_encoded(),
         self.encoding_fps(),
         self.bitrate() as f64 / 1000f64,
