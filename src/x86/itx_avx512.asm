@@ -1500,8 +1500,8 @@ cglobal iidentity_8x8_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
 %ifidn %1_%2, dct_dct
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 16
     imul                r6d, 181
-    mov                 r3d, 16
     add                 r6d, 128
     sar                 r6d, 8
     jmp m(inv_txfm_add_dct_dct_8x8_8bpc).dconly
@@ -1978,7 +1978,7 @@ cglobal iidentity_16x4_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
 %ifidn %1_%2, dct_dct
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 8
+    or                  r3d, 8
 .dconly:
     imul                r6d, 181
     add                 r6d, 128
@@ -2279,8 +2279,8 @@ cglobal iidentity_16x8_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
 %ifidn %1_%2, dct_dct
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 16
     imul                r6d, 181
-    mov                 r3d, 16
     add                 r6d, 128+512
     sar                 r6d, 8+2
     jmp m(inv_txfm_add_dct_dct_16x8_8bpc).dconly3
@@ -2929,7 +2929,7 @@ cglobal inv_txfm_add_dct_dct_8x32_8bpc, 4, 4, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 32
+    or                  r3d, 32
     imul                r6d, 181
     add                 r6d, 128+512
     sar                 r6d, 8+2
@@ -3136,7 +3136,7 @@ cglobal inv_txfm_add_dct_dct_32x8_8bpc, 4, 4, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 8
+    or                  r3d, 8
 .dconly2:
     imul                r6d, 181
     add                 r6d, 128+512
@@ -3539,7 +3539,7 @@ ALIGN function_align
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 32
+    or                  r3d, 32
     jmp m(inv_txfm_add_dct_dct_16x8_8bpc).dconly
 ALIGN function_align
 .main_oddhalf_fast2: ; bottom three-quarters are zero
@@ -3825,8 +3825,8 @@ ALIGN function_align
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 16
     imul                r6d, 181
-    mov                 r3d, 16
     add                 r6d, 128
     sar                 r6d, 8
     imul                r6d, 181
@@ -4607,7 +4607,7 @@ cglobal inv_txfm_add_dct_dct_32x32_8bpc, 4, 6, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 32
+    or                  r3d, 32
     jmp m(inv_txfm_add_dct_dct_32x8_8bpc).dconly2
 ALIGN function_align
 .main_oddhalf_fast2: ; bottom three-quarters are zero
@@ -5072,8 +5072,8 @@ cglobal inv_txfm_add_dct_dct_16x64_8bpc, 4, 7, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 64
     imul                r6d, 181
-    mov                 r3d, 64
     add                 r6d, 128+512
     sar                 r6d, 8+2
     jmp m(inv_txfm_add_dct_dct_16x8_8bpc).dconly3
@@ -5286,7 +5286,7 @@ cglobal inv_txfm_add_dct_dct_64x16_8bpc, 4, 7, 0, dst, stride, c, eob
     jnz .normal
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 16
+    or                  r3d, 16
 .dconly:
     imul                r6d, 181
     add                 r6d, 128+512
@@ -6016,8 +6016,8 @@ cglobal inv_txfm_add_dct_dct_32x64_8bpc, 4, 7, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 64
     imul                r6d, 181
-    mov                 r3d, 64
     add                 r6d, 128
     sar                 r6d, 8
     imul                r6d, 181
@@ -6678,8 +6678,8 @@ ALIGN function_align
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
+    or                  r3d, 32
     imul                r6d, 181
-    mov                 r3d, 32
     add                 r6d, 128
     sar                 r6d, 8
     imul                r6d, 181
@@ -7121,7 +7121,7 @@ cglobal inv_txfm_add_dct_dct_64x64_8bpc, 4, 7, 0, dst, stride, c, eob
 .dconly:
     movsx               r6d, word [cq]
     mov                [cq], eobd
-    mov                 r3d, 64
+    or                  r3d, 64
     jmp m(inv_txfm_add_dct_dct_64x16_8bpc).dconly
 ALIGN function_align
 .pass2_end:
