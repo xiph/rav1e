@@ -273,7 +273,7 @@ fn get_long_version() -> &'static str {
       rustflags = "(None)";
     }
     format!(
-      "{}\n{} {}\nCompiled CPU Features: {}\nAssembly: {}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}\nBuilt {}",
+      "{}\n{} {}\nCompiled CPU Features: {}\nAssembly: {}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}",
       get_version(),
       built_info::RUSTC_VERSION,
       built_info::TARGET,
@@ -281,8 +281,7 @@ fn get_long_version() -> &'static str {
       if cfg!(feature = "asm") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "threading") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
-      rustflags,
-      built_info::BUILT_TIME_UTC
+      rustflags
     )
   });
   &LONG_VERSION_STR
