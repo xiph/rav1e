@@ -182,8 +182,7 @@ pub fn apply_ssim_boost(
   //          C3     sqrt(C1^2 + svar * dvar)
   let rsqrt = ssim_boost_rsqrt((C1 * C1) + svar * dvar);
   ((input as u64
-    * (((RATIO * (svar + dvar + C2) as u64) * rsqrt.norm as u64)
-      >> RATIO_SHIFT))
+    * (((RATIO * (svar + dvar + C2)) * rsqrt.norm as u64) >> RATIO_SHIFT))
     >> rsqrt.shift) as u32
 }
 

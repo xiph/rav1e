@@ -450,10 +450,8 @@ fn sse_size4<T: Pixel>(
 
     // mask4 sets the dividing line for filter vs no filter
     // nhev4 sets the dividing line between narrow2 and narrow4
-    let mask =
-      clamp(mask4(p1, p0, q0, q1, bd - 8), 1, MAX_LOOP_FILTER + 1) as usize;
-    let nhev =
-      clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
+    let mask = clamp(mask4(p1, p0, q0, q1, bd - 8), 1, MAX_LOOP_FILTER + 1);
+    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -596,11 +594,9 @@ fn sse_size6<T: Pixel>(
     // flat6 decides between wide and narrow filters (unrelated to level)
     // nhev4 sets the dividing line between narrow2 and narrow4
     let mask =
-      clamp(mask6(p2, p1, p0, q0, q1, q2, bd - 8), 1, MAX_LOOP_FILTER + 1)
-        as usize;
+      clamp(mask6(p2, p1, p0, q0, q1, q2, bd - 8), 1, MAX_LOOP_FILTER + 1);
     let flatp = flat6(p2, p1, p0, q0, q1, q2) <= flat;
-    let nhev =
-      clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
+    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -800,10 +796,9 @@ fn sse_size8<T: Pixel>(
       mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8),
       1,
       MAX_LOOP_FILTER + 1,
-    ) as usize;
+    );
     let flatp = flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat;
-    let nhev =
-      clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
+    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -1058,11 +1053,10 @@ fn sse_size14<T: Pixel>(
       mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8),
       1,
       MAX_LOOP_FILTER + 1,
-    ) as usize;
+    );
     let flat8p = flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat;
     let flat14p = flat14_outer(p6, p5, p4, p0, q0, q4, q5, q6) <= flat;
-    let nhev =
-      clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1) as usize;
+    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);

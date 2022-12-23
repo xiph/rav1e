@@ -63,11 +63,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
         let delta = self.delta_in_planes(first, second);
 
         ScenecutResult {
-          threshold: self.threshold as f64,
-          inter_cost: delta as f64,
-          imp_block_cost: delta as f64,
-          forward_adjusted_cost: delta as f64,
-          backward_adjusted_cost: delta as f64,
+          threshold: self.threshold,
+          inter_cost: delta,
+          imp_block_cost: delta,
+          forward_adjusted_cost: delta,
+          backward_adjusted_cost: delta,
         }
       } else {
         // SAFETY: `downscaled_frame_buffer` is always initialized to `Some(..)` with a valid state
@@ -89,11 +89,11 @@ impl<T: Pixel> SceneChangeDetector<T> {
         );
 
         ScenecutResult {
-          threshold: self.threshold as f64,
-          inter_cost: delta as f64,
-          imp_block_cost: delta as f64,
-          backward_adjusted_cost: delta as f64,
-          forward_adjusted_cost: delta as f64,
+          threshold: self.threshold,
+          inter_cost: delta,
+          imp_block_cost: delta,
+          backward_adjusted_cost: delta,
+          forward_adjusted_cost: delta,
         }
       } else {
         // SAFETY: `frame_ref_buffer` is always initialized to `Some(..)` at the start

@@ -236,8 +236,8 @@ fn estimate_sb_motion<T: Pixel>(
         // Processing the block a size up produces data that can be used by
         // the right and bottom corners.
         MVSamplingMode::CORNER {
-          right: x as usize & mv_size == mv_size,
-          bottom: y as usize & mv_size == mv_size,
+          right: x & mv_size == mv_size,
+          bottom: y & mv_size == mv_size,
         }
       };
 

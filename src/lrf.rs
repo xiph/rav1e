@@ -443,12 +443,11 @@ impl<'a, T: Pixel> Iterator for VertPaddedIter<'a, T> {
       let ly = clamp(cropped_y, self.stripe_begin - 2, self.stripe_end + 1);
 
       // decide if we're vertically inside or outside the strip
-      let src_plane =
-        if ly >= self.stripe_begin && ly < self.stripe_end as isize {
-          self.cdeffed
-        } else {
-          self.deblocked
-        };
+      let src_plane = if ly >= self.stripe_begin && ly < self.stripe_end {
+        self.cdeffed
+      } else {
+        self.deblocked
+      };
       // cannot directly return self.ps.row(row) due to lifetime issue
       let range = src_plane.row_range(self.x, ly);
       self.y += 1;
@@ -1049,13 +1048,13 @@ pub fn sgrproj_solve<T: Pixel>(
       ((c[0] / h[0][0]).round() as i32, 0)
     }
   } else {
-    let det = h[0][0] * h[1][1] - h[0][1] * h[1][0];
+    let det = h[0][0].mul_add(h[1][1], -h[0][1] * h[1][0]);
     if det == 0. {
       (0, 0)
     } else {
       // If scaling up dividend would overflow, instead scale down the divisor
-      let div1 = h[1][1] * c[0] - h[0][1] * c[1];
-      let div2 = h[0][0] * c[1] - h[1][0] * c[0];
+      let div1 = h[1][1].mul_add(c[0], -h[0][1] * c[1]);
+      let div2 = h[0][0].mul_add(c[1], -h[1][0] * c[0]);
       ((div1 / det).round() as i32, (div2 / det).round() as i32)
     }
   };
@@ -1151,7 +1150,7 @@ fn wiener_stripe_filter<T: Pixel>(
       let off = 3 - (xi as isize);
       let s = cmp::max(0, off) as usize;
       let s1 = (s as isize - off) as usize;
-      let n1 = (n as isize - off) as usize;
+      let n1 = (n - off) as usize;
 
       for (hf, &v) in hfilter[s..n as usize].iter().zip(src[s1..n1].iter()) {
         acc += hf * i32::cast_from(v);

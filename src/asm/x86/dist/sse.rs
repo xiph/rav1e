@@ -127,8 +127,7 @@ pub fn get_weighted_sse<T: Pixel>(
             T::to_asm_stride(dst.plane_cfg.stride),
             scale.as_ptr(),
             (scale_stride * size_of_element(scale)) as isize,
-          ) as u64
-            + (den >> 1))
+          ) + (den >> 1))
             / den
         },
         None => call_rust(),
@@ -140,9 +139,9 @@ pub fn get_weighted_sse<T: Pixel>(
         Some(func) => unsafe {
           ((func)(
             src.data_ptr() as *const _,
-            T::to_asm_stride(src.plane_cfg.stride) as isize,
+            T::to_asm_stride(src.plane_cfg.stride),
             dst.data_ptr() as *const _,
-            T::to_asm_stride(dst.plane_cfg.stride) as isize,
+            T::to_asm_stride(dst.plane_cfg.stride),
             scale.as_ptr(),
             (scale_stride * size_of_element(scale)) as isize,
           ) + (den >> 1))

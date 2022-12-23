@@ -621,7 +621,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       for i in 0..INTER_REFS_PER_FRAME {
         if !frame_refs_short_signaling {
-          self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i] as u8)?;
+          self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i])?;
         }
         if fi.sequence.frame_id_numbers_present_flag {
           unimplemented!();

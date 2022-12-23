@@ -220,8 +220,8 @@ pub fn dispatch_predict_intra<T: Pixel>(
               );
               // From dav1d, dx and dy are the distance from the predicted block to the frame edge
               let (dx, dy) = (
-                (bw as isize - dst.rect().x as isize) as libc::c_int,
-                (bh as isize - dst.rect().y as isize) as libc::c_int,
+                (bw as isize - dst.rect().x) as libc::c_int,
+                (bh as isize - dst.rect().y) as libc::c_int,
               );
 
               if angle <= 90 {
@@ -371,8 +371,8 @@ pub fn dispatch_predict_intra<T: Pixel>(
             );
             // From dav1d, dx and dy are the distance from the predicted block to the frame edge
             let (dx, dy) = (
-              (bw as isize - dst.rect().x as isize) as libc::c_int,
-              (bh as isize - dst.rect().y as isize) as libc::c_int,
+              (bw as isize - dst.rect().x) as libc::c_int,
+              (bh as isize - dst.rect().y) as libc::c_int,
             );
 
             if angle <= 90 {
