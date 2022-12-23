@@ -154,7 +154,7 @@ impl ProgressInfo {
 
   // Elapsed time in seconds
   pub fn elapsed_time(&self) -> u64 {
-    Instant::now().duration_since(self.time_started).as_secs() as u64
+    Instant::now().duration_since(self.time_started).as_secs()
   }
 
   // Number of frames of given type which appear in the video

@@ -259,7 +259,7 @@ pub(crate) mod rust {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
     let x_filter = get_filter(mode_x, col_frac, width);
-    let max_sample_val = ((1 << bit_depth) - 1) as i32;
+    let max_sample_val = (1 << bit_depth) - 1;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     match (col_frac, row_frac) {
       (0, 0) => {
@@ -284,8 +284,7 @@ pub(crate) mod rust {
                 },
                 7,
               )
-              .max(0)
-              .min(max_sample_val),
+              .clamp(0, max_sample_val),
             );
           }
         }
@@ -306,8 +305,7 @@ pub(crate) mod rust {
                 ),
                 intermediate_bits,
               )
-              .max(0)
-              .min(max_sample_val),
+              .clamp(0, max_sample_val),
             );
           }
         }
@@ -345,8 +343,7 @@ pub(crate) mod rust {
                   },
                   7 + intermediate_bits,
                 )
-                .max(0)
-                .min(max_sample_val),
+                .clamp(0, max_sample_val),
               );
             }
           }
@@ -462,7 +459,7 @@ pub(crate) mod rust {
     assert_eq!(height & 1, 0);
     assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
-    let max_sample_val = ((1 << bit_depth) - 1) as i32;
+    let max_sample_val = (1 << bit_depth) - 1;
     let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
     let prep_bias = if bit_depth == 8 { 0 } else { PREP_BIAS * 2 };
     for r in 0..height {
@@ -475,8 +472,7 @@ pub(crate) mod rust {
               + prep_bias,
             intermediate_bits + 1,
           )
-          .max(0)
-          .min(max_sample_val),
+          .clamp(0, max_sample_val),
         );
       }
     }

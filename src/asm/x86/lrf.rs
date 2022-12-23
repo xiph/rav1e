@@ -205,7 +205,7 @@ unsafe fn sgrproj_box_ab_8_avx2(
   let p = _mm256_max_epi32(
     _mm256_setzero_si256(),
     _mm256_sub_epi32(
-      _mm256_mullo_epi32(scaled_ssq, _mm256_set1_epi32(n as i32)),
+      _mm256_mullo_epi32(scaled_ssq, _mm256_set1_epi32(n)),
       _mm256_madd_epi16(scaled_sum, scaled_sum),
     ),
   );

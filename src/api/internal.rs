@@ -726,7 +726,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno,
         segmentation: fs.segmentation,
       });
-      for i in 0..(REF_FRAMES as usize) {
+      for i in 0..REF_FRAMES {
         if (fi.refresh_frame_flags & (1 << i)) != 0 {
           coded_data.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
           coded_data.lookahead_rec_buffer.deblock[i] = fs.deblock;
@@ -808,7 +808,7 @@ impl<T: Pixel> ContextInner<T> {
       output_frameno,
       segmentation: fs.segmentation,
     });
-    for i in 0..(REF_FRAMES as usize) {
+    for i in 0..REF_FRAMES {
       if (fi.refresh_frame_flags & (1 << i)) != 0 {
         coded_data.lookahead_rec_buffer.frames[i] = Some(Arc::clone(&rfs));
         coded_data.lookahead_rec_buffer.deblock[i] = fs.deblock;
