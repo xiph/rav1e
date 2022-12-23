@@ -38,173 +38,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// The set of options that controls frame re-ordering and reference picture
-///  selection.
-/// The options stored here are invariant over the whole encode.
 #[derive(Debug, Clone, Copy)]
-pub struct InterConfig {
-  /// Whether frame re-ordering is enabled.
-  reorder: bool,
-  /// Whether P-frames can use multiple references.
-  pub(crate) multiref: bool,
-  /// The depth of the re-ordering pyramid.
-  /// The current code cannot support values larger than 2.
-  pub(crate) pyramid_depth: u64,
-  /// Number of input frames in group.
-  pub(crate) group_input_len: u64,
-  /// Number of output frames in group.
-  /// This includes both hidden frames and "show existing frame" frames.
-  group_output_len: u64,
-  /// Interval between consecutive S-frames.
-  /// Keyframes reset this interval.
-  /// This MUST be a multiple of group_input_len.
-  pub(crate) switch_frame_interval: u64,
-}
-
-impl InterConfig {
-  pub(crate) fn new(enc_config: &EncoderConfig) -> InterConfig {
-    let reorder = !enc_config.low_latency;
-    // A group always starts with (group_output_len - group_input_len) hidden
-    //  frames, followed by group_input_len shown frames.
-    // The shown frames iterate over the input frames in order, with frames
-    //  already encoded as hidden frames now displayed with Show Existing
-    //  Frame.
-    // For example, for a pyramid depth of 2, the group is as follows:
-    //                      |TU         |TU |TU |TU
-    // idx_in_group_output:   0   1   2   3   4   5
-    // input_frameno:         4   2   1  SEF  3  SEF
-    // output_frameno:        1   2   3   4   5   6
-    // level:                 0   1   2   1   2   0
-    //                        ^^^^^   ^^^^^^^^^^^^^
-    //                        hidden      shown
-    // TODO: This only works for pyramid_depth <= 2 --- after that we need
-    //  more hidden frames in the middle of the group.
-    let pyramid_depth = if reorder { 2 } else { 0 };
-    let group_input_len = 1 << pyramid_depth;
-    let group_output_len = group_input_len + pyramid_depth;
-    let switch_frame_interval = enc_config.switch_frame_interval;
-    assert!(switch_frame_interval % group_input_len == 0);
-    InterConfig {
-      reorder,
-      multiref: reorder || enc_config.speed_settings.multiref,
-      pyramid_depth,
-      group_input_len,
-      group_output_len,
-      switch_frame_interval,
-    }
-  }
-
-  /// Get the index of an output frame in its re-ordering group given the output
-  ///  frame number of the frame in the current keyframe gop.
-  /// When re-ordering is disabled, this always returns 0.
-  pub(crate) fn get_idx_in_group_output(
-    &self, output_frameno_in_gop: u64,
-  ) -> u64 {
-    // The first frame in the GOP should be a keyframe and is not re-ordered,
-    //  so we should not be calling this function on it.
-    debug_assert!(output_frameno_in_gop > 0);
-    (output_frameno_in_gop - 1) % self.group_output_len
-  }
-
-  /// Get the order-hint of an output frame given the output frame number of the
-  ///  frame in the current keyframe gop and the index of that output frame
-  ///  in its re-ordering gorup.
-  pub(crate) fn get_order_hint(
-    &self, output_frameno_in_gop: u64, idx_in_group_output: u64,
-  ) -> u32 {
-    // The first frame in the GOP should be a keyframe, but currently this
-    //  function only handles inter frames.
-    // We could return 0 for keyframes if keyframe support is needed.
-    debug_assert!(output_frameno_in_gop > 0);
-    // Which P-frame group in the current gop is this output frame in?
-    // Subtract 1 because the first frame in the gop is always a keyframe.
-    let group_idx = (output_frameno_in_gop - 1) / self.group_output_len;
-    // Get the offset to the corresponding input frame.
-    // TODO: This only works with pyramid_depth <= 2.
-    let offset = if idx_in_group_output < self.pyramid_depth {
-      self.group_input_len >> idx_in_group_output
-    } else {
-      idx_in_group_output - self.pyramid_depth + 1
-    };
-    // Construct the final order hint relative to the start of the group.
-    (self.group_input_len * group_idx + offset) as u32
-  }
-
-  /// Get the level of the current frame in the pyramid.
-  pub(crate) const fn get_level(&self, idx_in_group_output: u64) -> u64 {
-    if !self.reorder {
-      0
-    } else if idx_in_group_output < self.pyramid_depth {
-      // Hidden frames are output first (to be shown in the future).
-      idx_in_group_output
-    } else {
-      // Shown frames
-      // TODO: This only works with pyramid_depth <= 2.
-      pos_to_lvl(
-        idx_in_group_output - self.pyramid_depth + 1,
-        self.pyramid_depth,
-      )
-    }
-  }
-
-  pub(crate) const fn get_slot_idx(&self, level: u64, order_hint: u32) -> u32 {
-    // Frames with level == 0 are stored in slots 0..4, and frames with higher
-    //  values of level in slots 4..8
-    if level == 0 {
-      (order_hint >> self.pyramid_depth) & 3
-    } else {
-      // This only works with pyramid_depth <= 4.
-      3 + level as u32
-    }
-  }
-
-  pub(crate) const fn get_show_frame(&self, idx_in_group_output: u64) -> bool {
-    idx_in_group_output >= self.pyramid_depth
-  }
-
-  pub(crate) const fn get_show_existing_frame(
-    &self, idx_in_group_output: u64,
-  ) -> bool {
-    // The self.reorder test here is redundant, but short-circuits the rest,
-    //  avoiding a bunch of work when it's false.
-    self.reorder
-      && self.get_show_frame(idx_in_group_output)
-      && (idx_in_group_output - self.pyramid_depth + 1).count_ones() == 1
-      && idx_in_group_output != self.pyramid_depth
-  }
-
-  pub(crate) fn get_input_frameno(
-    &self, output_frameno_in_gop: u64, gop_input_frameno_start: u64,
-  ) -> u64 {
-    if output_frameno_in_gop == 0 {
-      gop_input_frameno_start
-    } else {
-      let idx_in_group_output =
-        self.get_idx_in_group_output(output_frameno_in_gop);
-      let order_hint =
-        self.get_order_hint(output_frameno_in_gop, idx_in_group_output);
-      gop_input_frameno_start + order_hint as u64
-    }
-  }
-
-  const fn max_reordering_latency(&self) -> u64 {
-    self.group_input_len
-  }
-
-  pub(crate) const fn keyframe_lookahead_distance(&self) -> u64 {
-    self.max_reordering_latency() + 1
-  }
-
-  pub(crate) const fn allowed_ref_frames(&self) -> &[RefType] {
-    use crate::partition::RefType::*;
-    if self.reorder {
-      &ALL_INTER_REFS
-    } else if self.multiref {
-      &[LAST_FRAME, LAST2_FRAME, LAST3_FRAME, GOLDEN_FRAME]
-    } else {
-      &[LAST_FRAME]
-    }
-  }
+pub(crate) struct MiniGopConfig {
+  pub group_input_len: usize,
+  pub pyramid_depth: u8,
 }
 
 // Thin wrapper for frame-related data
@@ -230,7 +67,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) frame_count: u64,
   pub(crate) limit: Option<u64>,
   pub(crate) output_frameno: u64,
-  pub(super) inter_cfg: InterConfig,
+  pub(super) minigop_config: MiniGopConfig,
   pub(super) frames_processed: u64,
   /// Maps *input_frameno* to frames
   pub(super) frame_q: FrameQueue<T>,
@@ -248,6 +85,11 @@ pub(crate) struct ContextInner<T: Pixel> {
   gop_output_frameno_start: BTreeMap<u64, u64>,
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
+  /// Maps `output_frameno` to `minigop_output_frameno_start`.
+  minigop_output_frameno_start: BTreeMap<u64, u64>,
+  /// Maps `output_frameno` to `minigop_input_frameno_start`.
+  pub(crate) minigop_input_frameno_start: BTreeMap<u64, u64>,
+  frame_type_lookahead_distance: usize,
   keyframe_detector: SceneChangeDetector<T>,
   pub(crate) config: Arc<EncoderConfig>,
   seq: Arc<Sequence>,
@@ -274,13 +116,12 @@ impl<T: Pixel> ContextInner<T> {
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
 
     let seq = Arc::new(Sequence::new(enc));
-    let inter_cfg = InterConfig::new(enc);
-    let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
+    let lookahead_distance = enc.speed_settings.rdo_lookahead_frames.min(32);
 
     ContextInner {
       frame_count: 0,
       limit: None,
-      inter_cfg,
+      minigop_config: MiniGopConfig { group_input_len: 1, pyramid_depth: 0 },
       output_frameno: 0,
       frames_processed: 0,
       frame_q: BTreeMap::new(),
@@ -290,6 +131,9 @@ impl<T: Pixel> ContextInner<T> {
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
+      minigop_output_frameno_start: BTreeMap::new(),
+      minigop_input_frameno_start: BTreeMap::new(),
+      frame_type_lookahead_distance: lookahead_distance,
       keyframe_detector: SceneChangeDetector::new(
         enc.clone(),
         CpuFeatureLevel::default(),
@@ -314,6 +158,20 @@ impl<T: Pixel> ContextInner<T> {
       next_lookahead_output_frameno: 0,
       opaque_q: BTreeMap::new(),
       t35_q: BTreeMap::new(),
+    }
+  }
+
+  pub(crate) fn allowed_ref_frames(&self) -> &[RefType] {
+    use crate::partition::RefType::*;
+
+    let reorder = self.config.reorder();
+    let multiref = self.config.multiref();
+    if reorder {
+      &ALL_INTER_REFS
+    } else if multiref {
+      &[LAST_FRAME, LAST2_FRAME, LAST3_FRAME, GOLDEN_FRAME]
+    } else {
+      &[LAST_FRAME]
     }
   }
 
@@ -394,7 +252,7 @@ impl<T: Pixel> ContextInner<T> {
   fn needs_more_frame_q_lookahead(&self, input_frameno: u64) -> bool {
     let lookahead_end = self.frame_q.keys().last().cloned().unwrap_or(0);
     let frames_needed =
-      input_frameno + self.inter_cfg.keyframe_lookahead_distance() + 1;
+      input_frameno + self.frame_type_lookahead_distance as u64 + 1;
     lookahead_end < frames_needed && self.needs_more_frames(lookahead_end)
   }
 
@@ -422,6 +280,30 @@ impl<T: Pixel> ContextInner<T> {
       .filter_map(|(fno, data)| data.as_ref().map(|data| (fno, data)))
       .filter(|(_, data)| !data.fi.is_show_existing_frame())
       .take(self.config.speed_settings.rdo_lookahead_frames + 1)
+  }
+
+  fn next_minigop_input_frameno(
+    &self, minigop_input_frameno_start: u64, ignore_limit: bool,
+  ) -> u64 {
+    let next_detected = self
+      .frame_depths
+      .iter()
+      .find(|&(&input_frameno, frame_depth)| {
+        (frame_depth == &FrameDepth::Intra
+          || frame_depth
+            == &FrameDepth::Inter { depth: 0, is_minigop_start: true })
+          && input_frameno > minigop_input_frameno_start
+      })
+      .map(|(input_frameno, _)| *input_frameno);
+    let mut next_limit =
+      minigop_input_frameno_start + self.config.max_key_frame_interval;
+    if !ignore_limit && self.limit.is_some() {
+      next_limit = next_limit.min(self.limit.unwrap());
+    }
+    if next_detected.is_none() {
+      return next_limit;
+    }
+    cmp::min(next_detected.unwrap(), next_limit)
   }
 
   fn next_keyframe_input_frameno(
@@ -481,6 +363,53 @@ impl<T: Pixel> ContextInner<T> {
     data_location
   }
 
+  fn get_input_frameno(
+    &mut self, output_frameno: u64, minigop_input_frameno_start: u64,
+  ) -> u64 {
+    let next_minigop_start = self
+      .frame_depths
+      .range((minigop_input_frameno_start + 1)..)
+      .find(|&(_, depth)| depth.is_minigop_start())
+      .map(|(frameno, _)| *frameno);
+    let minigop_end = next_minigop_start
+      .unwrap_or_else(|| *self.frame_depths.keys().last().unwrap());
+    let minigop_depth = self
+      .frame_depths
+      .range(minigop_input_frameno_start..=minigop_end)
+      .map(|(_, depth)| depth.depth())
+      .max()
+      .unwrap();
+    let last_fi = &self.frame_data.last_key_value().unwrap().1.unwrap().fi;
+    let next_input_frameno = self
+      .frame_depths
+      .range(minigop_input_frameno_start..=minigop_end)
+      .find(|(frameno, depth)| {
+        depth.depth() == last_fi.pyramid_level
+          && **frameno > last_fi.input_frameno
+      })
+      .or_else(|| {
+        self
+          .frame_depths
+          .range(minigop_input_frameno_start..=minigop_end)
+          .find(|(_, depth)| depth.depth() == last_fi.pyramid_level + 1)
+      })
+      .map(|(frameno, _)| *frameno);
+    if let Some(frameno) = next_input_frameno {
+      frameno
+    } else {
+      // This frame starts a new minigop
+      let input_frameno = last_fi.input_frameno + 1;
+      self.minigop_output_frameno_start.insert(output_frameno, output_frameno);
+      self.minigop_input_frameno_start.insert(output_frameno, input_frameno);
+      self.minigop_config = MiniGopConfig {
+        group_input_len: (minigop_end - minigop_input_frameno_start + 1)
+          as usize,
+        pyramid_depth: minigop_depth,
+      };
+      input_frameno
+    }
+  }
+
   fn build_frame_properties(
     &mut self, output_frameno: u64,
   ) -> Result<Option<FrameInvariants<T>>, EncoderStatus> {
@@ -501,11 +430,26 @@ impl<T: Pixel> ContextInner<T> {
       .gop_input_frameno_start
       .insert(output_frameno, prev_gop_input_frameno_start);
 
-    let output_frameno_in_gop =
-      output_frameno - self.gop_output_frameno_start[&output_frameno];
-    let mut input_frameno = self.inter_cfg.get_input_frameno(
-      output_frameno_in_gop,
-      self.gop_input_frameno_start[&output_frameno],
+    let (prev_minigop_output_frameno_start, prev_minigop_input_frameno_start) =
+      if output_frameno == 0 {
+        (0, 0)
+      } else {
+        (
+          self.minigop_output_frameno_start[&(output_frameno - 1)],
+          self.minigop_input_frameno_start[&(output_frameno - 1)],
+        )
+      };
+
+    self
+      .minigop_output_frameno_start
+      .insert(output_frameno, prev_minigop_output_frameno_start);
+    self
+      .minigop_input_frameno_start
+      .insert(output_frameno, prev_minigop_input_frameno_start);
+
+    let mut input_frameno = self.get_input_frameno(
+      output_frameno,
+      self.minigop_input_frameno_start[&output_frameno],
     );
 
     if self.needs_more_frame_q_lookahead(input_frameno) {
@@ -517,49 +461,6 @@ impl<T: Pixel> ContextInner<T> {
     } else {
       Box::new([])
     };
-
-    if output_frameno_in_gop > 0 {
-      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
-        self.gop_input_frameno_start[&output_frameno],
-        false,
-      );
-      let prev_input_frameno =
-        self.get_previous_fi(output_frameno).input_frameno;
-      if input_frameno >= next_keyframe_input_frameno {
-        if !self.inter_cfg.reorder
-          || ((output_frameno_in_gop - 1) % self.inter_cfg.group_output_len
-            == 0
-            && prev_input_frameno == (next_keyframe_input_frameno - 1))
-        {
-          input_frameno = next_keyframe_input_frameno;
-
-          // If we'll return early, do it before modifying the state.
-          match self.frame_q.get(&input_frameno) {
-            Some(Some(_)) => {}
-            _ => {
-              return Err(EncoderStatus::NeedMoreData);
-            }
-          }
-
-          *self.gop_output_frameno_start.get_mut(&output_frameno).unwrap() =
-            output_frameno;
-          *self.gop_input_frameno_start.get_mut(&output_frameno).unwrap() =
-            next_keyframe_input_frameno;
-        } else {
-          let fi = FrameInvariants::new_inter_frame(
-            self.get_previous_coded_fi(output_frameno),
-            &self.inter_cfg,
-            self.gop_input_frameno_start[&output_frameno],
-            output_frameno_in_gop,
-            next_keyframe_input_frameno,
-            self.config.error_resilient,
-            t35_metadata,
-          );
-          assert!(fi.is_none());
-          return Ok(fi);
-        }
-      }
-    }
 
     match self.frame_q.get(&input_frameno) {
       Some(Some(_)) => {}
@@ -593,18 +494,44 @@ impl<T: Pixel> ContextInner<T> {
       );
       Ok(Some(fi))
     } else {
-      let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
+      let minigop_input_frameno_start =
+        self.minigop_input_frameno_start[&output_frameno];
+      let next_minigop_input_frameno = self.next_minigop_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
         false,
       );
+      // Show frame if all previous input frames have already been shown
+      let show_frame = self
+        .frame_data
+        .range(minigop_input_frameno_start..)
+        .filter(|(_, data)| data.unwrap().fi.show_frame)
+        .map(|(_, data)| data.unwrap().fi.input_frameno)
+        .sorted()
+        .unique()
+        .filter(|frameno| *frameno < input_frameno)
+        .count() as u64
+        == input_frameno - minigop_input_frameno_start;
+      let show_existing_frame = self
+        .frame_data
+        .range(minigop_input_frameno_start..)
+        .any(|(_, data)| data.unwrap().fi.input_frameno == input_frameno);
+      if show_existing_frame {
+        assert!(show_frame);
+      }
       let fi = FrameInvariants::new_inter_frame(
         self.get_previous_coded_fi(output_frameno),
-        &self.inter_cfg,
+        input_frameno,
         self.gop_input_frameno_start[&output_frameno],
         output_frameno_in_gop,
-        next_keyframe_input_frameno,
-        self.config.error_resilient,
+        minigop_input_frameno_start,
+        output_frameno - self.minigop_output_frameno_start[&output_frameno],
+        next_minigop_input_frameno,
+        show_frame,
+        show_existing_frame,
+        &self.frame_depths,
+        &self.config,
         t35_metadata,
+        &self.minigop_config,
       );
       assert!(fi.is_some());
       Ok(fi)
@@ -742,7 +669,7 @@ impl<T: Pixel> ContextInner<T> {
     // P-frames in this instance.
     //
     // Compute the motion vectors.
-    compute_motion_vectors(fi, fs, &self.inter_cfg);
+    compute_motion_vectors(fi, fs, self.allowed_ref_frames());
 
     let coded_data = fi.coded_frame_data.as_mut().unwrap();
 
@@ -871,12 +798,15 @@ impl<T: Pixel> ContextInner<T> {
         self.frame_depths.insert(self.next_lookahead_frame, FrameDepth::Intra);
       } else if self.frame_depths[&(self.next_lookahead_frame - 1)]
         == FrameDepth::Intra
+        || self.config.low_latency
       {
-        // The last frame is a keyframe, so this one must start a new mini-GOP
+        // The last frame is a keyframe, so this one must start a new mini-GOP.
+        // Or, in the case of low latency, every frame is a separate mini-GOP.
         self.keyframe_detector.inter_costs.remove(&self.next_lookahead_frame);
-        self
-          .frame_depths
-          .insert(self.next_lookahead_frame, FrameDepth::Inter { depth: 0 });
+        self.frame_depths.insert(
+          self.next_lookahead_frame,
+          FrameDepth::Inter { depth: 0, is_minigop_start: true },
+        );
       } else {
         self.compute_current_minigop_cost();
       };
@@ -890,14 +820,15 @@ impl<T: Pixel> ContextInner<T> {
       .frame_depths
       .iter()
       .rev()
-      .find(|(_, d)| **d == FrameDepth::Inter { depth: 0 })
+      .find(|(_, d)| {
+        **d == FrameDepth::Inter { depth: 0, is_minigop_start: true }
+      })
       .unwrap()
       .0;
 
     let current_width =
       (self.next_lookahead_frame - minigop_start_frame) as u8;
-    let max_pyramid_width =
-      self.config.speed_settings.rdo_lookahead_frames.min(32) as u8;
+    let max_pyramid_width = self.frame_type_lookahead_distance as u8;
 
     let mut need_new_minigop = false;
     if current_width == max_pyramid_width {
@@ -925,9 +856,7 @@ impl<T: Pixel> ContextInner<T> {
         // Depth 4
         9..=16 => 12000.0,
         // Depth 5
-        17..=32 => 10000.0,
-        // SAFETY: 32 is the max mini-GOP width
-        _ => unsafe { debug_unreachable!() },
+        17.. => 10000.0,
       };
       if current_minigop_cost > allowance {
         need_new_minigop = true;
@@ -939,9 +868,10 @@ impl<T: Pixel> ContextInner<T> {
         minigop_start_frame,
         self.next_lookahead_frame - 1,
       );
-      self
-        .frame_depths
-        .insert(self.next_lookahead_frame, FrameDepth::Inter { depth: 0 });
+      self.frame_depths.insert(
+        self.next_lookahead_frame,
+        FrameDepth::Inter { depth: 0, is_minigop_start: true },
+      );
       for frameno in minigop_start_frame..=self.next_lookahead_frame {
         self.keyframe_detector.inter_costs.remove(&frameno);
       }
@@ -960,17 +890,23 @@ impl<T: Pixel> ContextInner<T> {
     while !frames.is_empty() {
       if current_depth == 0 {
         // Special case for depth 0, we generally want the last frame at this depth
-        self
-          .frame_depths
-          .insert(frames.pop_last().unwrap(), FrameDepth::Inter { depth: 0 });
-        current_depth = 1;
+        let frameno = frames.pop_last().unwrap();
+        self.frame_depths.insert(
+          frameno,
+          FrameDepth::Inter { depth: 0, is_minigop_start: frames.is_empty() },
+        );
+        current_depth += 1;
       } else {
         let max_frames_in_level = 1 << (current_depth - 1);
         if frames.len() <= max_frames_in_level {
           for frameno in frames.into_iter() {
-            self
-              .frame_depths
-              .insert(frameno, FrameDepth::Inter { depth: current_depth });
+            self.frame_depths.insert(
+              frameno,
+              FrameDepth::Inter {
+                depth: current_depth,
+                is_minigop_start: false,
+              },
+            );
           }
           break;
         } else {
@@ -986,9 +922,13 @@ impl<T: Pixel> ContextInner<T> {
           for (start, end) in breakpoints.into_iter().tuple_windows() {
             let midpoint = (end - start + 1) / 2;
             frames.remove(&midpoint);
-            self
-              .frame_depths
-              .insert(midpoint, FrameDepth::Inter { depth: current_depth });
+            self.frame_depths.insert(
+              midpoint,
+              FrameDepth::Inter {
+                depth: current_depth,
+                is_minigop_start: false,
+              },
+            );
           }
           current_depth += 1;
         }
@@ -1402,11 +1342,8 @@ impl<T: Pixel> ContextInner<T> {
   ) -> Result<Packet<T>, EncoderStatus> {
     let frame_data =
       self.frame_data.get_mut(&cur_output_frameno).unwrap().as_mut().unwrap();
-    let sef_data = encode_show_existing_frame(
-      &frame_data.fi,
-      &mut frame_data.fs,
-      &self.inter_cfg,
-    );
+    let sef_data =
+      encode_show_existing_frame(&frame_data.fi, &mut frame_data.fs);
     let bits = (sef_data.len() * 8) as i64;
     self.packet_data.extend(sef_data);
     self.rc_state.update_state(
@@ -1491,7 +1428,7 @@ impl<T: Pixel> ContextInner<T> {
 
     if self.rc_state.needs_trial_encode(fti) {
       let mut trial_fs = frame_data.fs.clone();
-      let data = encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
+      let data = encode_frame(&frame_data.fi, &mut trial_fs);
       self.rc_state.update_state(
         (data.len() * 8) as i64,
         fti,
@@ -1510,8 +1447,7 @@ impl<T: Pixel> ContextInner<T> {
       frame_data.fi.set_quantizers(&qps);
     }
 
-    let data =
-      encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+    let data = encode_frame(&frame_data.fi, &mut frame_data.fs);
     #[cfg(feature = "dump_lookahead_data")]
     {
       let input_frameno = frame_data.fi.input_frameno;
@@ -1681,162 +1617,26 @@ impl<T: Pixel> ContextInner<T> {
       self.gop_input_frameno_start.remove(&i);
     }
   }
-
-  /// Counts the number of output frames of each subtype in the next
-  ///  `reservoir_frame_delay` temporal units (needed for rate control).
-  /// Returns the number of output frames (excluding SEF frames) and output TUs
-  ///  until the last keyframe in the next `reservoir_frame_delay` temporal units,
-  ///  or the end of the interval, whichever comes first.
-  /// The former is needed because it indicates the number of rate estimates we
-  ///  will make.
-  /// The latter is needed because it indicates the number of times new bitrate
-  ///  is added to the buffer.
-  pub(crate) fn guess_frame_subtypes(
-    &self, nframes: &mut [i32; FRAME_NSUBTYPES + 1],
-    reservoir_frame_delay: i32,
-  ) -> (i32, i32) {
-    for fti in 0..=FRAME_NSUBTYPES {
-      nframes[fti] = 0;
-    }
-
-    // Two-pass calls this function before receive_packet(), and in particular
-    // before the very first send_frame(), when the following maps are empty.
-    // In this case, return 0 as the default value.
-    let mut prev_keyframe_input_frameno = *self
-      .gop_input_frameno_start
-      .get(&self.output_frameno)
-      .unwrap_or_else(|| {
-        assert!(self.output_frameno == 0);
-        &0
-      });
-    let mut prev_keyframe_output_frameno = *self
-      .gop_output_frameno_start
-      .get(&self.output_frameno)
-      .unwrap_or_else(|| {
-        assert!(self.output_frameno == 0);
-        &0
-      });
-
-    let mut prev_keyframe_ntus = 0;
-    // Does not include SEF frames.
-    let mut prev_keyframe_nframes = 0;
-    let mut acc: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
-    // Updates the frame counts with the accumulated values when we hit a
-    //  keyframe.
-    fn collect_counts(
-      nframes: &mut [i32; FRAME_NSUBTYPES + 1],
-      acc: &mut [i32; FRAME_NSUBTYPES + 1],
-    ) {
-      for fti in 0..=FRAME_NSUBTYPES {
-        nframes[fti] += acc[fti];
-        acc[fti] = 0;
-      }
-      acc[FRAME_SUBTYPE_I] += 1;
-    }
-    let mut output_frameno = self.output_frameno;
-    let mut ntus = 0;
-    // Does not include SEF frames.
-    let mut nframes_total = 0;
-    while ntus < reservoir_frame_delay {
-      let output_frameno_in_gop =
-        output_frameno - prev_keyframe_output_frameno;
-      let is_kf =
-        if let Some(Some(frame_data)) = self.frame_data.get(&output_frameno) {
-          if frame_data.fi.frame_type == FrameType::KEY {
-            prev_keyframe_input_frameno = frame_data.fi.input_frameno;
-            // We do not currently use forward keyframes, so they should always
-            //  end the current TU (thus we always increment ntus below).
-            debug_assert!(frame_data.fi.show_frame);
-            true
-          } else {
-            false
-          }
-        } else {
-          // It is possible to be invoked for the first time from twopass_out()
-          //  before receive_packet() is called, in which case frame_invariants
-          //  will not be populated.
-          // Force the first frame in each GOP to be a keyframe in that case.
-          output_frameno_in_gop == 0
-        };
-      if is_kf {
-        collect_counts(nframes, &mut acc);
-        prev_keyframe_output_frameno = output_frameno;
-        prev_keyframe_ntus = ntus;
-        prev_keyframe_nframes = nframes_total;
-        output_frameno += 1;
-        ntus += 1;
-        nframes_total += 1;
-        continue;
-      }
-      let idx_in_group_output =
-        self.inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
-      let input_frameno = prev_keyframe_input_frameno
-        + self
-          .inter_cfg
-          .get_order_hint(output_frameno_in_gop, idx_in_group_output)
-          as u64;
-      // For rate control purposes, ignore any limit on frame count that has
-      //  been set.
-      // We pretend that we will keep encoding frames forever to prevent the
-      //  control loop from driving us into the rails as we come up against a
-      //  hard stop (with no more chance to correct outstanding errors).
-      let next_keyframe_input_frameno =
-        self.next_keyframe_input_frameno(prev_keyframe_input_frameno, true);
-      // If we are re-ordering, we may skip some output frames in the final
-      //  re-order group of the GOP.
-      if input_frameno >= next_keyframe_input_frameno {
-        // If we have encoded enough whole groups to reach the next keyframe,
-        //  then start the next keyframe gop.
-        if 1
-          + (output_frameno - prev_keyframe_output_frameno)
-            / self.inter_cfg.group_output_len
-            * self.inter_cfg.group_input_len
-          >= next_keyframe_input_frameno - prev_keyframe_input_frameno
-        {
-          collect_counts(nframes, &mut acc);
-          prev_keyframe_input_frameno = input_frameno;
-          prev_keyframe_output_frameno = output_frameno;
-          prev_keyframe_ntus = ntus;
-          prev_keyframe_nframes = nframes_total;
-          // We do not currently use forward keyframes, so they should always
-          //  end the current TU.
-          output_frameno += 1;
-          ntus += 1;
-        }
-        output_frameno += 1;
-        continue;
-      }
-      if self.inter_cfg.get_show_existing_frame(idx_in_group_output) {
-        acc[FRAME_SUBTYPE_SEF] += 1;
-      } else {
-        // TODO: Implement golden P-frames.
-        let fti = FRAME_SUBTYPE_P
-          + (self.inter_cfg.get_level(idx_in_group_output) as usize);
-        acc[fti] += 1;
-        nframes_total += 1;
-      }
-      if self.inter_cfg.get_show_frame(idx_in_group_output) {
-        ntus += 1;
-      }
-      output_frameno += 1;
-    }
-    if prev_keyframe_output_frameno <= self.output_frameno {
-      // If there were no keyframes at all, or only the first frame was a
-      //  keyframe, the accumulators never flushed and still contain counts for
-      //  the entire buffer.
-      // In both cases, we return these counts.
-      collect_counts(nframes, &mut acc);
-      (nframes_total, ntus)
-    } else {
-      // Otherwise, we discard what remains in the accumulators as they contain
-      //  the counts from and past the last keyframe.
-      (prev_keyframe_nframes, prev_keyframe_ntus)
-    }
-  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FrameDepth {
   Intra,
-  Inter { depth: u8 },
+  Inter { depth: u8, is_minigop_start: bool },
+}
+
+impl FrameDepth {
+  pub fn depth(self) -> u8 {
+    match self {
+      FrameDepth::Intra => 0,
+      FrameDepth::Inter { depth, .. } => depth,
+    }
+  }
+
+  pub fn is_minigop_start(self) -> bool {
+    match self {
+      FrameDepth::Intra => true,
+      FrameDepth::Inter { is_minigop_start, .. } => is_minigop_start,
+    }
+  }
 }
