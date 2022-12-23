@@ -586,7 +586,7 @@ pub static default_interintra_cdf: [[u16; 2]; BLOCK_SIZE_GROUPS] =
 #[allow(unused)]
 pub static default_interintra_mode_cdf: [[u16;
   InterIntraMode::INTERINTRA_MODES as usize];
-  BLOCK_SIZE_GROUPS as usize] = [
+  BLOCK_SIZE_GROUPS] = [
   cdf!(8192, 16384, 24576),
   cdf!(1875, 11082, 27332),
   cdf!(2473, 9996, 26388),
@@ -623,7 +623,7 @@ pub static default_wedge_interintra_cdf: [[u16; 2];
 #[allow(unused)]
 pub static default_compound_type_cdf: [[u16;
   CompoundType::COMPOUND_TYPES as usize - 1];
-  BlockSize::BLOCK_SIZES_ALL as usize] = [
+  BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(16384),
   cdf!(16384),
   cdf!(16384),
@@ -743,7 +743,7 @@ pub static default_wedge_idx_cdf: [[u16; 16]; BlockSize::BLOCK_SIZES_ALL] = [
 #[allow(unused)]
 pub static default_motion_mode_cdf: [[u16;
   MotionMode::MOTION_MODES as usize];
-  BlockSize::BLOCK_SIZES_ALL as usize] = [
+  BlockSize::BLOCK_SIZES_ALL] = [
   cdf!(10923, 21845),
   cdf!(10923, 21845),
   cdf!(10923, 21845),

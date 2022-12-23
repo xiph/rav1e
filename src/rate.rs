@@ -557,7 +557,7 @@ impl QuantizerParameters {
     // delta_q only gets 6 bits + a sign bit, so it can differ by 63 at most.
     let min_qi = base_q_idx.saturating_sub(63).max(1);
     let max_qi = base_q_idx.saturating_add(63).min(255);
-    let clamp_qi = |qi: u8| qi.max(min_qi).min(max_qi);
+    let clamp_qi = |qi: u8| qi.clamp(min_qi, max_qi);
 
     QuantizerParameters {
       log_base_q,
@@ -887,7 +887,7 @@ impl RCState {
         }
       }
       // If we've been missing our target, add a penalty term.
-      let rate_bias = (self.rate_bias / (self.nencoded_frames as i64 + 100))
+      let rate_bias = (self.rate_bias / (self.nencoded_frames + 100))
         * (reservoir_frames as i64);
       // rate_total is the total bits available over the next
       //  reservoir_tus TUs.
@@ -1052,10 +1052,10 @@ impl RCState {
 
     // We use the AC quantizer as the source quantizer since its quantizer
     //  tables have unique entries, while the DC tables do not.
-    let ac_quantizer = ac_q(base_qi as u8, 0, bit_depth) as i64;
+    let ac_quantizer = ac_q(base_qi, 0, bit_depth) as i64;
     // Pick the nearest DC entry since an exact match may be unavailable.
     let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-    let dc_quantizer = dc_q(dc_qi as u8, 0, bit_depth) as i64;
+    let dc_quantizer = dc_q(dc_qi, 0, bit_depth) as i64;
     // Get the log quantizers as Q57.
     let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
     let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
@@ -1457,8 +1457,7 @@ impl RCState {
     }
 
     (self.reservoir_frame_delay - self.scale_window_ntus)
-      .max(0)
-      .min(cur_nframes_left - cur_scale_window_nframes)
+      .clamp(0, cur_nframes_left - cur_scale_window_nframes)
   }
 
   pub(crate) fn parse_frame_data_packet(
@@ -1582,8 +1581,7 @@ impl RCState {
               }
               frames_needed = (self.reservoir_frame_delay
                 - self.scale_window_ntus)
-                .max(0)
-                .min(cur_nframes_left - cur_scale_window_nframes);
+                .clamp(0, cur_nframes_left - cur_scale_window_nframes);
               // Clear the buffer for the next frame.
               self.des.pass2_buffer_fill = 0;
             } else {

@@ -147,8 +147,7 @@ pub(crate) mod rust {
   fn constrain(diff: i32, threshold: i32, damping: i32) -> i32 {
     if threshold != 0 {
       let shift = cmp::max(0, damping - msb(threshold));
-      let magnitude =
-        cmp::min(diff.abs(), cmp::max(0, threshold - (diff.abs() >> shift)));
+      let magnitude = (threshold - (diff.abs() >> shift)).clamp(0, diff.abs());
 
       if diff < 0 {
         -magnitude
@@ -234,7 +233,7 @@ pub(crate) mod rust {
     } else {
       let xsize = (8 >> xdec) as isize;
       let ysize = (8 >> ydec) as isize;
-      let coeff_shift = bit_depth as usize - 8;
+      let coeff_shift = bit_depth - 8;
       let cdef_pri_taps = [[4, 2], [3, 3]];
       let cdef_sec_taps = [[2, 1], [2, 1]];
       let pri_taps =
@@ -341,7 +340,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset,
 ) -> CdefDirections {
-  let coeff_shift = fi.sequence.bit_depth as usize - 8;
+  let coeff_shift = fi.sequence.bit_depth - 8;
   let mut dir: CdefDirections =
     CdefDirections { dir: [[0; 8]; 8], var: [[0; 8]; 8] };
   // Each direction block is 8x8 in y, and direction computation only looks at y

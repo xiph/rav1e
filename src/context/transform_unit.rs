@@ -580,8 +580,8 @@ impl<'a> ContextWriter<'a> {
     let max_tx_high = max_tx_size.height() as u8;
     let has_above = bo.0.y > 0;
     let has_left = bo.0.x > 0;
-    let mut above = self.bc.above_tx_context[bo.0.x] >= max_tx_wide as u8;
-    let mut left = self.bc.left_tx_context[bo.y_in_sb()] >= max_tx_high as u8;
+    let mut above = self.bc.above_tx_context[bo.0.x] >= max_tx_wide;
+    let mut left = self.bc.left_tx_context[bo.y_in_sb()] >= max_tx_high;
 
     if has_above {
       let above_blk = self.bc.blocks.above_of(bo);
@@ -716,7 +716,7 @@ impl<'a> ContextWriter<'a> {
 
     let max_tx_size: TxSize = bsize.tx_size().sqr_up();
     let category: usize = (tx_size.sqr_up() != max_tx_size) as usize
-      + (TxSize::TX_SIZES as usize - 1 - max_tx_size as usize) * 2;
+      + (TxSize::TX_SIZES - 1 - max_tx_size as usize) * 2;
 
     debug_assert!(category < TXFM_PARTITION_CONTEXTS);
 
@@ -807,7 +807,7 @@ impl<'a> ContextWriter<'a> {
       eob_to_pos_small[eob] as u32
     } else {
       let e = cmp::min((eob - 1) >> 5, 16);
-      eob_to_pos_large[e as usize] as u32
+      eob_to_pos_large[e] as u32
     };
     assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);
     *extra = eob as u32 - k_eob_group_start[t as usize] as u32;

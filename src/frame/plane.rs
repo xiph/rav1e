@@ -25,8 +25,8 @@ impl<T: Pixel> AsRegion<T> for Plane<T> {
     let rect = area.to_rect(
       self.cfg.xdec,
       self.cfg.ydec,
-      self.cfg.stride - self.cfg.xorigin as usize,
-      self.cfg.alloc_height - self.cfg.yorigin as usize,
+      self.cfg.stride - self.cfg.xorigin,
+      self.cfg.alloc_height - self.cfg.yorigin,
     );
     PlaneRegion::new(self, rect)
   }
@@ -36,8 +36,8 @@ impl<T: Pixel> AsRegion<T> for Plane<T> {
     let rect = area.to_rect(
       self.cfg.xdec,
       self.cfg.ydec,
-      self.cfg.stride - self.cfg.xorigin as usize,
-      self.cfg.alloc_height - self.cfg.yorigin as usize,
+      self.cfg.stride - self.cfg.xorigin,
+      self.cfg.alloc_height - self.cfg.yorigin,
     );
     PlaneRegionMut::new(self, rect)
   }

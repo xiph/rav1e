@@ -287,7 +287,7 @@ impl TileBlocksMut<'_> {
     let bh = cmp::min(bo.y + MIB_SIZE, self.rows);
     for y in bo.y..bh {
       for x in bo.x..bw {
-        self[y as usize][x as usize].cdef_index = cdef_index;
+        self[y][x].cdef_index = cdef_index;
       }
     }
   }

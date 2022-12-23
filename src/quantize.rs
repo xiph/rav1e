@@ -245,8 +245,7 @@ impl QuantizationContext {
     let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
 
     qcoeffs[0] = {
-      let coeff: i32 =
-        i32::cast_from(coeffs[0]) << (self.log_tx_scale as usize);
+      let coeff: i32 = i32::cast_from(coeffs[0]) << self.log_tx_scale;
       let abs_coeff = coeff.unsigned_abs();
       T::cast_from(copysign(
         divu_pair(abs_coeff + self.dc_offset, self.dc_mul_add),

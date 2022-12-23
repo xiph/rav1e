@@ -370,9 +370,9 @@ impl<'a> BlockContext<'a> {
       (tx_size.width() as u8, tx_size.height() as u8)
     };
 
-    let above_ctx = &mut self.above_tx_context[bo.0.x..bo.0.x + n4_w as usize];
+    let above_ctx = &mut self.above_tx_context[bo.0.x..bo.0.x + n4_w];
     let left_ctx =
-      &mut self.left_tx_context[bo.y_in_sb()..bo.y_in_sb() + n4_h as usize];
+      &mut self.left_tx_context[bo.y_in_sb()..bo.y_in_sb() + n4_h];
 
     for v in above_ctx[0..n4_w].iter_mut() {
       *v = tx_w;
@@ -1009,7 +1009,7 @@ impl<'a> ContextWriter<'a> {
         let inc = cmp::min(-max_row_offs + row_offset + 1, cand.n4_h as isize);
         assert!(inc >= 0);
         weight = cmp::max(weight, inc as u32);
-        *processed_rows = (inc as isize) - row_offset - 1;
+        *processed_rows = inc - row_offset - 1;
       }
 
       if Self::add_ref_mv_candidate(
@@ -1075,7 +1075,7 @@ impl<'a> ContextWriter<'a> {
         let inc = cmp::min(-max_col_offs + col_offset + 1, cand.n4_w as isize);
         assert!(inc >= 0);
         weight = cmp::max(weight, inc as u32);
-        *processed_cols = (inc as isize) - col_offset - 1;
+        *processed_cols = inc - col_offset - 1;
       }
 
       if Self::add_ref_mv_candidate(
@@ -1403,13 +1403,13 @@ impl<'a> ContextWriter<'a> {
         * (8 * MI_SIZE) as isize
         + border_h;
       mv.this_mv.row =
-        (mv.this_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
+        (mv.this_mv.row as isize).clamp(mvy_min, mvy_max) as i16;
       mv.this_mv.col =
-        (mv.this_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
+        (mv.this_mv.col as isize).clamp(mvx_min, mvx_max) as i16;
       mv.comp_mv.row =
-        (mv.comp_mv.row as isize).max(mvy_min).min(mvy_max) as i16;
+        (mv.comp_mv.row as isize).clamp(mvy_min, mvy_max) as i16;
       mv.comp_mv.col =
-        (mv.comp_mv.col as isize).max(mvx_min).min(mvx_max) as i16;
+        (mv.comp_mv.col as isize).clamp(mvx_min, mvx_max) as i16;
     }
 
     mode_context
@@ -1906,7 +1906,7 @@ impl<'a> ContextWriter<'a> {
         &mut self.fc.eob_extra_cdf[txs_ctx][plane_type][(eob_pt - 3) as usize];
       symbol_with_update!(self, w, bit, cdf, 2);
       for i in 1..eob_offset_bits {
-        eob_shift = eob_offset_bits as u16 - 1 - i as u16;
+        eob_shift = eob_offset_bits - 1 - i;
         bit = u32::from((eob_extra & (1 << eob_shift)) != 0);
         w.bit(bit as u16);
       }
@@ -1942,7 +1942,7 @@ impl<'a> ContextWriter<'a> {
         symbol_with_update!(
           self,
           w,
-          (cmp::min(u32::cast_from(level), 3) - 1) as u32,
+          cmp::min(u32::cast_from(level), 3) - 1,
           &mut self.fc.coeff_base_eob_cdf[txs_ctx][plane_type]
             [coeff_ctx as usize],
           3
@@ -1951,7 +1951,7 @@ impl<'a> ContextWriter<'a> {
         symbol_with_update!(
           self,
           w,
-          (cmp::min(u32::cast_from(level), 3)) as u32,
+          cmp::min(u32::cast_from(level), 3),
           &mut self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize],
           4
         );
