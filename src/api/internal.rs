@@ -28,6 +28,8 @@ use crate::stats::EncoderStats;
 use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
+use debug_unreachable::debug_unreachable;
+use itertools::Itertools;
 use rust_hawktracer::*;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
@@ -234,11 +236,10 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(super) frame_q: FrameQueue<T>,
   /// Maps *output_frameno* to frame data
   pub(super) frame_data: FrameDataQueue<T>,
-  /// A list of the input_frameno for keyframes in this encode.
-  /// Needed so that we don't need to keep all of the frame_invariants in
-  ///  memory for the whole life of the encode.
-  // TODO: Is this needed at all?
-  keyframes: BTreeSet<u64>,
+  /// A list of the precomputed frame types and pyramid depth for frames within the lookahead.
+  /// This allows us to have dynamic pyramid depths and widths by computing them before
+  /// creating the frame invariants.
+  frame_depths: BTreeMap<u64, FrameDepth>,
   // TODO: Is this needed at all?
   keyframes_forced: BTreeSet<u64>,
   /// A storage space for reordered frames.
@@ -266,8 +267,8 @@ impl<T: Pixel> ContextInner<T> {
   pub fn new(enc: &EncoderConfig) -> Self {
     // initialize with temporal delimiter
     let packet_data = TEMPORAL_DELIMITER.to_vec();
-    let mut keyframes = BTreeSet::new();
-    keyframes.insert(0);
+    let mut frame_depths = BTreeMap::new();
+    frame_depths.insert(0, FrameDepth::Intra);
 
     let maybe_ac_qi_max =
       if enc.quantizer < 255 { Some(enc.quantizer as u8) } else { None };
@@ -284,7 +285,7 @@ impl<T: Pixel> ContextInner<T> {
       frames_processed: 0,
       frame_q: BTreeMap::new(),
       frame_data: BTreeMap::new(),
-      keyframes,
+      frame_depths,
       keyframes_forced: BTreeSet::new(),
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
@@ -362,8 +363,8 @@ impl<T: Pixel> ContextInner<T> {
       let lookahead_frames = self
         .frame_q
         .range(self.next_lookahead_frame - 1..)
-        .filter_map(|(&_input_frameno, frame)| frame.as_ref())
-        .collect::<Vec<&Arc<Frame<T>>>>();
+        .filter_map(|(&_input_frameno, frame)| frame.as_ref().map(Arc::clone))
+        .collect::<Vec<Arc<Frame<T>>>>();
 
       if is_flushing {
         // This is the last time send_frame is called, process all the
@@ -376,22 +377,10 @@ impl<T: Pixel> ContextInner<T> {
             break;
           }
 
-          Self::compute_keyframe_placement(
-            cur_lookahead_frames,
-            &self.keyframes_forced,
-            &mut self.keyframe_detector,
-            &mut self.next_lookahead_frame,
-            &mut self.keyframes,
-          );
+          self.compute_frame_placement(cur_lookahead_frames);
         }
       } else {
-        Self::compute_keyframe_placement(
-          &lookahead_frames,
-          &self.keyframes_forced,
-          &mut self.keyframe_detector,
-          &mut self.next_lookahead_frame,
-          &mut self.keyframes,
-        );
+        self.compute_frame_placement(&lookahead_frames);
       }
     }
 
@@ -439,10 +428,13 @@ impl<T: Pixel> ContextInner<T> {
     &self, gop_input_frameno_start: u64, ignore_limit: bool,
   ) -> u64 {
     let next_detected = self
-      .keyframes
+      .frame_depths
       .iter()
-      .find(|&&input_frameno| input_frameno > gop_input_frameno_start)
-      .cloned();
+      .find(|&(&input_frameno, frame_depth)| {
+        frame_depth == &FrameDepth::Intra
+          && input_frameno > gop_input_frameno_start
+      })
+      .map(|(input_frameno, _)| *input_frameno);
     let mut next_limit =
       gop_input_frameno_start + self.config.max_key_frame_interval;
     if !ignore_limit && self.limit.is_some() {
@@ -577,7 +569,8 @@ impl<T: Pixel> ContextInner<T> {
     }
 
     // Now that we know the input_frameno, look up the correct frame type
-    let frame_type = if self.keyframes.contains(&input_frameno) {
+    let frame_type = if self.frame_depths[&input_frameno] == FrameDepth::Intra
+    {
       FrameType::KEY
     } else {
       FrameType::INTER
@@ -862,22 +855,145 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   #[hawktracer(compute_keyframe_placement)]
-  pub fn compute_keyframe_placement(
-    lookahead_frames: &[&Arc<Frame<T>>], keyframes_forced: &BTreeSet<u64>,
-    keyframe_detector: &mut SceneChangeDetector<T>,
-    next_lookahead_frame: &mut u64, keyframes: &mut BTreeSet<u64>,
+  pub fn compute_frame_placement(
+    &mut self, lookahead_frames: &[Arc<Frame<T>>],
   ) {
-    if keyframes_forced.contains(next_lookahead_frame)
-      || keyframe_detector.analyze_next_frame(
+    if self.keyframes_forced.contains(&self.next_lookahead_frame) {
+      self.frame_depths.insert(self.next_lookahead_frame, FrameDepth::Intra);
+    } else {
+      let is_keyframe = self.keyframe_detector.analyze_next_frame(
         lookahead_frames,
-        *next_lookahead_frame,
-        *keyframes.iter().last().unwrap(),
-      )
-    {
-      keyframes.insert(*next_lookahead_frame);
+        self.next_lookahead_frame,
+        *self.frame_depths.iter().last().unwrap().0,
+      );
+      if is_keyframe {
+        self.keyframe_detector.inter_costs.remove(&self.next_lookahead_frame);
+        self.frame_depths.insert(self.next_lookahead_frame, FrameDepth::Intra);
+      } else if self.frame_depths[&(self.next_lookahead_frame - 1)]
+        == FrameDepth::Intra
+      {
+        // The last frame is a keyframe, so this one must start a new mini-GOP
+        self.keyframe_detector.inter_costs.remove(&self.next_lookahead_frame);
+        self
+          .frame_depths
+          .insert(self.next_lookahead_frame, FrameDepth::Inter { depth: 0 });
+      } else {
+        self.compute_current_minigop_cost();
+      };
     }
 
-    *next_lookahead_frame += 1;
+    self.next_lookahead_frame += 1;
+  }
+
+  fn compute_current_minigop_cost(&mut self) {
+    let minigop_start_frame = *self
+      .frame_depths
+      .iter()
+      .rev()
+      .find(|(_, d)| **d == FrameDepth::Inter { depth: 0 })
+      .unwrap()
+      .0;
+
+    let current_width =
+      (self.next_lookahead_frame - minigop_start_frame) as u8;
+    let max_pyramid_width =
+      self.config.speed_settings.rdo_lookahead_frames.min(32) as u8;
+
+    let mut need_new_minigop = false;
+    if current_width == max_pyramid_width {
+      // Since we hit the max width, we must start a new mini-GOP.
+      need_new_minigop = true;
+    } else {
+      let current_minigop_cost = self
+        .keyframe_detector
+        .inter_costs
+        .range(minigop_start_frame..=self.next_lookahead_frame)
+        .map(|cost| {
+          // Adjust the inter cost down to 8-bit scaling
+          *cost.1 / (1 << (self.config.bit_depth - 8)) as f64
+        })
+        .sum::<f64>();
+      let allowance = match current_width + 1 {
+        // Depth 0
+        1..=2 => 18000.0,
+        // Depth 1
+        3 => 20000.0,
+        // Depth 2
+        4 => 20000.0,
+        // Depth 3
+        5..=8 => 18000.0,
+        // Depth 4
+        9..=16 => 12000.0,
+        // Depth 5
+        17..=32 => 10000.0,
+        // SAFETY: 32 is the max mini-GOP width
+        _ => unsafe { debug_unreachable!() },
+      };
+      if current_minigop_cost > allowance {
+        need_new_minigop = true;
+      }
+    }
+
+    if need_new_minigop {
+      self.compute_minigop_frame_order(
+        minigop_start_frame,
+        self.next_lookahead_frame - 1,
+      );
+      self
+        .frame_depths
+        .insert(self.next_lookahead_frame, FrameDepth::Inter { depth: 0 });
+      for frameno in minigop_start_frame..=self.next_lookahead_frame {
+        self.keyframe_detector.inter_costs.remove(&frameno);
+      }
+    }
+  }
+
+  // Start and end frame are inclusive
+  fn compute_minigop_frame_order(&mut self, start_frame: u64, end_frame: u64) {
+    // By this point, `start_frame` should already be inserted at depth 0
+    if start_frame == end_frame {
+      return;
+    }
+
+    let mut frames = ((start_frame + 1)..=end_frame).collect::<BTreeSet<_>>();
+    let mut current_depth = 0;
+    while !frames.is_empty() {
+      if current_depth == 0 {
+        // Special case for depth 0, we generally want the last frame at this depth
+        self
+          .frame_depths
+          .insert(frames.pop_last().unwrap(), FrameDepth::Inter { depth: 0 });
+        current_depth = 1;
+      } else {
+        let max_frames_in_level = 1 << (current_depth - 1);
+        if frames.len() <= max_frames_in_level {
+          for frameno in frames.into_iter() {
+            self
+              .frame_depths
+              .insert(frameno, FrameDepth::Inter { depth: current_depth });
+          }
+          break;
+        } else {
+          let mut breakpoints = vec![*frames.first().unwrap()];
+          let mut prev_val = *frames.first().unwrap();
+          for frameno in &frames {
+            if *frameno > prev_val + 1 {
+              breakpoints.push(*frameno);
+            }
+            prev_val = *frameno;
+          }
+          breakpoints.push(*frames.last().unwrap());
+          for (start, end) in breakpoints.into_iter().tuple_windows() {
+            let midpoint = (end - start + 1) / 2;
+            frames.remove(&midpoint);
+            self
+              .frame_depths
+              .insert(midpoint, FrameDepth::Inter { depth: current_depth });
+          }
+          current_depth += 1;
+        }
+      }
+    }
   }
 
   #[hawktracer(compute_frame_invariants)]
@@ -1717,4 +1833,10 @@ impl<T: Pixel> ContextInner<T> {
       (prev_keyframe_nframes, prev_keyframe_ntus)
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FrameDepth {
+  Intra,
+  Inter { depth: u8 },
 }
