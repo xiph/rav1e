@@ -173,7 +173,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   let (ret, emit_pass_data) = match pkt_wrapped {
     Ok(pkt) => {
       output_file.write_frame(
-        pkt.input_frameno as u64,
+        pkt.input_frameno,
         pkt.data.as_ref(),
         pkt.frame_type,
       );

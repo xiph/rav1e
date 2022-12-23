@@ -93,8 +93,8 @@ pub struct ReferenceFrame<T: Pixel> {
 
 #[derive(Debug, Clone, Default)]
 pub struct ReferenceFramesSet<T: Pixel> {
-  pub frames: [Option<Arc<ReferenceFrame<T>>>; REF_FRAMES as usize],
-  pub deblock: [DeblockState; REF_FRAMES as usize],
+  pub frames: [Option<Arc<ReferenceFrame<T>>>; REF_FRAMES],
+  pub deblock: [DeblockState; REF_FRAMES],
 }
 
 impl<T: Pixel> ReferenceFramesSet<T> {
@@ -1223,7 +1223,7 @@ impl<T: Pixel> FrameInvariants<T> {
 
   fn pick_strength_from_q(&mut self, qps: &QuantizerParameters) {
     self.cdef_damping = 3 + (self.base_q_idx >> 6);
-    let q = bexp64(qps.log_target_q as i64 + q57(QSCALE)) as f32;
+    let q = bexp64(qps.log_target_q + q57(QSCALE)) as f32;
     /* These coefficients were trained on libaom. */
     let (y_f1, y_f2, uv_f1, uv_f2) = if !self.intra_only {
       (
@@ -2836,17 +2836,11 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
 
       let four_partitions = [
         tile_bo,
+        TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbsw, y: tile_bo.0.y }),
+        TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbsh }),
         TileBlockOffset(BlockOffset {
-          x: tile_bo.0.x + hbsw as usize,
-          y: tile_bo.0.y,
-        }),
-        TileBlockOffset(BlockOffset {
-          x: tile_bo.0.x,
-          y: tile_bo.0.y + hbsh as usize,
-        }),
-        TileBlockOffset(BlockOffset {
-          x: tile_bo.0.x + hbsw as usize,
-          y: tile_bo.0.y + hbsh as usize,
+          x: tile_bo.0.x + hbsw,
+          y: tile_bo.0.y + hbsh,
         }),
       ];
       let partitions = get_sub_partitions(&four_partitions, partition);
@@ -3235,16 +3229,16 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let four_partitions = [
           tile_bo,
           TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + hbsw as usize,
+            x: tile_bo.0.x + hbsw,
             y: tile_bo.0.y,
           }),
           TileBlockOffset(BlockOffset {
             x: tile_bo.0.x,
-            y: tile_bo.0.y + hbsh as usize,
+            y: tile_bo.0.y + hbsh,
           }),
           TileBlockOffset(BlockOffset {
-            x: tile_bo.0.x + hbsw as usize,
-            y: tile_bo.0.y + hbsh as usize,
+            x: tile_bo.0.x + hbsw,
+            y: tile_bo.0.y + hbsh,
           }),
         ];
         let partitions = get_sub_partitions(&four_partitions, partition);
@@ -3890,7 +3884,7 @@ pub fn update_rec_buffer<T: Pixel>(
     output_frameno,
     segmentation: fs.segmentation,
   });
-  for i in 0..(REF_FRAMES as usize) {
+  for i in 0..REF_FRAMES {
     if (fi.refresh_frame_flags & (1 << i)) != 0 {
       fi.rec_buffer.frames[i] = Some(Arc::clone(&rfs));
       fi.rec_buffer.deblock[i] = fs.deblock;

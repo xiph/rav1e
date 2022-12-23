@@ -93,7 +93,7 @@ impl TilingInfo {
     );
 
     let tile_cols_log2 =
-      tile_cols_log2.max(min_tile_cols_log2).min(max_tile_cols_log2);
+      tile_cols_log2.clamp(min_tile_cols_log2, max_tile_cols_log2);
     let tile_width_sb_pre =
       sb_cols.align_power_of_two_and_shift(tile_cols_log2);
 
@@ -134,8 +134,7 @@ impl TilingInfo {
       };
     let tile_rows_log2 = tile_rows_log2
       .max(min_tile_rows_log2)
-      .max(min_tile_rows_ratelimit_log2)
-      .min(max_tile_rows_log2);
+      .clamp(min_tile_rows_ratelimit_log2, max_tile_rows_log2);
     let tile_height_sb = sb_rows.align_power_of_two_and_shift(tile_rows_log2);
 
     let rows = (frame_height_sb + tile_height_sb - 1) / tile_height_sb;

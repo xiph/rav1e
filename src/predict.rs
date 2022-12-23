@@ -988,7 +988,7 @@ pub(crate) mod rust {
     {
       for (v, &l) in line[..width].iter_mut().zip(luma[..width].iter()) {
         *v = T::cast_from(
-          (avg + get_scaled_luma_q0(alpha, l)).max(0).min(sample_max),
+          (avg + get_scaled_luma_q0(alpha, l)).clamp(0, sample_max),
         );
       }
     }
@@ -1164,14 +1164,14 @@ pub(crate) mod rust {
           + (9 * dup[i + 1].to_i32().unwrap())
           + (9 * dup[i + 2].to_i32().unwrap())
           - dup[i + 3].to_i32().unwrap();
-        s = (((s + 8) / 16) as i32).max(0).min((1 << bit_depth) - 1);
+        s = ((s + 8) / 16).clamp(0, (1 << bit_depth) - 1);
 
         edge[2 * i + 1] = T::cast_from(s);
         edge[2 * i + 2] = dup[i + 2];
       }
     }
 
-    let sample_max = ((1 << bit_depth) - 1) as i32;
+    let sample_max = (1 << bit_depth) - 1;
 
     let max_x = output.plane_cfg.width as isize - 1;
     let max_y = output.plane_cfg.height as isize - 1;
@@ -1326,16 +1326,15 @@ pub(crate) mod rust {
           let base = (idx >> (6 - upsample_above)) + (j << upsample_above);
           let shift = (((idx << upsample_above) >> 1) & 31) as i32;
           let max_base_x = (height + width - 1) << upsample_above;
-          let v = if base < max_base_x {
+          let v = (if base < max_base_x {
             let a: i32 = above_edge[base + offset_above].into();
             let b: i32 = above_edge[base + 1 + offset_above].into();
             round_shift(a * (32 - shift) + b * shift, 5)
           } else {
             let c: i32 = above_edge[max_base_x + offset_above].into();
             c
-          }
-          .max(0)
-          .min(sample_max);
+          })
+          .clamp(0, sample_max);
           row[j] = T::cast_from(v);
         }
       }
@@ -1356,8 +1355,7 @@ pub(crate) mod rust {
             let b: i32 =
               above_edge[(base + 1 + offset_above as isize) as usize].into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
-              .max(0)
-              .min(sample_max);
+              .clamp(0, sample_max);
             row[j] = T::cast_from(v);
           } else {
             let idx = (i << 6) as isize - ((j + 1) * dy) as isize;
@@ -1379,8 +1377,7 @@ pub(crate) mod rust {
             }
             .into();
             let v = round_shift(a * (32 - shift) + b * shift, 5)
-              .max(0)
-              .min(sample_max);
+              .clamp(0, sample_max);
             row[j] = T::cast_from(v);
           }
         }
@@ -1396,9 +1393,8 @@ pub(crate) mod rust {
           let a: i32 = left_edge[l.saturating_sub(base + offset_left)].into();
           let b: i32 =
             left_edge[l.saturating_sub(base + offset_left + 1)].into();
-          let v = round_shift(a * (32 - shift) + b * shift, 5)
-            .max(0)
-            .min(sample_max);
+          let v =
+            round_shift(a * (32 - shift) + b * shift, 5).clamp(0, sample_max);
           row[j] = T::cast_from(v);
         }
       }

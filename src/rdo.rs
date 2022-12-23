@@ -592,8 +592,7 @@ impl DistortionScale {
       (Self::SHIFT << 11) as i64 - sum / slice.len() as i64;
     Self(
       bexp64((log_inv_mean_q11 + (Self::SHIFT << 11) as i64) << (57 - 11))
-        .min((1 << Self::BITS) - 1)
-        .max(1) as u32,
+        .clamp(1, (1 << Self::BITS) - 1) as u32,
     )
   }
 
@@ -628,8 +627,7 @@ impl std::ops::Mul for DistortionScale {
     Self(
       (((self.0 as u64 * rhs.0 as u64) + (1 << (Self::SHIFT - 1)))
         >> Self::SHIFT)
-        .min((1 << Self::BITS) - 1)
-        .max(1) as u32,
+        .clamp(1, (1 << Self::BITS) - 1) as u32,
     )
   }
 }
@@ -1883,17 +1881,11 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
   let hbsh = subsize.height_mi(); // Half the block size height in blocks
   let four_partitions = [
     tile_bo,
+    TileBlockOffset(BlockOffset { x: tile_bo.0.x + hbsw, y: tile_bo.0.y }),
+    TileBlockOffset(BlockOffset { x: tile_bo.0.x, y: tile_bo.0.y + hbsh }),
     TileBlockOffset(BlockOffset {
-      x: tile_bo.0.x + hbsw as usize,
-      y: tile_bo.0.y,
-    }),
-    TileBlockOffset(BlockOffset {
-      x: tile_bo.0.x,
-      y: tile_bo.0.y + hbsh as usize,
-    }),
-    TileBlockOffset(BlockOffset {
-      x: tile_bo.0.x + hbsw as usize,
-      y: tile_bo.0.y + hbsh as usize,
+      x: tile_bo.0.x + hbsw,
+      y: tile_bo.0.y + hbsh,
     }),
   ];
 

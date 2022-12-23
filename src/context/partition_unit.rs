@@ -473,7 +473,7 @@ impl<'a> BlockContext<'a> {
 
     assert!(bsize.is_sqr());
 
-    (left * 2 + above) as usize + bsl as usize * PARTITION_PLOFFSET
+    (left * 2 + above) as usize + bsl * PARTITION_PLOFFSET
   }
 
   /// # Panics

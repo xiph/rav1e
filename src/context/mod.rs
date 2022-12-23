@@ -161,7 +161,7 @@ pub fn mv_joint_horizontal(joint_type: MvJointType) -> bool {
 #[inline(always)]
 pub const fn mv_class_base(mv_class: usize) -> u32 {
   if mv_class != MV_CLASS_0 {
-    (CLASS0_SIZE << (mv_class as usize + 2)) as u32
+    (CLASS0_SIZE << (mv_class + 2)) as u32
   } else {
     0
   }
