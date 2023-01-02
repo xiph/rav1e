@@ -1375,6 +1375,493 @@ L(ipred_smooth_h_tbl):
         .hword L(ipred_smooth_h_tbl) -  40b
 endfunc
 
+const padding_mask_buf
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        .byte 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+padding_mask:
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+        .byte 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+endconst
+
+// void ipred_z1_upsample_edge_8bpc_neon(pixel *out, const int hsz,
+//                                       const pixel *const in, const int end);
+function ipred_z1_upsample_edge_8bpc_neon, export=1
+        movrel          x4,  padding_mask
+        ld1             {v0.16b},  [x2]           // in[]
+        add             x5,  x2,  w3,  uxtw       // in[end]
+        sub             x4,  x4,  w3,  uxtw
+
+        ld1r            {v1.16b},  [x5]           // padding
+        ld1             {v3.16b},  [x4]           // padding_mask
+
+        movi            v31.8h,  #9
+
+        bit             v0.16b,  v1.16b,  v3.16b  // padded in[]
+
+        ext             v4.16b,  v0.16b,  v1.16b,  #1
+        ext             v5.16b,  v0.16b,  v1.16b,  #2
+        ext             v6.16b,  v0.16b,  v1.16b,  #3
+
+        uaddl           v16.8h,  v4.8b,   v5.8b   // in[i+1] + in[i+2]
+        uaddl2          v17.8h,  v4.16b,  v5.16b
+        uaddl           v18.8h,  v0.8b,   v6.8b   // in[i+0] + in[i+3]
+        uaddl2          v19.8h,  v0.16b,  v6.16b
+        mul             v16.8h,  v16.8h,  v31.8h  // 9*(in[i+1] + in[i+2])
+        mul             v17.8h,  v17.8h,  v31.8h
+        sub             v16.8h,  v16.8h,  v18.8h
+        sub             v17.8h,  v17.8h,  v19.8h
+
+        sqrshrun        v16.8b,  v16.8h,  #4
+        sqrshrun2       v16.16b, v17.8h,  #4
+
+        zip1            v0.16b,  v4.16b,  v16.16b
+        zip2            v1.16b,  v4.16b,  v16.16b
+
+        st1             {v0.16b, v1.16b}, [x0]
+
+        ret
+endfunc
+
+const edge_filter
+        .byte 0, 4, 8, 0
+        .byte 0, 5, 6, 0
+// Leaving out the coeffs for strength=3
+//      .byte 2, 4, 4, 0
+endconst
+
+// void ipred_z1_filter_edge_8bpc_neon(pixel *out, const int sz,
+//                                     const pixel *const in, const int end,
+//                                     const int strength);
+function ipred_z1_filter_edge_8bpc_neon, export=1
+        cmp             w4, #3
+        b.eq            L(fivetap)                // if (strength == 3) goto fivetap
+
+        movrel          x5,  edge_filter, -3
+        add             x5,  x5,  w4,  uxtw #2    // edge_filter + (strength - 1)*4 + 1
+
+        ld1             {v31.h}[0], [x5]          // kernel[1-2]
+
+        ld1             {v0.16b}, [x2], #16
+
+        dup             v30.16b, v31.b[0]
+        dup             v31.16b, v31.b[1]
+1:
+        // in[end], is the last valid pixel. We produce 16 pixels out by
+        // using 18 pixels in - the last pixel used is [17] of the ones
+        // read/buffered.
+        cmp             w3,  #17
+        ld1             {v1.16b}, [x2], #16
+        b.lt            2f
+        ext             v2.16b,  v0.16b,  v1.16b,  #1
+        ext             v3.16b,  v0.16b,  v1.16b,  #2
+        umull           v4.8h,   v0.8b,   v30.8b
+        umlal           v4.8h,   v2.8b,   v31.8b
+        umlal           v4.8h,   v3.8b,   v30.8b
+        umull2          v5.8h,   v0.16b,  v30.16b
+        umlal2          v5.8h,   v2.16b,  v31.16b
+        umlal2          v5.8h,   v3.16b,  v30.16b
+        subs            w1,  w1,  #16
+        mov             v0.16b,  v1.16b
+        rshrn           v4.8b,   v4.8h,   #4
+        rshrn2          v4.16b,  v5.8h,   #4
+        sub             w3,  w3,  #16
+        st1             {v4.16b}, [x0], #16
+        b.gt            1b
+        ret
+2:
+        // Right padding
+
+        // x2[w3-32] is the padding pixel (x2 points 32 bytes ahead)
+        movrel          x5,  padding_mask
+        sub             w6,  w3,  #32
+        sub             x5,  x5,  w3,  uxtw
+        add             x6,  x2,  w6,  sxtw
+
+        ld1             {v2.16b, v3.16b}, [x5]    // padding_mask
+
+        ld1r            {v4.16b}, [x6]
+        bit             v0.16b,  v4.16b,  v2.16b  // Pad v0-v1
+        bit             v1.16b,  v4.16b,  v3.16b
+
+        // Filter one block
+        ext             v2.16b,  v0.16b,  v1.16b,  #1
+        ext             v3.16b,  v0.16b,  v1.16b,  #2
+        umull           v4.8h,   v0.8b,   v30.8b
+        umlal           v4.8h,   v2.8b,   v31.8b
+        umlal           v4.8h,   v3.8b,   v30.8b
+        umull2          v5.8h,   v0.16b,  v30.16b
+        umlal2          v5.8h,   v2.16b,  v31.16b
+        umlal2          v5.8h,   v3.16b,  v30.16b
+        subs            w1,  w1,  #16
+        rshrn           v4.8b,   v4.8h,   #4
+        rshrn2          v4.16b,  v5.8h,   #4
+        st1             {v4.16b}, [x0], #16
+        b.le            9f
+5:
+        // After one block, any remaining output would only be filtering
+        // padding - thus just store the padding.
+        subs            w1,  w1,  #16
+        st1             {v1.16b}, [x0], #16
+        b.gt            5b
+9:
+        ret
+
+L(fivetap):
+        sub             x2,  x2,  #1              // topleft -= 1
+        movi            v29.16b, #2
+        ld1             {v0.16b}, [x2], #16
+        movi            v30.16b, #4
+        movi            v31.16b, #4
+        ins             v0.b[0], v0.b[1]
+1:
+        // in[end+1], is the last valid pixel. We produce 16 pixels out by
+        // using 20 pixels in - the last pixel used is [19] of the ones
+        // read/buffered.
+        cmp             w3,  #18
+        ld1             {v1.16b}, [x2], #16
+        b.lt            2f                        // if (end + 1 < 19)
+        ext             v2.16b,  v0.16b,  v1.16b,  #1
+        ext             v3.16b,  v0.16b,  v1.16b,  #2
+        ext             v4.16b,  v0.16b,  v1.16b,  #3
+        ext             v5.16b,  v0.16b,  v1.16b,  #4
+        umull           v6.8h,   v0.8b,   v29.8b
+        umlal           v6.8h,   v2.8b,   v30.8b
+        umlal           v6.8h,   v3.8b,   v31.8b
+        umlal           v6.8h,   v4.8b,   v30.8b
+        umlal           v6.8h,   v5.8b,   v29.8b
+        umull2          v7.8h,   v0.16b,  v29.16b
+        umlal2          v7.8h,   v2.16b,  v30.16b
+        umlal2          v7.8h,   v3.16b,  v31.16b
+        umlal2          v7.8h,   v4.16b,  v30.16b
+        umlal2          v7.8h,   v5.16b,  v29.16b
+        subs            w1,  w1,  #16
+        mov             v0.16b,  v1.16b
+        rshrn           v6.8b,   v6.8h,   #4
+        rshrn2          v6.16b,  v7.8h,   #4
+        sub             w3,  w3,  #16
+        st1             {v6.16b}, [x0], #16
+        b.gt            1b
+        ret
+2:
+        // Right padding
+
+        // x2[w3+1-32] is the padding pixel (x2 points 32 bytes ahead)
+        movrel          x5,  padding_mask, -1
+        sub             w6,  w3,  #31
+        sub             x5,  x5,  w3,  uxtw
+        add             x6,  x2,  w6,  sxtw
+
+        ld1             {v2.16b, v3.16b}, [x5]    // padding_mask
+
+        ld1r            {v28.16b}, [x6]
+        bit             v0.16b,  v28.16b, v2.16b  // Pad v0-v1
+        bit             v1.16b,  v28.16b, v3.16b
+4:
+        // Filter one block
+        ext             v2.16b,  v0.16b,  v1.16b,  #1
+        ext             v3.16b,  v0.16b,  v1.16b,  #2
+        ext             v4.16b,  v0.16b,  v1.16b,  #3
+        ext             v5.16b,  v0.16b,  v1.16b,  #4
+        umull           v6.8h,   v0.8b,   v29.8b
+        umlal           v6.8h,   v2.8b,   v30.8b
+        umlal           v6.8h,   v3.8b,   v31.8b
+        umlal           v6.8h,   v4.8b,   v30.8b
+        umlal           v6.8h,   v5.8b,   v29.8b
+        umull2          v7.8h,   v0.16b,  v29.16b
+        umlal2          v7.8h,   v2.16b,  v30.16b
+        umlal2          v7.8h,   v3.16b,  v31.16b
+        umlal2          v7.8h,   v4.16b,  v30.16b
+        umlal2          v7.8h,   v5.16b,  v29.16b
+        subs            w1,  w1,  #16
+        mov             v0.16b,  v1.16b
+        mov             v1.16b,  v28.16b
+        rshrn           v6.8b,   v6.8h,   #4
+        rshrn2          v6.16b,  v7.8h,   #4
+        sub             w3,  w3,  #16
+        st1             {v6.16b}, [x0], #16
+        b.le            9f
+        // v0-v1[w3+1] is the last valid pixel; if (w3 + 1 > 0) we need to
+        // filter properly once more - aka (w3 >= 0).
+        cmp             w3,  #0
+        b.ge            4b
+5:
+        // When w3 <= 0, all remaining pixels in v0-v1 are equal to the
+        // last valid pixel - thus just output that without filtering.
+        subs            w1,  w1,  #16
+        st1             {v1.16b}, [x0], #16
+        b.gt            5b
+9:
+        ret
+endfunc
+
+// void ipred_z1_fill1_8bpc_neon(pixel *dst, const ptrdiff_t stride,
+//                               const pixel *const top,
+//                               const int width, const int height,
+//                               const int dx, const int max_base_x);
+function ipred_z1_fill1_8bpc_neon, export=1
+        clz             w9,  w3
+        adr             x8,  L(ipred_z1_fill1_tbl)
+        sub             w9,  w9,  #25
+        ldrh            w9,  [x8, w9, uxtw #1]
+        add             x10, x2,  w6,  uxtw       // top[max_base_x]
+        sub             x8,  x8,  w9,  uxtw
+        ld1r            {v31.16b}, [x10]          // padding
+        mov             w7,  w5
+        mov             w15, #64
+        br              x8
+40:
+        AARCH64_VALID_JUMP_TARGET
+4:
+        lsr             w8,  w7,  #6              // base
+        and             w9,  w7,  #0x3e           // frac
+        add             w7,  w7,  w5              // xpos += dx
+        cmp             w8,  w6                   // base >= max_base_x
+        lsr             w10, w7,  #6              // base
+        and             w11, w7,  #0x3e           // frac
+        b.ge            49f
+        ldr             d0,  [x2, w8, uxtw]       // top[base]
+        ldr             d2,  [x2, w10, uxtw]
+        dup             v4.4h,   w9               // frac
+        dup             v5.4h,   w11
+        ext             v1.8b,   v0.8b,   v0.8b,   #1 // top[base+1]
+        ext             v3.8b,   v2.8b,   v2.8b,   #1
+        usubl           v6.8h,   v1.8b,   v0.8b   // top[base+1]-top[base]
+        usubl           v7.8h,   v3.8b,   v2.8b
+        ushll           v16.8h,  v0.8b,   #6      // top[base]*64
+        ushll           v17.8h,  v2.8b,   #6
+        mla             v16.4h,  v6.4h,   v4.4h   // + top[base+1]*frac
+        mla             v17.4h,  v7.4h,   v5.4h
+        rshrn           v16.8b,  v16.8h,  #6
+        rshrn           v17.8b,  v17.8h,  #6
+        st1             {v16.s}[0], [x0], x1
+        add             w7,  w7,  w5              // xpos += dx
+        subs            w4,  w4,  #2
+        st1             {v17.s}[0], [x0], x1
+        b.gt            4b
+        ret
+
+49:
+        st1             {v31.s}[0], [x0], x1
+        subs            w4,  w4,  #2
+        st1             {v31.s}[0], [x0], x1
+        b.gt            49b
+        ret
+
+80:
+        AARCH64_VALID_JUMP_TARGET
+8:
+        lsr             w8,  w7,  #6              // base
+        and             w9,  w7,  #0x3e           // frac
+        add             w7,  w7,  w5              // xpos += dx
+        cmp             w8,  w6                   // base >= max_base_x
+        lsr             w10, w7,  #6              // base
+        and             w11, w7,  #0x3e           // frac
+        b.ge            89f
+        ldr             q0,  [x2, w8, uxtw]       // top[base]
+        ldr             q2,  [x2, w10, uxtw]
+        dup             v4.8b,   w9               // frac
+        dup             v5.8b,   w11
+        sub             w9,  w15, w9              // 64 - frac
+        sub             w11, w15, w11
+        dup             v6.8b,   w9               // 64 - frac
+        dup             v7.8b,   w11
+        ext             v1.16b,  v0.16b,  v0.16b,  #1 // top[base+1]
+        ext             v3.16b,  v2.16b,  v2.16b,  #1
+        umull           v16.8h,  v1.8b,   v4.8b   // top[base+1]*frac
+        umlal           v16.8h,  v0.8b,   v6.8b   // + top[base]*(64-frac)
+        umull           v17.8h,  v3.8b,   v5.8b
+        umlal           v17.8h,  v2.8b,   v7.8b
+        rshrn           v16.8b,  v16.8h,  #6
+        rshrn           v17.8b,  v17.8h,  #6
+        st1             {v16.8b}, [x0], x1
+        add             w7,  w7,  w5              // xpos += dx
+        subs            w4,  w4,  #2
+        st1             {v17.8b}, [x0], x1
+        b.gt            8b
+        ret
+
+89:
+        st1             {v31.8b}, [x0], x1
+        subs            w4,  w4,  #2
+        st1             {v31.8b}, [x0], x1
+        b.gt            89b
+        ret
+
+160:
+320:
+640:
+        AARCH64_VALID_JUMP_TARGET
+
+        mov             w12, w3
+
+        add             x13, x0,  x1
+        lsl             x1,  x1,  #1
+        sub             x1,  x1,  w3,  uxtw
+1:
+        lsr             w8,  w7,  #6              // base
+        and             w9,  w7,  #0x3e           // frac
+        add             w7,  w7,  w5              // xpos += dx
+        cmp             w8,  w6                   // base >= max_base_x
+        lsr             w10, w7,  #6              // base
+        and             w11, w7,  #0x3e           // frac
+        b.ge            169f
+        add             x8,  x2,  w8,  uxtw
+        add             x10, x2,  w10, uxtw
+        dup             v4.16b,  w9               // frac
+        dup             v5.16b,  w11
+        ld1             {v0.16b, v1.16b}, [x8],  #32 // top[base]
+        ld1             {v2.16b, v3.16b}, [x10], #32
+        sub             w9,  w15, w9              // 64 - frac
+        sub             w11, w15, w11
+        dup             v6.16b,  w9               // 64 - frac
+        dup             v7.16b,  w11
+        add             w7,  w7,  w5              // xpos += dx
+2:
+        ext             v16.16b, v0.16b,  v1.16b,  #1 // top[base+1]
+        ext             v17.16b, v2.16b,  v3.16b,  #1
+        subs            w3,  w3,  #16
+        umull           v18.8h,  v16.8b,  v4.8b   // top[base+1]*frac
+        umlal           v18.8h,  v0.8b,   v6.8b   // + top[base]*(64-frac)
+        umull2          v19.8h,  v16.16b, v4.16b
+        umlal2          v19.8h,  v0.16b,  v6.16b
+        umull           v20.8h,  v17.8b,  v5.8b
+        umlal           v20.8h,  v2.8b,   v7.8b
+        umull2          v21.8h,  v17.16b, v5.16b
+        umlal2          v21.8h,  v2.16b,  v7.16b
+        rshrn           v16.8b,  v18.8h,  #6
+        rshrn2          v16.16b, v19.8h,  #6
+        rshrn           v17.8b,  v20.8h,  #6
+        rshrn2          v17.16b, v21.8h,  #6
+        st1             {v16.16b}, [x0],  #16
+        st1             {v17.16b}, [x13], #16
+        b.le            3f
+        mov             v0.16b,  v1.16b
+        ld1             {v1.16b}, [x8],  #16 // top[base]
+        mov             v2.16b,  v3.16b
+        ld1             {v3.16b}, [x10], #16
+        b               2b
+
+3:
+        subs            w4,  w4,  #2
+        b.le            9f
+        add             x0,  x0,  x1
+        add             x13, x13, x1
+        mov             w3,  w12
+        b               1b
+9:
+        ret
+
+169:
+        st1             {v31.16b}, [x0],  #16
+        subs            w3,  w3,  #16
+        st1             {v31.16b}, [x13], #16
+        b.gt            169b
+        subs            w4,  w4,  #2
+        b.le            9b
+        add             x0,  x0,  x1
+        add             x13, x13, x1
+        mov             w3,  w12
+        b               169b
+
+L(ipred_z1_fill1_tbl):
+        .hword L(ipred_z1_fill1_tbl) - 640b
+        .hword L(ipred_z1_fill1_tbl) - 320b
+        .hword L(ipred_z1_fill1_tbl) - 160b
+        .hword L(ipred_z1_fill1_tbl) -  80b
+        .hword L(ipred_z1_fill1_tbl) -  40b
+endfunc
+
+function ipred_z1_fill2_8bpc_neon, export=1
+        cmp             w3,  #8
+        add             x10, x2,  w6,  uxtw       // top[max_base_x]
+        ld1r            {v31.16b}, [x10]          // padding
+        mov             w7,  w5
+        mov             w15, #64
+        b.eq            8f
+
+4:      // w == 4
+        lsr             w8,  w7,  #6              // base
+        and             w9,  w7,  #0x3e           // frac
+        add             w7,  w7,  w5              // xpos += dx
+        cmp             w8,  w6                   // base >= max_base_x
+        lsr             w10, w7,  #6              // base
+        and             w11, w7,  #0x3e           // frac
+        b.ge            49f
+        ldr             d0,  [x2, w8, uxtw]       // top[base]
+        ldr             d2,  [x2, w10, uxtw]
+        dup             v4.4h,   w9               // frac
+        dup             v5.4h,   w11
+        uzp2            v1.8b,   v0.8b,   v0.8b   // top[base+1]
+        uzp1            v0.8b,   v0.8b,   v0.8b   // top[base]
+        uzp2            v3.8b,   v2.8b,   v2.8b
+        uzp1            v2.8b,   v2.8b,   v2.8b
+        usubl           v6.8h,   v1.8b,   v0.8b   // top[base+1]-top[base]
+        usubl           v7.8h,   v3.8b,   v2.8b
+        ushll           v16.8h,  v0.8b,   #6      // top[base]*64
+        ushll           v17.8h,  v2.8b,   #6
+        mla             v16.4h,  v6.4h,   v4.4h   // + top[base+1]*frac
+        mla             v17.4h,  v7.4h,   v5.4h
+        rshrn           v16.8b,  v16.8h,  #6
+        rshrn           v17.8b,  v17.8h,  #6
+        st1             {v16.s}[0], [x0], x1
+        add             w7,  w7,  w5              // xpos += dx
+        subs            w4,  w4,  #2
+        st1             {v17.s}[0], [x0], x1
+        b.gt            4b
+        ret
+
+49:
+        st1             {v31.s}[0], [x0], x1
+        subs            w4,  w4,  #2
+        st1             {v31.s}[0], [x0], x1
+        b.gt            49b
+        ret
+
+8:      // w == 8
+        lsr             w8,  w7,  #6              // base
+        and             w9,  w7,  #0x3e           // frac
+        add             w7,  w7,  w5              // xpos += dx
+        cmp             w8,  w6                   // base >= max_base_x
+        lsr             w10, w7,  #6              // base
+        and             w11, w7,  #0x3e           // frac
+        b.ge            89f
+        ldr             q0,  [x2, w8, uxtw]       // top[base]
+        ldr             q2,  [x2, w10, uxtw]
+        dup             v4.8b,   w9               // frac
+        dup             v5.8b,   w11
+        sub             w9,  w15, w9              // 64 - frac
+        sub             w11, w15, w11
+        dup             v6.8b,   w9               // 64 - frac
+        dup             v7.8b,   w11
+        uzp2            v1.16b,  v0.16b,  v0.16b  // top[base+1]
+        uzp1            v0.16b,  v0.16b,  v0.16b  // top[base]
+        uzp2            v3.16b,  v2.16b,  v2.16b
+        uzp1            v2.16b,  v2.16b,  v2.16b
+        umull           v16.8h,  v1.8b,   v4.8b   // top[base+1]*frac
+        umlal           v16.8h,  v0.8b,   v6.8b   // + top[base]*(64-frac)
+        umull           v17.8h,  v3.8b,   v5.8b
+        umlal           v17.8h,  v2.8b,   v7.8b
+        rshrn           v16.8b,  v16.8h,  #6
+        rshrn           v17.8b,  v17.8h,  #6
+        st1             {v16.8b}, [x0], x1
+        add             w7,  w7,  w5              // xpos += dx
+        subs            w4,  w4,  #2
+        st1             {v17.8b}, [x0], x1
+        b.gt            8b
+        ret
+
+89:
+        st1             {v31.8b}, [x0], x1
+        subs            w4,  w4,  #2
+        st1             {v31.8b}, [x0], x1
+        b.gt            89b
+        ret
+endfunc
+
 // void ipred_filter_8bpc_neon(pixel *dst, const ptrdiff_t stride,
 //                             const pixel *const topleft,
 //                             const int width, const int height, const int filt_idx,
