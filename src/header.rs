@@ -311,7 +311,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write(5, 0)?; // one operating point
       self.write(12, 0)?; // idc
       self.write(5, fi.sequence.level_idx[0])?; // level
-      self.write(1, 0)?; // tier
+      if fi.sequence.level_idx[0] > 7 {
+        self.write(1, 0)?; // tier
+      }
     }
 
     self.write_sequence_header(fi)?;
