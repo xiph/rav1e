@@ -104,8 +104,8 @@ pub trait Writer {
 pub trait StorageBackend {
   /// Store partially-computed range code into given storage backend
   fn store(&mut self, fl: u16, fh: u16, nms: u16);
-  /// Return byte-length of encoded stream to date
-  fn stream_bytes(&mut self) -> usize;
+  /// Return bit-length of encoded stream to date
+  fn stream_bits(&mut self) -> usize;
   /// Backend implementation of checkpoint to pass through Writer interface
   fn checkpoint(&mut self) -> WriterCheckpoint;
   /// Backend implementation of rollback to pass through Writer interface
@@ -130,8 +130,8 @@ pub struct WriterBase<S> {
 
 #[derive(Debug, Clone)]
 pub struct WriterCounter {
-  /// Bytes that would be shifted out to date
-  bytes: usize,
+  /// Bits that would be shifted out to date
+  bits: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -166,7 +166,7 @@ pub struct WriterCheckpoint {
 impl WriterCounter {
   #[inline]
   pub const fn new() -> WriterBase<WriterCounter> {
-    WriterBase::new(WriterCounter { bytes: 0 })
+    WriterBase::new(WriterCounter { bits: 0 })
   }
 }
 
@@ -193,22 +193,18 @@ impl StorageBackend for WriterBase<WriterCounter> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = 16 - ILog::ilog(r);
-    let mut s = self.cnt + (d as i16);
 
-    self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
-    s -= 8 * ((s >= 0) as i16 + (s >= 8) as i16);
-
+    self.s.bits += d;
     self.rng = r << d;
-    self.cnt = s;
   }
   #[inline]
-  fn stream_bytes(&mut self) -> usize {
-    self.s.bytes
+  fn stream_bits(&mut self) -> usize {
+    self.s.bits
   }
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_bytes: self.s.bytes,
+      stream_bytes: self.s.bits,
       backend_var: 0,
       rng: self.rng,
       cnt: self.cnt,
@@ -218,7 +214,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
-    self.s.bytes = checkpoint.stream_bytes;
+    self.s.bits = checkpoint.stream_bytes;
   }
 }
 
@@ -241,8 +237,8 @@ impl StorageBackend for WriterBase<WriterRecorder> {
     self.s.storage.push((fl, fh, nms));
   }
   #[inline]
-  fn stream_bytes(&mut self) -> usize {
-    self.s.bytes
+  fn stream_bits(&mut self) -> usize {
+    self.s.bytes * 8
   }
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
@@ -292,8 +288,8 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     self.cnt = s;
   }
   #[inline]
-  fn stream_bytes(&mut self) -> usize {
-    self.s.precarry.len()
+  fn stream_bits(&mut self) -> usize {
+    self.s.precarry.len() * 8
   }
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
@@ -791,7 +787,7 @@ where
   fn tell(&mut self) -> u32 {
     // The 10 here counteracts the offset of -9 baked into cnt, and adds 1 extra
     // bit, which we reserve for terminating the stream.
-    (((self.stream_bytes() * 8) as i32) + (self.cnt as i32) + 10) as u32
+    (((self.stream_bits()) as i32) + (self.cnt as i32) + 10) as u32
       + (self.fake_bits_frac >> 8)
   }
   /// Returns the number of bits "used" by the encoded symbols so far.
