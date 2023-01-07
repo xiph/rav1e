@@ -680,7 +680,6 @@ pub fn luma_ac<T: Pixel>(
   let h_pad = (bsize.height() - max_luma_h) >> (2 + ydec);
   let cpu = fi.cpu_feature_level;
 
-  use crate::predict::rust::pred_cfl_ac;
   match (xdec, ydec) {
     (0, 0) => pred_cfl_ac::<T, 0, 0>(ac, luma, plane_bsize, w_pad, h_pad, cpu),
     (1, 0) => pred_cfl_ac::<T, 1, 0>(ac, luma, plane_bsize, w_pad, h_pad, cpu),
