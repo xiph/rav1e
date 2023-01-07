@@ -2260,27 +2260,42 @@ pub fn luma_ac<T: Pixel>(
     bsize.height()
   };
 
-  let max_luma_x: usize = max_luma_w.max(8) - (1 << xdec);
-  let max_luma_y: usize = max_luma_h.max(8) - (1 << ydec);
+  let w_pad = (bsize.width() - max_luma_w) >> (2 + xdec);
+  let h_pad = (bsize.height() - max_luma_h) >> (2 + ydec);
 
+  match (xdec, ydec) {
+    (0, 0) => luma_ac_internal::<T, 0, 0>(ac, luma, plane_bsize, w_pad, h_pad),
+    (1, 0) => luma_ac_internal::<T, 1, 0>(ac, luma, plane_bsize, w_pad, h_pad),
+    _ => luma_ac_internal::<T, 1, 1>(ac, luma, plane_bsize, w_pad, h_pad),
+  }
+}
+
+fn luma_ac_internal<T: Pixel, const XDEC: usize, const YDEC: usize>(
+  ac: &mut [i16], luma: &PlaneRegion<'_, T>, plane_bsize: BlockSize,
+  w_pad: usize, h_pad: usize,
+) {
+  let max_luma_w = (plane_bsize.width() - w_pad * 4) << XDEC;
+  let max_luma_h = (plane_bsize.height() - h_pad * 4) << YDEC;
+  let max_luma_x: usize = max_luma_w.max(8) - (1 << XDEC);
+  let max_luma_y: usize = max_luma_h.max(8) - (1 << YDEC);
   let mut sum: i32 = 0;
   for sub_y in 0..plane_bsize.height() {
     for sub_x in 0..plane_bsize.width() {
       // Refer to https://aomediacodec.github.io/av1-spec/#predict-chroma-from-luma-process
-      let luma_y = sub_y << ydec;
-      let luma_x = sub_x << xdec;
+      let luma_y = sub_y << YDEC;
+      let luma_x = sub_x << XDEC;
       let y = luma_y.min(max_luma_y);
       let x = luma_x.min(max_luma_x);
       let mut sample: i16 = i16::cast_from(luma[y][x]);
-      if xdec != 0 {
+      if XDEC != 0 {
         sample += i16::cast_from(luma[y][x + 1]);
       }
-      if ydec != 0 {
-        debug_assert!(xdec != 0);
+      if YDEC != 0 {
+        debug_assert!(XDEC != 0);
         sample +=
           i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
       }
-      sample <<= 3 - xdec - ydec;
+      sample <<= 3 - XDEC - YDEC;
       ac[sub_y * plane_bsize.width() + sub_x] = sample;
       sum += sample as i32;
     }
