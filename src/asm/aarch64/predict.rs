@@ -18,6 +18,8 @@ use crate::util::Aligned;
 use crate::{Pixel, PixelType};
 use libc;
 
+pub(crate) use crate::predict::rust::pred_cfl_ac;
+
 macro_rules! decl_angular_ipred_fn {
   ($($f:ident),+) => {
     extern {

@@ -9,10 +9,11 @@
 
 use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
+use crate::partition::BlockSize;
 use crate::predict::{
   rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
 };
-use crate::tiling::PlaneRegionMut;
+use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::transform::TxSize;
 use crate::util::Aligned;
 use crate::Pixel;
@@ -101,6 +102,49 @@ extern {
     width: libc::c_int, height: libc::c_int, angle: libc::c_int,
     dx: libc::c_int, dy: libc::c_int, bit_depth_max: libc::c_int,
   );
+}
+
+macro_rules! decl_cfl_ac_fn {
+  ($($f:ident),+) => {
+    extern {
+      $(
+        fn $f(
+          ac: *mut i16, src: *const u8, stride: libc::ptrdiff_t,
+          w_pad: libc::c_int, h_pad: libc::c_int,
+          width: libc::c_int, height: libc::c_int,
+        );
+      )*
+    }
+  };
+}
+
+decl_cfl_ac_fn! {
+  rav1e_ipred_cfl_ac_420_8bpc_avx2,
+  rav1e_ipred_cfl_ac_420_8bpc_ssse3,
+  rav1e_ipred_cfl_ac_422_8bpc_avx2,
+  rav1e_ipred_cfl_ac_422_8bpc_ssse3,
+  rav1e_ipred_cfl_ac_444_8bpc_avx2,
+  rav1e_ipred_cfl_ac_444_8bpc_ssse3
+}
+
+macro_rules! decl_cfl_ac_hbd_fn {
+  ($($f:ident),+) => {
+    extern {
+      $(
+        fn $f(
+          ac: *mut i16, src: *const u16, stride: libc::ptrdiff_t,
+          w_pad: libc::c_int, h_pad: libc::c_int,
+          width: libc::c_int, height: libc::c_int,
+        );
+      )*
+    }
+  };
+}
+
+decl_cfl_ac_hbd_fn! {
+  rav1e_ipred_cfl_ac_420_16bpc_avx2,
+  rav1e_ipred_cfl_ac_422_16bpc_avx2,
+  rav1e_ipred_cfl_ac_444_16bpc_avx2
 }
 
 macro_rules! decl_cfl_pred_fn {
@@ -424,6 +468,54 @@ pub fn dispatch_predict_intra<T: Pixel>(
         }
       }
       _ => call_rust(dst),
+    }
+  }
+}
+
+#[inline(always)]
+pub(crate) fn pred_cfl_ac<T: Pixel, const XDEC: usize, const YDEC: usize>(
+  ac: &mut [i16], luma: &PlaneRegion<'_, T>, bsize: BlockSize, w_pad: usize,
+  h_pad: usize, cpu: CpuFeatureLevel,
+) {
+  let call_rust = |ac: &mut [i16]| {
+    rust::pred_cfl_ac::<T, XDEC, YDEC>(ac, luma, bsize, w_pad, h_pad, cpu);
+  };
+
+  let stride = T::to_asm_stride(luma.plane_cfg.stride) as libc::ptrdiff_t;
+  let w = bsize.width() as libc::c_int;
+  let h = bsize.height() as libc::c_int;
+  let w_pad = w_pad as libc::c_int;
+  let h_pad = h_pad as libc::c_int;
+
+  // SAFETY: Calls Assembly code.
+  unsafe {
+    let ac_ptr = ac.as_mut_ptr();
+    match T::type_enum() {
+      PixelType::U8 if cpu >= CpuFeatureLevel::SSSE3 => {
+        let luma_ptr = luma.data_ptr() as *const u8;
+        (if cpu >= CpuFeatureLevel::AVX2 {
+          match (XDEC, YDEC) {
+            (0, 0) => rav1e_ipred_cfl_ac_444_8bpc_avx2,
+            (1, 0) => rav1e_ipred_cfl_ac_422_8bpc_avx2,
+            _ => rav1e_ipred_cfl_ac_420_8bpc_avx2,
+          }
+        } else {
+          match (XDEC, YDEC) {
+            (0, 0) => rav1e_ipred_cfl_ac_444_8bpc_ssse3,
+            (1, 0) => rav1e_ipred_cfl_ac_422_8bpc_ssse3,
+            _ => rav1e_ipred_cfl_ac_420_8bpc_ssse3,
+          }
+        })(ac_ptr, luma_ptr, stride, w_pad, h_pad, w, h)
+      }
+      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 => {
+        let luma_ptr = luma.data_ptr() as *const u16;
+        (match (XDEC, YDEC) {
+          (0, 0) => rav1e_ipred_cfl_ac_444_16bpc_avx2,
+          (1, 0) => rav1e_ipred_cfl_ac_422_16bpc_avx2,
+          _ => rav1e_ipred_cfl_ac_420_16bpc_avx2,
+        })(ac_ptr, luma_ptr, stride, w_pad, h_pad, w, h)
+      }
+      _ => call_rust(ac),
     }
   }
 }
