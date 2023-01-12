@@ -23,7 +23,6 @@ use crate::frame::Frame;
 use crate::frame::*;
 use crate::header::ReferenceMode;
 use crate::lrf::*;
-use crate::luma_ac;
 use crate::mc::MotionVector;
 use crate::me::estimate_motion;
 use crate::me::MVSamplingMode;
@@ -32,7 +31,7 @@ use crate::motion_compensate;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+  luma_ac, AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
   RAV1E_INTER_COMPOUND_MODES, RAV1E_INTER_MODES_MINIMAL, RAV1E_INTRA_MODES,
 };
 use crate::rdo_tables::*;
