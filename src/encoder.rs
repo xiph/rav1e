@@ -23,7 +23,7 @@ use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
-  AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
+  luma_ac, AngleDelta, IntraEdgeFilterParameters, IntraParam, PredictionMode,
 };
 use crate::quantize::*;
 use crate::rate::{
@@ -2219,94 +2219,6 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       rdo_type,
       need_recon_pixel,
     )
-  }
-}
-
-/// # Panics
-///
-/// - If the block size is invalid for subsampling
-pub fn luma_ac<T: Pixel>(
-  ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
-) {
-  let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
-  let bo = if bsize.is_sub8x8(xdec, ydec) {
-    let offset = bsize.sub8x8_offset(xdec, ydec);
-    tile_bo.with_offset(offset.0, offset.1)
-  } else {
-    tile_bo
-  };
-  let rec = &ts.rec.planes[0];
-  let luma = &rec.subregion(Area::BlockStartingAt { bo: bo.0 });
-  let frame_bo = ts.to_frame_block_offset(bo);
-
-  let frame_clipped_bw: usize =
-    ((fi.w_in_b - frame_bo.0.x) << MI_SIZE_LOG2).min(bsize.width());
-  let frame_clipped_bh: usize =
-    ((fi.h_in_b - frame_bo.0.y) << MI_SIZE_LOG2).min(bsize.height());
-
-  // Similar to 'MaxLumaW' and 'MaxLumaH' stated in https://aomediacodec.github.io/av1-spec/#transform-block-semantics
-  let max_luma_w = if bsize.width() > BlockSize::BLOCK_8X8.width() {
-    let txw_log2 = tx_size.width_log2();
-    ((frame_clipped_bw + (1 << txw_log2) - 1) >> txw_log2) << txw_log2
-  } else {
-    bsize.width()
-  };
-  let max_luma_h = if bsize.height() > BlockSize::BLOCK_8X8.height() {
-    let txh_log2 = tx_size.height_log2();
-    ((frame_clipped_bh + (1 << txh_log2) - 1) >> txh_log2) << txh_log2
-  } else {
-    bsize.height()
-  };
-
-  let w_pad = (bsize.width() - max_luma_w) >> (2 + xdec);
-  let h_pad = (bsize.height() - max_luma_h) >> (2 + ydec);
-
-  match (xdec, ydec) {
-    (0, 0) => luma_ac_internal::<T, 0, 0>(ac, luma, plane_bsize, w_pad, h_pad),
-    (1, 0) => luma_ac_internal::<T, 1, 0>(ac, luma, plane_bsize, w_pad, h_pad),
-    _ => luma_ac_internal::<T, 1, 1>(ac, luma, plane_bsize, w_pad, h_pad),
-  }
-}
-
-fn luma_ac_internal<T: Pixel, const XDEC: usize, const YDEC: usize>(
-  ac: &mut [i16], luma: &PlaneRegion<'_, T>, plane_bsize: BlockSize,
-  w_pad: usize, h_pad: usize,
-) {
-  let max_luma_w = (plane_bsize.width() - w_pad * 4) << XDEC;
-  let max_luma_h = (plane_bsize.height() - h_pad * 4) << YDEC;
-  let max_luma_x: usize = max_luma_w.max(8) - (1 << XDEC);
-  let max_luma_y: usize = max_luma_h.max(8) - (1 << YDEC);
-  let mut sum: i32 = 0;
-  for sub_y in 0..plane_bsize.height() {
-    for sub_x in 0..plane_bsize.width() {
-      // Refer to https://aomediacodec.github.io/av1-spec/#predict-chroma-from-luma-process
-      let luma_y = sub_y << YDEC;
-      let luma_x = sub_x << XDEC;
-      let y = luma_y.min(max_luma_y);
-      let x = luma_x.min(max_luma_x);
-      let mut sample: i16 = i16::cast_from(luma[y][x]);
-      if XDEC != 0 {
-        sample += i16::cast_from(luma[y][x + 1]);
-      }
-      if YDEC != 0 {
-        debug_assert!(XDEC != 0);
-        sample +=
-          i16::cast_from(luma[y + 1][x]) + i16::cast_from(luma[y + 1][x + 1]);
-      }
-      sample <<= 3 - XDEC - YDEC;
-      ac[sub_y * plane_bsize.width() + sub_x] = sample;
-      sum += sample as i32;
-    }
-  }
-  let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
-  let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
-
-  for sub_y in 0..plane_bsize.height() {
-    for sub_x in 0..plane_bsize.width() {
-      ac[sub_y * plane_bsize.width() + sub_x] -= average;
-    }
   }
 }
 
