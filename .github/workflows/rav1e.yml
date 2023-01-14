@@ -12,7 +12,6 @@ on:
 
 jobs:
   rustfmt-clippy:
-
     runs-on: ubuntu-22.04
 
     steps:
@@ -134,9 +133,8 @@ jobs:
         if: matrix.conf == 'grcov-codecov'
         run: |
           rustup component add llvm-tools-preview
-      - name: Generate Cargo.lock and Cargo.version
+      - name: Generate Cargo.version for cache key
         run: |
-          cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -299,9 +297,8 @@ jobs:
           override: true
           target: ${{ matrix.target }}
           default: true
-      - name: Generate Cargo.lock and Cargo.version
+      - name: Generate Cargo.version for cache key
         run: |
-          cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
         uses: actions/cache@v3
@@ -380,9 +377,8 @@ jobs:
           $CARGO_C_FILE = "cargo-c-windows-msvc"
           curl -LO "$LINK/$CARGO_C_FILE.zip"
           7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
-      - name: Generate Cargo.lock and Cargo.version
+      - name: Generate Cargo.version for cache key
         run: |
-          cargo update
           cargo --version > Cargo.version
       - name: Cache cargo registry
         uses: actions/cache@v3

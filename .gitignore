@@ -1,6 +1,5 @@
 aom_test
 target/
-Cargo.lock
 *.y4m
 *.ivf
 *.png
