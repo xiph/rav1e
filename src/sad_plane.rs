@@ -29,22 +29,16 @@ pub(crate) mod rust {
     src: &Plane<T>, dst: &Plane<T>, _cpu: CpuFeatureLevel,
   ) -> u64 {
     debug_assert!(src.cfg.width == dst.cfg.width);
-
-    let width = src.cfg.width;
+    debug_assert!(src.cfg.height == dst.cfg.height);
 
     src
       .rows_iter()
       .zip(dst.rows_iter())
       .map(|(src, dst)| {
-        let src = src.get(..width).unwrap_or(src);
-        let dst = dst.get(..width).unwrap_or(dst);
-
         src
           .iter()
           .zip(dst.iter())
-          .map(|(&p1, &p2)| {
-            (i16::cast_from(p1) - i16::cast_from(p2)).unsigned_abs() as u32
-          })
+          .map(|(&p1, &p2)| i32::cast_from(p1).abs_diff(i32::cast_from(p2)))
           .sum::<u32>() as u64
       })
       .sum()
