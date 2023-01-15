@@ -478,11 +478,7 @@ pub fn spatiotemporal_scale<T: Pixel>(
   // compared to using `Iterator::take`
   #[inline(always)]
   fn take_slice<T>(slice: &[T], n: usize) -> &[T] {
-    if n >= slice.len() {
-      slice
-    } else {
-      &slice[..n]
-    }
+    slice.get(..n).unwrap_or(slice)
   }
 
   let mut sum = 0;
