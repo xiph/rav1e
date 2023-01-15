@@ -10,8 +10,6 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use std::num::NonZeroUsize;
-
 use crate::serialize::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -195,80 +193,31 @@ impl BlockSize {
   pub fn from_width_and_height_opt(
     w: usize, h: usize,
   ) -> Result<BlockSize, InvalidBlockSize> {
-    static BLOCK_LUT: [[Result<BlockSize, InvalidBlockSize>; 6]; 6] = [
-      [
-        Ok(BLOCK_4X4),
-        Ok(BLOCK_4X8),
-        Ok(BLOCK_4X16),
-        Err(InvalidBlockSize), // X32
-        Err(InvalidBlockSize), // X64
-        Err(InvalidBlockSize), // X128
-      ],
-      [
-        Ok(BLOCK_8X4),
-        Ok(BLOCK_8X8),
-        Ok(BLOCK_8X16),
-        Ok(BLOCK_8X32),
-        Err(InvalidBlockSize), // X64
-        Err(InvalidBlockSize), // X128
-      ],
-      [
-        Ok(BLOCK_16X4),
-        Ok(BLOCK_16X8),
-        Ok(BLOCK_16X16),
-        Ok(BLOCK_16X32),
-        Ok(BLOCK_16X64),
-        Err(InvalidBlockSize), // X128
-      ],
-      [
-        Err(InvalidBlockSize), // X4
-        Ok(BLOCK_32X8),
-        Ok(BLOCK_32X16),
-        Ok(BLOCK_32X32),
-        Ok(BLOCK_32X64),
-        Err(InvalidBlockSize), // X128
-      ],
-      [
-        Err(InvalidBlockSize), // X4
-        Err(InvalidBlockSize), // X8
-        Ok(BLOCK_64X16),
-        Ok(BLOCK_64X32),
-        Ok(BLOCK_64X64),
-        Ok(BLOCK_64X128),
-      ],
-      [
-        Err(InvalidBlockSize), // X4
-        Err(InvalidBlockSize), // X8
-        Err(InvalidBlockSize), // X16
-        Err(InvalidBlockSize), // X32
-        Ok(BLOCK_128X64),
-        Ok(BLOCK_128X128),
-      ],
-    ];
-
-    if (4..=128).contains(&w) && (4..=128).contains(&h) {
-      // Check if w and h are both powers of 2; writing
-      // it this way allows us to reuse the tzcnt result later on.
-      //
-      // SAFETY: w/h are always nonzero due to previous range checks.
-      let w_tz = unsafe { NonZeroUsize::new_unchecked(w).trailing_zeros() };
-      if 1 << w_tz != w {
-        return Err(InvalidBlockSize);
-      }
-      let h_tz = unsafe { NonZeroUsize::new_unchecked(h).trailing_zeros() };
-      if 1 << h_tz != h {
-        return Err(InvalidBlockSize);
-      }
-
-      let x = w_tz as usize - 2;
-      let y = h_tz as usize - 2;
-
-      // SAFETY: Because all the statements in the if condition are true,
-      // indexing BLOCK_LUT with x and y will never be out-of-bounds.
-      return unsafe { *BLOCK_LUT.get_unchecked(x).get_unchecked(y) };
+    match (w, h) {
+      (4, 4) => Ok(BLOCK_4X4),
+      (4, 8) => Ok(BLOCK_4X8),
+      (4, 16) => Ok(BLOCK_4X16),
+      (8, 4) => Ok(BLOCK_8X4),
+      (8, 8) => Ok(BLOCK_8X8),
+      (8, 16) => Ok(BLOCK_8X16),
+      (8, 32) => Ok(BLOCK_8X32),
+      (16, 4) => Ok(BLOCK_16X4),
+      (16, 8) => Ok(BLOCK_16X8),
+      (16, 16) => Ok(BLOCK_16X16),
+      (16, 32) => Ok(BLOCK_16X32),
+      (16, 64) => Ok(BLOCK_16X64),
+      (32, 8) => Ok(BLOCK_32X8),
+      (32, 16) => Ok(BLOCK_32X16),
+      (32, 32) => Ok(BLOCK_32X32),
+      (32, 64) => Ok(BLOCK_32X64),
+      (64, 16) => Ok(BLOCK_64X16),
+      (64, 32) => Ok(BLOCK_64X32),
+      (64, 64) => Ok(BLOCK_64X64),
+      (64, 128) => Ok(BLOCK_64X128),
+      (128, 64) => Ok(BLOCK_128X64),
+      (128, 128) => Ok(BLOCK_128X128),
+      _ => Err(InvalidBlockSize),
     }
-
-    Err(InvalidBlockSize)
   }
 
   /// # Panics
