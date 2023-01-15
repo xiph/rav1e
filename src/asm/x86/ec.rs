@@ -12,7 +12,7 @@ use crate::ec::rust;
 use std::arch::x86_64::*;
 
 #[inline(always)]
-pub fn update_cdf(cdf: &mut [u16], val: u32) {
+pub fn update_cdf<const N: usize>(cdf: &mut [u16; N], val: u32) {
   if cdf.len() == 4 {
     // SAFETY: Calls Assembly code, which is only valid when the length of
     // `cdf` is 4.
