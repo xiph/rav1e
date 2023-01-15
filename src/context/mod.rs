@@ -134,18 +134,11 @@ pub const MV_LOW: i32 = -(1 << MV_IN_USE_BITS);
 
 #[inline(always)]
 pub const fn av1_get_mv_joint(mv: MotionVector) -> MvJointType {
-  if mv.row == 0 {
-    return if mv.col == 0 {
-      MvJointType::MV_JOINT_ZERO
-    } else {
-      MvJointType::MV_JOINT_HNZVZ
-    };
-  }
-
-  if mv.col == 0 {
-    MvJointType::MV_JOINT_HZVNZ
-  } else {
-    MvJointType::MV_JOINT_HNZVNZ
+  match (mv.row, mv.col) {
+    (0, 0) => MvJointType::MV_JOINT_ZERO,
+    (0, _) => MvJointType::MV_JOINT_HNZVZ,
+    (_, 0) => MvJointType::MV_JOINT_HZVNZ,
+    (_, _) => MvJointType::MV_JOINT_HNZVNZ,
   }
 }
 #[inline(always)]
