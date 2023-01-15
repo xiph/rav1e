@@ -1358,11 +1358,11 @@ fn write_key_frame_obus<T: Pixel>(
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
 fn diff<T: Pixel>(
   dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
-  width: usize, height: usize,
 ) {
+  debug_assert!(dst.len() % src1.rect().width == 0);
+
   for ((l, s1), s2) in dst
-    .chunks_mut(width)
-    .take(height)
+    .chunks_exact_mut(src1.rect().width)
     .zip(src1.rows_iter())
     .zip(src2.rows_iter())
   {
@@ -1424,7 +1424,11 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 ) -> (bool, ScaledDistortion) {
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[p].cfg;
   let tile_rect = ts.tile_rect().decimated(xdec, ydec);
-  let area = Area::BlockStartingAt { bo: tx_bo.0 };
+  let area = Area::BlockRect {
+    bo: tx_bo.0,
+    width: tx_size.width(),
+    height: tx_size.height(),
+  };
 
   if tx_bo.0.x >= ts.mi_width || tx_bo.0.y >= ts.mi_height {
     return (false, ScaledDistortion::zero());
@@ -1526,8 +1530,6 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       residual,
       &ts.input_tile.planes[p].subregion(area),
       &rec.subregion(area),
-      tx_size.width(),
-      tx_size.height(),
     );
   } else {
     residual.fill(0);
