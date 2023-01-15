@@ -147,11 +147,8 @@ macro_rules! plane_region_common {
       /// # Panics
       ///
       /// - If the configured dimensions are invalid
-      // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
-      #[allow(clippy::undocumented_unsafe_blocks)]
       #[inline(always)]
-      pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect:
-        Rect) -> Self {
+      pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect: Rect) -> Self {
         if cfg.width == 0 || cfg.height == 0 {
           return Self {
             // SAFETY: This is actually pretty unsafe.
@@ -167,19 +164,43 @@ macro_rules! plane_region_common {
         assert!(rect.y >= -(cfg.yorigin as isize));
         assert!(cfg.xorigin as isize + rect.x + rect.width as isize <= cfg.stride as isize);
         assert!(cfg.yorigin as isize + rect.y + rect.height as isize <= cfg.alloc_height as isize);
-        let origin = (cfg.yorigin as isize + rect.y) * cfg.stride as isize
-                    + cfg.xorigin as isize + rect.x;
+
+        // SAFETY: The above asserts ensure we do not go OOB.
+        unsafe { Self::from_slice_unsafe(data, cfg, rect)}
+      }
+
+      #[inline(always)]
+      pub unsafe fn from_slice_unsafe(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect: Rect) -> Self {
+        debug_assert!(rect.x >= -(cfg.xorigin as isize));
+        debug_assert!(rect.y >= -(cfg.yorigin as isize));
+        debug_assert!(cfg.xorigin as isize + rect.x + rect.width as isize <= cfg.stride as isize);
+        debug_assert!(cfg.yorigin as isize + rect.y + rect.height as isize <= cfg.alloc_height as isize);
+
+        let origin = (cfg.yorigin as isize + rect.y) * cfg.stride as isize + cfg.xorigin as isize + rect.x;
         Self {
-          // SAFETY: The above asserts ensure we do not go OOB.
-          data: unsafe { data.$as_ptr().offset(origin) },
+          data: data.$as_ptr().offset(origin),
           plane_cfg: cfg,
           rect,
           phantom: PhantomData,
         }
       }
+
       #[inline(always)]
       pub fn new(plane: &'a $($opt_mut)? Plane<T>, rect: Rect) -> Self {
         Self::from_slice(& $($opt_mut)? plane.data, &plane.cfg, rect)
+      }
+
+      #[inline(always)]
+      pub fn new_from_plane(plane: &'a $($opt_mut)? Plane<T>) -> Self {
+        let rect = Area::StartingAt { x: 0, y: 0 }.to_rect(
+          plane.cfg.xdec,
+          plane.cfg.ydec,
+          plane.cfg.stride - plane.cfg.xorigin,
+          plane.cfg.alloc_height - plane.cfg.yorigin,
+        );
+
+        // SAFETY: Area::StartingAt{}.to_rect is guaranteed to be the entire plane
+        unsafe { Self::from_slice_unsafe(& $($opt_mut)? plane.data, &plane.cfg, rect) }
       }
 
       #[inline(always)]

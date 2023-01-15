@@ -44,11 +44,11 @@ impl<T: Pixel> AsRegion<T> for Plane<T> {
 
   #[inline(always)]
   fn as_region(&self) -> PlaneRegion<'_, T> {
-    self.region(Area::StartingAt { x: 0, y: 0 })
+    PlaneRegion::new_from_plane(self)
   }
 
   #[inline(always)]
   fn as_region_mut(&mut self) -> PlaneRegionMut<'_, T> {
-    self.region_mut(Area::StartingAt { x: 0, y: 0 })
+    PlaneRegionMut::new_from_plane(self)
   }
 }
