@@ -37,7 +37,7 @@ type ec_window = u32;
 /// contents can be replayed into a `WriterEncoder`.
 pub trait Writer {
   /// Write a symbol `s`, using the passed in cdf reference; leaves `cdf` unchanged
-  fn symbol(&mut self, s: u32, cdf: &[u16]);
+  fn symbol<const CDF_LEN: usize>(&mut self, s: u32, cdf: &[u16; CDF_LEN]);
   /// return approximate number of fractional bits in `OD_BITRES`
   /// precision to write a symbol `s` using the passed in cdf reference;
   /// leaves `cdf` unchanged
@@ -526,7 +526,7 @@ where
   ///       must be greater than 32704. There should be at most 16 values.
   ///       The lower 6 bits of the last value hold the count.
   #[inline(always)]
-  fn symbol(&mut self, s: u32, cdf: &[u16]) {
+  fn symbol<const CDF_LEN: usize>(&mut self, s: u32, cdf: &[u16; CDF_LEN]) {
     debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));
     let s = s as usize;
     debug_assert!(s < cdf.len());
@@ -941,7 +941,7 @@ pub(crate) fn cdf_to_pdf<const CDF_LEN: usize>(
 pub(crate) mod rust {
   // Function to update the CDF for Writer calls that do so.
   #[inline]
-  pub fn update_cdf(cdf: &mut [u16], val: u32) {
+  pub fn update_cdf<const N: usize>(cdf: &mut [u16; N], val: u32) {
     use crate::context::CDF_LEN_MAX;
     let nsymbs = cdf.len();
     let mut rate = 3 + (nsymbs >> 1).min(2);
