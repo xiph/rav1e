@@ -34,41 +34,23 @@ pub(crate) mod rust {
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
     h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
-    assert!(w <= 128 && h <= 128);
-    assert!(plane_org.rect().width >= w && plane_org.rect().height >= h);
-    assert!(plane_ref.rect().width >= w && plane_ref.rect().height >= h);
+    debug_assert!(w <= 128 && h <= 128);
+    let plane_org =
+      plane_org.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
+    let plane_ref =
+      plane_ref.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
 
-    let mut sum: u32 = 0;
-
-    for (slice_org, slice_ref) in
-      plane_org.rows_iter().take(h).zip(plane_ref.rows_iter())
-    {
-      let mut iter_org = slice_org[..w].chunks_exact(4);
-      let mut iter_ref = slice_ref[..w].chunks_exact(4);
-      for (chunk_org, chunk_ref) in iter_org.by_ref().zip(iter_ref.by_ref()) {
-        let chunk_org = {
-          let mut i = chunk_org.iter();
-          [(); 4].map(|_| *i.next().unwrap()).map(i32::cast_from)
-        };
-        let chunk_ref = {
-          let mut i = chunk_ref.iter();
-          [(); 4].map(|_| *i.next().unwrap()).map(i32::cast_from)
-        };
-        sum += chunk_org
+    plane_org
+      .rows_iter()
+      .zip(plane_ref.rows_iter())
+      .map(|(src, dst)| {
+        src
           .iter()
-          .zip(chunk_ref)
-          .map(|(a, b)| (a - b).unsigned_abs())
-          .sum::<u32>();
-      }
-      sum += iter_org
-        .remainder()
-        .iter()
-        .zip(iter_ref.remainder().iter())
-        .map(|(&a, &b)| (i32::cast_from(a) - i32::cast_from(b)).unsigned_abs())
-        .sum::<u32>();
-    }
-
-    sum
+          .zip(dst)
+          .map(|(&p1, &p2)| i32::cast_from(p1).abs_diff(i32::cast_from(p2)))
+          .sum::<u32>()
+      })
+      .sum()
   }
 
   #[inline(always)]
