@@ -144,21 +144,27 @@ macro_rules! plane_region_common {
       pub fn is_null(&self) -> bool {
         self.data.is_null()
       }
+
+      #[cold]
+      pub fn empty(plane_cfg : &'a PlaneConfig) -> Self {
+        return Self {
+          // SAFETY: This is actually pretty unsafe.
+          // This means we need to ensure that no other method on this struct
+          // can access data if the dimensions are 0.
+          data: unsafe { std::ptr::null_mut::<T>() },
+          plane_cfg,
+          rect: Rect::default(),
+          phantom: PhantomData,
+        }
+      }
+
       /// # Panics
       ///
       /// - If the configured dimensions are invalid
       #[inline(always)]
       pub fn from_slice(data: &'a $($opt_mut)? [T], cfg: &'a PlaneConfig, rect: Rect) -> Self {
         if cfg.width == 0 || cfg.height == 0 {
-          return Self {
-            // SAFETY: This is actually pretty unsafe.
-            // This means we need to ensure that no other method on this struct
-            // can access data if the dimensions are 0.
-            data: unsafe { std::ptr::null_mut::<T>() },
-            plane_cfg: cfg,
-            rect: Rect::default(),
-            phantom: PhantomData,
-          }
+          return Self::empty(&cfg);
         }
         assert!(rect.x >= -(cfg.xorigin as isize));
         assert!(rect.y >= -(cfg.yorigin as isize));
@@ -284,40 +290,31 @@ macro_rules! plane_region_common {
       #[inline(always)]
       pub fn subregion(&self, area: Area) -> PlaneRegion<'_, T> {
         if self.data.is_null() {
-          PlaneRegion {
-            data: self.data,
-            plane_cfg: &self.plane_cfg,
-            rect: Rect::default(),
-            phantom: PhantomData,
-          }
-        } else {
-          let rect = area.to_rect(
-            self.plane_cfg.xdec,
-            self.plane_cfg.ydec,
-            self.rect.width,
-            self.rect.height,
-          );
-          assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
-          assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
-          // SAFETY: The above asserts ensure we do not go outside the original rectangle.
-          //
-          // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
-          #[allow(clippy::undocumented_unsafe_blocks)]
-          let data = unsafe {
-            self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
-          };
-          let absolute_rect = Rect {
-            x: self.rect.x + rect.x,
-            y: self.rect.y + rect.y,
-            width: rect.width,
-            height: rect.height,
-          };
-          PlaneRegion {
-            data,
-            plane_cfg: &self.plane_cfg,
-            rect: absolute_rect,
-            phantom: PhantomData,
-          }
+          return PlaneRegion::empty(&self.plane_cfg);
+        }
+        let rect = area.to_rect(
+          self.plane_cfg.xdec,
+          self.plane_cfg.ydec,
+          self.rect.width,
+          self.rect.height,
+        );
+        assert!(rect.x >= 0 && rect.x as usize <= self.rect.width);
+        assert!(rect.y >= 0 && rect.y as usize <= self.rect.height);
+        // SAFETY: The above asserts ensure we do not go outside the original rectangle.
+        let data = unsafe {
+          self.data.add(rect.y as usize * self.plane_cfg.stride + rect.x as usize)
+        };
+        let absolute_rect = Rect {
+          x: self.rect.x + rect.x,
+          y: self.rect.y + rect.y,
+          width: rect.width,
+          height: rect.height,
+        };
+        PlaneRegion {
+          data,
+          plane_cfg: &self.plane_cfg,
+          rect: absolute_rect,
+          phantom: PhantomData,
         }
       }
 
