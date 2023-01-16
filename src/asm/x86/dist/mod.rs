@@ -166,12 +166,13 @@ pub(crate) const fn to_index(bsize: BlockSize) -> usize {
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_sad<T: Pixel>(
-  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bit_depth: usize,
+  cpu: CpuFeatureLevel,
 ) -> u32 {
-  let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
+  let bsize_opt =
+    BlockSize::from_width_and_height_opt(src.rect().width, src.rect().height);
 
-  let call_rust = || -> u32 { rust::get_sad(dst, src, w, h, bit_depth, cpu) };
+  let call_rust = || -> u32 { rust::get_sad(dst, src, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
@@ -220,12 +221,14 @@ pub fn get_sad<T: Pixel>(
 #[inline(always)]
 #[allow(clippy::let_and_return)]
 pub fn get_satd<T: Pixel>(
-  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, bit_depth: usize,
+  cpu: CpuFeatureLevel,
 ) -> u32 {
+  let w = src.rect().width;
+  let h = src.rect().height;
   let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
 
-  let call_rust = || -> u32 { rust::get_satd(dst, src, w, h, bit_depth, cpu) };
+  let call_rust = || -> u32 { rust::get_satd(dst, src, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
@@ -565,8 +568,8 @@ mod test {
                 *s = random::<u8>() as u16 * $BD / 8;
                 *d = random::<u8>() as u16 * $BD / 8;
               }
-              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::RUST);
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $BD, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             } else {
@@ -578,8 +581,8 @@ mod test {
                 *s = random::<u8>();
                 *d = random::<u8>();
               }
-              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $W, $H, $BD, CpuFeatureLevel::RUST);
+              let result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(), $BD, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = [<get_ $DIST_TY>](&src.as_region(), &dst.as_region(),  $BD, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             }

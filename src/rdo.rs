@@ -1337,15 +1337,16 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
         &mut ts.inter_compound_buffers,
       );
 
-      let plane_org = ts.input_tile.planes[0]
-        .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+      let plane_org = ts.input_tile.planes[0].subregion(Area::BlockRect {
+        bo: tile_bo.0,
+        width: bsize.width(),
+        height: bsize.height(),
+      });
       let plane_ref = rec_region.as_const();
 
       let satd = get_satd(
         &plane_org,
         &plane_ref,
-        bsize.width(),
-        bsize.height(),
         fi.sequence.bit_depth,
         fi.cpu_feature_level,
       );
@@ -1482,15 +1483,16 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
           fi.cpu_feature_level,
         );
 
-        let plane_org = ts.input_tile.planes[0]
-          .subregion(Area::BlockStartingAt { bo: tile_bo.0 });
+        let plane_org = ts.input_tile.planes[0].subregion(Area::BlockRect {
+          bo: tile_bo.0,
+          width: tx_size.width(),
+          height: tx_size.height(),
+        });
         let plane_ref = rec_region.as_const();
 
         satds_all[luma_mode as usize] = get_satd(
           &plane_org,
           &plane_ref,
-          tx_size.width(),
-          tx_size.height(),
           fi.sequence.bit_depth,
           fi.cpu_feature_level,
         );
