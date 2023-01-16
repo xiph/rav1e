@@ -912,61 +912,67 @@ impl<T: Pixel> ContextInner<T> {
 
     lookahead_intra_costs_lines
       .zip(block_importances_lines)
+      .zip(me_stats.rows_iter().step_by(2))
       .enumerate()
-      .flat_map(|(y, (lookahead_intra_costs, block_importances))| {
-        lookahead_intra_costs
-          .iter()
-          .zip(block_importances.iter())
-          .enumerate()
-          .map(move |(x, (&intra_cost, &future_importance))| {
-            let mv = me_stats[y * 2][x * 2].mv;
+      .flat_map(
+        |(y, ((lookahead_intra_costs, block_importances), me_stats_line))| {
+          lookahead_intra_costs
+            .iter()
+            .zip(block_importances.iter())
+            .zip(me_stats_line.iter().step_by(2))
+            .enumerate()
+            .map(move |(x, ((&intra_cost, &future_importance), &me_stat))| {
+              let mv = me_stat.mv;
 
-            // Coordinates of the top-left corner of the reference block, in MV
-            // units.
-            let reference_x =
-              x as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
-            let reference_y =
-              y as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
+              // Coordinates of the top-left corner of the reference block, in MV
+              // units.
+              let reference_x =
+                x as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.col as i64;
+              let reference_y =
+                y as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
-            let region_org = plane_org.region(Area::Rect {
-              x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-              y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-              width: IMPORTANCE_BLOCK_SIZE,
-              height: IMPORTANCE_BLOCK_SIZE,
-            });
+              let region_org = plane_org.region(Area::Rect {
+                x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
+                y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
+                width: IMPORTANCE_BLOCK_SIZE,
+                height: IMPORTANCE_BLOCK_SIZE,
+              });
 
-            let region_ref = plane_ref.region(Area::Rect {
-              x: reference_x as isize / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-              y: reference_y as isize / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-              width: IMPORTANCE_BLOCK_SIZE,
-              height: IMPORTANCE_BLOCK_SIZE,
-            });
+              let region_ref = plane_ref.region(Area::Rect {
+                x: reference_x as isize
+                  / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
+                y: reference_y as isize
+                  / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
+                width: IMPORTANCE_BLOCK_SIZE,
+                height: IMPORTANCE_BLOCK_SIZE,
+              });
 
-            let inter_cost = get_satd(
-              &region_org,
-              &region_ref,
-              bsize.width(),
-              bsize.height(),
-              bit_depth,
-              fi.cpu_feature_level,
-            ) as f32;
+              let inter_cost = get_satd(
+                &region_org,
+                &region_ref,
+                bsize.width(),
+                bsize.height(),
+                bit_depth,
+                fi.cpu_feature_level,
+              ) as f32;
 
-            let intra_cost = intra_cost as f32;
-            //          let intra_cost = lookahead_intra_costs[x] as f32;
-            //          let future_importance = block_importances[x];
+              let intra_cost = intra_cost as f32;
+              //          let intra_cost = lookahead_intra_costs[x] as f32;
+              //          let future_importance = block_importances[x];
 
-            let propagate_fraction = if intra_cost <= inter_cost {
-              0.
-            } else {
-              1. - inter_cost / intra_cost
-            };
+              let propagate_fraction = if intra_cost <= inter_cost {
+                0.
+              } else {
+                1. - inter_cost / intra_cost
+              };
 
-            let propagate_amount = (intra_cost + future_importance)
-              * propagate_fraction
-              / len as f32;
-            (propagate_amount, reference_x, reference_y)
-          })
-      })
+              let propagate_amount = (intra_cost + future_importance)
+                * propagate_fraction
+                / len as f32;
+              (propagate_amount, reference_x, reference_y)
+            })
+        },
+      )
       .for_each(|(propagate_amount, reference_x, reference_y)| {
         let mut propagate =
           |block_x_in_mv_units, block_y_in_mv_units, fraction| {

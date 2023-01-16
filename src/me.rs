@@ -54,6 +54,11 @@ pub type WriteGuardMEStats<'a> =
   RwLockWriteGuard<'a, [FrameMEStats; REF_FRAMES]>;
 
 impl FrameMEStats {
+  #[inline]
+  pub fn rows_iter(&self) -> std::slice::ChunksExact<'_, MEStats> {
+    self.stats.chunks_exact(self.cols)
+  }
+
   pub fn new(cols: usize, rows: usize) -> Self {
     Self {
       // dynamic allocation: once per frame
