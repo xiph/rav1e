@@ -320,14 +320,12 @@ macro_rules! get_sad_hbd_avx2 {
         ) -> u32 {
           let mut sum = 0;
           for w in (0..$W).step_by($BS) {
-            for h in (0..$H).step_by($BS) {
-              sum += [<rav1e_sad $BS x $BS _hbd_avx2>](
-                src.offset(w + h * src_stride / 2),
-                src_stride,
-                dst.offset(w + h * dst_stride / 2),
-                dst_stride
-              );
-            }
+            sum += [<rav1e_sad $BS x $H _hbd_avx2>](
+              src.offset(w),
+              src_stride,
+              dst.offset(w),
+              dst_stride
+            );
           }
           sum
         }
@@ -361,9 +359,9 @@ get_sad_hbd_ssse3!(
 );
 
 get_sad_hbd_avx2!(
-  // 64x64 base
-  (128, 128, 32),
-  (128, 64, 32)
+  // 64xH base
+  (128, 128, 64),
+  (128, 64, 64)
 );
 
 static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
