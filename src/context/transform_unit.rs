@@ -782,10 +782,10 @@ impl<'a> ContextWriter<'a> {
   ) {
     // Coefficients and levels are transposed from how they work in the spec
     for (coeffs_col, levels_col) in
-      coeffs.chunks(height).zip(levels.chunks_mut(levels_stride))
+      coeffs.chunks_exact(height).zip(levels.chunks_exact_mut(levels_stride))
     {
-      for (coeff, level) in coeffs_col.iter().zip(levels_col.iter_mut()) {
-        *level = clamp(coeff.abs(), T::cast_from(0), T::cast_from(127)).as_();
+      for (coeff, level) in coeffs_col.iter().zip(levels_col) {
+        *level = coeff.abs().min(T::cast_from(127)).as_();
       }
     }
   }
