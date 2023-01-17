@@ -447,7 +447,7 @@ macro_rules! get_sad_hbd_avx2_WxH {
         unsafe extern fn [<rav1e_sad_ $W x $H _hbd_avx2>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u32 {
-          rav1e_sad_wxh_hbd_avx2::<[<$W>]>(
+          rav1e_sad_wxh_hbd_avx2::<$W>(
                 src,
                 src_stride,
                 dst,
