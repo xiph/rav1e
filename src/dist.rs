@@ -238,39 +238,48 @@ pub(crate) mod rust {
     scale_stride: usize, w: usize, h: usize, _bit_depth: usize,
     _cpu: CpuFeatureLevel,
   ) -> u64 {
+    let src1 = src1.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
     // Always chunk and apply scaling on the sse of squares the size of
     // decimated/sub-sampled importance block sizes.
     // Warning: Changing this will require changing/disabling assembly.
-    let chunk_size = IMPORTANCE_BLOCK_SIZE >> 1;
+    let chunk_size: usize = IMPORTANCE_BLOCK_SIZE >> 1;
 
-    let mut sse: u64 = 0;
+    // Iterator of a row of scales, stretched out to be per row
+    let scales = scale.chunks_exact(scale_stride);
 
-    for block_y in 0..(h + chunk_size - 1) / chunk_size {
-      for block_x in 0..(w + chunk_size - 1) / chunk_size {
-        let mut block_sse: u32 = 0;
+    let sse = src1
+      .vert_windows(chunk_size)
+      .step_by(chunk_size)
+      .zip(src2.vert_windows(chunk_size).step_by(chunk_size))
+      .zip(scales)
+      .map(|((row1, row2), scales)| {
+        row1
+          .horz_windows(chunk_size)
+          .step_by(chunk_size)
+          .zip(row2.horz_windows(chunk_size).step_by(chunk_size))
+          .zip(scales)
+          .map(|((chunk1, chunk2), &scale)| {
+            let sum = chunk1
+              .rows_iter()
+              .zip(chunk2.rows_iter())
+              .map(|(chunk_row1, chunk_row2)| {
+                chunk_row1
+                  .iter()
+                  .zip(chunk_row2)
+                  .map(|(&a, &b)| {
+                    let c = i32::cast_from(a) - i32::cast_from(b);
+                    (c * c) as u32
+                  })
+                  .sum::<u32>()
+              })
+              .sum::<u32>();
+            (sum as u64 * scale as u64 + (1 << GET_WEIGHTED_SSE_SHIFT >> 1))
+              >> GET_WEIGHTED_SSE_SHIFT
+          })
+          .sum::<u64>()
+      })
+      .sum::<u64>();
 
-        for j in 0..chunk_size.min(h - block_y * chunk_size) {
-          let s1 = &src1[block_y * chunk_size + j]
-            [block_x * chunk_size..((block_x + 1) * chunk_size).min(w)];
-          let s2 = &src2[block_y * chunk_size + j]
-            [block_x * chunk_size..((block_x + 1) * chunk_size).min(w)];
-
-          block_sse += s1
-            .iter()
-            .zip(s2)
-            .map(|(&a, &b)| {
-              let c = (i16::cast_from(a) - i16::cast_from(b)) as i32;
-              (c * c) as u32
-            })
-            .sum::<u32>();
-        }
-
-        sse += (block_sse as u64
-          * scale[block_y * scale_stride + block_x] as u64
-          + (1 << GET_WEIGHTED_SSE_SHIFT >> 1))
-          >> GET_WEIGHTED_SSE_SHIFT;
-      }
-    }
     let den = DistortionScale::new(1, 1 << GET_WEIGHTED_SSE_SHIFT).0 as u64;
     (sse + (den >> 1)) / den
   }
