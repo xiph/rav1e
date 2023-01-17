@@ -323,10 +323,8 @@ pub(crate) mod rust {
     let mut sum_s2: u32 = 0; // sum(src_{i,j}^2)
     let mut sum_d2: u32 = 0; // sum(dst_{i,j}^2)
     let mut sum_sd: u32 = 0; // sum(src_{i,j} * dst_{i,j})
-    for j in 0..h {
-      let row1 = &src[j][0..w];
-      let row2 = &dst[j][0..w];
-      for (s, d) in row1.iter().zip(row2) {
+    for (row1, row2) in src.rows_iter().take(h).zip(dst.rows_iter()) {
+      for (s, d) in row1[..w].iter().zip(row2) {
         let s: u32 = u32::cast_from(*s);
         let d: u32 = u32::cast_from(*d);
         sum_s += s;
