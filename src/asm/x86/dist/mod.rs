@@ -448,12 +448,12 @@ macro_rules! get_sad_hbd_avx2_WxH {
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
         ) -> u32 {
           rav1e_sad_wxh_hbd_avx2::<$W>(
-                src,
-                src_stride,
-                dst,
-                dst_stride,
-                $H,
-              )
+            src,
+            src_stride,
+            dst,
+            dst_stride,
+            $H,
+          )
         }
       }
     )*
