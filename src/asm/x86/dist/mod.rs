@@ -67,6 +67,7 @@ use std::arch::x86_64::*;
 
 /// Horizontally sum 8 32-bit values in a YMM register
 #[inline]
+#[target_feature(enable = "avx2")]
 unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
   // We split the vector in half and then add (2, 3) + (0, 1), and finally 0 + 1.
   let m1 = _mm256_extracti128_si256(ymm, 1);
@@ -91,6 +92,7 @@ unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
 /// - If `W` * `n_rows` > 256
 /// - If `W` is not a multiple of 16
 #[inline]
+#[target_feature(enable = "avx2")]
 unsafe fn rav1e_sad_wxh_hbd_avx2_inner<const W: usize>(
   src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
   n_rows: usize,
@@ -102,23 +104,22 @@ unsafe fn rav1e_sad_wxh_hbd_avx2_inner<const W: usize>(
   // Check we load the right number of values
   assert_eq!(W % LOADS_PER_REGISTER, 0);
 
-  let sum16 = (0..n_rows as isize)
-    .flat_map(|n| {
-      (0..(W / LOADS_PER_REGISTER) as isize).map(move |x| unsafe {
-        _mm256_abs_epi16(_mm256_sub_epi16(
-          _mm256_loadu_si256(
-            src.offset(n * src_stride + x * LOADS_PER_REGISTER as isize * 2)
-              as *const _,
-          ),
-          _mm256_loadu_si256(
-            dst.offset(n * dst_stride + x * LOADS_PER_REGISTER as isize * 2)
-              as *const _,
-          ),
-        ))
-      }) // We use reduce here as it lets the optimiser instruction-parallel the summation.
+  let mut sum16 = _mm256_setzero_si256();
+  (0..n_rows as isize).for_each(|n| {
+    (0..(W / LOADS_PER_REGISTER) as isize).for_each(|x| {
+      let res = _mm256_abs_epi16(_mm256_sub_epi16(
+        _mm256_loadu_si256(
+          src.offset(n * src_stride + x * LOADS_PER_REGISTER as isize * 2)
+            as *const _,
+        ),
+        _mm256_loadu_si256(
+          dst.offset(n * dst_stride + x * LOADS_PER_REGISTER as isize * 2)
+            as *const _,
+        ),
+      ));
+      sum16 = _mm256_add_epi16(sum16, res);
     })
-    .reduce(|a, b| unsafe { _mm256_add_epi16(a, b) })
-    .unwrap();
+  });
 
   let b = _mm256_unpackhi_epi16(sum16, _mm256_setzero_si256());
   let c = _mm256_unpacklo_epi16(sum16, _mm256_setzero_si256());
@@ -130,6 +131,7 @@ unsafe fn rav1e_sad_wxh_hbd_avx2_inner<const W: usize>(
 ///
 /// By convention, `src_stride` and `dst_stride` are measured in bytes, not u16's
 #[inline]
+#[target_feature(enable = "avx2")]
 unsafe fn rav1e_sad_wxh_hbd_avx2<const W: usize>(
   src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
   n_rows: usize,
@@ -150,16 +152,15 @@ unsafe fn rav1e_sad_wxh_hbd_avx2<const W: usize>(
     assert_eq!(MAX_INNER_SIZE % W, 0);
     let row_step = (MAX_INNER_SIZE / W).min(n_rows);
     assert_eq!(n_rows % row_step, 0);
-    let sum = (0..(n_rows / row_step) as isize)
-      .map(|w| {
-        let src = src.offset(w * row_step as isize * src_stride);
-        let dst = dst.offset(w * row_step as isize * dst_stride);
-        rav1e_sad_wxh_hbd_avx2_inner::<W>(
-          src, src_stride, dst, dst_stride, row_step,
-        )
-      })
-      .reduce(|a, b| unsafe { _mm256_add_epi32(a, b) })
-      .unwrap();
+    let mut sum = _mm256_setzero_si256();
+    (0..(n_rows / row_step) as isize).for_each(|w| {
+      let src = src.offset(w * row_step as isize * src_stride);
+      let dst = dst.offset(w * row_step as isize * dst_stride);
+      let res = rav1e_sad_wxh_hbd_avx2_inner::<W>(
+        src, src_stride, dst, dst_stride, row_step,
+      );
+      sum = _mm256_add_epi32(sum, res)
+    });
     mm256_sum_i32(sum) as u32
   } else {
     // If we can't sum an entire row in one shot, split each row up
@@ -595,11 +596,16 @@ static SAD_HBD_FNS_AVX2: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
 
   use BlockSize::*;
 
+  out[BLOCK_4X4 as usize] = Some(rav1e_sad_4x4_hbd_ssse3);
+  out[BLOCK_8X8 as usize] = Some(rav1e_sad_8x8_hbd_ssse3);
   out[BLOCK_16X16 as usize] = Some(rav1e_sad_16x16_hbd_avx2);
   out[BLOCK_32X32 as usize] = Some(rav1e_sad_32x32_hbd_avx2);
   out[BLOCK_64X64 as usize] = Some(rav1e_sad_64x64_hbd_avx2);
   out[BLOCK_128X128 as usize] = Some(rav1e_sad_128x128_hbd_avx2);
 
+  out[BLOCK_4X8 as usize] = Some(rav1e_sad_4x8_hbd_ssse3);
+  out[BLOCK_8X4 as usize] = Some(rav1e_sad_8x4_hbd_ssse3);
+  out[BLOCK_8X16 as usize] = Some(rav1e_sad_8x16_hbd_ssse3);
   out[BLOCK_16X8 as usize] = Some(rav1e_sad_16x8_hbd_avx2);
   out[BLOCK_16X32 as usize] = Some(rav1e_sad_16x32_hbd_avx2);
   out[BLOCK_32X16 as usize] = Some(rav1e_sad_32x16_hbd_avx2);
@@ -608,6 +614,7 @@ static SAD_HBD_FNS_AVX2: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
   out[BLOCK_64X128 as usize] = Some(rav1e_sad_64x128_hbd_avx2);
   out[BLOCK_128X64 as usize] = Some(rav1e_sad_128x64_hbd_avx2);
 
+  out[BLOCK_4X16 as usize] = Some(rav1e_sad_4x16_hbd_ssse3);
   out[BLOCK_16X4 as usize] = Some(rav1e_sad_16x4_hbd_avx2);
   out[BLOCK_32X8 as usize] = Some(rav1e_sad_32x8_hbd_avx2);
   out[BLOCK_16X64 as usize] = Some(rav1e_sad_16x64_hbd_avx2);
