@@ -80,7 +80,7 @@ pub fn get_sad<T: Pixel>(
   let bsize_opt =
     BlockSize::from_width_and_height_opt(src.rect().width, src.rect().height);
 
-  let call_rust = || -> u32 { rust::get_sad(dst, src, bit_depth, cpu) };
+  let call_rust = || -> u32 { rust::get_sad(src, dst, bit_depth, cpu) };
 
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
