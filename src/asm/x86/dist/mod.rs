@@ -93,6 +93,19 @@ declare_asm_dist_fn![
   // SSE4
   (rav1e_satd_4x4_sse4, u8),
   // AVX
+  (rav1e_sad16x4_hbd_avx2, u16),
+  (rav1e_sad16x8_hbd_avx2, u16),
+  (rav1e_sad16x16_hbd_avx2, u16),
+  (rav1e_sad16x32_hbd_avx2, u16),
+  (rav1e_sad16x64_hbd_avx2, u16),
+  (rav1e_sad32x8_hbd_avx2, u16),
+  (rav1e_sad32x16_hbd_avx2, u16),
+  (rav1e_sad32x32_hbd_avx2, u16),
+  (rav1e_sad32x64_hbd_avx2, u16),
+  (rav1e_sad64x16_hbd_avx2, u16),
+  (rav1e_sad64x32_hbd_avx2, u16),
+  (rav1e_sad64x64_hbd_avx2, u16),
+  (rav1e_sad64x128_hbd_avx2, u16),
   (rav1e_sad32x8_avx2, u8),
   (rav1e_sad32x16_avx2, u8),
   (rav1e_sad32x32_avx2, u8),
@@ -297,6 +310,32 @@ macro_rules! get_sad_hbd_ssse3 {
   }
 }
 
+macro_rules! get_sad_hbd_avx2 {
+  ($(($W:expr, $H:expr, $BS:expr)),*) => {
+    $(
+      paste::item! {
+        #[target_feature(enable = "avx2")]
+        unsafe extern fn [<rav1e_sad $W x $H _hbd_avx2>](
+          src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+        ) -> u32 {
+          let mut sum = 0;
+          for w in (0..$W).step_by($BS) {
+            for h in (0..$H).step_by($BS) {
+              sum += [<rav1e_sad $BS x $BS _hbd_avx2>](
+                src.offset(w + h * src_stride / 2),
+                src_stride,
+                dst.offset(w + h * dst_stride / 2),
+                dst_stride
+              );
+            }
+          }
+          sum
+        }
+      }
+    )*
+  }
+}
+
 get_sad_hbd_ssse3!(
   // 4x4 base
   (8, 8, 4),
@@ -308,7 +347,6 @@ get_sad_hbd_ssse3!(
   (16, 4, 4),
   (8, 32, 4),
   (32, 8, 4),
-  // 16x16 base
   (32, 32, 16),
   (64, 64, 16),
   (128, 128, 16),
@@ -320,6 +358,12 @@ get_sad_hbd_ssse3!(
   (128, 64, 16),
   (16, 64, 16),
   (64, 16, 16)
+);
+
+get_sad_hbd_avx2!(
+  // 64x64 base
+  (128, 128, 32),
+  (128, 64, 32)
 );
 
 static SAD_FNS_SSE2: [Option<SadFn>; DIST_FNS_LENGTH] = {
@@ -433,10 +477,36 @@ static SAD_HBD_FNS_SSSE3: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
   out
 };
 
+static SAD_HBD_FNS_AVX2: [Option<SadHBDFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SadHBDFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_16X16 as usize] = Some(rav1e_sad16x16_hbd_avx2);
+  out[BLOCK_32X32 as usize] = Some(rav1e_sad32x32_hbd_avx2);
+  out[BLOCK_64X64 as usize] = Some(rav1e_sad64x64_hbd_avx2);
+  out[BLOCK_128X128 as usize] = Some(rav1e_sad128x128_hbd_avx2);
+
+  out[BLOCK_16X8 as usize] = Some(rav1e_sad16x8_hbd_avx2);
+  out[BLOCK_16X32 as usize] = Some(rav1e_sad16x32_hbd_avx2);
+  out[BLOCK_32X16 as usize] = Some(rav1e_sad32x16_hbd_avx2);
+  out[BLOCK_32X64 as usize] = Some(rav1e_sad32x64_hbd_avx2);
+  out[BLOCK_64X32 as usize] = Some(rav1e_sad64x32_hbd_avx2);
+  out[BLOCK_64X128 as usize] = Some(rav1e_sad64x128_hbd_avx2);
+  out[BLOCK_128X64 as usize] = Some(rav1e_sad128x64_hbd_avx2);
+
+  out[BLOCK_16X4 as usize] = Some(rav1e_sad16x4_hbd_avx2);
+  out[BLOCK_32X8 as usize] = Some(rav1e_sad32x8_hbd_avx2);
+  out[BLOCK_16X64 as usize] = Some(rav1e_sad16x64_hbd_avx2);
+  out[BLOCK_64X16 as usize] = Some(rav1e_sad64x16_hbd_avx2);
+
+  out
+};
+
 cpu_function_lookup_table!(
   SAD_HBD_FNS: [[Option<SadHBDFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
-  [SSSE3]
+  [SSSE3, AVX2]
 );
 
 static SATD_FNS_SSSE3: [Option<SatdFn>; DIST_FNS_LENGTH] = {
@@ -616,6 +686,35 @@ mod test {
     10,
     ssse3,
     "ssse3"
+  );
+
+  test_dist_fns!(
+    (4, 4),
+    (16, 16),
+    (8, 8),
+    (4, 8),
+    (8, 4),
+    (8, 16),
+    (16, 8),
+    (4, 16),
+    (16, 4),
+    (8, 32),
+    (32, 8),
+    (32, 32),
+    (64, 64),
+    (128, 128),
+    (16, 32),
+    (32, 16),
+    (32, 64),
+    (64, 32),
+    (64, 128),
+    (128, 64),
+    (16, 64),
+    (64, 16),
+    sad,
+    10,
+    avx2,
+    "avx2"
   );
 
   test_dist_fns!(
