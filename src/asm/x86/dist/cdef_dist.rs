@@ -13,6 +13,7 @@ use crate::dist::*;
 use crate::tiling::PlaneRegion;
 use crate::util::Pixel;
 use crate::util::PixelType;
+use std::arch::x86_64::*;
 
 type CdefDistKernelFn = unsafe extern fn(
   src: *const u8,
@@ -21,6 +22,13 @@ type CdefDistKernelFn = unsafe extern fn(
   dst_stride: isize,
   ret_ptr: *mut u32,
 );
+
+type CdefDistKernelHBDFn = unsafe fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+) -> (u32, u32, u32);
 
 extern {
   fn rav1e_cdef_dist_kernel_4x4_sse2(
@@ -63,12 +71,12 @@ pub fn cdef_dist_kernel<T: Pixel>(
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
 
-  let mut ret_buf = [0u32; 3];
-  match T::type_enum() {
+  let (svar, dvar, sse) = match T::type_enum() {
     PixelType::U8 => {
       if let Some(func) =
         CDEF_DIST_KERNEL_FNS[cpu.as_index()][kernel_fn_index(w, h)]
       {
+        let mut ret_buf = [0u32; 3];
         // SAFETY: Calls Assembly code.
         unsafe {
           func(
@@ -79,16 +87,30 @@ pub fn cdef_dist_kernel<T: Pixel>(
             ret_buf.as_mut_ptr(),
           )
         }
+
+        (ret_buf[0], ret_buf[1], ret_buf[2])
       } else {
         return call_rust();
       }
     }
-    PixelType::U16 => return call_rust(),
-  }
-
-  let svar = ret_buf[0];
-  let dvar = ret_buf[1];
-  let sse = ret_buf[2];
+    PixelType::U16 => {
+      if let Some(func) =
+        CDEF_DIST_KERNEL_HBD_FNS[cpu.as_index()][kernel_fn_index(w, h)]
+      {
+        // SAFETY: Calls Assembly code.
+        unsafe {
+          func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        }
+      } else {
+        return call_rust();
+      }
+    }
+  };
 
   let dist = apply_ssim_boost(sse, svar, dvar, bit_depth);
   #[cfg(feature = "check_asm")]
@@ -126,6 +148,98 @@ cpu_function_lookup_table!(
     [[Option<CdefDistKernelFn>; CDEF_DIST_KERNEL_FNS_LENGTH]],
   default: [None; CDEF_DIST_KERNEL_FNS_LENGTH],
   [SSE2]
+);
+
+#[target_feature(enable = "avx2")]
+#[inline]
+unsafe fn mm256_sum_i32(ymm: __m256i) -> i32 {
+  // We split the vector in half and then add the two halves and sum.
+  let m1 = _mm256_extracti128_si256(ymm, 1);
+  let m2 = _mm256_castsi256_si128(ymm);
+  let m2 = _mm_add_epi32(m2, m1);
+  let m1 = _mm_shuffle_epi32(m2, 0b11_10_11_10);
+  let m2 = _mm_add_epi32(m2, m1);
+  let m1 = _mm_shuffle_epi32(m2, 0b01_01_01_01);
+  let m2 = _mm_add_epi32(m2, m1);
+  _mm_cvtsi128_si32(m2)
+}
+
+#[target_feature(enable = "avx2")]
+#[inline]
+unsafe fn rav1e_cdef_dist_kernel_8x8_hbd_avx2(
+  src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+) -> (u32, u32, u32) {
+  let src = src as *const u8;
+  let dst = dst as *const u8;
+
+  unsafe fn sum16(src: *const u8, src_stride: isize) -> u32 {
+    let h = 8;
+    let res = (0..h)
+      .map(|row| _mm_load_si128(src.offset(row * src_stride) as *const _))
+      .reduce(|a, b| _mm_add_epi16(a, b))
+      .unwrap();
+
+    let m32 = _mm256_cvtepi16_epi32(res);
+    mm256_sum_i32(m32) as u32
+  }
+  unsafe fn mpadd32(
+    src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
+  ) -> u32 {
+    let h = 8;
+    let res = (0..h / 2)
+      .map(|row| {
+        let s1 = _mm_load_si128(src.offset(2 * row * src_stride) as *const _);
+        let s2 =
+          _mm_load_si128(src.offset((2 * row + 1) * src_stride) as *const _);
+        let s = _mm256_inserti128_si256(_mm256_castsi128_si256(s1), s2, 1);
+
+        let d1 = _mm_load_si128(dst.offset(2 * row * dst_stride) as *const _);
+        let d2 =
+          _mm_load_si128(dst.offset((2 * row + 1) * dst_stride) as *const _);
+        let d = _mm256_inserti128_si256(_mm256_castsi128_si256(d1), d2, 1);
+
+        _mm256_madd_epi16(s, d)
+      })
+      .reduce(|a, b| _mm256_add_epi32(a, b))
+      .unwrap();
+    mm256_sum_i32(res) as u32
+  }
+
+  let sum_s = sum16(src, src_stride);
+  let sum_d = sum16(dst, dst_stride);
+  let sum_s2 = mpadd32(src, src_stride, src, src_stride);
+  let sum_d2 = mpadd32(dst, dst_stride, dst, dst_stride);
+  let sum_sd = mpadd32(src, src_stride, dst, dst_stride);
+
+  // To get the distortion, compute sum of squared error and apply a weight
+  // based on the variance of the two planes.
+  let sse = sum_d2 + sum_s2 - 2 * sum_sd;
+
+  // Convert to 64-bits to avoid overflow when squaring
+  let sum_s = sum_s as u64;
+  let sum_d = sum_d as u64;
+
+  let svar = (sum_s2 as u64 - (sum_s * sum_s) / 64) as u32;
+  let dvar = (sum_d2 as u64 - (sum_d * sum_d) / 64) as u32;
+
+  (svar, dvar, sse)
+}
+
+static CDEF_DIST_KERNEL_HBD_FNS_AVX2: [Option<CdefDistKernelHBDFn>;
+  CDEF_DIST_KERNEL_FNS_LENGTH] = {
+  let mut out: [Option<CdefDistKernelHBDFn>; CDEF_DIST_KERNEL_FNS_LENGTH] =
+    [None; CDEF_DIST_KERNEL_FNS_LENGTH];
+
+  out[kernel_fn_index(8, 8)] = Some(rav1e_cdef_dist_kernel_8x8_hbd_avx2);
+
+  out
+};
+
+cpu_function_lookup_table!(
+  CDEF_DIST_KERNEL_HBD_FNS:
+    [[Option<CdefDistKernelHBDFn>; CDEF_DIST_KERNEL_FNS_LENGTH]],
+  default: [None; CDEF_DIST_KERNEL_FNS_LENGTH],
+  [AVX2]
 );
 
 #[cfg(test)]
@@ -205,13 +319,31 @@ pub mod test {
   }
 
   #[test]
+  fn cdef_dist_simd_random_hbd() {
+    cdef_diff_tester(10, random_planes::<u16>);
+    cdef_diff_tester(12, random_planes::<u16>);
+  }
+
+  #[test]
   fn cdef_dist_simd_large() {
     cdef_diff_tester(8, max_planes::<u8>);
   }
 
   #[test]
+  fn cdef_dist_simd_large_hbd() {
+    cdef_diff_tester(10, max_planes::<u16>);
+    cdef_diff_tester(12, max_planes::<u16>);
+  }
+
+  #[test]
   fn cdef_dist_simd_large_diff() {
     cdef_diff_tester(8, max_diff_planes::<u8>);
+  }
+
+  #[test]
+  fn cdef_dist_simd_large_diff_hbd() {
+    cdef_diff_tester(10, max_diff_planes::<u16>);
+    cdef_diff_tester(12, max_diff_planes::<u16>);
   }
 
   fn cdef_diff_tester<T: Pixel>(
