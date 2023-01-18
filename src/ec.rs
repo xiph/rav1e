@@ -209,13 +209,14 @@ impl StorageBackend for WriterBase<WriterCounter> {
       stream_size: self.s.bits,
       backend_var: 0,
       rng: self.rng,
+      // We do not use `cnt` within Counter, but setting it here allows the compiler
+      // to do a 32-bit merged load/store.
       cnt: self.cnt,
     }
   }
   #[inline]
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
-    self.cnt = checkpoint.cnt;
     self.s.bits = checkpoint.stream_size;
   }
 }
