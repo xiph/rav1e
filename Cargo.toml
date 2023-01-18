@@ -108,6 +108,7 @@ new_debug_unreachable = "1.0.4"
 once_cell = "1.18.0"
 av1-grain = { version = "0.2.2", features = ["serialize"] }
 serde-big-array = { version = "0.5.1", optional = true }
+hdr10plus = { version = "2.0.0", features = ["json"] }
 
 [dependencies.image]
 version = "0.24.6"

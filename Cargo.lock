@@ -231,6 +231,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82704769cb85a22df2c54d6bdd6a158b7931d256cf3248a07d6ecbe9d58b31d7"
 
 [[package]]
+name = "bitvec_helpers"
+version = "3.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ef6883bd86b4112b56be19de3a1628de6c4063be7be6e641d484c83069efb4a"
+dependencies = [
+ "bitstream-io",
+]
+
+[[package]]
 name = "bstr"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -716,6 +725,18 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+
+[[package]]
+name = "hdr10plus"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee3a6bfa9ada73834523412702bbcaa0f53c3393acb36278cd3489c38c808491"
+dependencies = [
+ "anyhow",
+ "bitvec_helpers",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "heck"
@@ -1300,6 +1321,7 @@ dependencies = [
  "crossbeam",
  "dav1d-sys",
  "fern",
+ "hdr10plus",
  "image",
  "interpolate_name",
  "itertools 0.11.0",
@@ -1546,6 +1568,7 @@ version = "1.0.100"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f1e14e89be7aa4c4b78bdbdc9eb5bf8517829a600ae8eaa39a6e1d960b5185c"
 dependencies = [
+ "indexmap",
  "itoa",
  "ryu",
  "serde",

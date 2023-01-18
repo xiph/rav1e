@@ -137,6 +137,14 @@ impl fmt::Display for FrameType {
   }
 }
 
+/// ST2094-40 T.35 metadata payload expected prefix.
+pub const ST2094_40_PREFIX: &[u8] = &[
+  0x00, 0x03C, // Samsung Electronics America
+  0x00, 0x01, // ST-2094-40
+  0x04, // application_identifier = 4
+  0x01, // application_mode = 1
+];
+
 /// A single T.35 metadata packet.
 #[derive(Clone, Debug, Default)]
 pub struct T35 {
@@ -297,5 +305,14 @@ impl<T: Pixel> IntoFrame<T> for (Frame<T>, FrameParameters) {
 impl<T: Pixel> IntoFrame<T> for (Frame<T>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self.0)), self.1)
+  }
+}
+
+impl T35 {
+  /// Whether the T.35 metadata is HDR10+ Metadata.
+  ///
+  /// According to the [AV1 HDR10+ specification](https://aomediacodec.github.io/av1-hdr10plus).
+  pub fn is_hdr10plus_metadata(&self) -> bool {
+    self.country_code == 0xB5 && self.data.starts_with(ST2094_40_PREFIX)
   }
 }
