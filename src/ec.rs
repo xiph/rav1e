@@ -19,7 +19,6 @@ cfg_if::cfg_if! {
 }
 
 use crate::context::CDFContextLog;
-use crate::util::{msb, ILog};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
 
@@ -194,7 +193,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
   #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - ILog::ilog(r);
+    let d = r.leading_zeros() as usize;
 
     self.s.bits += d;
     self.rng = r << d;
@@ -229,7 +228,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   #[inline]
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = 16 - ILog::ilog(r);
+    let d = r.leading_zeros() as usize;
     let mut s = self.cnt + (d as i16);
 
     self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
@@ -270,7 +269,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     let (l, r) = self.lr_compute(fl, fh, nms);
     let mut low = l + self.s.low;
     let mut c = self.cnt;
-    let d = 16 - ILog::ilog(r);
+    let d = r.leading_zeros() as usize;
     let mut s = c + (d as i16);
 
     if s >= 0 {
@@ -582,7 +581,7 @@ where
     debug_assert!(32768 <= self.rng);
     let rng = (self.rng >> 8) as u32;
     let fh = cdf[s as usize] as u32 >> EC_PROB_SHIFT;
-    let r = if s > 0 {
+    let r: u32 = if s > 0 {
       let fl = cdf[s as usize - 1] as u32 >> EC_PROB_SHIFT;
       ((rng * fl) >> (7 - EC_PROB_SHIFT)) - ((rng * fh) >> (7 - EC_PROB_SHIFT))
         + EC_MIN_PROB
@@ -595,7 +594,7 @@ where
 
     // The 9 here counteracts the offset of -9 baked into cnt.  Don't include a termination bit.
     let pre = Self::frac_compute((self.cnt + 9) as u32, self.rng as u32);
-    let d = 16 - ILog::ilog(r);
+    let d = r.leading_zeros() - 16;
     let mut c = self.cnt;
     let mut sh = c + (d as i16);
     if sh >= 0 {
@@ -630,7 +629,7 @@ where
   /// - `v`: value to encode
   fn write_quniform(&mut self, n: u32, v: u32) {
     if n > 1 {
-      let l = msb(n as i32) as u8 + 1;
+      let l = 32 - n.leading_zeros() as u8;
       let m = (1 << l) - n;
       if v < m {
         self.literal(l - 1, v);
@@ -646,7 +645,7 @@ where
   fn count_quniform(&self, n: u32, v: u32) -> u32 {
     let mut bits = 0;
     if n > 1 {
-      let l = (msb(n as i32) + 1) as u32;
+      let l = 32 - n.leading_zeros();
       let m = (1 << l) - n;
       bits += (l - 1) << OD_BITRES;
       if v >= m {
@@ -868,7 +867,7 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
   }
   fn write_quniform(&mut self, n: u16, v: u16) -> Result<(), std::io::Error> {
     if n > 1 {
-      let l = msb(n as i32) as u8 + 1;
+      let l = 16 - n.leading_zeros() as u8;
       let m = (1 << l) - n;
       if v < m {
         self.write(l as u32 - 1, v)
@@ -1010,7 +1009,6 @@ mod test {
       assert!(rng <= 65536);
       let d = rng.leading_zeros() - 16;
       //let d = 16 - (32-rng.leading_zeros());
-      //msb(rng) = 31-rng.leading_zeros();
       self.cnt -= d as i16;
       /*This is equivalent to shifting in 1's instead of 0's.*/
       self.dif = ((dif + 1) << d) - 1;
