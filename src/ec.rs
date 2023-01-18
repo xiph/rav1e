@@ -152,8 +152,10 @@ pub struct WriterEncoder {
 
 #[derive(Clone)]
 pub struct WriterCheckpoint {
-  /// Byte length coded/recorded to date
-  stream_bytes: usize,
+  /// Stream length coded/recorded to date, in the unit used by the Writer,
+  /// which may be bytes or bits. This depends on the assumption
+  /// that a Writer will only ever restore its own Checkpoint.
+  stream_size: usize,
   /// To be defined by backend
   backend_var: usize,
   /// Saved number of values in the current range.
@@ -204,7 +206,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_bytes: self.s.bits,
+      stream_size: self.s.bits,
       backend_var: 0,
       rng: self.rng,
       cnt: self.cnt,
@@ -214,7 +216,7 @@ impl StorageBackend for WriterBase<WriterCounter> {
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
-    self.s.bits = checkpoint.stream_bytes;
+    self.s.bits = checkpoint.stream_size;
   }
 }
 
@@ -243,7 +245,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_bytes: self.s.bytes,
+      stream_size: self.s.bytes,
       backend_var: self.s.storage.len(),
       rng: self.rng,
       cnt: self.cnt,
@@ -253,7 +255,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
-    self.s.bytes = checkpoint.stream_bytes;
+    self.s.bytes = checkpoint.stream_size;
     self.s.storage.truncate(checkpoint.backend_var);
   }
 }
@@ -294,7 +296,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_bytes: self.s.precarry.len(),
+      stream_size: self.s.precarry.len(),
       backend_var: self.s.low as usize,
       rng: self.rng,
       cnt: self.cnt,
@@ -304,7 +306,7 @@ impl StorageBackend for WriterBase<WriterEncoder> {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
     self.s.low = checkpoint.backend_var as ec_window;
-    self.s.precarry.truncate(checkpoint.stream_bytes);
+    self.s.precarry.truncate(checkpoint.stream_size);
   }
 }
 
