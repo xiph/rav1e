@@ -645,7 +645,7 @@ where
   fn count_quniform(&self, n: u32, v: u32) -> u32 {
     let mut bits = 0;
     if n > 1 {
-      let l = 32 - n.leading_zeros() as u32;
+      let l = 32 - n.leading_zeros();
       let m = (1 << l) - n;
       bits += (l - 1) << OD_BITRES;
       if v >= m {
