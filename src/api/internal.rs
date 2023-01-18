@@ -902,6 +902,8 @@ impl<T: Pixel> ContextInner<T> {
     bsize: BlockSize, len: usize,
     reference_frame_block_importances: &mut [f32],
   ) {
+    debug_assert!(bsize.width() == IMPORTANCE_BLOCK_SIZE);
+    debug_assert!(bsize.height() == IMPORTANCE_BLOCK_SIZE);
     let coded_data = fi.coded_frame_data.as_ref().unwrap();
     let plane_org = &frame.planes[0];
     let plane_ref = &reference_frame.planes[0];
@@ -950,8 +952,6 @@ impl<T: Pixel> ContextInner<T> {
               let inter_cost = get_satd(
                 &region_org,
                 &region_ref,
-                bsize.width(),
-                bsize.height(),
                 bit_depth,
                 fi.cpu_feature_level,
               ) as f32;

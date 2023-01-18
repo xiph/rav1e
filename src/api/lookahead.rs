@@ -107,8 +107,6 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       let intra_cost = get_satd(
         &plane_org,
         &plane_after_prediction_region,
-        bsize.width(),
-        bsize.height(),
         bit_depth,
         cpu_feature_level,
       );
@@ -223,10 +221,6 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
   let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
   let stats = &fs.frame_me_stats.read().expect("poisoned lock")[0];
-  let bsize = BlockSize::from_width_and_height(
-    IMPORTANCE_BLOCK_SIZE,
-    IMPORTANCE_BLOCK_SIZE,
-  );
 
   let mut inter_costs = 0;
   (0..h_in_imp_b).for_each(|y| {
@@ -252,14 +246,9 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      inter_costs += get_satd(
-        &region_org,
-        &region_ref,
-        bsize.width(),
-        bsize.height(),
-        bit_depth,
-        fi.cpu_feature_level,
-      ) as u64;
+      inter_costs +=
+        get_satd(&region_org, &region_ref, bit_depth, fi.cpu_feature_level)
+          as u64;
     });
   });
   inter_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64

@@ -31,14 +31,12 @@ pub(crate) mod rust {
   /// Compute the sum of absolute differences over a block.
   /// w and h can be at most 128, the size of the largest block.
   pub fn get_sad<T: Pixel>(
-    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
-    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
+    _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
-    debug_assert!(w <= 128 && h <= 128);
-    let plane_org =
-      plane_org.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
-    let plane_ref =
-      plane_ref.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
+    debug_assert!(
+      plane_org.rect().width <= 128 && plane_org.rect().height <= 128
+    );
 
     plane_org
       .rows_iter()
@@ -156,11 +154,12 @@ pub(crate) mod rust {
   /// revert to sad on edges when these transforms do not fit into w and h.
   /// 4x4 transforms instead of 8x8 transforms when width or height < 8.
   pub fn get_satd<T: Pixel>(
-    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
-    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>,
+    _bit_depth: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
+    let w = plane_org.rect().width;
+    let h = plane_org.rect().height;
     assert!(w <= 128 && h <= 128);
-    assert!(plane_org.rect().width >= w && plane_org.rect().height >= h);
     assert!(plane_ref.rect().width >= w && plane_ref.rect().height >= h);
 
     // Size of hadamard transform should be 4x4 or 8x8
@@ -186,9 +185,7 @@ pub(crate) mod rust {
 
         // Revert to sad on edge blocks (frame edges)
         if chunk_w != size || chunk_h != size {
-          sum += get_sad(
-            &chunk_org, &chunk_ref, chunk_w, chunk_h, _bit_depth, _cpu,
-          ) as u64;
+          sum += get_sad(&chunk_org, &chunk_ref, _bit_depth, _cpu) as u64;
           continue;
         }
 
@@ -443,7 +440,7 @@ pub mod test {
     let (input_plane, rec_plane) = setup_planes::<T>();
 
     for (w, h, distortion) in blocks {
-      let area = Area::StartingAt { x: 32, y: 40 };
+      let area = Area::Rect { x: 32, y: 40, width: w, height: h };
 
       let input_region = input_plane.region(area);
       let rec_region = rec_plane.region(area);
@@ -453,8 +450,6 @@ pub mod test {
         get_sad(
           &input_region,
           &rec_region,
-          w,
-          h,
           bit_depth,
           CpuFeatureLevel::default()
         )
@@ -502,7 +497,7 @@ pub mod test {
     let (input_plane, rec_plane) = setup_planes::<T>();
 
     for (w, h, distortion) in blocks {
-      let area = Area::StartingAt { x: 32, y: 40 };
+      let area = Area::Rect { x: 32, y: 40, width: w, height: h };
 
       let input_region = input_plane.region(area);
       let rec_region = rec_plane.region(area);
@@ -512,8 +507,6 @@ pub mod test {
         get_satd(
           &input_region,
           &rec_region,
-          w,
-          h,
           bit_depth,
           CpuFeatureLevel::default()
         )

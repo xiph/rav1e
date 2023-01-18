@@ -92,8 +92,6 @@ fn new_plane<T: Pixel>(
 type DistFn<T> = fn(
   plane_org: &PlaneRegion<'_, T>,
   plane_ref: &PlaneRegion<'_, T>,
-  w: usize,
-  h: usize,
   bit_depth: usize,
   cpu: CpuFeatureLevel,
 ) -> u32;
@@ -108,15 +106,15 @@ fn run_dist_bench<T: Pixel>(
   let input_plane = new_plane::<T>(&mut ra, w, h);
   let rec_plane = new_plane::<T>(&mut ra, w, h);
 
-  let plane_org = input_plane.as_region();
-  let plane_ref = rec_plane.as_region();
-
   let blk_w = bs.width();
   let blk_h = bs.height();
+  let plane_org =
+    input_plane.region(Area::Rect { x: 0, y: 0, width: blk_w, height: blk_h });
+  let plane_ref =
+    rec_plane.region(Area::Rect { x: 0, y: 0, width: blk_w, height: blk_h });
 
   b.iter(|| {
-    let _ =
-      black_box(func(&plane_org, &plane_ref, blk_w, blk_h, bit_depth, cpu));
+    let _ = black_box(func(&plane_org, &plane_ref, bit_depth, cpu));
   })
 }
 
