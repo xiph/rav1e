@@ -1,5 +1,5 @@
-; Copyright © 2020, VideoLAN and dav1d authors
-; Copyright © 2020, Two Orioles, LLC
+; Copyright © 2020-2023, VideoLAN and dav1d authors
+; Copyright © 2020-2023, Two Orioles, LLC
 ; All rights reserved.
 ;
 ; Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,11 @@
 
 SECTION_RODATA 64
 const \
+dup16_perm,  db  0,  1,  0,  1,  2,  3,  2,  3,  4,  5,  4,  5,  6,  7,  6,  7
+             db  8,  9,  8,  9, 10, 11, 10, 11, 12, 13, 12, 13, 14, 15, 14, 15
+             db 16, 17, 16, 17, 18, 19, 18, 19, 20, 21, 20, 21, 22, 23, 22, 23
+             db 24, 25, 24, 25, 26, 27, 26, 27, 28, 29, 28, 29, 30, 31, 30, 31
+const \
 int8_permA,  db  0,  1, 16, 17, 32, 33, 48, 49,  2,  3, 18, 19, 34, 35, 50, 51
              db  4,  5, 20, 21, 36, 37, 52, 53,  6,  7, 22, 23, 38, 39, 54, 55
              db  8,  9, 24, 25, 40, 41, 56, 57, 10, 11, 26, 27, 42, 43, 58, 59
@@ -42,10 +47,6 @@ int16_perm:  db  0,  1, 32, 33,  2,  3, 34, 35,  4,  5, 36, 37,  6,  7, 38, 39
              db  8,  9, 40, 41, 10, 11, 42, 43, 12, 13, 44, 45, 14, 15, 46, 47
              db 16, 17, 48, 49, 18, 19, 50, 51, 20, 21, 52, 53, 22, 23, 54, 55
              db 24, 25, 56, 57, 26, 27, 58, 59, 28, 29, 60, 61, 30, 31, 62, 63
-dup16_perm:  db  0,  1,  0,  1,  2,  3,  2,  3,  4,  5,  4,  5,  6,  7,  6,  7
-             db  8,  9,  8,  9, 10, 11, 10, 11, 12, 13, 12, 13, 14, 15, 14, 15
-             db 16, 17, 16, 17, 18, 19, 18, 19, 20, 21, 20, 21, 22, 23, 22, 23
-             db 24, 25, 24, 25, 26, 27, 26, 27, 28, 29, 28, 29, 30, 31, 30, 31
 idtx_16x4p:  db  0,  1,  4,  5, 16, 17, 20, 21,  2,  3,  6,  7, 18, 19, 22, 23
              db 32, 33, 36, 37, 48, 49, 52, 53, 34, 35, 38, 39, 50, 51, 54, 55
              db  8,  9, 12, 13, 24, 25, 28, 29, 10, 11, 14, 15, 26, 27, 30, 31
@@ -2469,7 +2470,7 @@ cglobal idct_16x16_internal_8bpc, 0, 6, 0, dst, stride, c, eob, tx2
     vextracti32x4 [r6+r3       ], m3, 3
     RET
 ALIGN function_align
-.main_fast2: ; bottom three-quarters are zero
+cglobal_label .main_fast2 ; bottom three-quarters are zero
     vpbroadcastd        m10, [o(pd_2048)]
     vpbroadcastq        m13, [o(int_mshift)]
     vpcmpub              k7, m13, m10, 6
@@ -2486,7 +2487,7 @@ ALIGN function_align
     mova                 m1, m7
     jmp .main5
 ALIGN function_align
-.main_fast: ; bottom half is zero
+cglobal_label .main_fast ; bottom half is zero
     vpbroadcastd        m10, [o(pd_2048)]
 .main_fast3:
     vpbroadcastq        m13, [o(int_mshift)]
@@ -3606,7 +3607,7 @@ ALIGN function_align
     or                  r3d, 32
     jmp m(inv_txfm_add_dct_dct_16x8_8bpc).dconly
 ALIGN function_align
-.main_oddhalf_fast2: ; bottom three-quarters are zero
+cglobal_label .main_oddhalf_fast2 ; bottom three-quarters are zero
     vpbroadcastd         m8, [o(pw_201_4091x8)]
     vpbroadcastd        m20, [o(pw_m1380_3857x8)]
     vpbroadcastd         m9, [o(pw_995_3973x8)]
@@ -3621,7 +3622,7 @@ ALIGN function_align
     mova                m16, m14
     jmp .main3
 ALIGN function_align
-.main_oddhalf_fast: ; bottom half is zero
+cglobal_label .main_oddhalf_fast ; bottom half is zero
     vpbroadcastd         m8, [o(pw_201_4091x8)]
     vpbroadcastd         m9, [o(pw_m2751_3035x8)]
     vpbroadcastd        m11, [o(pw_1751_3703x8)]
@@ -3640,7 +3641,7 @@ ALIGN function_align
     pmulhrsw            m14, m12 ; t23a, t24a
     jmp .main2
 ALIGN function_align
-.main_oddhalf:
+cglobal_label .main_oddhalf
     ITX_MUL2X_PACK       21, 8, 9, 10,  201, 4091, 5 ; t16a, t31a
     ITX_MUL2X_PACK       17, 8, 9, 10, 3035, 2751, 5 ; t17a, t30a
     ITX_MUL2X_PACK       20, 8, 9, 10, 1751, 3703, 5 ; t18a, t29a
@@ -3898,7 +3899,7 @@ ALIGN function_align
     sar                 r6d, 8+1
     jmp m(inv_txfm_add_dct_dct_32x8_8bpc).dconly3
 ALIGN function_align
-.main_oddhalf_fast2: ; bottom three-quarters are zero
+cglobal_label .main_oddhalf_fast2 ; bottom three-quarters are zero
     vpbroadcastd         m9, [o(pw_2896x8)]
     vpbroadcastd         m2, [o(pw_4017x8)]
     vpbroadcastd         m3, [o(pw_799x8)]
@@ -3928,7 +3929,7 @@ ALIGN function_align
     paddsw               m2, m9     ; idct8 out2
     jmp .main3
 ALIGN function_align
-.main_oddhalf_fast: ; bottom half is zero
+cglobal_label .main_oddhalf_fast ; bottom half is zero
     vpbroadcastd         m5, [o(pw_m2276x8)]
     vpbroadcastd        m11, [o(pw_3406x8)]
     vpbroadcastd         m7, [o(pw_4017x8)]
@@ -3966,7 +3967,7 @@ ALIGN function_align
     pmulhrsw            m15, m12 ; t12a
     jmp .main2
 ALIGN function_align
-.main_oddhalf:
+cglobal_label .main_oddhalf
     ITX_MULSUB_2W        14, 21, 8, 9, 10,  401, 4076 ; t8a,  t15a
     ITX_MULSUB_2W        18, 17, 8, 9, 10, 3166, 2598 ; t9a,  t14a
     ITX_MULSUB_2W        16, 19, 8, 9, 10, 1931, 3612 ; t10a, t13a
@@ -4674,7 +4675,7 @@ cglobal inv_txfm_add_dct_dct_32x32_8bpc, 4, 6, 0, dst, stride, c, eob
     or                  r3d, 32
     jmp m(inv_txfm_add_dct_dct_32x8_8bpc).dconly2
 ALIGN function_align
-.main_oddhalf_fast2: ; bottom three-quarters are zero
+cglobal_label .main_oddhalf_fast2 ; bottom three-quarters are zero
     vpbroadcastd        m21, [o(pw_4091x8)]
     vpbroadcastd         m8, [o(pw_201x8)]
     vpbroadcastd        m18, [o(pw_m1380x8)]
@@ -4701,7 +4702,7 @@ ALIGN function_align
     mova                m20, m23
     jmp .main3
 ALIGN function_align
-.main_oddhalf_fast: ; bottom half is zero
+cglobal_label .main_oddhalf_fast ; bottom half is zero
     vpbroadcastd        m21, [o(pw_4091x8)]
     vpbroadcastd         m8, [o(pw_201x8)]
     vpbroadcastd        m14, [o(pw_m2751x8)]
@@ -4736,7 +4737,7 @@ ALIGN function_align
     pmulhrsw            m23, m12 ; t24a
     jmp .main2
 ALIGN function_align
-.main_oddhalf:
+cglobal_label .main_oddhalf
     ITX_MULSUB_2W        22, 21,  8,  9, 10,  201, 4091 ; t16a, t31a
     ITX_MULSUB_2W        14, 29,  8,  9, 10, 3035, 2751 ; t17a, t30a
     ITX_MULSUB_2W        26, 17,  8,  9, 10, 1751, 3703 ; t18a, t29a
