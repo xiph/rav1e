@@ -309,13 +309,13 @@ impl Config {
 
     if (config.still_picture && config.width < 1)
       || (!config.still_picture && config.width < 16)
-      || config.width > u16::max_value() as usize
+      || config.width > u16::MAX as usize
     {
       return Err(InvalidWidth(config.width));
     }
     if (config.still_picture && config.height < 1)
       || (!config.still_picture && config.height < 16)
-      || config.height > u16::max_value() as usize
+      || config.height > u16::MAX as usize
     {
       return Err(InvalidHeight(config.height));
     }
@@ -332,10 +332,10 @@ impl Config {
     }
 
     let (render_width, render_height) = config.render_size();
-    if render_width == 0 || render_width > u16::max_value() as usize {
+    if render_width == 0 || render_width > u16::MAX as usize {
       return Err(InvalidRenderWidth(render_width));
     }
-    if render_height == 0 || render_height > u16::max_value() as usize {
+    if render_height == 0 || render_height > u16::MAX as usize {
       return Err(InvalidRenderHeight(render_height));
     }
 
@@ -362,20 +362,16 @@ impl Config {
       return Err(InvalidTileRows(config.tile_rows));
     }
 
-    if config.time_base.num == 0
-      || config.time_base.num > u32::max_value() as u64
-    {
+    if config.time_base.num == 0 || config.time_base.num > u32::MAX as u64 {
       return Err(InvalidFrameRateNum {
         actual: config.time_base.num,
-        max: u32::max_value() as u64,
+        max: u32::MAX as u64,
       });
     }
-    if config.time_base.den == 0
-      || config.time_base.den > u32::max_value() as u64
-    {
+    if config.time_base.den == 0 || config.time_base.den > u32::MAX as u64 {
       return Err(InvalidFrameRateDen {
         actual: config.time_base.den,
-        max: u32::max_value() as u64,
+        max: u32::MAX as u64,
       });
     }
 
