@@ -219,8 +219,8 @@ unsafe fn rav1e_cdef_dist_kernel_8x8_hbd_avx2(
   let sum_s = sum_s as u64;
   let sum_d = sum_d as u64;
 
-  let svar = (sum_s2 as u64 - (sum_s * sum_s) / 64) as u32;
-  let dvar = (sum_d2 as u64 - (sum_d * sum_d) / 64) as u32;
+  let svar = (sum_s2 as u64 - (sum_s * sum_s + 32) / 64) as u32;
+  let dvar = (sum_d2 as u64 - (sum_d * sum_d + 32) / 64) as u32;
 
   (svar, dvar, sse)
 }
