@@ -2023,8 +2023,7 @@ fn zero_frames() {
 
 #[test]
 fn tile_cols_overflow() {
-  let enc =
-    EncoderConfig { tile_cols: usize::max_value(), ..Default::default() };
+  let enc = EncoderConfig { tile_cols: usize::MAX, ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -2032,7 +2031,7 @@ fn tile_cols_overflow() {
 #[test]
 fn max_key_frame_interval_overflow() {
   let enc = EncoderConfig {
-    max_key_frame_interval: i32::max_value() as u64,
+    max_key_frame_interval: i32::MAX as u64,
     reservoir_frame_delay: None,
     ..Default::default()
   };
@@ -2043,8 +2042,8 @@ fn max_key_frame_interval_overflow() {
 #[test]
 fn target_bitrate_overflow() {
   let enc = EncoderConfig {
-    bitrate: i32::max_value(),
-    time_base: Rational::new(i64::max_value() as u64, 1),
+    bitrate: i32::MAX,
+    time_base: Rational::new(i64::MAX as u64, 1),
     ..Default::default()
   };
   let config = Config::new().with_encoder_config(enc);
@@ -2061,8 +2060,7 @@ fn time_base_den_divide_by_zero() {
 
 #[test]
 fn large_width_assert() {
-  let enc =
-    EncoderConfig { width: u32::max_value() as usize, ..Default::default() };
+  let enc = EncoderConfig { width: u32::MAX as usize, ..Default::default() };
   let config = Config::new().with_encoder_config(enc);
   let _: Result<Context<u8>, _> = config.new_context();
 }
@@ -2070,9 +2068,9 @@ fn large_width_assert() {
 #[test]
 fn reservoir_max_overflow() {
   let enc = EncoderConfig {
-    reservoir_frame_delay: Some(i32::max_value()),
-    bitrate: i32::max_value(),
-    time_base: Rational::new(i32::max_value() as u64 * 2, 1),
+    reservoir_frame_delay: Some(i32::MAX),
+    bitrate: i32::MAX,
+    time_base: Rational::new(i32::MAX as u64 * 2, 1),
     ..Default::default()
   };
   let config = Config::new().with_encoder_config(enc);
@@ -2091,7 +2089,7 @@ fn zero_width() {
 fn rdo_lookahead_frames_overflow() {
   let enc = EncoderConfig {
     speed_settings: SpeedSettings {
-      rdo_lookahead_frames: usize::max_value(),
+      rdo_lookahead_frames: usize::MAX,
       ..Default::default()
     },
     ..Default::default()
