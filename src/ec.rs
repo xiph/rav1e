@@ -330,22 +330,18 @@ impl<S> WriterBase<S> {
   }
 
   /// Compute low and range values from token cdf values and local state
-  fn lr_compute(&mut self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16) {
-    let u: u32;
-    let v: u32;
-    let mut r = self.rng as u32;
+  const fn lr_compute(&self, fl: u16, fh: u16, nms: u16) -> (ec_window, u16) {
+    let r = self.rng as u32;
     debug_assert!(32768 <= r);
-    if fl < 32768 {
-      u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * nms as u32;
-      v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * (nms - 1) as u32;
-      (r - u, (u - v) as u16)
-    } else {
-      r -= (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
-        + EC_MIN_PROB * (nms - 1) as u32;
-      (0, r as u16)
+    let mut u = (((r >> 8) * (fl as u32 >> EC_PROB_SHIFT))
+      >> (7 - EC_PROB_SHIFT))
+      + EC_MIN_PROB * nms as u32;
+    if fl >= 32768 {
+      u = r;
     }
+    let v = (((r >> 8) * (fh as u32 >> EC_PROB_SHIFT)) >> (7 - EC_PROB_SHIFT))
+      + EC_MIN_PROB * (nms - 1) as u32;
+    (r - u, (u - v) as u16)
   }
 
   /// Given the current total integer number of bits used and the current value of
