@@ -107,7 +107,7 @@ pub struct QuantizationContext {
 fn divu_gen(d: u32) -> (u32, u32, u32) {
   let nbits = (mem::size_of_val(&d) as u64) * 8;
   let m = nbits - d.leading_zeros() as u64 - 1;
-  if (d & (d - 1)) == 0 {
+  if d.is_power_of_two() {
     (0xFFFF_FFFF, 0xFFFF_FFFF, m as u32)
   } else {
     let d = d as u64;
