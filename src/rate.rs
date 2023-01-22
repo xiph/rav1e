@@ -909,14 +909,14 @@ impl RCState {
       let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
       // TODO: Proper handling of lossless.
-      let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth) as i64)
+      let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth).get() as i64)
         - q57(QSCALE + bit_depth as i32 - 8);
       // The AC quantizer tables map to values larger than the DC quantizer
       //  tables, so we use that as the upper bound to make sure we can use
       //  the full table if needed.
-      let mut log_qhi =
-        blog64(ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0, bit_depth) as i64)
-          - q57(QSCALE + bit_depth as i32 - 8);
+      let mut log_qhi = blog64(
+        ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0, bit_depth).get() as i64,
+      ) - q57(QSCALE + bit_depth as i32 - 8);
       let mut log_base_q = (log_qlo + log_qhi) >> 1;
       while log_qlo < log_qhi {
         // Count bits contributed by each frame type using the model.
@@ -1052,10 +1052,10 @@ impl RCState {
 
     // We use the AC quantizer as the source quantizer since its quantizer
     //  tables have unique entries, while the DC tables do not.
-    let ac_quantizer = ac_q(base_qi, 0, bit_depth) as i64;
+    let ac_quantizer = ac_q(base_qi, 0, bit_depth).get() as i64;
     // Pick the nearest DC entry since an exact match may be unavailable.
     let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-    let dc_quantizer = dc_q(dc_qi, 0, bit_depth) as i64;
+    let dc_quantizer = dc_q(dc_qi, 0, bit_depth).get() as i64;
     // Get the log quantizers as Q57.
     let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
     let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
