@@ -37,17 +37,17 @@ pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
 }
 
 pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
-  static DC_Q: [&[NonZeroU16; 256]; 3] =
-    [dc_qlookup_Q3, dc_qlookup_10_Q3, dc_qlookup_12_Q3];
+  let dc_q: [&[NonZeroU16; 256]; 3] =
+    [&dc_qlookup_Q3, &dc_qlookup_10_Q3, &dc_qlookup_12_Q3];
   let bd = ((bit_depth ^ 8) >> 1).min(2);
-  DC_Q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+  dc_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
 pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
-  static AC_Q: [&[NonZeroU16; 256]; 3] =
-    [ac_qlookup_Q3, ac_qlookup_10_Q3, ac_qlookup_12_Q3];
+  let ac_q: [&[NonZeroU16; 256]; 3] =
+    [&ac_qlookup_Q3, &ac_qlookup_10_Q3, &ac_qlookup_12_Q3];
   let bd = ((bit_depth ^ 8) >> 1).min(2);
-  AC_Q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+  ac_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
 // TODO: Handle lossless properly.
