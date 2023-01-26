@@ -15,6 +15,7 @@ use crate::api::{
 };
 use crate::color::ChromaSampling::Cs400;
 use crate::cpu_features::CpuFeatureLevel;
+use crate::denoise::{DftDenoiser, TEMPORAL_RADIUS};
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -220,7 +221,7 @@ impl<T: Pixel> FrameData<T> {
   }
 }
 
-type FrameQueue<T> = BTreeMap<u64, Option<Arc<Frame<T>>>>;
+pub(crate) type FrameQueue<T> = BTreeMap<u64, Option<Arc<Frame<T>>>>;
 type FrameDataQueue<T> = BTreeMap<u64, Option<FrameData<T>>>;
 
 // the fields pub(super) are accessed only by the tests
@@ -248,6 +249,7 @@ pub(crate) struct ContextInner<T: Pixel> {
   /// Maps `output_frameno` to `gop_input_frameno_start`.
   pub(crate) gop_input_frameno_start: BTreeMap<u64, u64>,
   keyframe_detector: SceneChangeDetector<T>,
+  denoiser: Option<DftDenoiser<T>>,
   pub(crate) config: Arc<EncoderConfig>,
   seq: Arc<Sequence>,
   pub(crate) rc_state: RCState,
@@ -295,6 +297,16 @@ impl<T: Pixel> ContextInner<T> {
         lookahead_distance,
         seq.clone(),
       ),
+      denoiser: if enc.denoise_strength > 0 {
+        Some(DftDenoiser::<T>::new(
+          enc.denoise_strength as f32 / 10.0,
+          enc.width,
+          enc.height,
+          enc.bit_depth,
+        ))
+      } else {
+        None
+      },
       config: Arc::new(enc.clone()),
       seq,
       rc_state: RCState::new(
@@ -357,6 +369,25 @@ impl<T: Pixel> ContextInner<T> {
         self.opaque_q.insert(input_frameno, op);
       }
       self.t35_q.insert(input_frameno, params.t35_metadata);
+    }
+
+    // If denoising is enabled, run it now because we want the entire
+    // encoding process, including lookahead, to see the denoised frame.
+    if let Some(ref mut denoiser) = self.denoiser {
+      loop {
+        let denoiser_frame = denoiser.cur_frameno;
+        if (!is_flushing
+          && input_frameno >= denoiser_frame + TEMPORAL_RADIUS as u64)
+          || (is_flushing && Some(denoiser_frame) < self.limit)
+        {
+          self.frame_q.insert(
+            denoiser_frame,
+            Some(Arc::new(denoiser.filter_frame(&self.frame_q).unwrap())),
+          );
+        } else {
+          break;
+        }
+      }
     }
 
     if !self.needs_more_frame_q_lookahead(self.next_lookahead_frame) {

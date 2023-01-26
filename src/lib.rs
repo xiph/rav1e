@@ -255,6 +255,8 @@ mod cdef;
 #[doc(hidden)]
 pub mod context;
 mod deblock;
+#[doc(hidden)]
+pub mod denoise;
 mod encoder;
 mod entropymode;
 mod levels;
@@ -459,6 +461,9 @@ pub mod bench {
   }
   pub mod context {
     pub use crate::context::*;
+  }
+  pub mod denoise {
+    pub use crate::denoise::*;
   }
   pub mod dist {
     pub use crate::dist::*;

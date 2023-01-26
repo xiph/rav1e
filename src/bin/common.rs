@@ -185,6 +185,17 @@ pub struct CliOptions {
     help_heading = "ENCODE SETTINGS"
   )]
   pub photon_noise: u8,
+  /// Enable spatio-temporal denoising, intended to be used with grain synthesis.
+  /// Takes a strength value 0-50.
+  ///
+  /// Default strength is 1/2 of photon noise strength,
+  /// or 4 if a photon noise table is specified.
+  #[clap(
+    long,
+    value_parser = clap::value_parser!(u8).range(0..=50),
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub denoise: Option<u8>,
   /// Uses a film grain table file to apply grain synthesis to the encode.
   /// Uses the same table file format as aomenc and svt-av1.
   #[clap(
@@ -675,7 +686,19 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
       .expect("Failed to parse film grain table");
     if !table.is_empty() {
       cfg.film_grain_params = Some(table);
+      cfg.denoise_strength = 4;
     }
+  } else if matches.photon_noise > 0 {
+    cfg.denoise_strength = matches.photon_noise / 2;
+    // We have to know the video resolution before we can generate a table,
+    // so we must handle that elsewhere.
+  }
+  // A user set denoise strength overrides the defaults above
+  if let Some(denoise_str) = matches.denoise {
+    if denoise_str > 50 {
+      panic!("Denoising strength must be between 0-50");
+    }
+    cfg.denoise_strength = denoise_str;
   }
 
   if let Some(frame_rate) = matches.frame_rate {

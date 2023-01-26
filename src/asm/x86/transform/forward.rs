@@ -316,20 +316,6 @@ impl SizeClass1D {
   }
 }
 
-fn cast<const N: usize, T>(x: &[T]) -> &[T; N] {
-  // SAFETY: we perform a bounds check with [..N],
-  // so casting to *const [T; N] is valid because the bounds
-  // check guarantees that x has N elements
-  unsafe { &*(&x[..N] as *const [T] as *const [T; N]) }
-}
-
-fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
-  // SAFETY: we perform a bounds check with [..N],
-  // so casting to *mut [T; N] is valid because the bounds
-  // check guarantees that x has N elements
-  unsafe { &mut *(&mut x[..N] as *mut [T] as *mut [T; N]) }
-}
-
 #[allow(clippy::identity_op, clippy::erasing_op)]
 #[target_feature(enable = "avx2")]
 unsafe fn forward_transform_avx2<T: Coefficient>(
