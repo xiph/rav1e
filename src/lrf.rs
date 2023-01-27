@@ -350,9 +350,7 @@ fn sgrproj_sum_finish(
 ) -> (u32, u32) {
   let scaled_ssq = (ssq + (1 << (2 * bdm8) >> 1)) >> (2 * bdm8);
   let scaled_sum = (sum + (1 << bdm8 >> 1)) >> bdm8;
-  let p =
-    cmp::max(0, (scaled_ssq * n) as i32 - (scaled_sum * scaled_sum) as i32)
-      as u32;
+  let p = (scaled_ssq * n).saturating_sub(scaled_sum * scaled_sum);
   let z = (p * s + (1 << SGRPROJ_MTABLE_BITS >> 1)) >> SGRPROJ_MTABLE_BITS;
   let a = if z >= 255 {
     256
