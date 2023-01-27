@@ -7,12 +7,91 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::{
+  mem::{transmute, MaybeUninit},
+  num::NonZeroU16,
+};
+
+use once_cell::sync::Lazy;
+
 pub const MINQ: usize = 0;
 pub const MAXQ: usize = 255;
 pub(super) const QINDEX_RANGE: usize = MAXQ - MINQ + 1;
 
+pub(super) static dc_qlookup_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in dc_qlookup_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
+pub(super) static dc_qlookup_10_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in dc_qlookup_10_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
+pub(super) static dc_qlookup_12_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in dc_qlookup_12_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
+pub(super) static ac_qlookup_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in ac_qlookup_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
+pub(super) static ac_qlookup_10_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in ac_qlookup_10_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
+pub(super) static ac_qlookup_12_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
+  Lazy::new(|| {
+    // SAFETY: We initialize everything before exiting this function
+    unsafe {
+      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+      for (i, value) in ac_qlookup_12_Q3_raw.iter().enumerate() {
+        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
+      }
+      transmute(nonzero)
+    }
+  });
+
 #[rustfmt::skip]
-pub(super) const dc_qlookup_Q3: [i16; QINDEX_RANGE] = [
+const dc_qlookup_Q3_raw: [u16; QINDEX_RANGE] = [
   4,    8,    8,    9,    10,  11,  12,  12,  13,  14,  15,   16,   17,   18,
   19,   19,   20,   21,   22,  23,  24,  25,  26,  26,  27,   28,   29,   30,
   31,   32,   32,   33,   34,  35,  36,  37,  38,  38,  39,   40,   41,   42,
@@ -35,7 +114,7 @@ pub(super) const dc_qlookup_Q3: [i16; QINDEX_RANGE] = [
 ];
 
 #[rustfmt::skip]
-pub(super) const dc_qlookup_10_Q3: [i16; QINDEX_RANGE] = [
+const dc_qlookup_10_Q3_raw: [u16; QINDEX_RANGE] = [
   4,    9,    10,   13,   15,   17,   20,   22,   25,   28,   31,   34,   37,
   40,   43,   47,   50,   53,   57,   60,   64,   68,   71,   75,   78,   82,
   86,   90,   93,   97,   101,  105,  109,  113,  116,  120,  124,  128,  132,
@@ -59,7 +138,7 @@ pub(super) const dc_qlookup_10_Q3: [i16; QINDEX_RANGE] = [
 ];
 
 #[rustfmt::skip]
-pub(super) const dc_qlookup_12_Q3: [i16; QINDEX_RANGE] = [
+const dc_qlookup_12_Q3_raw: [u16; QINDEX_RANGE] = [
   4,     12,    18,    25,    33,    41,    50,    60,    70,    80,    91,
   103,   115,   127,   140,   153,   166,   180,   194,   208,   222,   237,
   251,   266,   281,   296,   312,   327,   343,   358,   374,   390,   405,
@@ -87,7 +166,7 @@ pub(super) const dc_qlookup_12_Q3: [i16; QINDEX_RANGE] = [
 ];
 
 #[rustfmt::skip]
-pub(super) const ac_qlookup_Q3: [i16; QINDEX_RANGE] = [
+const ac_qlookup_Q3_raw: [u16; QINDEX_RANGE] = [
   4,    8,    9,    10,   11,   12,   13,   14,   15,   16,   17,   18,   19,
   20,   21,   22,   23,   24,   25,   26,   27,   28,   29,   30,   31,   32,
   33,   34,   35,   36,   37,   38,   39,   40,   41,   42,   43,   44,   45,
@@ -111,7 +190,7 @@ pub(super) const ac_qlookup_Q3: [i16; QINDEX_RANGE] = [
 ];
 
 #[rustfmt::skip]
-pub(super) const ac_qlookup_10_Q3: [i16; QINDEX_RANGE] = [
+const ac_qlookup_10_Q3_raw: [u16; QINDEX_RANGE] = [
   4,    9,    11,   13,   16,   18,   21,   24,   27,   30,   33,   37,   40,
   44,   48,   51,   55,   59,   63,   67,   71,   75,   79,   83,   88,   92,
   96,   100,  105,  109,  114,  118,  122,  127,  131,  136,  140,  145,  149,
@@ -135,7 +214,7 @@ pub(super) const ac_qlookup_10_Q3: [i16; QINDEX_RANGE] = [
 ];
 
 #[rustfmt::skip]
-pub(super) const ac_qlookup_12_Q3: [i16; QINDEX_RANGE] = [
+const ac_qlookup_12_Q3_raw: [u16; QINDEX_RANGE] = [
   4,     13,    19,    27,    35,    44,    54,    64,    75,    87,    99,
   112,   126,   139,   154,   168,   183,   199,   214,   230,   247,   263,
   280,   297,   314,   331,   349,   366,   384,   402,   420,   438,   456,

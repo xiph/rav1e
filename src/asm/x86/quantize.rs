@@ -94,11 +94,11 @@ unsafe fn dequantize_avx2(
   let log_tx_scale = _mm256_set1_epi32(get_log_tx_scale(tx_size) as i32);
 
   let quants_ac =
-    _mm256_set1_epi32(ac_q(qindex, ac_delta_q, bit_depth) as i32);
+    _mm256_set1_epi32(ac_q(qindex, ac_delta_q, bit_depth).get() as i32);
   // Use the dc quantize as first vector element for the first iteration
   let mut quants = _mm256_insert_epi32(
     quants_ac,
-    dc_q(qindex, dc_delta_q, bit_depth) as i32,
+    dc_q(qindex, dc_delta_q, bit_depth).get() as i32,
     0,
   );
 
@@ -173,8 +173,8 @@ mod test {
 
     for &tx_size in &tx_sizes {
       let qindex: u8 = rng.gen_range((MINQ as u8)..(MAXQ as u8));
-      let dc_quant: i16 = dc_q(qindex, 0, bd);
-      let ac_quant: i16 = ac_q(qindex, 0, bd);
+      let dc_quant = dc_q(qindex, 0, bd).get() as i16;
+      let ac_quant = ac_q(qindex, 0, bd).get() as i16;
 
       // Test the min, max, and random eobs
       let eobs = {

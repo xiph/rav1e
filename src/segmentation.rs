@@ -113,7 +113,7 @@ fn segmentation_optimize_inner<T: Pixel>(
   let compute_delta = |centroids: &[i16]| {
     use crate::util::{bexp64, blog64};
     let log2_base_ac_q_q57 =
-      blog64(ac_q(fi.base_q_idx, 0, fi.config.bit_depth).into());
+      blog64(ac_q(fi.base_q_idx, 0, fi.config.bit_depth).get().into());
     centroids
       .iter()
       .rev()

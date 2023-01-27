@@ -1624,7 +1624,7 @@ pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
   blocks: &TileBlocks, crop_w: usize, crop_h: usize,
 ) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {
-    let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth) as i32;
+    let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth).get() as i32;
     let level = clamp(
       match fi.sequence.bit_depth {
         8 => {

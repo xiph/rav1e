@@ -27,6 +27,7 @@ use crate::util::*;
 use crate::scan_order::av1_scan_orders;
 use std::convert::Into;
 use std::mem;
+use std::num::{NonZeroU16, NonZeroU32, NonZeroU64};
 
 pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
   let num_pixels = tx_size.area();
@@ -35,34 +36,37 @@ pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
     + Into::<usize>::into(num_pixels > 1024)
 }
 
-pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
-  static DC_Q: [&[i16; 256]; 3] =
+pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
+  let dc_q: [&[NonZeroU16; 256]; 3] =
     [&dc_qlookup_Q3, &dc_qlookup_10_Q3, &dc_qlookup_12_Q3];
   let bd = ((bit_depth ^ 8) >> 1).min(2);
-  DC_Q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+  dc_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
-pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> i16 {
-  static AC_Q: [&[i16; 256]; 3] =
+pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
+  let ac_q: [&[NonZeroU16; 256]; 3] =
     [&ac_qlookup_Q3, &ac_qlookup_10_Q3, &ac_qlookup_12_Q3];
   let bd = ((bit_depth ^ 8) >> 1).min(2);
-  AC_Q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+  ac_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
 // TODO: Handle lossless properly.
-fn select_qi(quantizer: i64, qlookup: &[i16; QINDEX_RANGE]) -> u8 {
-  if quantizer < qlookup[MINQ] as i64 {
+fn select_qi(quantizer: i64, qlookup: &[NonZeroU16; QINDEX_RANGE]) -> u8 {
+  if quantizer < qlookup[MINQ].get() as i64 {
     MINQ as u8
-  } else if quantizer >= qlookup[MAXQ] as i64 {
+  } else if quantizer >= qlookup[MAXQ].get() as i64 {
     MAXQ as u8
   } else {
-    match qlookup.binary_search(&(quantizer as i16)) {
+    match qlookup
+      .binary_search(&NonZeroU16::new(quantizer as u16).expect("Not zero"))
+    {
       Ok(qi) => qi as u8,
       Err(qi) => {
         debug_assert!(qi > MINQ);
         debug_assert!(qi <= MAXQ);
         // Pick the closest quantizer in the log domain.
-        let qthresh = (qlookup[qi - 1] as i32) * (qlookup[qi] as i32);
+        let qthresh =
+          (qlookup[qi - 1].get() as i32) * (qlookup[qi].get() as i32);
         let q2_i32 = (quantizer as i32) * (quantizer as i32);
         if q2_i32 < qthresh {
           (qi - 1) as u8
@@ -94,28 +98,46 @@ pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
   select_qi(quantizer, qlookup)
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct QuantizationContext {
   log_tx_scale: usize,
-  dc_quant: u32,
+  dc_quant: NonZeroU16,
   dc_offset: u32,
   dc_mul_add: (u32, u32, u32),
 
-  ac_quant: u32,
+  ac_quant: NonZeroU16,
   ac_offset_eob: u32,
   ac_offset0: u32,
   ac_offset1: u32,
   ac_mul_add: (u32, u32, u32),
 }
 
-fn divu_gen(d: u32) -> (u32, u32, u32) {
+impl Default for QuantizationContext {
+  fn default() -> Self {
+    QuantizationContext {
+      dc_quant: NonZeroU16::new(1).expect("Not zero"),
+      ac_quant: NonZeroU16::new(1).expect("Not zero"),
+      log_tx_scale: Default::default(),
+      dc_offset: Default::default(),
+      dc_mul_add: Default::default(),
+      ac_offset_eob: Default::default(),
+      ac_offset0: Default::default(),
+      ac_offset1: Default::default(),
+      ac_mul_add: Default::default(),
+    }
+  }
+}
+
+fn divu_gen(d: NonZeroU32) -> (u32, u32, u32) {
   let nbits = (mem::size_of_val(&d) as u64) * 8;
   let m = nbits - d.leading_zeros() as u64 - 1;
   if d.is_power_of_two() {
     (0xFFFF_FFFF, 0xFFFF_FFFF, m as u32)
   } else {
-    let d = d as u64;
+    let d = NonZeroU64::from(d);
     let t = (1u64 << (m + nbits)) / d;
+
+    let d = d.get();
     let r = (t * d + d) & ((1 << nbits) - 1);
     if r <= 1u64 << m {
       (t as u32 + 1, 0u32, m as u32)
@@ -154,7 +176,7 @@ mod test {
   fn test_divu_pair() {
     for d in 1..1024 {
       for x in 0..1000 {
-        let ab = divu_gen(d as u32);
+        let ab = divu_gen(NonZeroU32::new(d).unwrap());
         assert_eq!(x / d, divu_pair(x, ab));
       }
     }
@@ -162,7 +184,7 @@ mod test {
   #[test]
   fn gen_divu_table() {
     let b: Vec<(u32, u32, u32)> =
-      dc_qlookup_Q3.iter().map(|&v| divu_gen(v as u32)).collect();
+      dc_qlookup_Q3.iter().map(|&v| divu_gen(v.into())).collect();
 
     println!("{:?}", b);
   }
@@ -202,11 +224,11 @@ impl QuantizationContext {
   ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
-    self.dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as u32;
-    self.dc_mul_add = divu_gen(self.dc_quant);
+    self.dc_quant = dc_q(qindex, dc_delta_q, bit_depth);
+    self.dc_mul_add = divu_gen(self.dc_quant.into());
 
-    self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as u32;
-    self.ac_mul_add = divu_gen(self.ac_quant);
+    self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth);
+    self.ac_mul_add = divu_gen(self.ac_quant.into());
 
     // All of these biases were derived by measuring the cost of coding
     // a zero vs coding a one on any given coefficient position, or, in
@@ -235,11 +257,14 @@ impl QuantizationContext {
     // post-deadzoning.
     //
     // [1] https://jmvalin.ca/notes/theoretical_results.pdf
-    self.dc_offset = self.dc_quant * (if is_intra { 109 } else { 108 }) / 256;
-    self.ac_offset0 = self.ac_quant * (if is_intra { 98 } else { 97 }) / 256;
-    self.ac_offset1 = self.ac_quant * (if is_intra { 109 } else { 108 }) / 256;
+    self.dc_offset =
+      self.dc_quant.get() as u32 * (if is_intra { 109 } else { 108 }) / 256;
+    self.ac_offset0 =
+      self.ac_quant.get() as u32 * (if is_intra { 98 } else { 97 }) / 256;
+    self.ac_offset1 =
+      self.ac_quant.get() as u32 * (if is_intra { 109 } else { 108 }) / 256;
     self.ac_offset_eob =
-      self.ac_quant * (if is_intra { 88 } else { 44 }) / 256;
+      self.ac_quant.get() as u32 * (if is_intra { 88 } else { 44 }) / 256;
   }
 
   #[inline]
@@ -262,7 +287,7 @@ impl QuantizationContext {
     // This threshold is such that `abs(coeff) < deadzone` implies:
     // (abs(coeff << log_tx_scale) + ac_offset_eob) / ac_quant == 0
     let deadzone = T::cast_from(
-      (self.ac_quant as usize - self.ac_offset_eob as usize)
+      (self.ac_quant.get() as usize - self.ac_offset_eob as usize)
         .align_power_of_two_and_shift(self.log_tx_scale),
     );
     let eob = {
@@ -334,8 +359,8 @@ pub mod rust {
     let log_tx_scale = get_log_tx_scale(tx_size) as i32;
     let offset = (1 << log_tx_scale) - 1;
 
-    let dc_quant = dc_q(qindex, dc_delta_q, bit_depth) as i32;
-    let ac_quant = ac_q(qindex, ac_delta_q, bit_depth) as i32;
+    let dc_quant = dc_q(qindex, dc_delta_q, bit_depth).get() as i32;
+    let ac_quant = ac_q(qindex, ac_delta_q, bit_depth).get() as i32;
 
     for (i, (r, c)) in rcoeffs
       .iter_mut()
