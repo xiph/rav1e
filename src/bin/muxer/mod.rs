@@ -55,7 +55,7 @@ pub fn create_muxer<P: AsRef<Path>>(
   match &ext[..] {
     "ivf" => IvfMuxer::open(path),
     _e => {
-      panic!("{} is not a supported extension, please change to .ivf", ext);
+      panic!("{ext} is not a supported extension, please change to .ivf");
     }
   }
 }

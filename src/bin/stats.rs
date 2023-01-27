@@ -346,7 +346,7 @@ impl ProgressInfo {
     let avg_qp = self.get_frame_type_avg_qp(frame_type);
     info!(
       "{:17} {:>6} | avg QP: {:6.2} | avg size: {:>7} B",
-      format!("{}:", frame_type),
+      format!("{frame_type}:"),
       count,
       avg_qp,
       size
@@ -705,11 +705,11 @@ fn secs_to_human_time(mut secs: u64) -> String {
   let hours = mins / 60;
   mins %= 60;
   if hours > 0 {
-    format!("{}h {}m {}s", hours, mins, secs)
+    format!("{hours}h {mins}m {secs}s")
   } else if mins > 0 {
-    format!("{}m {}s", mins, secs)
+    format!("{mins}m {secs}s")
   } else {
-    format!("{}s", secs)
+    format!("{secs}s")
   }
 }
 

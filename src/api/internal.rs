@@ -336,8 +336,7 @@ impl<T: Pixel> ContextInner<T> {
       for (p, plane) in frame.planes[..planes].iter().enumerate() {
         assert!(
           plane.probe_padding(width, height),
-          "Plane {} was not padded before passing Frame to send_frame().",
-          p
+          "Plane {p} was not padded before passing Frame to send_frame()."
         );
       }
     }
