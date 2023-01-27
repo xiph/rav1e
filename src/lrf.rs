@@ -183,13 +183,20 @@ pub(crate) mod rust {
     let n: usize = d * d;
     let one_over_n = if r == 1 { 455 } else { 164 };
 
+    assert!(iimg.len() > (y + d) * iimg_stride + stripe_w + d);
+    assert!(iimg_sq.len() > (y + d) * iimg_stride + stripe_w + d);
+    assert!(af.len() > stripe_w);
+    assert!(bf.len() > stripe_w);
     for x in start_x..stripe_w + 2 {
-      let sum = get_integral_square(iimg, iimg_stride, x, y, d);
-      let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
-      let (reta, retb) =
-        sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
-      af[x] = reta;
-      bf[x] = retb;
+      // SAFETY: We perform the bounds checks above, once for the whole loop
+      unsafe {
+        let sum = get_integral_square(iimg, iimg_stride, x, y, d);
+        let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
+        let (reta, retb) =
+          sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
+        *af.get_unchecked_mut(x) = reta;
+        *bf.get_unchecked_mut(x) = retb;
+      }
     }
   }
 
@@ -359,14 +366,20 @@ fn sgrproj_sum_finish(
 }
 
 // Using an integral image, compute the sum of a square region
-const fn get_integral_square(
+// SAFETY: The size of `iimg` must be at least `(y + size) * stride + x + size`
+#[inline(always)]
+unsafe fn get_integral_square(
   iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
   // Cancel out overflow in iimg by using wrapping arithmetic
-  iimg[y * stride + x]
-    .wrapping_add(iimg[(y + size) * stride + x + size])
-    .wrapping_sub(iimg[(y + size) * stride + x])
-    .wrapping_sub(iimg[y * stride + x + size])
+  let top_left = *iimg.get_unchecked(y * stride + x);
+  let top_right = *iimg.get_unchecked(y * stride + x + size);
+  let bottom_left = *iimg.get_unchecked((y + size) * stride + x);
+  let bottom_right = *iimg.get_unchecked((y + size) * stride + x + size);
+  top_left
+    .wrapping_add(bottom_right)
+    .wrapping_sub(bottom_left)
+    .wrapping_sub(top_right)
 }
 
 struct VertPaddedIter<'a, T: Pixel> {
