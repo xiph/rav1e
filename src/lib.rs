@@ -401,7 +401,7 @@ pub mod version {
     if hash.is_empty() {
       s
     } else {
-      format!("{} - {}", s, hash)
+      format!("{s} - {hash}")
     }
   }
 

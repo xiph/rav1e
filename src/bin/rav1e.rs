@@ -224,7 +224,7 @@ fn process_frame<T: Pixel, D: Decoder>(
         Some(RcData::Summary(outbuf)) => {
           // The last packet of rate control data we get is the summary data.
           // Let's put it at the start of the file.
-          passfile.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+          passfile.rewind().map_err(|e| {
             e.context("Unable to seek in the two-pass data file.")
           })?;
           let len = outbuf.len() as u64;
@@ -285,7 +285,7 @@ fn do_encode<T: Pixel, D: Decoder>(
           info!("{} - {}", frame, progress);
         } else {
           // Print a one-line progress indicator that overrides itself with every update
-          eprint!("\r{}                    ", progress);
+          eprint!("\r{progress}                    ");
         };
       }
 
@@ -383,7 +383,7 @@ cfg_if::cfg_if! {
         "system time: {} s",
         stime.tv_sec as f64 + stime.tv_usec as f64 / 1_000_000f64
       );
-      eprintln!("maximum rss: {} KB", maxrss);
+      eprintln!("maximum rss: {maxrss} KB");
     }
   }
 }

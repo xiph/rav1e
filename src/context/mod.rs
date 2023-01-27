@@ -82,13 +82,13 @@ impl FieldMap {
   fn lookup(&self, addr: usize) {
     for (name, start, end) in &self.map {
       if addr >= *start && addr < *end {
-        println!(" CDF {}", name);
+        println!(" CDF {name}");
         println!();
         return;
       }
     }
 
-    println!("  CDF address not found {}", addr);
+    println!("  CDF address not found: {addr}");
   }
 }
 

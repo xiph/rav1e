@@ -136,9 +136,9 @@ fn build_nasm_files() {
     nasm.flag(&config_include_arg);
     nasm.flag("-Isrc/");
     let obj = nasm.compile_objects().unwrap_or_else(|e| {
-      println!("cargo:warning={}", e);
+      println!("cargo:warning={e}");
       panic!("NASM build failed. Make sure you have nasm installed or disable the \"asm\" feature.\n\
-        You can get NASM from https://nasm.us or your system's package manager.\n\nerror: {}", e);
+        You can get NASM from https://nasm.us or your system's package manager.\n\nerror: {e}");
     });
 
     // cc is better at finding the correct archiver
@@ -164,7 +164,7 @@ fn build_nasm_files() {
 
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
-    println!("cargo:rustc-link-search={}", out_dir);
+    println!("cargo:rustc-link-search={out_dir}");
   }
   println!("cargo:rustc-link-lib=static=rav1easm");
   rerun_dir("src/x86");
@@ -214,7 +214,7 @@ fn build_asm_files() {
 
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
-    println!("cargo:rustc-link-search={}", out_dir);
+    println!("cargo:rustc-link-search={out_dir}");
     println!("cargo:rustc-link-lib=static=rav1e-aarch64");
   }
   rerun_dir("src/arm");
@@ -225,7 +225,7 @@ fn rustc_version_check() {
   // Make sure to updated README.md when this changes.
   const REQUIRED_VERSION: &str = "1.60.0";
   if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
-    eprintln!("rav1e requires rustc >= {}.", REQUIRED_VERSION);
+    eprintln!("rav1e requires rustc >= {REQUIRED_VERSION}.");
     exit(1);
   }
 
@@ -262,7 +262,7 @@ fn main() {
 
   println!("cargo:rustc-env=PROFILE={}", env::var("PROFILE").unwrap());
   if let Ok(value) = env::var("CARGO_CFG_TARGET_FEATURE") {
-    println!("cargo:rustc-env=CARGO_CFG_TARGET_FEATURE={}", value);
+    println!("cargo:rustc-env=CARGO_CFG_TARGET_FEATURE={value}");
   }
   println!(
     "cargo:rustc-env=CARGO_ENCODED_RUSTFLAGS={}",
