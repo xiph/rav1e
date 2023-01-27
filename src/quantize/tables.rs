@@ -12,83 +12,27 @@ use std::{
   num::NonZeroU16,
 };
 
-use once_cell::sync::Lazy;
-
 pub const MINQ: usize = 0;
 pub const MAXQ: usize = 255;
 pub(super) const QINDEX_RANGE: usize = MAXQ - MINQ + 1;
 
-pub(super) static dc_qlookup_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in dc_qlookup_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static dc_qlookup_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(dc_qlookup_Q3_raw);
 
-pub(super) static dc_qlookup_10_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in dc_qlookup_10_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static dc_qlookup_10_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(dc_qlookup_10_Q3_raw);
 
-pub(super) static dc_qlookup_12_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in dc_qlookup_12_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static dc_qlookup_12_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(dc_qlookup_12_Q3_raw);
 
-pub(super) static ac_qlookup_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in ac_qlookup_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static ac_qlookup_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(ac_qlookup_Q3_raw);
 
-pub(super) static ac_qlookup_10_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in ac_qlookup_10_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static ac_qlookup_10_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(ac_qlookup_10_Q3_raw);
 
-pub(super) static ac_qlookup_12_Q3: Lazy<[NonZeroU16; QINDEX_RANGE]> =
-  Lazy::new(|| {
-    // SAFETY: We initialize everything before exiting this function
-    unsafe {
-      let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
-      for (i, value) in ac_qlookup_12_Q3_raw.iter().enumerate() {
-        nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(*value));
-      }
-      transmute(nonzero)
-    }
-  });
+pub(super) static ac_qlookup_12_Q3: [NonZeroU16; QINDEX_RANGE] =
+  nonzero_checked(ac_qlookup_12_Q3_raw);
 
 #[rustfmt::skip]
 const dc_qlookup_Q3_raw: [u16; QINDEX_RANGE] = [
@@ -240,3 +184,24 @@ const ac_qlookup_12_Q3_raw: [u16; QINDEX_RANGE] = [
   22766, 23214, 23662, 24126, 24590, 25070, 25551, 26047, 26559, 27071, 27599,
   28143, 28687, 29247,
 ];
+
+/// # Panics
+///
+/// - If any value is zero
+#[allow(clippy::let_unit_value)]
+#[allow(clippy::unused_unit)]
+const fn nonzero_checked(
+  raw: [u16; QINDEX_RANGE],
+) -> [NonZeroU16; QINDEX_RANGE] {
+  // SAFETY: We initialize everything before exiting this function
+  unsafe {
+    let mut nonzero = [MaybeUninit::uninit(); QINDEX_RANGE];
+    let mut i = 0;
+    while i < QINDEX_RANGE {
+      let _ = if raw[i] == 0 { [(); 0][i] } else { () };
+      nonzero[i] = MaybeUninit::new(NonZeroU16::new_unchecked(raw[i]));
+      i += 1;
+    }
+    transmute(nonzero)
+  }
+}
