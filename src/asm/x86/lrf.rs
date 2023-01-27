@@ -19,16 +19,15 @@ use std::mem;
 
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
-pub fn sgrproj_box_ab_r1(
+pub fn sgrproj_box_ab_r1<const BD: usize>(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
-  cpu: CpuFeatureLevel,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, cpu: CpuFeatureLevel,
 ) {
-  // only use 8-bit AVX2 assembly when bitdepth minus 8 equals 0
-  if cpu >= CpuFeatureLevel::AVX2 && bdm8 == 0 {
+  // only use 8-bit AVX2 assembly when bitdepth equals 8
+  if cpu >= CpuFeatureLevel::AVX2 && BD == 8 {
     // SAFETY: Calls Assembly code.
     return unsafe {
-      sgrproj_box_ab_r1_avx2(
+      sgrproj_box_ab_r1_avx2::<BD>(
         af,
         bf,
         iimg,
@@ -37,12 +36,11 @@ pub fn sgrproj_box_ab_r1(
         y,
         stripe_w,
         s,
-        bdm8,
       );
     };
   }
 
-  rust::sgrproj_box_ab_r1(
+  rust::sgrproj_box_ab_r1::<BD>(
     af,
     bf,
     iimg,
@@ -51,23 +49,21 @@ pub fn sgrproj_box_ab_r1(
     y,
     stripe_w,
     s,
-    bdm8,
     cpu,
   );
 }
 
 // computes an intermediate (ab) row for stripe_w + 2 columns at row y
 #[inline]
-pub fn sgrproj_box_ab_r2(
+pub fn sgrproj_box_ab_r2<const BD: usize>(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
-  cpu: CpuFeatureLevel,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, cpu: CpuFeatureLevel,
 ) {
-  // only use 8-bit AVX2 assembly when bitdepth minus 8 equals 0
-  if cpu >= CpuFeatureLevel::AVX2 && bdm8 == 0 {
+  // only use 8-bit AVX2 assembly when bitdepth equals 8
+  if cpu >= CpuFeatureLevel::AVX2 && BD == 8 {
     // SAFETY: Calls Assembly code.
     return unsafe {
-      sgrproj_box_ab_r2_avx2(
+      sgrproj_box_ab_r2_avx2::<BD>(
         af,
         bf,
         iimg,
@@ -76,12 +72,11 @@ pub fn sgrproj_box_ab_r2(
         y,
         stripe_w,
         s,
-        bdm8,
       );
     };
   }
 
-  rust::sgrproj_box_ab_r2(
+  rust::sgrproj_box_ab_r2::<BD>(
     af,
     bf,
     iimg,
@@ -90,7 +85,6 @@ pub fn sgrproj_box_ab_r2(
     y,
     stripe_w,
     s,
-    bdm8,
     cpu,
   );
 }
@@ -164,10 +158,11 @@ static X_BY_XPLUS1: [u32; 256] = [
 
 #[inline]
 #[target_feature(enable = "avx2")]
-unsafe fn sgrproj_box_ab_8_avx2(
+unsafe fn sgrproj_box_ab_8_avx2<const BD: usize>(
   r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, x: usize, y: usize, s: u32, bdm8: usize,
+  iimg_stride: usize, x: usize, y: usize, s: u32,
 ) {
+  let bdm8 = BD - 8;
   let d: usize = r * 2 + 1;
   let n: i32 = (d * d) as i32;
   let one_over_n = if r == 1 { 455 } else { 164 };
@@ -240,13 +235,13 @@ unsafe fn sgrproj_box_ab_8_avx2(
 }
 
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
+pub(crate) unsafe fn sgrproj_box_ab_r1_avx2<const BD: usize>(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
-      sgrproj_box_ab_8_avx2(
+      sgrproj_box_ab_8_avx2::<BD>(
         1,
         af,
         bf,
@@ -256,11 +251,10 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
         x,
         y,
         s,
-        bdm8,
       );
     } else {
       // finish using scalar
-      rust::sgrproj_box_ab_internal(
+      rust::sgrproj_box_ab_internal::<BD>(
         1,
         af,
         bf,
@@ -271,7 +265,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
         y,
         stripe_w,
         s,
-        bdm8,
       );
     }
   }
@@ -280,7 +273,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    rust::sgrproj_box_ab_internal(
+    rust::sgrproj_box_ab_internal::<BD>(
       1,
       &mut af_ref,
       &mut bf_ref,
@@ -291,7 +284,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
       y,
       stripe_w,
       s,
-      bdm8,
     );
     assert_eq!(&af[..stripe_w + 2], &af_ref[..]);
     assert_eq!(&bf[..stripe_w + 2], &bf_ref[..]);
@@ -299,13 +291,13 @@ pub(crate) unsafe fn sgrproj_box_ab_r1_avx2(
 }
 
 #[target_feature(enable = "avx2")]
-pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
+pub(crate) unsafe fn sgrproj_box_ab_r2_avx2<const BD: usize>(
   af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-  iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+  iimg_stride: usize, y: usize, stripe_w: usize, s: u32,
 ) {
   for x in (0..stripe_w + 2).step_by(8) {
     if x + 8 <= stripe_w + 2 {
-      sgrproj_box_ab_8_avx2(
+      sgrproj_box_ab_8_avx2::<BD>(
         2,
         af,
         bf,
@@ -315,11 +307,10 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
         x,
         y,
         s,
-        bdm8,
       );
     } else {
       // finish using scalar
-      rust::sgrproj_box_ab_internal(
+      rust::sgrproj_box_ab_internal::<BD>(
         2,
         af,
         bf,
@@ -330,7 +321,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
         y,
         stripe_w,
         s,
-        bdm8,
       );
     }
   }
@@ -339,7 +329,7 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
   {
     let mut af_ref: Vec<u32> = vec![0; stripe_w + 2];
     let mut bf_ref: Vec<u32> = vec![0; stripe_w + 2];
-    rust::sgrproj_box_ab_internal(
+    rust::sgrproj_box_ab_internal::<BD>(
       2,
       &mut af_ref,
       &mut bf_ref,
@@ -350,7 +340,6 @@ pub(crate) unsafe fn sgrproj_box_ab_r2_avx2(
       y,
       stripe_w,
       s,
-      bdm8,
     );
     assert_eq!(&af[..stripe_w + 2], &af_ref[..]);
     assert_eq!(&bf[..stripe_w + 2], &bf_ref[..]);
