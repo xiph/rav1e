@@ -174,10 +174,9 @@ pub(crate) mod rust {
   use crate::Pixel;
 
   #[inline(always)]
-  pub(crate) fn sgrproj_box_ab_internal(
+  pub(crate) fn sgrproj_box_ab_internal<const BD: usize>(
     r: usize, af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
     iimg_stride: usize, start_x: usize, y: usize, stripe_w: usize, s: u32,
-    bdm8: usize,
   ) {
     let d: usize = r * 2 + 1;
     let n: usize = d * d;
@@ -187,13 +186,14 @@ pub(crate) mod rust {
     assert!(iimg_sq.len() > (y + d) * iimg_stride + stripe_w + d);
     assert!(af.len() > stripe_w);
     assert!(bf.len() > stripe_w);
+
     for x in start_x..stripe_w + 2 {
       // SAFETY: We perform the bounds checks above, once for the whole loop
       unsafe {
         let sum = get_integral_square(iimg, iimg_stride, x, y, d);
         let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
         let (reta, retb) =
-          sgrproj_sum_finish(ssq, sum, n as u32, one_over_n, s, bdm8);
+          sgrproj_sum_finish::<BD>(ssq, sum, n as u32, one_over_n, s);
         *af.get_unchecked_mut(x) = reta;
         *bf.get_unchecked_mut(x) = retb;
       }
@@ -201,12 +201,12 @@ pub(crate) mod rust {
   }
 
   // computes an intermediate (ab) row for stripe_w + 2 columns at row y
-  pub(crate) fn sgrproj_box_ab_r1(
+  pub(crate) fn sgrproj_box_ab_r1<const BD: usize>(
     af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-    iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+    iimg_stride: usize, y: usize, stripe_w: usize, s: u32,
     _cpu: CpuFeatureLevel,
   ) {
-    sgrproj_box_ab_internal(
+    sgrproj_box_ab_internal::<BD>(
       1,
       af,
       bf,
@@ -217,17 +217,16 @@ pub(crate) mod rust {
       y,
       stripe_w,
       s,
-      bdm8,
     );
   }
 
   // computes an intermediate (ab) row for stripe_w + 2 columns at row y
-  pub(crate) fn sgrproj_box_ab_r2(
+  pub(crate) fn sgrproj_box_ab_r2<const BD: usize>(
     af: &mut [u32], bf: &mut [u32], iimg: &[u32], iimg_sq: &[u32],
-    iimg_stride: usize, y: usize, stripe_w: usize, s: u32, bdm8: usize,
+    iimg_stride: usize, y: usize, stripe_w: usize, s: u32,
     _cpu: CpuFeatureLevel,
   ) {
-    sgrproj_box_ab_internal(
+    sgrproj_box_ab_internal::<BD>(
       2,
       af,
       bf,
@@ -238,7 +237,6 @@ pub(crate) mod rust {
       y,
       stripe_w,
       s,
-      bdm8,
     );
   }
 
@@ -345,9 +343,10 @@ pub(crate) mod rust {
 }
 
 #[inline(always)]
-fn sgrproj_sum_finish(
-  ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32, bdm8: usize,
+fn sgrproj_sum_finish<const BD: usize>(
+  ssq: u32, sum: u32, n: u32, one_over_n: u32, s: u32,
 ) -> (u32, u32) {
+  let bdm8 = BD - 8;
   let scaled_ssq = (ssq + (1 << (2 * bdm8) >> 1)) >> (2 * bdm8);
   let scaled_sum = (sum + (1 << bdm8 >> 1)) >> bdm8;
   let p = (scaled_ssq * n).saturating_sub(scaled_sum * scaled_sum);
@@ -633,7 +632,6 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
 ) {
   let &Rect { width: stripe_w, height: stripe_h, .. } = out.rect();
-  let bdm8 = fi.sequence.bit_depth - 8;
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
     [[0; IMAGE_WIDTH_MAX + 2]; 2];
   let mut b_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -649,6 +647,19 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
 
+  let fn_ab_r1 = match fi.sequence.bit_depth {
+    8 => sgrproj_box_ab_r1::<8>,
+    10 => sgrproj_box_ab_r1::<10>,
+    12 => sgrproj_box_ab_r1::<12>,
+    _ => unimplemented!(),
+  };
+  let fn_ab_r2 = match fi.sequence.bit_depth {
+    8 => sgrproj_box_ab_r2::<8>,
+    10 => sgrproj_box_ab_r2::<10>,
+    12 => sgrproj_box_ab_r2::<12>,
+    _ => unimplemented!(),
+  };
+
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
   // the spec doesn't make clear: Although the spec defines computation
@@ -657,7 +668,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   let integral_image = &integral_image_buffer.integral_image;
   let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
-    sgrproj_box_ab_r2(
+    fn_ab_r2(
       &mut a_r2[0],
       &mut b_r2[0],
       integral_image,
@@ -666,13 +677,12 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       0,
       stripe_w,
       s_r2,
-      bdm8,
       fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
     let integral_image_offset = integral_image_stride + 1;
-    sgrproj_box_ab_r1(
+    fn_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
@@ -681,10 +691,9 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       0,
       stripe_w,
       s_r1,
-      bdm8,
       fi.cpu_feature_level,
     );
-    sgrproj_box_ab_r1(
+    fn_ab_r1(
       &mut a_r1[1],
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
@@ -693,7 +702,6 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       1,
       stripe_w,
       s_r1,
-      bdm8,
       fi.cpu_feature_level,
     );
   }
@@ -704,7 +712,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   for y in (0..stripe_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_ab: [&[u32]; 2] = if s_r2 > 0 {
-      sgrproj_box_ab_r2(
+      fn_ab_r2(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
@@ -713,7 +721,6 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
         y + 2,
         stripe_w,
         s_r2,
-        bdm8,
         fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
@@ -744,7 +751,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       let y = y + dy;
       if s_r1 > 0 {
         let integral_image_offset = integral_image_stride + 1;
-        sgrproj_box_ab_r1(
+        fn_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
@@ -753,7 +760,6 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
           y + 2,
           stripe_w,
           s_r1,
-          bdm8,
           fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
@@ -841,8 +847,6 @@ pub fn sgrproj_solve<T: Pixel>(
   integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
 ) -> (i8, i8) {
-  let bdm8 = fi.sequence.bit_depth - 8;
-
   let mut a_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
     [[0; IMAGE_WIDTH_MAX + 2]; 2];
   let mut b_r2: [[u32; IMAGE_WIDTH_MAX + 2]; 2] =
@@ -861,6 +865,19 @@ pub fn sgrproj_solve<T: Pixel>(
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
 
+  let fn_ab_r1 = match fi.sequence.bit_depth {
+    8 => sgrproj_box_ab_r1::<8>,
+    10 => sgrproj_box_ab_r1::<10>,
+    12 => sgrproj_box_ab_r1::<12>,
+    _ => unimplemented!(),
+  };
+  let fn_ab_r2 = match fi.sequence.bit_depth {
+    8 => sgrproj_box_ab_r2::<8>,
+    10 => sgrproj_box_ab_r2::<10>,
+    12 => sgrproj_box_ab_r2::<12>,
+    _ => unimplemented!(),
+  };
+
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
   // the spec doesn't make clear: Although the spec defines computation
@@ -869,7 +886,7 @@ pub fn sgrproj_solve<T: Pixel>(
   let integral_image = &integral_image_buffer.integral_image;
   let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
-    sgrproj_box_ab_r2(
+    fn_ab_r2(
       &mut a_r2[0],
       &mut b_r2[0],
       integral_image,
@@ -878,13 +895,12 @@ pub fn sgrproj_solve<T: Pixel>(
       0,
       cdef_w,
       s_r2,
-      bdm8,
       fi.cpu_feature_level,
     );
   }
   if s_r1 > 0 {
     let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
-    sgrproj_box_ab_r1(
+    fn_ab_r1(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
@@ -893,10 +909,9 @@ pub fn sgrproj_solve<T: Pixel>(
       0,
       cdef_w,
       s_r1,
-      bdm8,
       fi.cpu_feature_level,
     );
-    sgrproj_box_ab_r1(
+    fn_ab_r1(
       &mut a_r1[1],
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
@@ -905,7 +920,6 @@ pub fn sgrproj_solve<T: Pixel>(
       1,
       cdef_w,
       s_r1,
-      bdm8,
       fi.cpu_feature_level,
     );
   }
@@ -916,7 +930,7 @@ pub fn sgrproj_solve<T: Pixel>(
   for y in (0..cdef_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_01: [&[u32]; 2] = if s_r2 > 0 {
-      sgrproj_box_ab_r2(
+      fn_ab_r2(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
@@ -925,7 +939,6 @@ pub fn sgrproj_solve<T: Pixel>(
         y + 2,
         cdef_w,
         s_r2,
-        bdm8,
         fi.cpu_feature_level,
       );
       let ap0: [&[u32]; 2] = [&a_r2[(y / 2) % 2], &a_r2[(y / 2 + 1) % 2]];
@@ -950,7 +963,7 @@ pub fn sgrproj_solve<T: Pixel>(
       let y = y + dy;
       if s_r1 > 0 {
         let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
-        sgrproj_box_ab_r1(
+        fn_ab_r1(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
@@ -959,7 +972,6 @@ pub fn sgrproj_solve<T: Pixel>(
           y + 2,
           cdef_w,
           s_r1,
-          bdm8,
           fi.cpu_feature_level,
         );
         let ap1: [&[u32]; 3] =
