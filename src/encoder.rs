@@ -571,10 +571,11 @@ pub struct SegmentationState {
 
 impl SegmentationState {
   pub fn update_threshold(&mut self, base_q_idx: u8, bd: usize) {
-    let base_ac_q = ac_q(base_q_idx, 0, bd) as u64;
+    let base_ac_q = ac_q(base_q_idx, 0, bd).get() as u64;
     let real_ac_q = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
       self.data[..=self.max_segment as usize].iter().map(|data| {
-        ac_q(base_q_idx, data[SegLvl::SEG_LVL_ALT_Q as usize] as i8, bd) as u64
+        ac_q(base_q_idx, data[SegLvl::SEG_LVL_ALT_Q as usize] as i8, bd).get()
+          as u64
       }),
     );
     self.threshold.fill(DistortionScale(0));
