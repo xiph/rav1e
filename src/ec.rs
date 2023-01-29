@@ -137,8 +137,8 @@ pub struct WriterCounter {
 pub struct WriterRecorder {
   /// Storage for tokens
   storage: Vec<(u16, u16, u16)>,
-  /// Bytes that would be shifted out to date
-  bytes: usize,
+  /// Bits that would be shifted out to date
+  bits: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -175,7 +175,7 @@ impl WriterCounter {
 impl WriterRecorder {
   #[inline]
   pub const fn new() -> WriterBase<WriterRecorder> {
-    WriterBase::new(WriterRecorder { storage: Vec::new(), bytes: 0 })
+    WriterBase::new(WriterRecorder { storage: Vec::new(), bits: 0 })
   }
 }
 
@@ -229,23 +229,19 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   fn store(&mut self, fl: u16, fh: u16, nms: u16) {
     let (_l, r) = self.lr_compute(fl, fh, nms);
     let d = r.leading_zeros() as usize;
-    let mut s = self.cnt + (d as i16);
 
-    self.s.bytes += (s >= 0) as usize + (s >= 8) as usize;
-    s -= 8 * ((s >= 0) as i16 + (s >= 8) as i16);
-
+    self.s.bits += d;
     self.rng = r << d;
-    self.cnt = s;
     self.s.storage.push((fl, fh, nms));
   }
   #[inline]
   fn stream_bits(&mut self) -> usize {
-    self.s.bytes * 8
+    self.s.bits
   }
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_size: self.s.bytes,
+      stream_size: self.s.bits,
       backend_var: self.s.storage.len(),
       rng: self.rng,
       cnt: self.cnt,
@@ -255,7 +251,7 @@ impl StorageBackend for WriterBase<WriterRecorder> {
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
     self.cnt = checkpoint.cnt;
-    self.s.bytes = checkpoint.stream_size;
+    self.s.bits = checkpoint.stream_size;
     self.s.storage.truncate(checkpoint.backend_var);
   }
 }
@@ -429,7 +425,7 @@ impl WriterBase<WriterRecorder> {
     self.rng = 0x8000;
     self.cnt = -9;
     self.s.storage.truncate(0);
-    self.s.bytes = 0;
+    self.s.bits = 0;
   }
 }
 
