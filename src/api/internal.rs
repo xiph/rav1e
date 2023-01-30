@@ -317,7 +317,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   #[hawktracer(send_frame)]
-  pub fn send_frame(
+  pub fn send_frame<const BD: usize>(
     &mut self, mut frame: Option<Arc<Frame<T>>>,
     params: Option<FrameParameters>,
   ) -> Result<(), EncoderStatus> {
@@ -376,7 +376,7 @@ impl<T: Pixel> ContextInner<T> {
             break;
           }
 
-          Self::compute_keyframe_placement(
+          Self::compute_keyframe_placement::<BD>(
             cur_lookahead_frames,
             &self.keyframes_forced,
             &mut self.keyframe_detector,
@@ -385,7 +385,7 @@ impl<T: Pixel> ContextInner<T> {
           );
         }
       } else {
-        Self::compute_keyframe_placement(
+        Self::compute_keyframe_placement::<BD>(
           &lookahead_frames,
           &self.keyframes_forced,
           &mut self.keyframe_detector,
@@ -395,7 +395,7 @@ impl<T: Pixel> ContextInner<T> {
       }
     }
 
-    self.compute_frame_invariants();
+    self.compute_frame_invariants::<BD>();
 
     Ok(())
   }
@@ -649,7 +649,9 @@ impl<T: Pixel> ContextInner<T> {
   /// function must be called after every new `FrameInvariants` is initially
   /// computed.
   #[hawktracer(compute_lookahead_motion_vectors)]
-  fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
+  fn compute_lookahead_motion_vectors<const BD: usize>(
+    &mut self, output_frameno: u64,
+  ) {
     let frame_data = self.frame_data.get(&output_frameno).unwrap();
 
     // We're only interested in valid frames which are not show-existing-frame.
@@ -665,7 +667,7 @@ impl<T: Pixel> ContextInner<T> {
 
     let qps = {
       let fti = frame_data.as_ref().unwrap().fi.get_frame_subtype();
-      self.rc_state.select_qi(
+      self.rc_state.select_qi::<_, BD>(
         self,
         output_frameno,
         fti,
@@ -742,14 +744,14 @@ impl<T: Pixel> ContextInner<T> {
     fi.rec_buffer = coded_data.lookahead_rec_buffer.clone();
 
     // Estimate lambda with rate-control dry-run
-    fi.set_quantizers(&qps);
+    fi.set_quantizers::<BD>(&qps);
 
     // TODO: as in the encoding code, key frames will have no references.
     // However, for block importance purposes we want key frames to act as
     // P-frames in this instance.
     //
     // Compute the motion vectors.
-    compute_motion_vectors(fi, fs, &self.inter_cfg);
+    compute_motion_vectors::<_, BD>(fi, fs, &self.inter_cfg);
 
     let coded_data = fi.coded_frame_data.as_mut().unwrap();
 
@@ -818,7 +820,9 @@ impl<T: Pixel> ContextInner<T> {
   /// Computes lookahead intra cost approximations and fills in
   /// `lookahead_intra_costs` on the `FrameInvariants`.
   #[hawktracer(compute_lookahead_intra_costs)]
-  fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
+  fn compute_lookahead_intra_costs<const BD: usize>(
+    &mut self, output_frameno: u64,
+  ) {
     let frame_data = self.frame_data.get(&output_frameno).unwrap();
     let fd = &frame_data.as_ref();
 
@@ -853,23 +857,22 @@ impl<T: Pixel> ContextInner<T> {
 
         // We use the cached values from scenechange if available,
         // otherwise we need to calculate them here.
-        estimate_intra_costs(
+        estimate_intra_costs::<_, BD>(
           temp_plane,
           &**frame,
-          fi.sequence.bit_depth,
           fi.cpu_feature_level,
         )
       });
   }
 
   #[hawktracer(compute_keyframe_placement)]
-  pub fn compute_keyframe_placement(
+  pub fn compute_keyframe_placement<const BD: usize>(
     lookahead_frames: &[&Arc<Frame<T>>], keyframes_forced: &BTreeSet<u64>,
     keyframe_detector: &mut SceneChangeDetector<T>,
     next_lookahead_frame: &mut u64, keyframes: &mut BTreeSet<u64>,
   ) {
     if keyframes_forced.contains(next_lookahead_frame)
-      || keyframe_detector.analyze_next_frame(
+      || keyframe_detector.analyze_next_frame::<BD>(
         lookahead_frames,
         *next_lookahead_frame,
         *keyframes.iter().last().unwrap(),
@@ -882,24 +885,26 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   #[hawktracer(compute_frame_invariants)]
-  pub fn compute_frame_invariants(&mut self) {
+  pub fn compute_frame_invariants<const BD: usize>(&mut self) {
     while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
     {
-      self
-        .compute_lookahead_motion_vectors(self.next_lookahead_output_frameno);
+      self.compute_lookahead_motion_vectors::<BD>(
+        self.next_lookahead_output_frameno,
+      );
       if self.config.temporal_rdo() {
-        self.compute_lookahead_intra_costs(self.next_lookahead_output_frameno);
+        self.compute_lookahead_intra_costs::<BD>(
+          self.next_lookahead_output_frameno,
+        );
       }
       self.next_lookahead_output_frameno += 1;
     }
   }
 
   #[hawktracer(update_block_importances)]
-  fn update_block_importances(
+  fn update_block_importances<const BD: usize>(
     fi: &FrameInvariants<T>, me_stats: &crate::me::FrameMEStats,
-    frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
-    bsize: BlockSize, len: usize,
-    reference_frame_block_importances: &mut [f32],
+    frame: &Frame<T>, reference_frame: &Frame<T>, bsize: BlockSize,
+    len: usize, reference_frame_block_importances: &mut [f32],
   ) {
     let coded_data = fi.coded_frame_data.as_ref().unwrap();
     let plane_org = &frame.planes[0];
@@ -946,12 +951,11 @@ impl<T: Pixel> ContextInner<T> {
                 height: IMPORTANCE_BLOCK_SIZE,
               });
 
-              let inter_cost = get_satd(
+              let inter_cost = get_satd::<_, BD>(
                 &region_org,
                 &region_ref,
                 bsize.width(),
                 bsize.height(),
-                bit_depth,
                 fi.cpu_feature_level,
               ) as f32;
 
@@ -1058,7 +1062,7 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Computes the block importances for the current output frame.
   #[hawktracer(compute_block_importances)]
-  fn compute_block_importances(&mut self) {
+  fn compute_block_importances<const BD: usize>(&mut self) {
     // SEF don't need block importances.
     if self.frame_data[&self.output_frameno]
       .as_ref()
@@ -1142,7 +1146,6 @@ impl<T: Pixel> ContextInner<T> {
           }
         }
 
-        let bit_depth = self.config.bit_depth;
         let frame_data = &mut self.frame_data;
         let len = unique_indices.len();
 
@@ -1178,12 +1181,11 @@ impl<T: Pixel> ContextInner<T> {
                 .block_importances
             })
           {
-            Self::update_block_importances(
+            Self::update_block_importances::<BD>(
               fi,
               me_stats,
               frame,
               reference_frame,
-              bit_depth,
               bsize,
               len,
               reference_frame_block_importances,
@@ -1244,7 +1246,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  pub(crate) fn encode_packet(
+  pub(crate) fn encode_packet<const BD: usize>(
     &mut self, cur_output_frameno: u64,
   ) -> Result<Packet<T>, EncoderStatus> {
     if self
@@ -1325,10 +1327,9 @@ impl<T: Pixel> ContextInner<T> {
             self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
           coded_data.activity_mask =
             ActivityMask::from_plane(&frame.planes[0]);
-          coded_data.activity_mask.fill_scales(
-            frame_data.fi.sequence.bit_depth,
-            &mut coded_data.activity_scales,
-          );
+          coded_data
+            .activity_mask
+            .fill_scales::<BD>(&mut coded_data.activity_scales);
           log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
         } else {
           coded_data.activity_mask = ActivityMask::default();
@@ -1359,19 +1360,22 @@ impl<T: Pixel> ContextInner<T> {
       }
 
       let fti = frame_data.fi.get_frame_subtype();
-      let qps = self.rc_state.select_qi(
+      let qps = self.rc_state.select_qi::<_, BD>(
         self,
         cur_output_frameno,
         fti,
         self.maybe_prev_log_base_q,
         log_isqrt_mean_scale,
       );
-      frame_data.fi.set_quantizers(&qps);
+      frame_data.fi.set_quantizers::<BD>(&qps);
 
       if self.rc_state.needs_trial_encode(fti) {
         let mut trial_fs = frame_data.fs.clone();
-        let data =
-          encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
+        let data = encode_frame::<_, BD>(
+          &frame_data.fi,
+          &mut trial_fs,
+          &self.inter_cfg,
+        );
         self.rc_state.update_state(
           (data.len() * 8) as i64,
           fti,
@@ -1380,18 +1384,21 @@ impl<T: Pixel> ContextInner<T> {
           true,
           false,
         );
-        let qps = self.rc_state.select_qi(
+        let qps = self.rc_state.select_qi::<_, BD>(
           self,
           cur_output_frameno,
           fti,
           self.maybe_prev_log_base_q,
           log_isqrt_mean_scale,
         );
-        frame_data.fi.set_quantizers(&qps);
+        frame_data.fi.set_quantizers::<BD>(&qps);
       }
 
-      let data =
-        encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+      let data = encode_frame::<_, BD>(
+        &frame_data.fi,
+        &mut frame_data.fs,
+        &self.inter_cfg,
+      );
       #[cfg(feature = "dump_lookahead_data")]
       {
         let input_frameno = frame_data.fi.input_frameno;
@@ -1488,7 +1495,9 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   #[hawktracer(receive_packet)]
-  pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
+  pub fn receive_packet<const BD: usize>(
+    &mut self,
+  ) -> Result<Packet<T>, EncoderStatus> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
     }
@@ -1514,12 +1523,12 @@ impl<T: Pixel> ContextInner<T> {
 
     if self.config.temporal_rdo() {
       // Compute the block importances for the current output frame.
-      self.compute_block_importances();
+      self.compute_block_importances::<BD>();
     }
 
     let cur_output_frameno = self.output_frameno;
 
-    let mut ret = self.encode_packet(cur_output_frameno);
+    let mut ret = self.encode_packet::<BD>(cur_output_frameno);
 
     if let Ok(ref mut pkt) = ret {
       self.garbage_collect(pkt.input_frameno);

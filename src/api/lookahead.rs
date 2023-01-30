@@ -27,8 +27,8 @@ pub(crate) const IMP_BLOCK_AREA_IN_MV_UNITS: i64 =
   IMP_BLOCK_SIZE_IN_MV_UNITS * IMP_BLOCK_SIZE_IN_MV_UNITS;
 
 #[hawktracer(estimate_intra_costs)]
-pub(crate) fn estimate_intra_costs<T: Pixel>(
-  temp_plane: &mut Plane<T>, frame: &Frame<T>, bit_depth: usize,
+pub(crate) fn estimate_intra_costs<T: Pixel, const BD: usize>(
+  temp_plane: &mut Plane<T>, frame: &Frame<T>,
   cpu_feature_level: CpuFeatureLevel,
 ) -> Box<[u32]> {
   let plane = &frame.planes[0];
@@ -54,7 +54,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       });
 
       // TODO: other intra prediction modes.
-      let edge_buf = get_intra_edges(
+      let edge_buf = get_intra_edges::<_, BD>(
         &plane.as_region(),
         TileBlockOffset(BlockOffset { x, y }),
         0,
@@ -65,7 +65,6 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
           y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
         },
         TxSize::TX_8X8,
-        bit_depth,
         Some(PredictionMode::DC_PRED),
         false,
         IntraParam::None,
@@ -79,7 +78,7 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
           height: IMPORTANCE_BLOCK_SIZE,
         });
 
-      PredictionMode::DC_PRED.predict_intra(
+      PredictionMode::DC_PRED.predict_intra::<_, BD>(
         TileRect {
           x: x * IMPORTANCE_BLOCK_SIZE,
           y: y * IMPORTANCE_BLOCK_SIZE,
@@ -88,7 +87,6 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         },
         &mut plane_after_prediction_region,
         tx_size,
-        bit_depth,
         &[], // Not used by DC_PRED
         IntraParam::None,
         None, // Not used by DC_PRED
@@ -104,12 +102,11 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
           height: IMPORTANCE_BLOCK_SIZE,
         });
 
-      let intra_cost = get_satd(
+      let intra_cost = get_satd::<_, BD>(
         &plane_org,
         &plane_after_prediction_region,
         bsize.width(),
         bsize.height(),
-        bit_depth,
         cpu_feature_level,
       );
 
@@ -177,9 +174,9 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
 }
 
 #[hawktracer(estimate_inter_costs)]
-pub(crate) fn estimate_inter_costs<T: Pixel>(
-  frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
-  mut config: EncoderConfig, sequence: Arc<Sequence>, buffer: RefMEStats,
+pub(crate) fn estimate_inter_costs<T: Pixel, const BD: usize>(
+  frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, mut config: EncoderConfig,
+  sequence: Arc<Sequence>, buffer: RefMEStats,
 ) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
@@ -215,7 +212,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
       ],
     }),
   );
-  compute_motion_vectors(&mut fi, &mut fs, &inter_cfg);
+  compute_motion_vectors::<_, BD>(&mut fi, &mut fs, &inter_cfg);
 
   // Estimate inter costs
   let plane_org = &frame.planes[0];
@@ -252,12 +249,11 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
         height: IMPORTANCE_BLOCK_SIZE,
       });
 
-      inter_costs += get_satd(
+      inter_costs += get_satd::<_, BD>(
         &region_org,
         &region_ref,
         bsize.width(),
         bsize.height(),
-        bit_depth,
         fi.cpu_feature_level,
       ) as u64;
     });
@@ -266,7 +262,7 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
 }
 
 #[hawktracer(compute_motion_vectors)]
-pub(crate) fn compute_motion_vectors<T: Pixel>(
+pub(crate) fn compute_motion_vectors<T: Pixel, const BD: usize>(
   fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) {
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
@@ -277,6 +273,6 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
     .into_par_iter()
     .for_each(|mut ctx| {
       let ts = &mut ctx.ts;
-      estimate_tile_motion(fi, ts, inter_cfg);
+      estimate_tile_motion::<_, BD>(fi, ts, inter_cfg);
     });
 }

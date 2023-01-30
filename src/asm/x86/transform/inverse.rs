@@ -16,27 +16,26 @@ use crate::{Pixel, PixelType};
 use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
-pub fn inverse_transform_add<T: Pixel>(
+pub fn inverse_transform_add<T: Pixel, const BD: usize>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
-  tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
+  tx_size: TxSize, tx_type: TxType, cpu: CpuFeatureLevel,
 ) {
   match T::type_enum() {
     PixelType::U8 => {
       if let Some(func) = INV_TXFM_FNS[cpu.as_index()]
         [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
       {
-        return call_inverse_func(
+        return call_inverse_func::<_, BD>(
           func,
           input,
           output,
           eob,
           tx_size.width(),
           tx_size.height(),
-          bd,
         );
       }
     }
-    PixelType::U16 if bd == 10 => {
+    PixelType::U16 if BD == 10 => {
       if let Some(func) = INV_TXFM_HBD_FNS_10[cpu.as_index()]
         [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
       {
@@ -47,11 +46,10 @@ pub fn inverse_transform_add<T: Pixel>(
           eob,
           tx_size.width(),
           tx_size.height(),
-          bd,
         );
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if BD == 12 => {
       if let Some(func) = INV_TXFM_HBD_FNS_12[cpu.as_index()]
         [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
       {
@@ -62,13 +60,15 @@ pub fn inverse_transform_add<T: Pixel>(
           eob,
           tx_size.width(),
           tx_size.height(),
-          bd,
         );
       }
     }
+    _ => unimplemented!(),
   };
 
-  rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
+  rust::inverse_transform_add::<_, BD>(
+    input, output, eob, tx_size, tx_type, cpu,
+  );
 }
 
 macro_rules! decl_itx_fns {

@@ -41,13 +41,13 @@ const fn decimate_index(xdec: usize, ydec: usize) -> usize {
   ((ydec << 1) | xdec) & 3
 }
 
-pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
+pub(crate) unsafe fn cdef_filter_block<T: Pixel, const BD: usize>(
   dst: &mut PlaneRegionMut<'_, T>, src: *const T, src_stride: isize,
-  pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-  bit_depth: usize, xdec: usize, ydec: usize, edges: u8, cpu: CpuFeatureLevel,
+  pri_strength: i32, sec_strength: i32, dir: usize, damping: i32, xdec: usize,
+  ydec: usize, edges: u8, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<T>| {
-    rust::cdef_filter_block(
+    rust::cdef_filter_block::<_, _, BD>(
       dst,
       src,
       src_stride,
@@ -55,7 +55,6 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
       sec_strength,
       dir,
       damping,
-      bit_depth,
       xdec,
       ydec,
       edges,
@@ -124,7 +123,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
               sec_strength,
               dir as i32,
               damping,
-              (1 << bit_depth) - 1,
+              (1 << BD) - 1,
             );
           }
           None => call_rust(dst),
@@ -316,7 +315,6 @@ mod test {
             let pri_strength = 1;
             let sec_strength = 0;
             let damping = 2;
-            let bit_depth = 8;
 
             // SAFETY: Calling functions with raw pointers--we created the
             // planes above and only read from the start.
@@ -324,8 +322,8 @@ mod test {
             // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
             #[allow(clippy::undocumented_unsafe_blocks)]
             unsafe {
-              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
+              cdef_filter_block::<_, _, 8>(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              cdef_filter_block::<_, _, 8>(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
               assert_eq!(rust_dst.data_origin(), dst.data_origin());
             }
           }

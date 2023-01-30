@@ -146,9 +146,10 @@ fn deblock_level(
 
 // four taps, 4 outputs (two are trivial)
 #[inline]
-fn filter_narrow2_4(
-  p1: i32, p0: i32, q0: i32, q1: i32, shift: usize,
+fn filter_narrow2_4<const BD: usize>(
+  p1: i32, p0: i32, q0: i32, q1: i32,
 ) -> [i32; 4] {
+  let shift = BD - 8;
   let filter0 = clamp(p1 - q1, -128 << shift, (128 << shift) - 1);
   let filter1 =
     clamp(filter0 + 3 * (q0 - p0) + 4, -128 << shift, (128 << shift) - 1) >> 3;
@@ -178,28 +179,29 @@ fn filter_narrow2_4(
 
 // six taps, 6 outputs (four are trivial)
 #[inline]
-fn filter_narrow2_6(
-  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
+fn filter_narrow2_6<const BD: usize>(
+  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32,
 ) -> [i32; 6] {
-  let x = filter_narrow2_4(p1, p0, q0, q1, shift);
+  let x = filter_narrow2_4::<BD>(p1, p0, q0, q1);
   [p2, x[0], x[1], x[2], x[3], q2]
 }
 
 // 12 taps, 12 outputs (ten are trivial)
 #[inline]
-fn filter_narrow2_12(
+fn filter_narrow2_12<const BD: usize>(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
-  q2: i32, q3: i32, q4: i32, q5: i32, shift: usize,
+  q2: i32, q3: i32, q4: i32, q5: i32,
 ) -> [i32; 12] {
-  let x = filter_narrow2_4(p1, p0, q0, q1, shift);
+  let x = filter_narrow2_4::<BD>(p1, p0, q0, q1);
   [p5, p4, p3, p2, x[0], x[1], x[2], x[3], q2, q3, q4, q5]
 }
 
 // four taps, 4 outputs
 #[inline]
-fn filter_narrow4_4(
-  p1: i32, p0: i32, q0: i32, q1: i32, shift: usize,
+fn filter_narrow4_4<const BD: usize>(
+  p1: i32, p0: i32, q0: i32, q1: i32,
 ) -> [i32; 4] {
+  let shift = BD - 8;
   let filter1 =
     clamp(3 * (q0 - p0) + 4, -128 << shift, (128 << shift) - 1) >> 3;
   // be certain our optimization removing a clamp is sound
@@ -227,20 +229,20 @@ fn filter_narrow4_4(
 
 // six taps, 6 outputs (two are trivial)
 #[inline]
-fn filter_narrow4_6(
-  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
+fn filter_narrow4_6<const BD: usize>(
+  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32,
 ) -> [i32; 6] {
-  let x = filter_narrow4_4(p1, p0, q0, q1, shift);
+  let x = filter_narrow4_4::<BD>(p1, p0, q0, q1);
   [p2, x[0], x[1], x[2], x[3], q2]
 }
 
 // 12 taps, 12 outputs (eight are trivial)
 #[inline]
-fn filter_narrow4_12(
+fn filter_narrow4_12<const BD: usize>(
   p5: i32, p4: i32, p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32,
-  q2: i32, q3: i32, q4: i32, q5: i32, shift: usize,
+  q2: i32, q3: i32, q4: i32, q5: i32,
 ) -> [i32; 12] {
-  let x = filter_narrow4_4(p1, p0, q0, q1, shift);
+  let x = filter_narrow4_4::<BD>(p1, p0, q0, q1);
   [p5, p4, p3, p2, x[0], x[1], x[2], x[3], q2, q3, q4, q5]
 }
 
@@ -333,57 +335,63 @@ fn stride_sse<const LEN: usize>(a: &[i32; LEN], b: &[i32; LEN]) -> i64 {
 }
 
 #[inline]
-const fn _level_to_limit(level: i32, shift: usize) -> i32 {
+const fn _level_to_limit<const BD: usize>(level: i32) -> i32 {
+  let shift = BD - 8;
   level << shift
 }
 
 #[inline]
-const fn limit_to_level(limit: i32, shift: usize) -> i32 {
+const fn limit_to_level<const BD: usize>(limit: i32) -> i32 {
+  let shift = BD - 8;
   (limit + (1 << shift) - 1) >> shift
 }
 
 #[inline]
-const fn _level_to_blimit(level: i32, shift: usize) -> i32 {
+const fn _level_to_blimit<const BD: usize>(level: i32) -> i32 {
+  let shift = BD - 8;
   (3 * level + 4) << shift
 }
 
 #[inline]
-const fn blimit_to_level(blimit: i32, shift: usize) -> i32 {
+const fn blimit_to_level<const BD: usize>(blimit: i32) -> i32 {
+  let shift = BD - 8;
   (((blimit + (1 << shift) - 1) >> shift) - 2) / 3
 }
 
 #[inline]
-const fn _level_to_thresh(level: i32, shift: usize) -> i32 {
+const fn _level_to_thresh<const BD: usize>(level: i32) -> i32 {
+  let shift = BD - 8;
   level >> 4 << shift
 }
 
 #[inline]
-const fn thresh_to_level(thresh: i32, shift: usize) -> i32 {
+const fn thresh_to_level<const BD: usize>(thresh: i32) -> i32 {
+  let shift = BD - 8;
   (thresh + (1 << shift) - 1) >> shift << 4
 }
 
 #[inline]
-fn nhev4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
-  thresh_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift) as usize
+fn nhev4<const BD: usize>(p1: i32, p0: i32, q0: i32, q1: i32) -> usize {
+  thresh_to_level::<BD>(cmp::max((p1 - p0).abs(), (q1 - q0).abs())) as usize
 }
 
 #[inline]
-fn mask4(p1: i32, p0: i32, q0: i32, q1: i32, shift: usize) -> usize {
+fn mask4<const BD: usize>(p1: i32, p0: i32, q0: i32, q1: i32) -> usize {
   cmp::max(
-    limit_to_level(cmp::max((p1 - p0).abs(), (q1 - q0).abs()), shift),
-    blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift),
+    limit_to_level::<BD>(cmp::max((p1 - p0).abs(), (q1 - q0).abs())),
+    blimit_to_level::<BD>((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2),
   ) as usize
 }
 
 #[inline]
-fn deblock_size4_inner(
-  [p1, p0, q0, q1]: [i32; 4], level: usize, bd: usize,
+fn deblock_size4_inner<const BD: usize>(
+  [p1, p0, q0, q1]: [i32; 4], level: usize,
 ) -> Option<[i32; 4]> {
-  if mask4(p1, p0, q0, q1, bd - 8) <= level {
-    let x = if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-      filter_narrow4_4(p1, p0, q0, q1, bd - 8)
+  if mask4::<BD>(p1, p0, q0, q1) <= level {
+    let x = if nhev4::<BD>(p1, p0, q0, q1) <= level {
+      filter_narrow4_4::<BD>(p1, p0, q0, q1)
     } else {
-      filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+      filter_narrow2_4::<BD>(p1, p0, q0, q1)
     };
     Some(x)
   } else {
@@ -392,26 +400,26 @@ fn deblock_size4_inner(
 }
 
 // Assumes rec[0] is set 2 taps back from the edge
-fn deblock_v_size4<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_v_size4<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
     let vals = [p[0].as_(), p[1].as_(), p[2].as_(), p[3].as_()];
-    if let Some(data) = deblock_size4_inner(vals, level, bd) {
+    if let Some(data) = deblock_size4_inner::<BD>(vals, level) {
       copy_horizontal(rec, 0, y, &data);
     }
   }
 }
 
 // Assumes rec[0] is set 2 taps back from the edge
-fn deblock_h_size4<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_h_size4<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for x in 0..4 {
     let vals =
       [rec[0][x].as_(), rec[1][x].as_(), rec[2][x].as_(), rec[3][x].as_()];
-    if let Some(data) = deblock_size4_inner(vals, level, bd) {
+    if let Some(data) = deblock_size4_inner::<BD>(vals, level) {
       copy_vertical(rec, x, 0, &data);
     }
   }
@@ -419,9 +427,9 @@ fn deblock_h_size4<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 2 taps back from the edge.
 // Accesses four taps, accumulates four pixels into the tally
-fn sse_size4<T: Pixel>(
+fn sse_size4<T: Pixel, const BD: usize>(
   rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
 ) {
   for i in 0..4 {
     let (p1, p0, q0, q1, a) = if horizontal_p {
@@ -445,13 +453,13 @@ fn sse_size4<T: Pixel>(
     // three possibilities: no filter, narrow2 and narrow4
     // All possibilities produce four outputs
     let none: [_; 4] = [p1, p0, q0, q1];
-    let narrow2 = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
-    let narrow4 = filter_narrow4_4(p1, p0, q0, q1, bd - 8);
+    let narrow2 = filter_narrow2_4::<BD>(p1, p0, q0, q1);
+    let narrow4 = filter_narrow4_4::<BD>(p1, p0, q0, q1);
 
     // mask4 sets the dividing line for filter vs no filter
     // nhev4 sets the dividing line between narrow2 and narrow4
-    let mask = clamp(mask4(p1, p0, q0, q1, bd - 8), 1, MAX_LOOP_FILTER + 1);
-    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
+    let mask = clamp(mask4::<BD>(p1, p0, q0, q1), 1, MAX_LOOP_FILTER + 1);
+    let nhev = clamp(nhev4::<BD>(p1, p0, q0, q1), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -474,18 +482,15 @@ fn sse_size4<T: Pixel>(
 }
 
 #[inline]
-fn mask6(
-  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, shift: usize,
+fn mask6<const BD: usize>(
+  p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32,
 ) -> usize {
   cmp::max(
-    limit_to_level(
-      cmp::max(
-        (p2 - p1).abs(),
-        cmp::max((p1 - p0).abs(), cmp::max((q2 - q1).abs(), (q1 - q0).abs())),
-      ),
-      shift,
-    ),
-    blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift),
+    limit_to_level::<BD>(cmp::max(
+      (p2 - p1).abs(),
+      cmp::max((p1 - p0).abs(), cmp::max((q2 - q1).abs(), (q1 - q0).abs())),
+    )),
+    blimit_to_level::<BD>((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2),
   ) as usize
 }
 
@@ -498,17 +503,17 @@ fn flat6(p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32) -> usize {
 }
 
 #[inline]
-fn deblock_size6_inner(
-  [p2, p1, p0, q0, q1, q2]: [i32; 6], level: usize, bd: usize,
+fn deblock_size6_inner<const BD: usize>(
+  [p2, p1, p0, q0, q1, q2]: [i32; 6], level: usize,
 ) -> Option<[i32; 4]> {
-  if mask6(p2, p1, p0, q0, q1, q2, bd - 8) <= level {
-    let flat = 1 << (bd - 8);
+  if mask6::<BD>(p2, p1, p0, q0, q1, q2) <= level {
+    let flat = 1 << (BD - 8);
     let x = if flat6(p2, p1, p0, q0, q1, q2) <= flat {
       filter_wide6_4(p2, p1, p0, q0, q1, q2)
-    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-      filter_narrow4_4(p1, p0, q0, q1, bd - 8)
+    } else if nhev4::<BD>(p1, p0, q0, q1) <= level {
+      filter_narrow4_4::<BD>(p1, p0, q0, q1)
     } else {
-      filter_narrow2_4(p1, p0, q0, q1, bd - 8)
+      filter_narrow2_4::<BD>(p1, p0, q0, q1)
     };
     Some(x)
   } else {
@@ -517,22 +522,22 @@ fn deblock_size6_inner(
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_v_size6<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_v_size6<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
     let vals =
       [p[0].as_(), p[1].as_(), p[2].as_(), p[3].as_(), p[4].as_(), p[5].as_()];
-    if let Some(data) = deblock_size6_inner(vals, level, bd) {
+    if let Some(data) = deblock_size6_inner::<BD>(vals, level) {
       copy_horizontal(rec, 1, y, &data);
     }
   }
 }
 
 // Assumes slice[0] is set 3 taps back from the edge
-fn deblock_h_size6<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_h_size6<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -543,7 +548,7 @@ fn deblock_h_size6<T: Pixel>(
       rec[4][x].as_(),
       rec[5][x].as_(),
     ];
-    if let Some(data) = deblock_size6_inner(vals, level, bd) {
+    if let Some(data) = deblock_size6_inner::<BD>(vals, level) {
       copy_vertical(rec, x, 1, &data);
     }
   }
@@ -551,11 +556,11 @@ fn deblock_h_size6<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 3 taps back from the edge.
 // Accesses six taps, accumulates four pixels into the tally
-fn sse_size6<T: Pixel>(
+fn sse_size6<T: Pixel, const BD: usize>(
   rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
 ) {
-  let flat = 1 << (bd - 8);
+  let flat = 1 << (BD - 8);
   for i in 0..4 {
     let (p2, p1, p0, q0, q1, q2, a) = if horizontal_p {
       // six taps
@@ -587,16 +592,16 @@ fn sse_size6<T: Pixel>(
     // All possibilities produce four outputs
     let none: [_; 4] = [p1, p0, q0, q1];
     let wide6 = filter_wide6_4(p2, p1, p0, q0, q1, q2);
-    let narrow2 = filter_narrow2_4(p1, p0, q0, q1, bd - 8);
-    let narrow4 = filter_narrow4_4(p1, p0, q0, q1, bd - 8);
+    let narrow2 = filter_narrow2_4::<BD>(p1, p0, q0, q1);
+    let narrow4 = filter_narrow4_4::<BD>(p1, p0, q0, q1);
 
     // mask6 sets the dividing line for filter vs no filter
     // flat6 decides between wide and narrow filters (unrelated to level)
     // nhev4 sets the dividing line between narrow2 and narrow4
     let mask =
-      clamp(mask6(p2, p1, p0, q0, q1, q2, bd - 8), 1, MAX_LOOP_FILTER + 1);
+      clamp(mask6::<BD>(p2, p1, p0, q0, q1, q2), 1, MAX_LOOP_FILTER + 1);
     let flatp = flat6(p2, p1, p0, q0, q1, q2) <= flat;
-    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
+    let nhev = clamp(nhev4::<BD>(p1, p0, q0, q1), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -627,28 +632,24 @@ fn sse_size6<T: Pixel>(
 }
 
 #[inline]
-fn mask8(
+fn mask8<const BD: usize>(
   p3: i32, p2: i32, p1: i32, p0: i32, q0: i32, q1: i32, q2: i32, q3: i32,
-  shift: usize,
 ) -> usize {
   cmp::max(
-    limit_to_level(
+    limit_to_level::<BD>(cmp::max(
+      (p3 - p2).abs(),
       cmp::max(
-        (p3 - p2).abs(),
+        (p2 - p1).abs(),
         cmp::max(
-          (p2 - p1).abs(),
+          (p1 - p0).abs(),
           cmp::max(
-            (p1 - p0).abs(),
-            cmp::max(
-              (q3 - q2).abs(),
-              cmp::max((q2 - q1).abs(), (q1 - q0).abs()),
-            ),
+            (q3 - q2).abs(),
+            cmp::max((q2 - q1).abs(), (q1 - q0).abs()),
           ),
         ),
       ),
-      shift,
-    ),
-    blimit_to_level((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2, shift),
+    )),
+    blimit_to_level::<BD>((p0 - q0).abs() * 2 + (p1 - q1).abs() / 2),
   ) as usize
 }
 
@@ -669,17 +670,17 @@ fn flat8(
 }
 
 #[inline]
-fn deblock_size8_inner(
-  [p3, p2, p1, p0, q0, q1, q2, q3]: [i32; 8], level: usize, bd: usize,
+fn deblock_size8_inner<const BD: usize>(
+  [p3, p2, p1, p0, q0, q1, q2, q3]: [i32; 8], level: usize,
 ) -> Option<[i32; 6]> {
-  if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-    let flat = 1 << (bd - 8);
+  if mask8::<BD>(p3, p2, p1, p0, q0, q1, q2, q3) <= level {
+    let flat = 1 << (BD - 8);
     let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
       filter_wide8_6(p3, p2, p1, p0, q0, q1, q2, q3)
-    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
-      filter_narrow4_6(p2, p1, p0, q0, q1, q2, bd - 8)
+    } else if nhev4::<BD>(p1, p0, q0, q1) <= level {
+      filter_narrow4_6::<BD>(p2, p1, p0, q0, q1, q2)
     } else {
-      filter_narrow2_6(p2, p1, p0, q0, q1, q2, bd - 8)
+      filter_narrow2_6::<BD>(p2, p1, p0, q0, q1, q2)
     };
     Some(x)
   } else {
@@ -688,8 +689,8 @@ fn deblock_size8_inner(
 }
 
 // Assumes rec[0] is set 4 taps back from the edge
-fn deblock_v_size8<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_v_size8<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -703,15 +704,15 @@ fn deblock_v_size8<T: Pixel>(
       p[6].as_(),
       p[7].as_(),
     ];
-    if let Some(data) = deblock_size8_inner(vals, level, bd) {
+    if let Some(data) = deblock_size8_inner::<BD>(vals, level) {
       copy_horizontal(rec, 1, y, &data);
     }
   }
 }
 
 // Assumes rec[0] is set 4 taps back from the edge
-fn deblock_h_size8<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_h_size8<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -724,7 +725,7 @@ fn deblock_h_size8<T: Pixel>(
       rec[6][x].as_(),
       rec[7][x].as_(),
     ];
-    if let Some(data) = deblock_size8_inner(vals, level, bd) {
+    if let Some(data) = deblock_size8_inner::<BD>(vals, level) {
       copy_vertical(rec, x, 1, &data);
     }
   }
@@ -732,11 +733,11 @@ fn deblock_h_size8<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 4 taps back from the edge.
 // Accesses eight taps, accumulates six pixels into the tally
-fn sse_size8<T: Pixel>(
+fn sse_size8<T: Pixel, const BD: usize>(
   rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
 ) {
-  let flat = 1 << (bd - 8);
+  let flat = 1 << (BD - 8);
 
   for i in 0..4 {
     let (p3, p2, p1, p0, q0, q1, q2, q3, a) = if horizontal_p {
@@ -786,19 +787,19 @@ fn sse_size8<T: Pixel>(
     // Four possibilities: no filter, wide8, narrow2 and narrow4
     let none: [_; 6] = [p2, p1, p0, q0, q1, q2];
     let wide8: [_; 6] = filter_wide8_6(p3, p2, p1, p0, q0, q1, q2, q3);
-    let narrow2: [_; 6] = filter_narrow2_6(p2, p1, p0, q0, q1, q2, bd - 8);
-    let narrow4: [_; 6] = filter_narrow4_6(p2, p1, p0, q0, q1, q2, bd - 8);
+    let narrow2: [_; 6] = filter_narrow2_6::<BD>(p2, p1, p0, q0, q1, q2);
+    let narrow4: [_; 6] = filter_narrow4_6::<BD>(p2, p1, p0, q0, q1, q2);
 
     // mask8 sets the dividing line for filter vs no filter
     // flat8 decides between wide and narrow filters (unrelated to level)
     // nhev4 sets the dividing line between narrow2 and narrow4
     let mask = clamp(
-      mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8),
+      mask8::<BD>(p3, p2, p1, p0, q0, q1, q2, q3),
       1,
       MAX_LOOP_FILTER + 1,
     );
     let flatp = flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat;
-    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
+    let nhev = clamp(nhev4::<BD>(p1, p0, q0, q1), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -845,13 +846,13 @@ fn flat14_outer(
 }
 
 #[inline]
-fn deblock_size14_inner(
+fn deblock_size14_inner<const BD: usize>(
   [p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6]: [i32; 14],
-  level: usize, bd: usize,
+  level: usize,
 ) -> Option<[i32; 12]> {
   // 'mask' test
-  if mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8) <= level {
-    let flat = 1 << (bd - 8);
+  if mask8::<BD>(p3, p2, p1, p0, q0, q1, q2, q3) <= level {
+    let flat = 1 << (BD - 8);
     // inner flatness test
     let x = if flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat {
       // outer flatness test
@@ -864,11 +865,11 @@ fn deblock_size14_inner(
         // only flat in inner area, run 8-tap
         filter_wide8_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5)
       }
-    } else if nhev4(p1, p0, q0, q1, bd - 8) <= level {
+    } else if nhev4::<BD>(p1, p0, q0, q1) <= level {
       // not flat, run narrow filter
-      filter_narrow4_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, bd - 8)
+      filter_narrow4_12::<BD>(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5)
     } else {
-      filter_narrow2_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, bd - 8)
+      filter_narrow2_12::<BD>(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5)
     };
     Some(x)
   } else {
@@ -877,8 +878,8 @@ fn deblock_size14_inner(
 }
 
 // Assumes rec[0] is set 7 taps back from the edge
-fn deblock_v_size14<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_v_size14<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for y in 0..4 {
     let p = &rec[y];
@@ -898,15 +899,15 @@ fn deblock_v_size14<T: Pixel>(
       p[12].as_(),
       p[13].as_(),
     ];
-    if let Some(data) = deblock_size14_inner(vals, level, bd) {
+    if let Some(data) = deblock_size14_inner::<BD>(vals, level) {
       copy_horizontal(rec, 1, y, &data);
     }
   }
 }
 
 // Assumes rec[0] is set 7 taps back from the edge
-fn deblock_h_size14<T: Pixel>(
-  rec: &mut PlaneRegionMut<'_, T>, level: usize, bd: usize,
+fn deblock_h_size14<T: Pixel, const BD: usize>(
+  rec: &mut PlaneRegionMut<'_, T>, level: usize,
 ) {
   for x in 0..4 {
     let vals = [
@@ -925,7 +926,7 @@ fn deblock_h_size14<T: Pixel>(
       rec[12][x].as_(),
       rec[13][x].as_(),
     ];
-    if let Some(data) = deblock_size14_inner(vals, level, bd) {
+    if let Some(data) = deblock_size14_inner::<BD>(vals, level) {
       copy_vertical(rec, x, 1, &data);
     }
   }
@@ -933,11 +934,11 @@ fn deblock_h_size14<T: Pixel>(
 
 // Assumes rec[0] and src[0] are set 7 taps back from the edge.
 // Accesses fourteen taps, accumulates twelve pixels into the tally
-fn sse_size14<T: Pixel>(
+fn sse_size14<T: Pixel, const BD: usize>(
   rec: &PlaneRegion<'_, T>, src: &PlaneRegion<'_, T>,
-  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool, bd: usize,
+  tally: &mut [i64; MAX_LOOP_FILTER + 2], horizontal_p: bool,
 ) {
-  let flat = 1 << (bd - 8);
+  let flat = 1 << (BD - 8);
   for i in 0..4 {
     let (p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6, a) =
       if horizontal_p {
@@ -1014,49 +1015,23 @@ fn sse_size14<T: Pixel>(
       filter_wide14_12(p6, p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5, q6);
     let wide8 =
       filter_wide8_12(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5);
-    let narrow2 = filter_narrow2_12(
-      p5,
-      p4,
-      p3,
-      p2,
-      p1,
-      p0,
-      q0,
-      q1,
-      q2,
-      q3,
-      q4,
-      q5,
-      bd - 8,
-    );
-    let narrow4 = filter_narrow4_12(
-      p5,
-      p4,
-      p3,
-      p2,
-      p1,
-      p0,
-      q0,
-      q1,
-      q2,
-      q3,
-      q4,
-      q5,
-      bd - 8,
-    );
+    let narrow2 =
+      filter_narrow2_12::<BD>(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5);
+    let narrow4 =
+      filter_narrow4_12::<BD>(p5, p4, p3, p2, p1, p0, q0, q1, q2, q3, q4, q5);
 
     // mask8 sets the dividing line for filter vs no filter
     // flat8 decides between wide and narrow filters (unrelated to level)
     // flat14 decides between wide14 and wide8 filters
     // nhev4 sets the dividing line between narrow2 and narrow4
     let mask = clamp(
-      mask8(p3, p2, p1, p0, q0, q1, q2, q3, bd - 8),
+      mask8::<BD>(p3, p2, p1, p0, q0, q1, q2, q3),
       1,
       MAX_LOOP_FILTER + 1,
     );
     let flat8p = flat8(p3, p2, p1, p0, q0, q1, q2, q3) <= flat;
     let flat14p = flat14_outer(p6, p5, p4, p0, q0, q4, q5, q6) <= flat;
-    let nhev = clamp(nhev4(p1, p0, q0, q1, bd - 8), mask, MAX_LOOP_FILTER + 1);
+    let nhev = clamp(nhev4::<BD>(p1, p0, q0, q1), mask, MAX_LOOP_FILTER + 1);
 
     // sse for each; short-circuit the 'special' no-op cases.
     let sse_none = stride_sse(&a, &none);
@@ -1098,9 +1073,9 @@ fn sse_size14<T: Pixel>(
   }
 }
 
-fn filter_v_edge<T: Pixel>(
+fn filter_v_edge<T: Pixel, const BD: usize>(
   deblock: &DeblockState, blocks: &TileBlocks, bo: TileBlockOffset,
-  p: &mut PlaneRegionMut<T>, pli: usize, bd: usize, xdec: usize, ydec: usize,
+  p: &mut PlaneRegionMut<T>, pli: usize, xdec: usize, ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1126,16 +1101,16 @@ fn filter_v_edge<T: Pixel>(
         });
         match filter_size {
           4 => {
-            deblock_v_size4(&mut plane_region, level, bd);
+            deblock_v_size4::<_, BD>(&mut plane_region, level);
           }
           6 => {
-            deblock_v_size6(&mut plane_region, level, bd);
+            deblock_v_size6::<_, BD>(&mut plane_region, level);
           }
           8 => {
-            deblock_v_size8(&mut plane_region, level, bd);
+            deblock_v_size8::<_, BD>(&mut plane_region, level);
           }
           14 => {
-            deblock_v_size14(&mut plane_region, level, bd);
+            deblock_v_size14::<_, BD>(&mut plane_region, level);
           }
           _ => unreachable!(),
         }
@@ -1144,10 +1119,10 @@ fn filter_v_edge<T: Pixel>(
   }
 }
 
-fn sse_v_edge<T: Pixel>(
+fn sse_v_edge<T: Pixel, const BD: usize>(
   blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
   src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
-  pli: usize, bd: usize, xdec: usize, ydec: usize,
+  pli: usize, xdec: usize, ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1177,16 +1152,16 @@ fn sse_v_edge<T: Pixel>(
       });
       match filter_size {
         4 => {
-          sse_size4(&rec_region, &src_region, tally, false, bd);
+          sse_size4::<_, BD>(&rec_region, &src_region, tally, false);
         }
         6 => {
-          sse_size6(&rec_region, &src_region, tally, false, bd);
+          sse_size6::<_, BD>(&rec_region, &src_region, tally, false);
         }
         8 => {
-          sse_size8(&rec_region, &src_region, tally, false, bd);
+          sse_size8::<_, BD>(&rec_region, &src_region, tally, false);
         }
         14 => {
-          sse_size14(&rec_region, &src_region, tally, false, bd);
+          sse_size14::<_, BD>(&rec_region, &src_region, tally, false);
         }
         _ => unreachable!(),
       }
@@ -1194,9 +1169,9 @@ fn sse_v_edge<T: Pixel>(
   }
 }
 
-fn filter_h_edge<T: Pixel>(
+fn filter_h_edge<T: Pixel, const BD: usize>(
   deblock: &DeblockState, blocks: &TileBlocks, bo: TileBlockOffset,
-  p: &mut PlaneRegionMut<T>, pli: usize, bd: usize, xdec: usize, ydec: usize,
+  p: &mut PlaneRegionMut<T>, pli: usize, xdec: usize, ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1222,16 +1197,16 @@ fn filter_h_edge<T: Pixel>(
         });
         match filter_size {
           4 => {
-            deblock_h_size4(&mut plane_region, level, bd);
+            deblock_h_size4::<_, BD>(&mut plane_region, level);
           }
           6 => {
-            deblock_h_size6(&mut plane_region, level, bd);
+            deblock_h_size6::<_, BD>(&mut plane_region, level);
           }
           8 => {
-            deblock_h_size8(&mut plane_region, level, bd);
+            deblock_h_size8::<_, BD>(&mut plane_region, level);
           }
           14 => {
-            deblock_h_size14(&mut plane_region, level, bd);
+            deblock_h_size14::<_, BD>(&mut plane_region, level);
           }
           _ => unreachable!(),
         }
@@ -1240,10 +1215,10 @@ fn filter_h_edge<T: Pixel>(
   }
 }
 
-fn sse_h_edge<T: Pixel>(
+fn sse_h_edge<T: Pixel, const BD: usize>(
   blocks: &TileBlocks, bo: TileBlockOffset, rec_plane: &PlaneRegion<T>,
   src_plane: &PlaneRegion<T>, tally: &mut [i64; MAX_LOOP_FILTER + 2],
-  pli: usize, bd: usize, xdec: usize, ydec: usize,
+  pli: usize, xdec: usize, ydec: usize,
 ) {
   let block = &blocks[bo];
   let txsize = if pli == 0 {
@@ -1274,16 +1249,16 @@ fn sse_h_edge<T: Pixel>(
 
       match filter_size {
         4 => {
-          sse_size4(&rec_region, &src_region, tally, true, bd);
+          sse_size4::<_, BD>(&rec_region, &src_region, tally, true);
         }
         6 => {
-          sse_size6(&rec_region, &src_region, tally, true, bd);
+          sse_size6::<_, BD>(&rec_region, &src_region, tally, true);
         }
         8 => {
-          sse_size8(&rec_region, &src_region, tally, true, bd);
+          sse_size8::<_, BD>(&rec_region, &src_region, tally, true);
         }
         14 => {
-          sse_size14(&rec_region, &src_region, tally, true, bd);
+          sse_size14::<_, BD>(&rec_region, &src_region, tally, true);
         }
         _ => unreachable!(),
       }
@@ -1293,9 +1268,9 @@ fn sse_h_edge<T: Pixel>(
 
 // Deblocks all edges, vertical and horizontal, in a single plane
 #[hawktracer(deblock_plane)]
-pub fn deblock_plane<T: Pixel>(
+pub fn deblock_plane<T: Pixel, const BD: usize>(
   deblock: &DeblockState, p: &mut PlaneRegionMut<T>, pli: usize,
-  blocks: &TileBlocks, crop_w: usize, crop_h: usize, bd: usize,
+  blocks: &TileBlocks, crop_w: usize, crop_h: usize,
 ) {
   let xdec = p.plane_cfg.xdec;
   let ydec = p.plane_cfg.ydec;
@@ -1339,26 +1314,24 @@ pub fn deblock_plane<T: Pixel>(
   // edge).  Unroll to avoid corner-cases.
   if rows > 0 {
     for x in (1 << xdec..cols).step_by(1 << xdec) {
-      filter_v_edge(
+      filter_v_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset { x, y: 0 }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
     }
     if rows > 1 << ydec {
       for x in (1 << xdec..cols).step_by(1 << xdec) {
-        filter_v_edge(
+        filter_v_edge::<_, BD>(
           deblock,
           blocks,
           TileBlockOffset(BlockOffset { x, y: 1 << ydec }),
           p,
           pli,
-          bd,
           xdec,
           ydec,
         );
@@ -1371,13 +1344,12 @@ pub fn deblock_plane<T: Pixel>(
   for y in ((2 << ydec)..rows).step_by(1 << ydec) {
     // Check for vertical edge at first MI block boundary on this row
     if cols > 1 << xdec {
-      filter_v_edge(
+      filter_v_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset { x: 1 << xdec, y }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
@@ -1385,17 +1357,16 @@ pub fn deblock_plane<T: Pixel>(
     // run the rest of the row with both vertical and horizontal edge filtering.
     // Horizontal lags vertical edge by one row and two columns.
     for x in (2 << xdec..cols).step_by(1 << xdec) {
-      filter_v_edge(
+      filter_v_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset { x, y }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
-      filter_h_edge(
+      filter_h_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset {
@@ -1404,14 +1375,13 @@ pub fn deblock_plane<T: Pixel>(
         }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
     }
     // ..and the last two horizontal edges for the row
     if cols >= 2 << xdec {
-      filter_h_edge(
+      filter_h_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset {
@@ -1420,13 +1390,12 @@ pub fn deblock_plane<T: Pixel>(
         }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
     }
     if cols >= 1 << xdec {
-      filter_h_edge(
+      filter_h_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset {
@@ -1435,7 +1404,6 @@ pub fn deblock_plane<T: Pixel>(
         }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
@@ -1445,13 +1413,12 @@ pub fn deblock_plane<T: Pixel>(
   // Last horizontal row, vertical is already complete
   if rows > 1 << ydec {
     for x in (0..cols).step_by(1 << xdec) {
-      filter_h_edge(
+      filter_h_edge::<_, BD>(
         deblock,
         blocks,
         TileBlockOffset(BlockOffset { x, y: rows - (1 << ydec) }),
         p,
         pli,
-        bd,
         xdec,
         ydec,
       );
@@ -1460,11 +1427,11 @@ pub fn deblock_plane<T: Pixel>(
 }
 
 // sse count of all edges in a single plane, accumulates into vertical and horizontal counts
-fn sse_plane<T: Pixel>(
+fn sse_plane<T: Pixel, const BD: usize>(
   rec: &PlaneRegion<T>, src: &PlaneRegion<T>,
   v_sse: &mut [i64; MAX_LOOP_FILTER + 2],
   h_sse: &mut [i64; MAX_LOOP_FILTER + 2], pli: usize, blocks: &TileBlocks,
-  crop_w: usize, crop_h: usize, bd: usize,
+  crop_w: usize, crop_h: usize,
 ) {
   let xdec = rec.plane_cfg.xdec;
   let ydec = rec.plane_cfg.ydec;
@@ -1485,14 +1452,13 @@ fn sse_plane<T: Pixel>(
 
   // No horizontal edge filtering along top of frame
   for x in (1 << xdec..cols).step_by(1 << xdec) {
-    sse_v_edge(
+    sse_v_edge::<_, BD>(
       blocks,
       TileBlockOffset(BlockOffset { x, y: 0 }),
       rec,
       src,
       v_sse,
       pli,
-      bd,
       xdec,
       ydec,
     );
@@ -1503,37 +1469,34 @@ fn sse_plane<T: Pixel>(
   // behind vertical.
   for y in (1 << ydec..rows).step_by(1 << ydec) {
     // No vertical filtering along left edge of frame
-    sse_h_edge(
+    sse_h_edge::<_, BD>(
       blocks,
       TileBlockOffset(BlockOffset { x: 0, y }),
       rec,
       src,
       h_sse,
       pli,
-      bd,
       xdec,
       ydec,
     );
     for x in (1 << xdec..cols).step_by(1 << xdec) {
-      sse_v_edge(
+      sse_v_edge::<_, BD>(
         blocks,
         TileBlockOffset(BlockOffset { x, y }),
         rec,
         src,
         v_sse,
         pli,
-        bd,
         xdec,
         ydec,
       );
-      sse_h_edge(
+      sse_h_edge::<_, BD>(
         blocks,
         TileBlockOffset(BlockOffset { x, y }),
         rec,
         src,
         h_sse,
         pli,
-        bd,
         xdec,
         ydec,
       );
@@ -1543,18 +1506,18 @@ fn sse_plane<T: Pixel>(
 
 // Deblocks all edges in all planes of a frame
 #[hawktracer(deblock_filter_frame)]
-pub fn deblock_filter_frame<T: Pixel>(
+pub fn deblock_filter_frame<T: Pixel, const BD: usize>(
   deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
-  crop_w: usize, crop_h: usize, bd: usize, planes: usize,
+  crop_w: usize, crop_h: usize, planes: usize,
 ) {
   tile.planes[..planes].par_iter_mut().enumerate().for_each(|(pli, plane)| {
-    deblock_plane(deblock, plane, pli, blocks, crop_w, crop_h, bd);
+    deblock_plane::<_, BD>(deblock, plane, pli, blocks, crop_w, crop_h);
   });
 }
 
-fn sse_optimize<T: Pixel>(
+fn sse_optimize<T: Pixel, const BD: usize>(
   rec: &Tile<T>, input: &Tile<T>, blocks: &TileBlocks, crop_w: usize,
-  crop_h: usize, bd: usize, monochrome: bool,
+  crop_h: usize, monochrome: bool,
 ) -> [u8; 4] {
   // i64 allows us to accumulate a total of ~ 35 bits worth of pixels
   assert!(
@@ -1569,7 +1532,7 @@ fn sse_optimize<T: Pixel>(
     let mut v_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
     let mut h_tally: [i64; MAX_LOOP_FILTER + 2] = [0; MAX_LOOP_FILTER + 2];
 
-    sse_plane(
+    sse_plane::<_, BD>(
       &rec.planes[pli],
       &input.planes[pli],
       &mut v_tally,
@@ -1578,7 +1541,6 @@ fn sse_optimize<T: Pixel>(
       blocks,
       crop_w,
       crop_h,
-      bd,
     );
 
     for i in 1..=MAX_LOOP_FILTER {
@@ -1619,14 +1581,14 @@ fn sse_optimize<T: Pixel>(
 }
 
 #[hawktracer(deblock_filter_optimize)]
-pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
+pub fn deblock_filter_optimize<T: Pixel, U: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<U>,
   blocks: &TileBlocks, crop_w: usize, crop_h: usize,
 ) -> [u8; 4] {
   if fi.config.speed_settings.fast_deblock {
-    let q = ac_q(fi.base_q_idx, 0, fi.sequence.bit_depth).get() as i32;
+    let q = ac_q::<BD>(fi.base_q_idx, 0).get() as i32;
     let level = clamp(
-      match fi.sequence.bit_depth {
+      match BD {
         8 => {
           if fi.frame_type == FrameType::KEY {
             (q * 17563 - 421_574 + (1 << 18 >> 1)) >> 18
@@ -1657,13 +1619,12 @@ pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
   } else {
     // Deblocking happens in 4x4 (luma) units; luma x,y are clipped to
     // the *crop frame* of the entire frame by 4x4 block.
-    sse_optimize(
+    sse_optimize::<_, BD>(
       rec,
       input,
       blocks,
       crop_w,
       crop_h,
-      fi.sequence.bit_depth,
       fi.sequence.chroma_sampling == Cs400,
     )
   }

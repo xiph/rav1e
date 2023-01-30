@@ -194,16 +194,15 @@ decl_cfl_pred_hbd_fn! {
 }
 
 #[inline(always)]
-pub fn dispatch_predict_intra<T: Pixel>(
+pub fn dispatch_predict_intra<T: Pixel, const BD: usize>(
   mode: PredictionMode, variant: PredictionVariant,
-  dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-  ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
+  dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, ac: &[i16], angle: isize,
+  ief_params: Option<IntraEdgeFilterParameters>,
   edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
-    rust::dispatch_predict_intra(
-      mode, variant, dst, tx_size, bit_depth, ac, angle, ief_params, edge_buf,
-      cpu,
+    rust::dispatch_predict_intra::<T, BD>(
+      mode, variant, dst, tx_size, ac, angle, ief_params, edge_buf, cpu,
     );
   };
 
@@ -362,11 +361,11 @@ pub fn dispatch_predict_intra<T: Pixel>(
           }
         }
       }
-      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 && bit_depth > 8 => {
+      PixelType::U16 if cpu >= CpuFeatureLevel::AVX2 && BD > 8 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
         let edge_ptr =
           edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
-        let bd_max = (1 << bit_depth) - 1;
+        let bd_max = (1 << BD) - 1;
         match mode {
           PredictionMode::DC_PRED => {
             (match variant {

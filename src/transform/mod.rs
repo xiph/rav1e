@@ -474,14 +474,20 @@ mod test {
       *d = T::cast_from(random::<u8>());
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
-    forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8, cpu);
+    forward_transform::<_, 8>(
+      res,
+      freq,
+      tx_size.width(),
+      tx_size,
+      tx_type,
+      cpu,
+    );
     inverse_transform_add(
       freq,
       &mut dst.as_region_mut(),
       coeff_area,
       tx_size,
       tx_type,
-      8,
       cpu,
     );
 

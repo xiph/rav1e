@@ -248,8 +248,15 @@ impl Config {
     // First-pass parameters depend on whether second-pass is in effect.
     // So `init_first_pass` must follow `init_second_pass`.
     if self.rate_control.emit_pass_data {
-      let maybe_pass1_log_base_q = (self.rate_control.summary.is_none())
-        .then(|| inner.rc_state.select_pass1_log_base_q(&inner, 0));
+      let maybe_pass1_log_base_q =
+        (self.rate_control.summary.is_none()).then(|| {
+          match self.enc.bit_depth {
+            8 => inner.rc_state.select_pass1_log_base_q::<_, 8>(&inner, 0),
+            10 => inner.rc_state.select_pass1_log_base_q::<_, 10>(&inner, 0),
+            12 => inner.rc_state.select_pass1_log_base_q::<_, 12>(&inner, 0),
+            _ => unimplemented!(),
+          }
+        });
       inner.rc_state.init_first_pass(maybe_pass1_log_base_q);
     }
 

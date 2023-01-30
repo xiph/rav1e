@@ -129,7 +129,12 @@ impl<T: Pixel> Context<T> {
     }
 
     let inner = &mut self.inner;
-    let run = move || inner.send_frame(frame, params);
+    let run = move || match inner.config.bit_depth {
+      8 => inner.send_frame::<8>(frame, params),
+      10 => inner.send_frame::<10>(frame, params),
+      12 => inner.send_frame::<12>(frame, params),
+      _ => unimplemented!(),
+    };
 
     match &self.pool {
       Some(pool) => pool.install(run),
@@ -302,7 +307,12 @@ impl<T: Pixel> Context<T> {
   #[inline]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     let inner = &mut self.inner;
-    let mut run = move || inner.receive_packet();
+    let mut run = move || match inner.config.bit_depth {
+      8 => inner.receive_packet::<8>(),
+      10 => inner.receive_packet::<10>(),
+      12 => inner.receive_packet::<12>(),
+      _ => unimplemented!(),
+    };
 
     match &self.pool {
       Some(pool) => pool.install(run),

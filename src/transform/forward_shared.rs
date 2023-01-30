@@ -119,7 +119,7 @@ impl Txfm2DFlipCfg {
   /// # Panics
   ///
   /// - If called with an invalid combination of `tx_size` and `tx_type`
-  pub fn fwd(tx_type: TxType, tx_size: TxSize, bd: usize) -> Self {
+  pub fn fwd<const BD: usize>(tx_type: TxType, tx_size: TxSize) -> Self {
     let tx_type_1d_col = VTX_TAB[tx_type as usize];
     let tx_type_1d_row = HTX_TAB[tx_type as usize];
     let txw_idx = tx_size.width_index();
@@ -134,7 +134,7 @@ impl Txfm2DFlipCfg {
       tx_size,
       ud_flip,
       lr_flip,
-      shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
+      shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(BD - 8) / 2],
       txfm_type_col,
       txfm_type_row,
     }

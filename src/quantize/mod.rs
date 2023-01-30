@@ -36,18 +36,24 @@ pub fn get_log_tx_scale(tx_size: TxSize) -> usize {
     + Into::<usize>::into(num_pixels > 1024)
 }
 
-pub fn dc_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
-  let dc_q: [&[NonZeroU16; 256]; 3] =
-    [&dc_qlookup_Q3, &dc_qlookup_10_Q3, &dc_qlookup_12_Q3];
-  let bd = ((bit_depth ^ 8) >> 1).min(2);
-  dc_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+pub fn dc_q<const BD: usize>(qindex: u8, delta_q: i8) -> NonZeroU16 {
+  let dc_q = match BD {
+    8 => &dc_qlookup_Q3,
+    10 => &dc_qlookup_10_Q3,
+    12 => &dc_qlookup_12_Q3,
+    _ => unimplemented!(),
+  };
+  dc_q[((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
-pub fn ac_q(qindex: u8, delta_q: i8, bit_depth: usize) -> NonZeroU16 {
-  let ac_q: [&[NonZeroU16; 256]; 3] =
-    [&ac_qlookup_Q3, &ac_qlookup_10_Q3, &ac_qlookup_12_Q3];
-  let bd = ((bit_depth ^ 8) >> 1).min(2);
-  ac_q[bd][((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
+pub fn ac_q<const BD: usize>(qindex: u8, delta_q: i8) -> NonZeroU16 {
+  let ac_q = match BD {
+    8 => &ac_qlookup_Q3,
+    10 => &ac_qlookup_10_Q3,
+    12 => &ac_qlookup_12_Q3,
+    _ => unimplemented!(),
+  };
+  ac_q[((qindex as isize + delta_q as isize).max(0) as usize).min(255)]
 }
 
 // TODO: Handle lossless properly.
@@ -78,8 +84,8 @@ fn select_qi(quantizer: i64, qlookup: &[NonZeroU16; QINDEX_RANGE]) -> u8 {
   }
 }
 
-pub fn select_dc_qi(quantizer: i64, bit_depth: usize) -> u8 {
-  let qlookup = match bit_depth {
+pub fn select_dc_qi<const BD: usize>(quantizer: i64) -> u8 {
+  let qlookup = match BD {
     8 => &dc_qlookup_Q3,
     10 => &dc_qlookup_10_Q3,
     12 => &dc_qlookup_12_Q3,
@@ -88,8 +94,8 @@ pub fn select_dc_qi(quantizer: i64, bit_depth: usize) -> u8 {
   select_qi(quantizer, qlookup)
 }
 
-pub fn select_ac_qi(quantizer: i64, bit_depth: usize) -> u8 {
-  let qlookup = match bit_depth {
+pub fn select_ac_qi<const BD: usize>(quantizer: i64) -> u8 {
+  let qlookup = match BD {
     8 => &ac_qlookup_Q3,
     10 => &ac_qlookup_10_Q3,
     12 => &ac_qlookup_12_Q3,
@@ -218,16 +224,16 @@ mod test {
 }
 
 impl QuantizationContext {
-  pub fn update(
-    &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, bit_depth: usize,
-    dc_delta_q: i8, ac_delta_q: i8,
+  pub fn update<const BD: usize>(
+    &mut self, qindex: u8, tx_size: TxSize, is_intra: bool, dc_delta_q: i8,
+    ac_delta_q: i8,
   ) {
     self.log_tx_scale = get_log_tx_scale(tx_size);
 
-    self.dc_quant = dc_q(qindex, dc_delta_q, bit_depth);
+    self.dc_quant = dc_q::<BD>(qindex, dc_delta_q);
     self.dc_mul_add = divu_gen(self.dc_quant.into());
 
-    self.ac_quant = ac_q(qindex, ac_delta_q, bit_depth);
+    self.ac_quant = ac_q::<BD>(qindex, ac_delta_q);
     self.ac_mul_add = divu_gen(self.ac_quant.into());
 
     // All of these biases were derived by measuring the cost of coding
@@ -352,15 +358,15 @@ pub mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
 
-  pub fn dequantize<T: Coefficient>(
+  pub fn dequantize<T: Coefficient, const BD: usize>(
     qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
-    bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, _cpu: CpuFeatureLevel,
+    dc_delta_q: i8, ac_delta_q: i8, _cpu: CpuFeatureLevel,
   ) {
     let log_tx_scale = get_log_tx_scale(tx_size) as i32;
     let offset = (1 << log_tx_scale) - 1;
 
-    let dc_quant = dc_q(qindex, dc_delta_q, bit_depth).get() as i32;
-    let ac_quant = ac_q(qindex, ac_delta_q, bit_depth).get() as i32;
+    let dc_quant = dc_q::<BD>(qindex, dc_delta_q).get() as i32;
+    let ac_quant = ac_q::<BD>(qindex, ac_delta_q).get() as i32;
 
     for (i, (r, c)) in rcoeffs
       .iter_mut()

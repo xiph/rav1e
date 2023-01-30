@@ -17,11 +17,11 @@ pub type InvTxfmFunc =
 pub type InvTxfmHBDFunc =
   unsafe extern fn(*mut u16, libc::ptrdiff_t, *mut i16, i32);
 
-pub fn call_inverse_func<T: Pixel>(
+pub fn call_inverse_func<T: Pixel, const BD: usize>(
   func: InvTxfmFunc, input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
-  eob: usize, width: usize, height: usize, bd: usize,
+  eob: usize, width: usize, height: usize,
 ) {
-  debug_assert!(bd == 8);
+  debug_assert!(BD == 8);
 
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
@@ -51,7 +51,6 @@ pub fn call_inverse_func<T: Pixel>(
 pub fn call_inverse_hbd_func<T: Pixel>(
   func: InvTxfmHBDFunc, input: &[T::Coeff],
   output: &mut PlaneRegionMut<'_, T>, eob: usize, width: usize, height: usize,
-  _bd: usize,
 ) {
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
@@ -161,35 +160,32 @@ pub mod test {
         *d = random::<u8>();
         *r = i16::from(*s) - i16::from(*d);
       }
-      forward_transform(
+      forward_transform::<_, 8>(
         res,
         freq,
         tx_size.width(),
         tx_size,
         tx_type,
-        8,
         CpuFeatureLevel::RUST,
       );
 
       let eob: usize = pick_eob(freq, tx_size, tx_type, sub_h);
       let mut rust_dst = dst.clone();
 
-      inverse_transform_add(
+      inverse_transform_add::<_, 8>(
         freq,
         &mut dst.as_region_mut(),
         eob,
         tx_size,
         tx_type,
-        8,
         cpu,
       );
-      inverse_transform_add(
+      inverse_transform_add::<_, 8>(
         freq,
         &mut rust_dst.as_region_mut(),
         eob,
         tx_size,
         tx_type,
-        8,
         CpuFeatureLevel::RUST,
       );
       assert_eq!(rust_dst.data_origin(), dst.data_origin());

@@ -196,11 +196,14 @@ pub(crate) mod rust {
 
   #[cold_for_target_arch("x86_64")]
   #[allow(clippy::erasing_op, clippy::identity_op, clippy::neg_multiply)]
-  pub(crate) unsafe fn cdef_filter_block<T: Pixel, U: Pixel>(
+  pub(crate) unsafe fn cdef_filter_block<
+    T: Pixel,
+    U: Pixel,
+    const BD: usize,
+  >(
     dst: &mut PlaneRegionMut<'_, T>, input: *const U, istride: isize,
     pri_strength: i32, sec_strength: i32, dir: usize, damping: i32,
-    bit_depth: usize, xdec: usize, ydec: usize, edges: u8,
-    _cpu: CpuFeatureLevel,
+    xdec: usize, ydec: usize, edges: u8, _cpu: CpuFeatureLevel,
   ) {
     if edges != CDEF_HAVE_ALL {
       // slowpath for unpadded border[s]
@@ -216,7 +219,7 @@ pub(crate) mod rust {
         8 >> ydec,
         edges,
       );
-      cdef_filter_block(
+      cdef_filter_block::<_, _, BD>(
         dst,
         tmp.as_ptr().offset(2 * tmpstride + 2),
         tmpstride,
@@ -224,7 +227,6 @@ pub(crate) mod rust {
         sec_strength,
         dir,
         damping,
-        bit_depth,
         xdec,
         ydec,
         CDEF_HAVE_ALL,
@@ -233,7 +235,7 @@ pub(crate) mod rust {
     } else {
       let xsize = (8 >> xdec) as isize;
       let ysize = (8 >> ydec) as isize;
-      let coeff_shift = bit_depth - 8;
+      let coeff_shift = BD - 8;
       let cdef_pri_taps = [[4, 2], [3, 3]];
       let cdef_sec_taps = [[2, 1], [2, 1]];
       let pri_taps =
@@ -322,7 +324,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
   }
 }
 
-pub fn cdef_analyze_superblock_range<T: Pixel>(
+pub fn cdef_analyze_superblock_range<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sb_w: usize, sb_h: usize,
 ) -> Vec<CdefDirections> {
@@ -330,17 +332,17 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
   for sby in 0..sb_h {
     for sbx in 0..sb_w {
       let sbo = TileSuperBlockOffset(SuperBlockOffset { x: sbx, y: sby });
-      ret.push(cdef_analyze_superblock(fi, in_frame, blocks, sbo));
+      ret.push(cdef_analyze_superblock::<_, BD>(fi, in_frame, blocks, sbo));
     }
   }
   ret
 }
 
-pub fn cdef_analyze_superblock<T: Pixel>(
+pub fn cdef_analyze_superblock<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset,
 ) -> CdefDirections {
-  let coeff_shift = fi.sequence.bit_depth - 8;
+  let coeff_shift = BD - 8;
   let mut dir: CdefDirections =
     CdefDirections { dir: [[0; 8]; 8], var: [[0; 8]; 8] };
   // Each direction block is 8x8 in y, and direction computation only looks at y
@@ -396,13 +398,12 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 /// # Panics
 ///
 /// - If called with invalid parameters
-pub fn cdef_filter_superblock<T: Pixel>(
+pub fn cdef_filter_superblock<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
   blocks: &TileBlocks<'_>, tile_sbo: TileSuperBlockOffset, cdef_index: u8,
   cdef_dirs: &CdefDirections,
 ) {
-  let bit_depth = fi.sequence.bit_depth;
-  let coeff_shift = fi.sequence.bit_depth as i32 - 8;
+  let coeff_shift = BD as i32 - 8;
   let cdef_damping = fi.cdef_damping as i32;
   let cdef_y_strength = fi.cdef_y_strengths[cdef_index as usize];
   let cdef_uv_strength = fi.cdef_uv_strengths[cdef_index as usize];
@@ -536,7 +537,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
                 0 <= in_po.y - if edges & CDEF_HAVE_TOP > 0 { 2 } else { 0 }
               );
 
-              cdef_filter_block(
+              cdef_filter_block::<_, BD>(
                 out_block,
                 in_slice.as_ptr(),
                 in_stride as isize,
@@ -544,7 +545,6 @@ pub fn cdef_filter_superblock<T: Pixel>(
                 local_sec_strength,
                 local_dir,
                 local_damping,
-                bit_depth,
                 xdec,
                 ydec,
                 edges,
@@ -592,7 +592,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 //   don't exist.
 
 #[hawktracer(cdef_filter_tile)]
-pub fn cdef_filter_tile<T: Pixel>(
+pub fn cdef_filter_tile<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
   output: &mut TileMut<'_, T>,
 ) {
@@ -613,9 +613,10 @@ pub fn cdef_filter_tile<T: Pixel>(
       // the input Frame.
       let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
       let cdef_index = tb.get_cdef(tile_sbo);
-      let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
+      let cdef_dirs =
+        cdef_analyze_superblock::<_, BD>(fi, input, tb, tile_sbo);
 
-      cdef_filter_superblock(
+      cdef_filter_superblock::<_, BD>(
         fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
       );
     }

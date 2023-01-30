@@ -247,10 +247,10 @@ pub(crate) mod rust {
   }
 
   #[cold_for_target_arch("x86_64")]
-  pub fn put_8tap<T: Pixel>(
+  pub fn put_8tap<T: Pixel, const BD: usize>(
     dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
     height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-    mode_y: FilterMode, bit_depth: usize, _cpu: CpuFeatureLevel,
+    mode_y: FilterMode, _cpu: CpuFeatureLevel,
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
@@ -259,8 +259,8 @@ pub(crate) mod rust {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
     let x_filter = get_filter(mode_x, col_frac, width);
-    let max_sample_val = (1 << bit_depth) - 1;
-    let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
+    let max_sample_val = (1 << BD) - 1;
+    let intermediate_bits = 4 - if BD == 12 { 2 } else { 0 };
     match (col_frac, row_frac) {
       (0, 0) => {
         for r in 0..height {
@@ -357,10 +357,10 @@ pub(crate) mod rust {
   const PREP_BIAS: i32 = 8192;
 
   #[cold_for_target_arch("x86_64")]
-  pub fn prep_8tap<T: Pixel>(
+  pub fn prep_8tap<T: Pixel, const BD: usize>(
     tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
     col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-    bit_depth: usize, _cpu: CpuFeatureLevel,
+    _cpu: CpuFeatureLevel,
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
@@ -369,8 +369,8 @@ pub(crate) mod rust {
     let ref_stride = src.plane.cfg.stride;
     let y_filter = get_filter(mode_y, row_frac, height);
     let x_filter = get_filter(mode_x, col_frac, width);
-    let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
-    let prep_bias = if bit_depth == 8 { 0 } else { PREP_BIAS };
+    let intermediate_bits = 4 - if BD == 12 { 2 } else { 0 };
+    let prep_bias = if BD == 8 { 0 } else { PREP_BIAS };
     match (col_frac, row_frac) {
       (0, 0) => {
         for r in 0..height {
@@ -451,17 +451,17 @@ pub(crate) mod rust {
   }
 
   #[cold_for_target_arch("x86_64")]
-  pub fn mc_avg<T: Pixel>(
+  pub fn mc_avg<T: Pixel, const BD: usize>(
     dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-    height: usize, bit_depth: usize, _cpu: CpuFeatureLevel,
+    height: usize, _cpu: CpuFeatureLevel,
   ) {
     // The assembly only supports even heights and valid uncropped widths
     assert_eq!(height & 1, 0);
     assert!(width.is_power_of_two() && (2..=128).contains(&width));
 
-    let max_sample_val = (1 << bit_depth) - 1;
-    let intermediate_bits = 4 - if bit_depth == 12 { 2 } else { 0 };
-    let prep_bias = if bit_depth == 8 { 0 } else { PREP_BIAS * 2 };
+    let max_sample_val = (1 << BD) - 1;
+    let intermediate_bits = 4 - if BD == 12 { 2 } else { 0 };
+    let prep_bias = if BD == 8 { 0 } else { PREP_BIAS * 2 };
     for r in 0..height {
       let dst_slice = &mut dst[r];
       for c in 0..width {

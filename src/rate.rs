@@ -522,15 +522,14 @@ fn chroma_offset(
 }
 
 impl QuantizerParameters {
-  fn new_from_log_q(
-    log_base_q: i64, log_target_q: i64, bit_depth: usize,
-    chroma_sampling: ChromaSampling, is_intra: bool,
-    log_isqrt_mean_scale: i64,
+  fn new_from_log_q<const BD: usize>(
+    log_base_q: i64, log_target_q: i64, chroma_sampling: ChromaSampling,
+    is_intra: bool, log_isqrt_mean_scale: i64,
   ) -> QuantizerParameters {
-    let scale = log_isqrt_mean_scale + q57(QSCALE + bit_depth as i32 - 8);
+    let scale = log_isqrt_mean_scale + q57(QSCALE + BD as i32 - 8);
 
     let mut log_q_y = log_target_q;
-    if !is_intra && bit_depth == 8 {
+    if !is_intra && BD == 8 {
       log_q_y = log_target_q
         + (log_target_q >> 32) * Q_MODEL_MUL[chroma_sampling as usize]
         + Q_MODEL_ADD[chroma_sampling as usize];
@@ -552,7 +551,7 @@ impl QuantizerParameters {
     let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
     let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
 
-    let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
+    let base_q_idx = select_ac_qi::<BD>(quantizer).max(1);
 
     // delta_q only gets 6 bits + a sign bit, so it can differ by 63 at most.
     let min_qi = base_q_idx.saturating_sub(63).max(1);
@@ -564,14 +563,14 @@ impl QuantizerParameters {
       log_target_q,
       // TODO: Allow lossless mode; i.e. qi == 0.
       dc_qi: [
-        clamp_qi(select_dc_qi(quantizer, bit_depth)),
-        if mono { 0 } else { clamp_qi(select_dc_qi(quantizer_u, bit_depth)) },
-        if mono { 0 } else { clamp_qi(select_dc_qi(quantizer_v, bit_depth)) },
+        clamp_qi(select_dc_qi::<BD>(quantizer)),
+        if mono { 0 } else { clamp_qi(select_dc_qi::<BD>(quantizer_u)) },
+        if mono { 0 } else { clamp_qi(select_dc_qi::<BD>(quantizer_v)) },
       ],
       ac_qi: [
         base_q_idx,
-        if mono { 0 } else { clamp_qi(select_ac_qi(quantizer_u, bit_depth)) },
-        if mono { 0 } else { clamp_qi(select_ac_qi(quantizer_v, bit_depth)) },
+        if mono { 0 } else { clamp_qi(select_ac_qi::<BD>(quantizer_u)) },
+        if mono { 0 } else { clamp_qi(select_ac_qi::<BD>(quantizer_v)) },
       ],
       lambda,
       dist_scale,
@@ -701,17 +700,16 @@ impl RCState {
     }
   }
 
-  pub(crate) fn select_first_pass_qi(
-    &self, bit_depth: usize, fti: usize, chroma_sampling: ChromaSampling,
+  pub(crate) fn select_first_pass_qi<const BD: usize>(
+    &self, fti: usize, chroma_sampling: ChromaSampling,
   ) -> QuantizerParameters {
     // Adjust the quantizer for the frame type, result is Q57:
     let log_q = ((self.pass1_log_base_q + (1i64 << 11)) >> 12)
       * (MQP_Q12[fti] as i64)
       + DQP_Q57[fti];
-    QuantizerParameters::new_from_log_q(
+    QuantizerParameters::new_from_log_q::<BD>(
       self.pass1_log_base_q,
       log_q,
-      bit_depth,
       chroma_sampling,
       fti == 0,
       0,
@@ -719,7 +717,7 @@ impl RCState {
   }
 
   // TODO: Separate quantizers for Cb and Cr.
-  pub(crate) fn select_qi<T: Pixel>(
+  pub(crate) fn select_qi<T: Pixel, const BD: usize>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
     maybe_prev_log_base_q: Option<i64>, log_isqrt_mean_scale: i64,
   ) -> QuantizerParameters {
@@ -727,14 +725,12 @@ impl RCState {
     if self.target_bitrate <= 0 {
       // Rate control is not active.
       // Derive quantizer directly from frame type.
-      let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
       let (log_base_q, log_q) =
-        Self::calc_flat_quantizer(ctx.config.quantizer as u8, bit_depth, fti);
-      QuantizerParameters::new_from_log_q(
+        Self::calc_flat_quantizer::<BD>(ctx.config.quantizer as u8, fti);
+      QuantizerParameters::new_from_log_q::<BD>(
         log_base_q,
         log_q,
-        bit_depth,
         chroma_sampling,
         fti == 0,
         log_isqrt_mean_scale,
@@ -748,11 +744,8 @@ impl RCState {
       match self.twopass_state {
         // First pass of 2-pass mode: use a fixed base quantizer.
         PASS_1 => {
-          return self.select_first_pass_qi(
-            ctx.config.bit_depth,
-            fti,
-            ctx.config.chroma_sampling,
-          );
+          return self
+            .select_first_pass_qi::<BD>(fti, ctx.config.chroma_sampling);
         }
         // Second pass of 2-pass mode: we know exactly how much of each frame
         //  type there is in the current buffer window, and have estimates for
@@ -906,17 +899,16 @@ impl RCState {
       //  in the binary log domain (binary exp and log aren't too bad):
       //  rate = exp2(log2(scale) - log2(quantizer)*exp)
       // There's no easy closed form solution, so we bisection searh for it.
-      let bit_depth = ctx.config.bit_depth;
       let chroma_sampling = ctx.config.chroma_sampling;
       // TODO: Proper handling of lossless.
-      let mut log_qlo = blog64(ac_q(self.ac_qi_min, 0, bit_depth).get() as i64)
-        - q57(QSCALE + bit_depth as i32 - 8);
+      let mut log_qlo = blog64(ac_q::<BD>(self.ac_qi_min, 0).get() as i64)
+        - q57(QSCALE + BD as i32 - 8);
       // The AC quantizer tables map to values larger than the DC quantizer
       //  tables, so we use that as the upper bound to make sure we can use
       //  the full table if needed.
       let mut log_qhi = blog64(
-        ac_q(self.maybe_ac_qi_max.unwrap_or(255), 0, bit_depth).get() as i64,
-      ) - q57(QSCALE + bit_depth as i32 - 8);
+        ac_q::<BD>(self.maybe_ac_qi_max.unwrap_or(255), 0).get() as i64,
+      ) - q57(QSCALE + BD as i32 - 8);
       let mut log_base_q = (log_qlo + log_qhi) >> 1;
       while log_qlo < log_qhi {
         // Count bits contributed by each frame type using the model.
@@ -1020,20 +1012,19 @@ impl RCState {
 
       if let Some(qi_max) = self.maybe_ac_qi_max {
         let (max_log_base_q, max_log_q) =
-          Self::calc_flat_quantizer(qi_max, ctx.config.bit_depth, fti);
+          Self::calc_flat_quantizer::<BD>(qi_max, fti);
         log_base_q = cmp::min(log_base_q, max_log_base_q);
         log_q = cmp::min(log_q, max_log_q);
       }
       if self.ac_qi_min > 0 {
         let (min_log_base_q, min_log_q) =
-          Self::calc_flat_quantizer(self.ac_qi_min, ctx.config.bit_depth, fti);
+          Self::calc_flat_quantizer::<BD>(self.ac_qi_min, fti);
         log_base_q = cmp::max(log_base_q, min_log_base_q);
         log_q = cmp::max(log_q, min_log_q);
       }
-      QuantizerParameters::new_from_log_q(
+      QuantizerParameters::new_from_log_q::<BD>(
         log_base_q,
         log_q,
-        bit_depth,
         chroma_sampling,
         fti == 0,
         log_isqrt_mean_scale,
@@ -1043,8 +1034,8 @@ impl RCState {
 
   // Computes a quantizer directly from the frame type and base quantizer index,
   // without consideration for rate control.
-  fn calc_flat_quantizer(
-    base_qi: u8, bit_depth: usize, fti: usize,
+  fn calc_flat_quantizer<const BD: usize>(
+    base_qi: u8, fti: usize,
   ) -> (i64, i64) {
     // TODO: Rename "quantizer" something that indicates it is a quantizer
     //  index, and move it somewhere more sensible (or choose a better way to
@@ -1052,13 +1043,13 @@ impl RCState {
 
     // We use the AC quantizer as the source quantizer since its quantizer
     //  tables have unique entries, while the DC tables do not.
-    let ac_quantizer = ac_q(base_qi, 0, bit_depth).get() as i64;
+    let ac_quantizer = ac_q::<BD>(base_qi, 0).get() as i64;
     // Pick the nearest DC entry since an exact match may be unavailable.
-    let dc_qi = select_dc_qi(ac_quantizer, bit_depth);
-    let dc_quantizer = dc_q(dc_qi, 0, bit_depth).get() as i64;
+    let dc_qi = select_dc_qi::<BD>(ac_quantizer);
+    let dc_quantizer = dc_q::<BD>(dc_qi, 0).get() as i64;
     // Get the log quantizers as Q57.
-    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
-    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + bit_depth as i32 - 8);
+    let log_ac_q = blog64(ac_quantizer) - q57(QSCALE + BD as i32 - 8);
+    let log_dc_q = blog64(dc_quantizer) - q57(QSCALE + BD as i32 - 8);
     // Target the midpoint of the chosen entries.
     let log_base_q = (log_ac_q + log_dc_q + 1) >> 1;
     // Adjust the quantizer for the frame type, result is Q57:
@@ -1255,11 +1246,13 @@ impl RCState {
     cur_pos
   }
 
-  pub(crate) fn select_pass1_log_base_q<T: Pixel>(
+  pub(crate) fn select_pass1_log_base_q<T: Pixel, const BD: usize>(
     &self, ctx: &ContextInner<T>, output_frameno: u64,
   ) -> i64 {
     assert_eq!(self.twopass_state, PASS_SINGLE);
-    self.select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0).log_base_q
+    self
+      .select_qi::<_, BD>(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0)
+      .log_base_q
   }
 
   // Initialize the first pass and emit a placeholder summary

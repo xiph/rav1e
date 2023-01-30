@@ -570,12 +570,12 @@ pub struct SegmentationState {
 }
 
 impl SegmentationState {
-  pub fn update_threshold(&mut self, base_q_idx: u8, bd: usize) {
-    let base_ac_q = ac_q(base_q_idx, 0, bd).get() as u64;
+  pub fn update_threshold<const BD: usize>(&mut self, base_q_idx: u8) {
+    let base_ac_q = ac_q::<BD>(base_q_idx, 0).get() as u64;
     let real_ac_q = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
       self.data[..=self.max_segment as usize].iter().map(|data| {
-        ac_q(base_q_idx, data[SegLvl::SEG_LVL_ALT_Q as usize] as i8, bd).get()
-          as u64
+        ac_q::<BD>(base_q_idx, data[SegLvl::SEG_LVL_ALT_Q as usize] as i8)
+          .get() as u64
       }),
     );
     self.threshold.fill(DistortionScale(0));
@@ -1246,15 +1246,16 @@ impl<T: Pixel> FrameInvariants<T> {
       (uv_f1 * CDEF_SEC_STRENGTHS as i32 + uv_f2) as u8;
   }
 
-  pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
+  pub fn set_quantizers<const BD: usize>(
+    &mut self, qps: &QuantizerParameters,
+  ) {
     self.base_q_idx = qps.ac_qi[0];
     let base_q_idx = self.base_q_idx as i32;
     for pi in 0..3 {
       self.dc_delta_q[pi] = (qps.dc_qi[pi] as i32 - base_q_idx) as i8;
       self.ac_delta_q[pi] = (qps.ac_qi[pi] as i32 - base_q_idx) as i8;
     }
-    self.lambda =
-      qps.lambda * ((1 << (2 * (self.sequence.bit_depth - 8))) as f64);
+    self.lambda = qps.lambda * ((1 << (2 * (BD - 8))) as f64);
     self.me_lambda = self.lambda.sqrt();
     self.dist_scale = qps.dist_scale.map(DistortionScale::from);
 
@@ -1394,7 +1395,7 @@ fn get_qidx<T: Pixel>(
 ///
 /// - If the block size is invalid for subsampling
 /// - If a tx type other than DCT is used for 64x64 blocks
-pub fn encode_tx_block<T: Pixel, W: Writer>(
+pub fn encode_tx_block<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter,
@@ -1465,8 +1466,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   let rec = &mut ts.rec.planes[p];
 
   if mode.is_intra() {
-    let bit_depth = fi.sequence.bit_depth;
-    let edge_buf = get_intra_edges(
+    let edge_buf = get_intra_edges::<_, BD>(
       &rec.as_const(),
       tile_partition_bo,
       bx,
@@ -1474,17 +1474,15 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       bsize,
       po,
       tx_size,
-      bit_depth,
       Some(mode),
       fi.sequence.enable_intra_edge_filter,
       pred_intra_param,
     );
 
-    mode.predict_intra(
+    mode.predict_intra::<_, BD>(
       tile_rect,
       &mut rec.subregion_mut(area),
       tx_size,
-      bit_depth,
       ac,
       pred_intra_param,
       ief_params,
@@ -1536,13 +1534,12 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     residual.fill(0);
   }
 
-  forward_transform(
+  forward_transform::<_, BD>(
     residual,
     coeffs,
     tx_size.width(),
     tx_size,
     tx_type,
-    fi.sequence.bit_depth,
     fi.cpu_feature_level,
   );
 
@@ -1579,13 +1576,12 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   };
 
   // Reconstruct
-  dequantize(
+  dequantize::<_, BD>(
     qidx,
     qcoeffs,
     eob,
     rcoeffs,
     tx_size,
-    fi.sequence.bit_depth,
     fi.dc_delta_q[p],
     fi.ac_delta_q[p],
     fi.cpu_feature_level,
@@ -1594,13 +1590,12 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   if eob == 0 {
     // All zero coefficients is a no-op
   } else if !fi.use_tx_domain_distortion || need_recon_pixel {
-    inverse_transform_add(
+    inverse_transform_add::<_, BD>(
       rcoeffs,
       &mut rec.subregion_mut(area),
       eob,
       tx_size,
       tx_type,
-      fi.sequence.bit_depth,
       fi.cpu_feature_level,
     );
   }
@@ -1654,7 +1649,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 /// # Panics
 ///
 /// - If the block size is invalid for subsampling
-pub fn motion_compensate<T: Pixel>(
+pub fn motion_compensate<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, luma_mode: PredictionMode, ref_frames: [RefType; 2],
   mvs: [MotionVector; 2], bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1713,7 +1708,7 @@ pub fn motion_compensate<T: Pixel>(
       };
 
       if some_use_intra {
-        luma_mode.predict_inter(
+        luma_mode.predict_inter::<_, BD>(
           fi,
           tile_rect,
           p,
@@ -1741,7 +1736,7 @@ pub fn motion_compensate<T: Pixel>(
           let area2 = Area::StartingAt { x: po2.x, y: po2.y };
           let po3 = PlaneOffset { x: po.x + 2, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1753,7 +1748,7 @@ pub fn motion_compensate<T: Pixel>(
             mv0,
             compound_buffer,
           );
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1765,7 +1760,7 @@ pub fn motion_compensate<T: Pixel>(
             mv1,
             compound_buffer,
           );
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1777,7 +1772,7 @@ pub fn motion_compensate<T: Pixel>(
             mv2,
             compound_buffer,
           );
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1793,7 +1788,7 @@ pub fn motion_compensate<T: Pixel>(
         if bsize == BlockSize::BLOCK_8X4 {
           let mv1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].mv;
           let rf1 = cw.bc.blocks[tile_bo.with_offset(0, -1)].ref_frames;
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1807,7 +1802,7 @@ pub fn motion_compensate<T: Pixel>(
           );
           let po3 = PlaneOffset { x: po.x, y: po.y + 2 };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1823,7 +1818,7 @@ pub fn motion_compensate<T: Pixel>(
         if bsize == BlockSize::BLOCK_4X8 {
           let mv2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].mv;
           let rf2 = cw.bc.blocks[tile_bo.with_offset(-1, 0)].ref_frames;
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1837,7 +1832,7 @@ pub fn motion_compensate<T: Pixel>(
           );
           let po3 = PlaneOffset { x: po.x + 2, y: po.y };
           let area3 = Area::StartingAt { x: po3.x, y: po3.y };
-          luma_mode.predict_inter(
+          luma_mode.predict_inter::<_, BD>(
             fi,
             tile_rect,
             p,
@@ -1852,7 +1847,7 @@ pub fn motion_compensate<T: Pixel>(
         }
       }
     } else {
-      luma_mode.predict_inter(
+      luma_mode.predict_inter::<_, BD>(
         fi,
         tile_rect,
         p,
@@ -1922,7 +1917,7 @@ pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
 ///
 /// - If chroma and luma do not match for inter modes
 /// - If an invalid motion vector is found
-pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
+pub fn encode_block_post_cdef<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
@@ -2184,10 +2179,10 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   }
 
   if is_inter {
-    motion_compensate(
+    motion_compensate::<_, BD>(
       fi, ts, cw, luma_mode, ref_frames, mvs, bsize, tile_bo, false,
     );
-    write_tx_tree(
+    write_tx_tree::<_, _, BD>(
       fi,
       ts,
       cw,
@@ -2204,7 +2199,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
       need_recon_pixel,
     )
   } else {
-    write_tx_blocks(
+    write_tx_blocks::<_, _, BD>(
       fi,
       ts,
       cw,
@@ -2228,7 +2223,7 @@ pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
 /// # Panics
 ///
 /// - If attempting to encode a lossless block (not yet supported)
-pub fn write_tx_blocks<T: Pixel, W: Writer>(
+pub fn write_tx_blocks<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   chroma_mode: PredictionMode, angle_delta: AngleDelta,
@@ -2249,14 +2244,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   let do_chroma =
     has_chroma(tile_bo, bsize, xdec, ydec, fi.sequence.chroma_sampling);
 
-  ts.qc.update(
-    qidx,
-    tx_size,
-    luma_mode.is_intra(),
-    fi.sequence.bit_depth,
-    fi.dc_delta_q[0],
-    0,
-  );
+  ts.qc.update::<BD>(qidx, tx_size, luma_mode.is_intra(), fi.dc_delta_q[0], 0);
 
   for by in 0..bh {
     for bx in 0..bw {
@@ -2268,7 +2256,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         continue;
       }
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
-      let (has_coeff, dist) = encode_tx_block(
+      let (has_coeff, dist) = encode_tx_block::<_, _, BD>(
         fi,
         ts,
         cw,
@@ -2333,11 +2321,10 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   };
 
   for p in 1..3 {
-    ts.qc.update(
+    ts.qc.update::<BD>(
       qidx,
       uv_tx_size,
       true,
-      fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
     );
@@ -2354,7 +2341,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
         po.x += (bx * uv_tx_size.width()) as isize;
         po.y += (by * uv_tx_size.height()) as isize;
-        let (has_coeff, dist) = encode_tx_block(
+        let (has_coeff, dist) = encode_tx_block::<_, _, BD>(
           fi,
           ts,
           cw,
@@ -2389,7 +2376,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   (partition_has_coeff, tx_dist)
 }
 
-pub fn write_tx_tree<T: Pixel, W: Writer>(
+pub fn write_tx_tree<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
   angle_delta_y: i8, tile_bo: TileBlockOffset, bsize: BlockSize,
@@ -2408,14 +2395,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
 
-  ts.qc.update(
-    qidx,
-    tx_size,
-    luma_mode.is_intra(),
-    fi.sequence.bit_depth,
-    fi.dc_delta_q[0],
-    0,
-  );
+  ts.qc.update::<BD>(qidx, tx_size, luma_mode.is_intra(), fi.dc_delta_q[0], 0);
 
   // TODO: If tx-parition more than only 1-level, this code does not work.
   // It should recursively traverse the tx block that are split recursivelty by calling write_tx_tree(),
@@ -2431,7 +2411,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
       }
 
       let po = tx_bo.plane_offset(&ts.input.planes[0].cfg);
-      let (has_coeff, dist) = encode_tx_block(
+      let (has_coeff, dist) = encode_tx_block::<_, _, BD>(
         fi,
         ts,
         cw,
@@ -2494,11 +2474,10 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   };
 
   for p in 1..3 {
-    ts.qc.update(
+    ts.qc.update::<BD>(
       qidx,
       uv_tx_size,
       false,
-      fi.sequence.bit_depth,
       fi.dc_delta_q[p],
       fi.ac_delta_q[p],
     );
@@ -2515,7 +2494,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
         let mut po = tile_bo.plane_offset(&ts.input.planes[p].cfg);
         po.x += (bx * uv_tx_size.width()) as isize;
         po.y += (by * uv_tx_size.height()) as isize;
-        let (has_coeff, dist) = encode_tx_block(
+        let (has_coeff, dist) = encode_tx_block::<_, _, BD>(
           fi,
           ts,
           cw,
@@ -2546,7 +2525,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   (partition_has_coeff, tx_dist)
 }
 
-pub fn encode_block_with_modes<T: Pixel, W: Writer>(
+pub fn encode_block_with_modes<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -2572,7 +2551,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
 
   let (tx_size, tx_type) = if !mode_decision.skip && !mode_decision.has_coeff {
     skip = true;
-    rdo_tx_size_type(
+    rdo_tx_size_type::<_, BD>(
       fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
     )
   } else {
@@ -2588,7 +2567,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
     tile_bo,
     skip,
   );
-  encode_block_post_cdef(
+  encode_block_post_cdef::<_, _, BD>(
     fi,
     ts,
     cw,
@@ -2612,7 +2591,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   );
 }
 
-fn encode_partition_bottomup<T: Pixel, W: Writer>(
+fn encode_partition_bottomup<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, ref_rd_cost: f64,
@@ -2673,7 +2652,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     };
 
     let mode_decision =
-      rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
+      rdo_mode_decision::<_, BD>(fi, ts, cw, bsize, tile_bo, inter_cfg);
 
     if !mode_decision.pred_mode_luma.is_intra() {
       // Fill the saved motion structure
@@ -2693,7 +2672,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
     rdo_output.part_modes.push(mode_decision.clone());
 
     if !can_split {
-      encode_block_with_modes(
+      encode_block_with_modes::<_, _, BD>(
         fi,
         ts,
         cw,
@@ -2783,7 +2762,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         if offset.0.x >= ts.mi_width || offset.0.y >= ts.mi_height {
           continue;
         }
-        let child_rdo_output = encode_partition_bottomup(
+        let child_rdo_output = encode_partition_bottomup::<_, _, BD>(
           fi,
           ts,
           cw,
@@ -2856,7 +2835,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         }
 
         // FIXME: redundant block re-encode
-        encode_block_with_modes(
+        encode_block_with_modes::<_, _, BD>(
           fi,
           ts,
           cw,
@@ -2895,7 +2874,7 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   rdo_output
 }
 
-fn encode_partition_topdown<T: Pixel, W: Writer>(
+fn encode_partition_topdown<T: Pixel, W: Writer, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -2939,7 +2918,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
     debug_assert!(bsize.is_sqr());
 
     // Blocks of sizes within the supported range are subjected to a partitioning decision
-    rdo_output = rdo_partition_decision(
+    rdo_output = rdo_partition_decision::<_, _, BD>(
       fi,
       ts,
       cw,
@@ -2977,7 +2956,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       } else {
         // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
         rdo_decision =
-          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
+          rdo_mode_decision::<_, BD>(fi, ts, cw, bsize, tile_bo, inter_cfg);
         &rdo_decision
       };
 
@@ -2997,7 +2976,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
       // NOTE: Cannot avoid calling rdo_tx_size_type() here again,
       // because, with top-down partition RDO, the neighboring contexts
       // of current partition can change, i.e. neighboring partitions can split down more.
-      let (tx_size, tx_type) = rdo_tx_size_type(
+      let (tx_size, tx_type) = rdo_tx_size_type::<_, BD>(
         fi, ts, cw, bsize, tile_bo, mode_luma, ref_frames, mvs, skip,
       );
 
@@ -3105,7 +3084,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         tile_bo,
         skip,
       );
-      encode_block_post_cdef(
+      encode_block_post_cdef::<_, _, BD>(
         fi,
         ts,
         cw,
@@ -3135,7 +3114,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         // The optimal prediction modes for each split block is known from an rdo_partition_decision() call
         for mode in rdo_output.part_modes {
           // Each block is subjected to a new splitting decision
-          encode_partition_topdown(
+          encode_partition_topdown::<_, _, BD>(
             fi,
             ts,
             cw,
@@ -3174,7 +3153,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
         let partitions = get_sub_partitions(&four_partitions, partition);
 
         partitions.iter().for_each(|&offset| {
-          encode_partition_topdown(
+          encode_partition_topdown::<_, _, BD>(
             fi,
             ts,
             cw,
@@ -3215,7 +3194,7 @@ fn get_initial_cdfcontext<T: Pixel>(fi: &FrameInvariants<T>) -> CDFContext {
 }
 
 #[hawktracer(encode_tile_group)]
-fn encode_tile_group<T: Pixel>(
+fn encode_tile_group<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   let planes =
@@ -3233,7 +3212,7 @@ fn encode_tile_group<T: Pixel>(
     .collect::<Vec<_>>()
     .into_par_iter()
     .map(|(mut ctx, cdf)| {
-      encode_tile(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg)
+      encode_tile::<_, BD>(fi, &mut ctx.ts, cdf, &mut ctx.tb, inter_cfg)
     })
     .unzip();
 
@@ -3247,7 +3226,7 @@ fn encode_tile_group<T: Pixel>(
   /* TODO: Don't apply if lossless */
   let levels = fs.apply_tile_state_mut(|ts| {
     let rec = &mut ts.rec;
-    deblock_filter_optimize(
+    deblock_filter_optimize::<_, _, BD>(
       fi,
       &rec.as_const(),
       &ts.input.as_tile(),
@@ -3261,13 +3240,12 @@ fn encode_tile_group<T: Pixel>(
   if fs.deblock.levels[0] != 0 || fs.deblock.levels[1] != 0 {
     fs.apply_tile_state_mut(|ts| {
       let rec = &mut ts.rec;
-      deblock_filter_frame(
+      deblock_filter_frame::<_, BD>(
         ts.deblock,
         rec,
         &blocks.as_tile_blocks(),
         fi.width,
         fi.height,
-        fi.sequence.bit_depth,
         planes,
       );
     });
@@ -3282,11 +3260,16 @@ fn encode_tile_group<T: Pixel>(
     if fi.sequence.enable_cdef {
       fs.apply_tile_state_mut(|ts| {
         let rec = &mut ts.rec;
-        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+        cdef_filter_tile::<_, BD>(
+          fi,
+          &deblocked_frame,
+          &blocks.as_tile_blocks(),
+          rec,
+        );
       });
     }
     /* TODO: Don't apply if lossless */
-    fs.restoration.lrf_filter_frame(
+    fs.restoration.lrf_filter_frame::<_, BD>(
       Arc::get_mut(&mut fs.rec).unwrap(),
       &deblocked_frame,
       fi,
@@ -3297,7 +3280,12 @@ fn encode_tile_group<T: Pixel>(
       let deblocked_frame = (*fs.rec).clone();
       fs.apply_tile_state_mut(|ts| {
         let rec = &mut ts.rec;
-        cdef_filter_tile(fi, &deblocked_frame, &blocks.as_tile_blocks(), rec);
+        cdef_filter_tile::<_, BD>(
+          fi,
+          &deblocked_frame,
+          &blocks.as_tile_blocks(),
+          rec,
+        );
       });
     }
   }
@@ -3353,7 +3341,7 @@ pub struct SBSQueueEntry {
   pub w_post_cdef: WriterBase<WriterRecorder>,
 }
 
-fn check_lf_queue<T: Pixel>(
+fn check_lf_queue<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut WriterBase<WriterEncoder>,
   sbs_q: &mut VecDeque<SBSQueueEntry>, last_lru_ready: &mut [i32; 3],
@@ -3405,7 +3393,7 @@ fn check_lf_queue<T: Pixel>(
             }
           }
           if !already_rdoed {
-            rdo_loop_decision(qe.sbo, fi, ts, cw, w, deblock_p);
+            rdo_loop_decision::<_, _, BD>(qe.sbo, fi, ts, cw, w, deblock_p);
             for pli in 0..planes {
               if qe.lru_index[pli] != -1
                 && last_lru_rdoed[pli] < qe.lru_index[pli]
@@ -3445,7 +3433,7 @@ fn check_lf_queue<T: Pixel>(
 }
 
 #[hawktracer(encode_tile)]
-fn encode_tile<'a, T: Pixel>(
+fn encode_tile<'a, T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, ts: &'a mut TileStateMut<'_, T>,
   fc: &'a mut CDFContext, blocks: &'a mut TileBlocksMut<'a>,
   inter_cfg: &InterConfig,
@@ -3492,7 +3480,7 @@ fn encode_tile<'a, T: Pixel>(
         || is_straddle_sbx
         || is_straddle_sby
       {
-        encode_partition_bottomup(
+        encode_partition_bottomup::<_, _, BD>(
           fi,
           ts,
           &mut cw,
@@ -3505,7 +3493,7 @@ fn encode_tile<'a, T: Pixel>(
           &mut enc_stats,
         );
       } else {
-        encode_partition_topdown(
+        encode_partition_topdown::<_, _, BD>(
           fi,
           ts,
           &mut cw,
@@ -3547,7 +3535,7 @@ fn encode_tile<'a, T: Pixel>(
         sbs_q.push_back(sbs_qe);
 
         if check_queue && !fi.sequence.enable_delayed_loopfilter_rdo {
-          check_lf_queue(
+          check_lf_queue::<_, BD>(
             fi,
             ts,
             &mut cw,
@@ -3566,7 +3554,7 @@ fn encode_tile<'a, T: Pixel>(
   if fi.sequence.enable_delayed_loopfilter_rdo {
     // Solve deblocking for just this tile
     /* TODO: Don't apply if lossless */
-    let deblock_levels = deblock_filter_optimize(
+    let deblock_levels = deblock_filter_optimize::<_, _, BD>(
       fi,
       &ts.rec.as_const(),
       &ts.input_tile,
@@ -3592,18 +3580,17 @@ fn encode_tile<'a, T: Pixel>(
       deblock_copy.levels = deblock_levels;
 
       // temporarily deblock the reference
-      deblock_filter_frame(
+      deblock_filter_frame::<_, BD>(
         &deblock_copy,
         &mut ts.rec,
         &cw.bc.blocks.as_const(),
         fi.width,
         fi.height,
-        fi.sequence.bit_depth,
         planes,
       );
 
       // rdo lf and write
-      check_lf_queue(
+      check_lf_queue::<_, BD>(
         fi,
         ts,
         &mut cw,
@@ -3627,7 +3614,7 @@ fn encode_tile<'a, T: Pixel>(
       }
     } else {
       // rdo lf and write
-      check_lf_queue(
+      check_lf_queue::<_, BD>(
         fi,
         ts,
         &mut cw,
@@ -3743,7 +3730,7 @@ fn get_initial_segmentation<T: Pixel>(
 /// # Panics
 ///
 /// - If the frame packets cannot be written
-pub fn encode_frame<T: Pixel>(
+pub fn encode_frame<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
   debug_assert!(!fi.is_show_existing_frame());
@@ -3753,9 +3740,9 @@ pub fn encode_frame<T: Pixel>(
 
   if fi.enable_segmentation {
     fs.segmentation = get_initial_segmentation(fi);
-    segmentation_optimize(fi, fs);
+    segmentation_optimize::<_, BD>(fi, fs);
   }
-  let tile_group = encode_tile_group(fi, fs, inter_cfg);
+  let tile_group = encode_tile_group::<_, BD>(fi, fs, inter_cfg);
 
   if fi.frame_type == FrameType::KEY {
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();

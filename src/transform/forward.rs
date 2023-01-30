@@ -98,9 +98,9 @@ pub mod rust {
   ///
   /// - If called with an invalid combination of `tx_size` and `tx_type`
   #[cold_for_target_arch("x86_64")]
-  pub fn forward_transform<T: Coefficient>(
+  pub fn forward_transform<T: Coefficient, const BD: usize>(
     input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-    tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
+    tx_type: TxType, _cpu: CpuFeatureLevel,
   ) {
     assert!(valid_av1_transform(tx_size, tx_type));
 
@@ -117,7 +117,7 @@ pub mod rust {
     let mut tmp: Aligned<[i32; 64 * 64]> = unsafe { Aligned::uninitialized() };
     let buf = &mut tmp.data[..txfm_size_col * txfm_size_row];
 
-    let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
+    let cfg = Txfm2DFlipCfg::fwd::<BD>(tx_type, tx_size);
 
     let txfm_func_col = get_func(cfg.txfm_type_col);
     let txfm_func_row = get_func(cfg.txfm_type_row);
