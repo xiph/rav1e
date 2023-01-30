@@ -793,9 +793,7 @@ pub(crate) mod rust {
     let avg = T::cast_from(avg);
 
     for line in output.rows_iter_mut().take(height) {
-      for v in &mut line[..width] {
-        *v = avg;
-      }
+      line[..width].fill(avg);
     }
   }
 
@@ -804,10 +802,8 @@ pub(crate) mod rust {
     width: usize, height: usize, bit_depth: usize,
   ) {
     let v = T::cast_from(128u32 << (bit_depth - 8));
-    for y in 0..height {
-      for x in 0..width {
-        output[y][x] = v;
-      }
+    for line in output.rows_iter_mut().take(height) {
+      line[..width].fill(v);
     }
   }
 
@@ -821,7 +817,7 @@ pub(crate) mod rust {
     });
     let avg = T::cast_from((sum + (height >> 1) as u32) / height as u32);
     for line in output.rows_iter_mut().take(height) {
-      line[..width].iter_mut().for_each(|v| *v = avg);
+      line[..width].fill(avg);
     }
   }
 
@@ -835,7 +831,7 @@ pub(crate) mod rust {
     });
     let avg = T::cast_from((sum + (width >> 1) as u32) / width as u32);
     for line in output.rows_iter_mut().take(height) {
-      line[..width].iter_mut().for_each(|v| *v = avg);
+      line[..width].fill(avg);
     }
   }
 
@@ -844,9 +840,7 @@ pub(crate) mod rust {
     height: usize,
   ) {
     for (line, l) in output.rows_iter_mut().zip(left[..height].iter().rev()) {
-      for v in &mut line[..width] {
-        *v = *l;
-      }
+      line[..width].fill(*l);
     }
   }
 
@@ -855,7 +849,7 @@ pub(crate) mod rust {
     height: usize,
   ) {
     for line in output.rows_iter_mut().take(height) {
-      line[..width].clone_from_slice(&above[..width])
+      line[..width].copy_from_slice(&above[..width])
     }
   }
 
@@ -1052,10 +1046,8 @@ pub(crate) mod rust {
     let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
     let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
 
-    for sub_y in 0..plane_bsize.height() {
-      for sub_x in 0..plane_bsize.width() {
-        ac[sub_y * plane_bsize.width() + sub_x] -= average;
-      }
+    for val in &mut ac[..(plane_bsize.height() * plane_bsize.width())] {
+      *val -= average;
     }
   }
 
@@ -1228,7 +1220,7 @@ pub(crate) mod rust {
 
         edge_filtered[i] = T::cast_from((s + 8) >> 4);
       }
-      edge.copy_from_slice(&edge_filtered[..]);
+      edge.copy_from_slice(edge_filtered.as_slice());
     }
 
     fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
@@ -1311,7 +1303,11 @@ pub(crate) mod rust {
             smooth_filter,
             p_angle as isize - 90,
           );
-          filter_edge(num_px.0, filter_strength, &mut above_filtered[..]);
+          filter_edge(
+            num_px.0,
+            filter_strength,
+            above_filtered.as_mut_slice(),
+          );
         }
         if output.rect().x > 0 {
           let filter_strength = select_ief_strength(
@@ -1320,7 +1316,7 @@ pub(crate) mod rust {
             smooth_filter,
             p_angle as isize - 180,
           );
-          filter_edge(num_px.1, filter_strength, &mut left_filtered[..]);
+          filter_edge(num_px.1, filter_strength, left_filtered.as_mut_slice());
         }
       }
 
@@ -1336,7 +1332,7 @@ pub(crate) mod rust {
         p_angle as isize - 90,
       );
       if upsample_above {
-        upsample_edge(num_px.0, &mut above_filtered[..], bit_depth);
+        upsample_edge(num_px.0, above_filtered.as_mut_slice(), bit_depth);
       }
       upsample_left = select_ief_upsample(
         width,
@@ -1345,12 +1341,12 @@ pub(crate) mod rust {
         p_angle as isize - 180,
       );
       if upsample_left {
-        upsample_edge(num_px.1, &mut left_filtered[..], bit_depth);
+        upsample_edge(num_px.1, left_filtered.as_mut_slice(), bit_depth);
       }
 
       left_filtered.reverse();
-      above_edge = &above_filtered[..];
-      left_edge = &left_filtered[..];
+      above_edge = above_filtered.as_slice();
+      left_edge = left_filtered.as_slice();
     }
 
     const fn dr_intra_derivative(p_angle: usize) -> usize {
