@@ -21,7 +21,6 @@ mod test {
   #[test]
   fn pred_matches_u8() {
     let tx_size = TxSize::TX_4X4;
-    let bit_depth = 8;
     let cpu = CpuFeatureLevel::default();
     let ac = [0i16; 32 * 32];
     // SAFETY: We write to the array below before reading from it.
@@ -73,12 +72,11 @@ mod test {
       for angle in angles {
         let expected = {
           let mut plane = Plane::from_slice(&[0u8; 4 * 4], 4);
-          rust::dispatch_predict_intra(
+          rust::dispatch_predict_intra::<_, 8>(
             *mode,
             *variant,
             &mut plane.as_region_mut(),
             tx_size,
-            bit_depth,
             &ac,
             *angle,
             None,
@@ -93,12 +91,11 @@ mod test {
         };
 
         let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
-        dispatch_predict_intra(
+        dispatch_predict_intra::<_, 8>(
           *mode,
           *variant,
           &mut output.as_region_mut(),
           tx_size,
-          bit_depth,
           &ac,
           *angle,
           None,

@@ -2274,7 +2274,7 @@ fn min_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
-    ctx.inner.encode_packet(i).unwrap();
+    ctx.inner.encode_packet::<8>(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
       assert_eq!(68, frame_data.fi.base_q_idx);
@@ -2305,7 +2305,7 @@ fn min_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
-    ctx.inner.encode_packet(i).unwrap();
+    ctx.inner.encode_packet::<8>(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
       assert!(frame_data.fi.base_q_idx > 68);
@@ -2339,7 +2339,7 @@ fn max_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
-    ctx.inner.encode_packet(i).unwrap();
+    ctx.inner.encode_packet::<8>(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
       assert_eq!(95, frame_data.fi.base_q_idx);
@@ -2370,7 +2370,7 @@ fn max_quantizer_bounds_correctly() {
   ctx.flush();
 
   for i in 0..limit {
-    ctx.inner.encode_packet(i).unwrap();
+    ctx.inner.encode_packet::<8>(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
       assert!(frame_data.fi.base_q_idx < 95);

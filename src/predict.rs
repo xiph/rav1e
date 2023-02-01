@@ -1508,7 +1508,7 @@ mod test {
     pred_dc_left(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [30u8; 16]);
 
-    pred_dc_128(&mut output.as_region_mut(), above, left, 4, 4);
+    pred_dc_128::<_, 8>(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [128u8; 16]);
 
     pred_v(&mut output.as_region_mut(), above, 4, 4);

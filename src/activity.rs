@@ -258,8 +258,13 @@ mod ssim_boost_tests {
     let scale = ((1 << bd) - 1) << (6 - 2 + bd - 8);
     for svar in scale..(scale << 2) {
       let float = ((scale << 1) as f64 / svar as f64).cbrt();
-      let fixed =
-        apply_ssim_boost(1 << 23, svar, svar) as f64 / (1 << 23) as f64;
+      let fixed = match bd {
+        8 => apply_ssim_boost::<8>(1 << 23, svar, svar),
+        10 => apply_ssim_boost::<10>(1 << 23, svar, svar),
+        12 => apply_ssim_boost::<12>(1 << 23, svar, svar),
+        _ => unimplemented!(),
+      } as f64
+        / (1 << 23) as f64;
 
       // Compare the two versions
       max_relative_error =

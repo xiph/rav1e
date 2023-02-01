@@ -342,14 +342,14 @@ pub mod test {
 
   #[test]
   fn cdef_dist_simd_large_diff_hbd() {
-    cdef_diff_tester::<_, 10>(max_diff_planes::<u16, 10>);
+    cdef_diff_tester::<_, 10>(max_diff_planes::<u16>);
     cdef_diff_tester::<_, 12>(max_diff_planes::<u16>);
   }
 
   fn cdef_diff_tester<T: Pixel, const BD: usize>(
     gen_planes: fn(bd: usize) -> (Plane<T>, Plane<T>),
   ) {
-    let (src_plane, dst_plane) = gen_planes(bd);
+    let (src_plane, dst_plane) = gen_planes(BD);
 
     let mut fail = false;
 
@@ -361,7 +361,7 @@ pub mod test {
         let src_region = src_plane.region(area);
         let dst_region = dst_plane.region(area);
 
-        let rust = rust::cdef_dist_kernel(
+        let rust = rust::cdef_dist_kernel::<_, BD>(
           &src_region,
           &dst_region,
           w,
@@ -369,7 +369,7 @@ pub mod test {
           CpuFeatureLevel::default(),
         );
 
-        let simd = cdef_dist_kernel(
+        let simd = cdef_dist_kernel::<_, BD>(
           &src_region,
           &dst_region,
           w,

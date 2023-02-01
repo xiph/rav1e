@@ -322,8 +322,8 @@ mod test {
             // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
             #[allow(clippy::undocumented_unsafe_blocks)]
             unsafe {
-              cdef_filter_block::<_, _, 8>(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              cdef_filter_block::<_, _, 8>(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
+              cdef_filter_block::<_, 8>(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              cdef_filter_block::<_, 8>(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping,  $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
               assert_eq!(rust_dst.data_origin(), dst.data_origin());
             }
           }

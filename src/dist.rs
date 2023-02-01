@@ -440,7 +440,6 @@ pub mod test {
       (64, 16, 116384),
     ];
 
-    let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
     for (w, h, distortion) in blocks {

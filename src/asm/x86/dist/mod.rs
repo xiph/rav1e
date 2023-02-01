@@ -735,12 +735,12 @@ mod test {
   use rand::random;
   use std::str::FromStr;
 
-  macro_rules! test_dist_fns {
-    ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:tt) => {
+  macro_rules! test_dist_sad_fns {
+    ($(($W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
       $(
         paste::item! {
           #[test]
-          fn [<get_ $DIST_TY _ $W x $H _bd_ $BD _ $OPT>]() {
+          fn [<get_sad _ $W x $H _bd_ $BD _ $OPT>]() {
             if !is_x86_feature_detected!($OPTLIT) {
               eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
               return;
@@ -755,8 +755,8 @@ mod test {
                 *s = random::<u8>() as u16 * $BD / 8;
                 *d = random::<u8>() as u16 * $BD / 8;
               }
-              let result = [<get_ $DIST_TY>]::<$BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>]::<$BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
+              let result = get_sad(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = get_sad(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             } else {
@@ -768,8 +768,8 @@ mod test {
                 *s = random::<u8>();
                 *d = random::<u8>();
               }
-              let result = [<get_ $DIST_TY>]::<$BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-              let rust_result = [<get_ $DIST_TY>]::<$BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
+              let result = get_sad(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = get_sad(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
 
               assert_eq!(rust_result, result);
             }
@@ -779,7 +779,51 @@ mod test {
     }
   }
 
-  test_dist_fns!(
+  macro_rules! test_dist_satd_fns {
+    ($(($W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
+      $(
+        paste::item! {
+          #[test]
+          fn [<get_satd_ $W x $H _bd_ $BD _ $OPT>]() {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            if $BD > 8 {
+              // dynamic allocation: test
+              let mut src = Plane::from_slice(&[0u16; $W * $H], $W);
+              // dynamic allocation: test
+              let mut dst = Plane::from_slice(&[0u16; $W * $H], $W);
+              for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
+                *s = random::<u8>() as u16 * $BD / 8;
+                *d = random::<u8>() as u16 * $BD / 8;
+              }
+              let result = get_satd::<_, $BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = get_satd::<_, $BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
+
+              assert_eq!(rust_result, result);
+            } else {
+              // dynamic allocation: test
+              let mut src = Plane::from_slice(&[0u8; $W * $H], $W);
+              // dynamic allocation: test
+              let mut dst = Plane::from_slice(&[0u8; $W * $H], $W);
+              for (s, d) in src.data.iter_mut().zip(dst.data.iter_mut()) {
+                *s = random::<u8>();
+                *d = random::<u8>();
+              }
+              let result = get_satd::<_, $BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              let rust_result = get_satd::<_, $BD>(&src.as_region(), &dst.as_region(), $W, $H, CpuFeatureLevel::RUST);
+
+              assert_eq!(rust_result, result);
+            }
+          }
+        }
+      )*
+    }
+  }
+
+  test_dist_sad_fns!(
     (4, 4),
     (16, 16),
     (8, 8),
@@ -802,13 +846,12 @@ mod test {
     (128, 64),
     (16, 64),
     (64, 16),
-    sad,
-    10,
     ssse3,
-    "ssse3"
+    "ssse3",
+    10
   );
 
-  test_dist_fns!(
+  test_dist_sad_fns!(
     (4, 4),
     (16, 16),
     (8, 8),
@@ -831,13 +874,12 @@ mod test {
     (128, 64),
     (16, 64),
     (64, 16),
-    sad,
-    10,
     avx2,
-    "avx2"
+    "avx2",
+    10
   );
 
-  test_dist_fns!(
+  test_dist_sad_fns!(
     (4, 4),
     (4, 8),
     (4, 16),
@@ -849,13 +891,12 @@ mod test {
     (32, 32),
     (64, 64),
     (128, 128),
-    sad,
-    8,
     sse2,
-    "sse2"
+    "sse2",
+    8
   );
 
-  test_dist_fns!(
+  test_dist_sad_fns!(
     (16, 4),
     (16, 8),
     (16, 16),
@@ -871,17 +912,16 @@ mod test {
     (64, 128),
     (128, 64),
     (128, 128),
-    sad,
-    8,
     avx2,
-    "avx2"
+    "avx2",
+    8
   );
 
-  test_dist_fns!((8, 8), satd, 8, ssse3, "ssse3");
+  test_dist_satd_fns!((8, 8), ssse3, "ssse3", 8);
 
-  test_dist_fns!((4, 4), satd, 8, sse4, "sse4.1");
+  test_dist_satd_fns!((4, 4), sse4, "sse4.1", 8);
 
-  test_dist_fns!(
+  test_dist_satd_fns!(
     (4, 4),
     (8, 8),
     (16, 16),
@@ -904,13 +944,12 @@ mod test {
     (32, 8),
     (16, 64),
     (64, 16),
-    satd,
-    8,
     avx2,
-    "avx2"
+    "avx2",
+    8
   );
 
-  test_dist_fns!(
+  test_dist_satd_fns!(
     (4, 4),
     (8, 8),
     (16, 16),
@@ -933,13 +972,12 @@ mod test {
     (32, 8),
     (16, 64),
     (64, 16),
-    satd,
-    10,
     avx2,
-    "avx2"
+    "avx2",
+    10
   );
 
-  test_dist_fns!(
+  test_dist_satd_fns!(
     (4, 4),
     (8, 8),
     (16, 16),
@@ -962,9 +1000,8 @@ mod test {
     (32, 8),
     (16, 64),
     (64, 16),
-    satd,
-    12,
     avx2,
-    "avx2"
+    "avx2",
+    12
   );
 }
