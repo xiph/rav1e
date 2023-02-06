@@ -75,7 +75,7 @@ clap = { version = "4.0.18", optional = true, default-features = false, features
     "wrap_help",
     "derive",
 ] }
-clap_complete = { version = "4.0.3", optional = true }
+clap_complete = { version = "4.1.1", optional = true }
 libc = "0.2"
 y4m = { version = "0.7", optional = true }
 backtrace = { version = "0.3", optional = true }
