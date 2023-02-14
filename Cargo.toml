@@ -144,7 +144,7 @@ semver = "1.0"
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.2"
 interpolate_name = "0.2.2"
-libfuzzer-sys = "0.3"
+libfuzzer-sys = "0.4"
 rand = "0.8"
 rand_chacha = "0.3"
 
