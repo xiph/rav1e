@@ -149,7 +149,7 @@ fn arbitrary_content_light(
   }))
 }
 
-impl Arbitrary for ArbitraryConfig {
+impl Arbitrary<'_> for ArbitraryConfig {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut enc = EncoderConfig::with_speed_preset(Arbitrary::arbitrary(u)?);
     enc.width = Arbitrary::arbitrary(u)?;
@@ -215,7 +215,7 @@ pub struct ArbitraryEncoder {
   pixels: Box<[u8]>,
 }
 
-impl Arbitrary for ArbitraryEncoder {
+impl Arbitrary<'_> for ArbitraryEncoder {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let enc = EncoderConfig {
       speed_settings: SpeedSettings::from_preset(u.int_in_range(0..=10)?),
@@ -265,7 +265,7 @@ impl Arbitrary for ArbitraryEncoder {
     if u.is_empty() {
       return Err(Error::NotEnoughData);
     }
-    let pixels = u.get_bytes(u.len())?.to_vec().into_boxed_slice();
+    let pixels = u.bytes(u.len())?.to_vec().into_boxed_slice();
     let config = Config::new().with_encoder_config(enc).with_threads(1);
     Ok(Self { config, frame_count, pixels })
   }
@@ -317,7 +317,7 @@ pub struct DecodeTestParameters<T: Pixel> {
   pixel: PhantomData<T>,
 }
 
-impl<T: Pixel> Arbitrary for DecodeTestParameters<T> {
+impl<T: Pixel> Arbitrary<'_> for DecodeTestParameters<T> {
   fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self, Error> {
     let mut p = Self {
       w: u.int_in_range(16..=16 + 255)?,
