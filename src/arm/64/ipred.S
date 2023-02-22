@@ -1670,10 +1670,10 @@ function ipred_z1_fill1_8bpc_neon, export=1
         dup             v7.8b,   w11
         ext             v1.16b,  v0.16b,  v0.16b,  #1 // top[base+1]
         ext             v3.16b,  v2.16b,  v2.16b,  #1
-        umull           v16.8h,  v1.8b,   v4.8b   // top[base+1]*frac
-        umlal           v16.8h,  v0.8b,   v6.8b   // + top[base]*(64-frac)
-        umull           v17.8h,  v3.8b,   v5.8b
-        umlal           v17.8h,  v2.8b,   v7.8b
+        umull           v16.8h,  v0.8b,   v6.8b   // top[base]*(64-frac)
+        umlal           v16.8h,  v1.8b,   v4.8b   // + top[base+1]*frac
+        umull           v17.8h,  v2.8b,   v7.8b
+        umlal           v17.8h,  v3.8b,   v5.8b
         rshrn           v16.8b,  v16.8h,  #6
         rshrn           v17.8b,  v17.8h,  #6
         st1             {v16.8b}, [x0], x1
@@ -1723,14 +1723,14 @@ function ipred_z1_fill1_8bpc_neon, export=1
         ext             v16.16b, v0.16b,  v1.16b,  #1 // top[base+1]
         ext             v17.16b, v2.16b,  v3.16b,  #1
         subs            w3,  w3,  #16
-        umull           v18.8h,  v16.8b,  v4.8b   // top[base+1]*frac
-        umlal           v18.8h,  v0.8b,   v6.8b   // + top[base]*(64-frac)
-        umull2          v19.8h,  v16.16b, v4.16b
-        umlal2          v19.8h,  v0.16b,  v6.16b
-        umull           v20.8h,  v17.8b,  v5.8b
-        umlal           v20.8h,  v2.8b,   v7.8b
-        umull2          v21.8h,  v17.16b, v5.16b
-        umlal2          v21.8h,  v2.16b,  v7.16b
+        umull           v18.8h,  v0.8b,   v6.8b   // top[base]*(64-frac)
+        umlal           v18.8h,  v16.8b,  v4.8b   // + top[base+1]*frac
+        umull2          v19.8h,  v0.16b,  v6.16b
+        umlal2          v19.8h,  v16.16b, v4.16b
+        umull           v20.8h,  v2.8b,   v7.8b
+        umlal           v20.8h,  v17.8b,  v5.8b
+        umull2          v21.8h,  v2.16b,  v7.16b
+        umlal2          v21.8h,  v17.16b, v5.16b
         rshrn           v16.8b,  v18.8h,  #6
         rshrn2          v16.16b, v19.8h,  #6
         rshrn           v17.8b,  v20.8h,  #6
