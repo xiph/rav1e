@@ -539,9 +539,9 @@ dependencies = [
 
 [[package]]
 name = "dav1d-sys"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0b22f9bfc5eeaf31fd30ea679b9e35b6ed25a4db6f45c51fea5b96d9d96ff99"
+checksum = "615542bb14c18b795f46aba92258902168218d714090f5fff47e68c9a352ea2d"
 dependencies = [
  "libc",
  "system-deps",
