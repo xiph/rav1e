@@ -1481,11 +1481,10 @@ function ipred_z1_filter_edge_8bpc_neon, export=1
         sub             x5,  x5,  w3,  uxtw
         add             x6,  x2,  w6,  sxtw
 
-        ld1             {v2.16b, v3.16b}, [x5]    // padding_mask
+        ld1             {v2.16b}, [x5]            // padding_mask
 
-        ld1r            {v4.16b}, [x6]
-        bit             v0.16b,  v4.16b,  v2.16b  // Pad v0-v1
-        bit             v1.16b,  v4.16b,  v3.16b
+        ld1r            {v1.16b}, [x6]
+        bit             v0.16b,  v1.16b,  v2.16b  // Pad v0-v1
 
         // Filter one block
         ext             v2.16b,  v0.16b,  v1.16b,  #1
