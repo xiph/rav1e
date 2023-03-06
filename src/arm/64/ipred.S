@@ -1597,6 +1597,17 @@ L(fivetap):
         ret
 endfunc
 
+// void ipred_pixel_set_8bpc_neon(pixel *out, const pixel px,
+//                                const int n);
+function ipred_pixel_set_8bpc_neon, export=1
+        dup             v0.16b,  w1
+1:
+        subs            w2,  w2,  #16
+        st1             {v0.16b}, [x0], #16
+        b.gt            1b
+        ret
+endfunc
+
 // void ipred_z1_fill1_8bpc_neon(pixel *dst, const ptrdiff_t stride,
 //                               const pixel *const top,
 //                               const int width, const int height,
