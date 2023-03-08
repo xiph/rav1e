@@ -1908,6 +1908,7 @@ function ipred_z3_fill1_8bpc_neon, export=1
         mul             v30.4h,  v30.4h,  v29.4h  // {0,1,2,3,4,5,6,7}*dy
         movi            v23.16b, #0x3e
 
+        // Worst case max_base_y is width+height-1, for w=4, h=16, <= 32
         ld1             {v0.16b, v1.16b}, [x2] // left[]
         add             v30.4h,  v29.4h,  v30.4h  // ypos
 
@@ -1957,7 +1958,8 @@ function ipred_z3_fill1_8bpc_neon, export=1
         mul             v30.8h,  v30.8h,  v29.8h  // {0,1,2,3,4,5,6,7}*dy
         movi            v23.16b, #0x3e
 
-        ld1             {v0.16b, v1.16b, v2.16b, v3.16b}, [x2] // left[]
+        // Worst case max_base_y is width+height-1, for w=8, h=32, <= 48
+        ld1             {v0.16b, v1.16b, v2.16b}, [x2] // left[]
         add             v30.8h,  v29.8h,  v30.8h  // ypos
 
         movi            v22.16b, #64
@@ -1973,12 +1975,12 @@ function ipred_z3_fill1_8bpc_neon, export=1
         uqadd           v28.8b,  v26.8b,  v21.8b  // base + 2
         sub             v25.8b,  v22.8b,  v24.8b  // 64 - frac
 
-        tbx             v4.8b, {v0.16b, v1.16b, v2.16b, v3.16b}, v26.8b // left[base]
+        tbx             v4.8b, {v0.16b, v1.16b, v2.16b}, v26.8b // left[base]
 1:
         mov             v5.8b,   v31.8b
         mov             v6.8b,   v31.8b
-        tbx             v5.8b, {v0.16b, v1.16b, v2.16b, v3.16b}, v27.8b // left[base+1]
-        tbx             v6.8b, {v0.16b, v1.16b, v2.16b, v3.16b}, v28.8b // left[base+2]
+        tbx             v5.8b, {v0.16b, v1.16b, v2.16b}, v27.8b // left[base+1]
+        tbx             v6.8b, {v0.16b, v1.16b, v2.16b}, v28.8b // left[base+2]
 
         umull           v16.8h,  v4.8b,   v25.8b  // left[base]*(64-frac)
         umlal           v16.8h,  v5.8b,   v24.8b  // + left[base+1]*frac
@@ -2007,6 +2009,7 @@ function ipred_z3_fill1_8bpc_neon, export=1
         mul             v30.8h,  v30.8h,  v28.8h  // {0,1,2,3,4,5,6,7}*dy
         movi            v23.16b, #0x3e
 
+        // This is only executed if we've checked that max_base_y <= 64.
         ld1             {v0.16b, v1.16b, v2.16b, v3.16b}, [x2] // left[]
         add             v28.8h,  v28.8h,  v30.8h  // ypos
 
@@ -2074,6 +2077,7 @@ function ipred_z3_fill1_8bpc_neon, export=1
         sub             x1,  x1,  w3,  uxtw
         add             v30.8h,  v28.8h,  v30.8h  // ypos
 
+        // This is only executed if we've checked that max_base_y <= 64.
         ld1             {v0.16b, v1.16b, v2.16b, v3.16b}, [x2] // left[]
 
         movi            v22.16b, #64
@@ -2379,6 +2383,8 @@ function ipred_z3_fill2_8bpc_neon, export=1
         mul             v30.4h,  v30.4h,  v29.4h  // {0,1,2,3,4,5,6,7}*dy
         movi            v23.16b, #0x3e
 
+        // Worst case max_base_y is 2*(width+height)-2, but width+height <= 16,
+        // so max_base_y <= 32.
         ld1             {v0.16b, v1.16b}, [x2] // left[]
         add             v30.4h,  v29.4h,  v30.4h  // ypos
 
@@ -2428,6 +2434,8 @@ function ipred_z3_fill2_8bpc_neon, export=1
         mul             v30.8h,  v30.8h,  v29.8h  // {0,1,2,3,4,5,6,7}*dy
         movi            v23.16b, #0x3e
 
+        // Worst case max_base_y is 2*(width+height)-2, but width+height <= 16,
+        // so max_base_y <= 32.
         ld1             {v0.16b, v1.16b}, [x2] // left[]
         add             v30.8h,  v29.8h,  v30.8h  // ypos
 
