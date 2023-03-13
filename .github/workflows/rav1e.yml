@@ -198,8 +198,11 @@ jobs:
           cargo check --features=unstable,channel-api
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_UNSTABLE_SPARSE_REGISTRY: false
         run: |
-          cargo cbuild
+          cargo fetch
+          cargo cbuild --offline
       - name: Install cargo-fuzz
         if: matrix.conf == 'fuzz'
         run: |
@@ -328,8 +331,11 @@ jobs:
           cargo test --workspace --verbose --target=${{ matrix.target }}
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_UNSTABLE_SPARSE_REGISTRY: false
         run: |
-          cargo cbuild --target=${{ matrix.target }}
+          cargo fetch
+          cargo cbuild --target=${{ matrix.target }} --offline
       - name: Stop sccache server
         run: |
           sccache --stop-server
@@ -407,8 +413,11 @@ jobs:
           cargo test --workspace --verbose
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_UNSTABLE_SPARSE_REGISTRY: false
         run: |
-          cargo cbuild
+          cargo fetch
+          cargo cbuild --offline
       - name: Stop sccache server
         run: |
           sccache --stop-server
