@@ -198,6 +198,8 @@ jobs:
           cargo check --features=unstable,channel-api
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
           cargo cbuild --offline
@@ -329,6 +331,8 @@ jobs:
           cargo test --workspace --verbose --target=${{ matrix.target }}
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
           cargo cbuild --target=${{ matrix.target }} --offline
@@ -409,6 +413,8 @@ jobs:
           cargo test --workspace --verbose
       - name: Run cargo-c
         if: matrix.conf == 'cargo-c'
+        env:
+          CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
           cargo cbuild --offline
