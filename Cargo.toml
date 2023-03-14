@@ -3,16 +3,16 @@ name = "rav1e"
 version = "0.6.1"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
-rust-version = "1.60.0"
+rust-version = "1.64.0"
 build = "build.rs"
 include = [
-    "/Cargo.toml",
-    "/LICENSE",
-    "/PATENTS",
-    "/README.md",
-    "/build.rs",
-    "/cbindgen.toml",
-    "/src/**",
+  "/Cargo.toml",
+  "/LICENSE",
+  "/PATENTS",
+  "/README.md",
+  "/build.rs",
+  "/cbindgen.toml",
+  "/src/**",
 ]
 license = "BSD-2-Clause"
 description = "The fastest and safest AV1 encoder"
@@ -28,15 +28,15 @@ channel-api = ["crossbeam"]
 decode_test = ["aom-sys"]
 decode_test_dav1d = ["dav1d-sys"]
 binaries = [
-    "ivf",
-    "y4m",
-    "clap",
-    "clap_complete",
-    "scan_fmt",
-    "fern",
-    "console",
-    "av-metrics",
-    "nom",
+  "ivf",
+  "y4m",
+  "clap",
+  "clap_complete",
+  "scan_fmt",
+  "fern",
+  "console",
+  "av-metrics",
+  "nom",
 ]
 default = ["binaries", "asm", "threading", "signal_support", "git_version"]
 git_version = ["built/git2"]
@@ -70,10 +70,10 @@ arg_enum_proc_macro = "0.3"
 bitstream-io = "1"
 cfg-if = "1.0"
 clap = { version = "4.1.8", optional = true, default-features = false, features = [
-    "color",
-    "std",
-    "wrap_help",
-    "derive",
+  "color",
+  "std",
+  "wrap_help",
+  "derive",
 ] }
 clap_complete = { version = "4.1.4", optional = true }
 libc = "0.2"
