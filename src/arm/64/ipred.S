@@ -2358,7 +2358,7 @@ L(ipred_z3_fill_padding_wide):
         st1             {v31.16b}, [x0], #16
         b.gt            2b
         subs            w4,  w4,  #1
-        add             x0,  x0, x1
+        add             x0,  x0,  x1
         b.le            9f
         mov             w3,  w12
         b               1b
