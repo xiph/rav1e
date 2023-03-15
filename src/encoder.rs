@@ -105,18 +105,13 @@ impl<T: Pixel> ReferenceFramesSet<T> {
 
 #[wasm_bindgen]
 #[derive(
-  ArgEnum, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize,
+  ArgEnum, Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default,
 )]
 #[repr(C)]
 pub enum Tune {
   Psnr,
+  #[default]
   Psychovisual,
-}
-
-impl Default for Tune {
-  fn default() -> Self {
-    Tune::Psychovisual
-  }
 }
 
 const FRAME_ID_LENGTH: u32 = 15;

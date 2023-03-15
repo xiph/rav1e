@@ -25,19 +25,14 @@ const LUMA_PADDING: usize = SB_SIZE + FRAME_MARGIN;
 /// Override the frame type decision
 ///
 /// Only certain frame types can be selected.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, FromPrimitive, Default)]
 #[repr(C)]
 pub enum FrameTypeOverride {
   /// Do not force any decision.
+  #[default]
   No,
   /// Force the frame to be a Keyframe.
   Key,
-}
-
-impl Default for FrameTypeOverride {
-  fn default() -> Self {
-    FrameTypeOverride::No
-  }
 }
 
 /// Optional per-frame encoder parameters

@@ -123,17 +123,17 @@ impl IntegralImageBuffer {
 }
 
 #[allow(unused)] // Wiener coming soon!
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum RestorationFilter {
+  #[default]
   None,
-  Wiener { coeffs: [[i8; 3]; 2] },
-  Sgrproj { set: u8, xqd: [i8; 2] },
-}
-
-impl Default for RestorationFilter {
-  fn default() -> RestorationFilter {
-    RestorationFilter::None
-  }
+  Wiener {
+    coeffs: [[i8; 3]; 2],
+  },
+  Sgrproj {
+    set: u8,
+    xqd: [i8; 2],
+  },
 }
 
 impl RestorationFilter {

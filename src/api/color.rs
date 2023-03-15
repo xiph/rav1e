@@ -16,24 +16,27 @@ use num_derive::FromPrimitive;
 /// Sample position for subsampled chroma
 #[wasm_bindgen]
 #[derive(
-  Copy, Clone, Debug, PartialEq, Eq, FromPrimitive, Serialize, Deserialize,
+  Copy,
+  Clone,
+  Debug,
+  PartialEq,
+  Eq,
+  FromPrimitive,
+  Serialize,
+  Deserialize,
+  Default,
 )]
 #[repr(C)]
 pub enum ChromaSamplePosition {
   /// The source video transfer function must be signaled
   /// outside the AV1 bitstream.
+  #[default]
   Unknown,
   /// Horizontally co-located with (0, 0) luma sample, vertically positioned
   /// in the middle between two luma samples.
   Vertical,
   /// Co-located with (0, 0) luma sample.
   Colocated,
-}
-
-impl Default for ChromaSamplePosition {
-  fn default() -> Self {
-    ChromaSamplePosition::Unknown
-  }
 }
 
 pub use v_frame::pixel::ChromaSampling;
@@ -51,12 +54,14 @@ pub use v_frame::pixel::ChromaSampling;
   FromPrimitive,
   Serialize,
   Deserialize,
+  Default,
 )]
 #[repr(C)]
 pub enum ColorPrimaries {
   /// BT.709
   BT709 = 1,
   /// Unspecified, must be signaled or inferred outside of the bitstream
+  #[default]
   Unspecified,
   /// BT.470 System M (historical)
   BT470M = 4,
@@ -80,12 +85,6 @@ pub enum ColorPrimaries {
   EBU3213 = 22,
 }
 
-impl Default for ColorPrimaries {
-  fn default() -> Self {
-    ColorPrimaries::Unspecified
-  }
-}
-
 /// Supported Transfer Characteristics
 ///
 /// As defined by “Transfer characteristics” section of ISO/IEC 23091-4/ITU-TH.273.
@@ -99,12 +98,14 @@ impl Default for ColorPrimaries {
   FromPrimitive,
   Serialize,
   Deserialize,
+  Default,
 )]
 #[repr(C)]
 pub enum TransferCharacteristics {
   /// BT.709
   BT709 = 1,
   /// Unspecified, must be signaled or inferred outside of the bitstream
+  #[default]
   Unspecified,
   /// BT.470 System M (historical)
   BT470M = 4,
@@ -138,12 +139,6 @@ pub enum TransferCharacteristics {
   HLG,
 }
 
-impl Default for TransferCharacteristics {
-  fn default() -> Self {
-    TransferCharacteristics::Unspecified
-  }
-}
-
 /// Matrix coefficients
 ///
 /// As defined by the “Matrix coefficients” section of ISO/IEC 23091-4/ITU-TH.273.
@@ -157,6 +152,7 @@ impl Default for TransferCharacteristics {
   FromPrimitive,
   Serialize,
   Deserialize,
+  Default,
 )]
 #[repr(C)]
 pub enum MatrixCoefficients {
@@ -165,6 +161,7 @@ pub enum MatrixCoefficients {
   /// BT.709
   BT709,
   /// Unspecified, must be signaled or inferred outside of the bitstream.
+  #[default]
   Unspecified,
   /// US FCC 73.628
   FCC = 4,
@@ -188,12 +185,6 @@ pub enum MatrixCoefficients {
   ChromatCL,
   /// BT.2020 ICtCp
   ICtCp,
-}
-
-impl Default for MatrixCoefficients {
-  fn default() -> Self {
-    MatrixCoefficients::Unspecified
-  }
 }
 
 /// Signal the content color description
@@ -229,19 +220,15 @@ impl ColorDescription {
   FromPrimitive,
   Serialize,
   Deserialize,
+  Default,
 )]
 #[repr(C)]
 pub enum PixelRange {
   /// Studio swing representation
+  #[default]
   Limited,
   /// Full swing representation
   Full,
-}
-
-impl Default for PixelRange {
-  fn default() -> Self {
-    PixelRange::Limited
-  }
 }
 
 /// High dynamic range content light level
