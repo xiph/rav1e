@@ -1899,7 +1899,7 @@ function ipred_z3_fill1_8bpc_neon, export=1
         ld1r            {v31.16b}, [x10]          // padding
         ld1             {v30.8h},  [x11]          // increments
         mov             w7,  w5
-        b.gt            L(ipred_z3_fill1_large_w16)
+        b.gt            L(ipred_z3_fill1_large_h16)
         br              x8
 
 40:
@@ -2146,7 +2146,7 @@ function ipred_z3_fill1_8bpc_neon, export=1
 9:
         ret
 
-L(ipred_z3_fill1_large_w16):
+L(ipred_z3_fill1_large_h16):
         // Fallback case for max_base_y > 64; similar to the z1
         // implementation. This does the filtering vertically, filling out
         // a 2x pixel column at a time.
