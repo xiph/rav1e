@@ -68,9 +68,10 @@ pub static RAV1E_INTER_COMPOUND_MODES: &[PredictionMode] = &[
 
 // There are more modes than in the spec because every allowed
 // drl index for NEAR modes is considered its own mode.
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Default)]
 pub enum PredictionMode {
-  DC_PRED,     // Average of above and left pixels
+  #[default]
+  DC_PRED, // Average of above and left pixels
   V_PRED,      // Vertical
   H_PRED,      // Horizontal
   D45_PRED,    // Directional 45  degree
@@ -128,13 +129,6 @@ impl PredictionVariant {
       (0, _) => PredictionVariant::TOP,
       _ => PredictionVariant::BOTH,
     }
-  }
-}
-
-impl Default for PredictionMode {
-  #[inline]
-  fn default() -> Self {
-    PredictionMode::DC_PRED
   }
 }
 
