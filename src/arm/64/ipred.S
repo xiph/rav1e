@@ -2367,16 +2367,11 @@ L(ipred_z3_fill_padding_wide):
 endfunc
 
 function ipred_z3_fill2_8bpc_neon, export=1
-        adr             x8,  L(ipred_z3_fill1_tbl)
+        cmp             w3,  #8
         add             x10, x2,  w6,  uxtw       // left[max_base_y]
         movrel          x11, increments
         ld1r            {v31.16b}, [x10]          // padding
         ld1             {v30.8h},  [x11]          // increments
-        mov             w7,  w5
-
-        cmp             w3,  #8
-        add             x10, x2,  w6,  uxtw       // left[max_base_y]
-        ld1r            {v31.16b}, [x10]          // padding
         b.eq            80f
 
 40:     // w == 4
