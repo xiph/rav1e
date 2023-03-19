@@ -611,6 +611,11 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
       let dst = self.data.as_mut_ptr().add(len) as *mut u16;
       let base = fc as *mut _ as *mut u8;
       let src = base.add(cdf.offset) as *const u16;
+      // When CDF_LEN + 1 < CDF_LEN_MAX_PLUS_1, this reads beyond the end of
+      // the slice described by `cdf`.
+      // Since it is part of `CDFContext`, the out-of-bounds data is valid.
+      // We conform to the stacked-borrows memory model by holding a mutable
+      // ref to the containing data structure.
       dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
       *dst.add(CDF_LEN_MAX_PLUS_1 - 1) = cdf.offset as u16;
       self.data.set_len(new_len);
@@ -630,10 +635,15 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
     unsafe {
       let mut src = self.data.as_mut_ptr().add(len);
       while len > checkpoint {
+        // As checkpoint is unsigned, len > 0 is implied.
         len -= 1;
         src = src.sub(1);
         let src = src as *mut u16;
         let offset = *src.add(CDF_LEN_MAX_PLUS_1 - 1) as usize;
+        debug_assert!(
+          offset + (CDF_LEN_MAX_PLUS_1 - 1) * mem::size_of::<u16>()
+            <= mem::size_of::<CDFContext>()
+        );
         let dst = base.add(offset) as *mut u16;
         dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
       }

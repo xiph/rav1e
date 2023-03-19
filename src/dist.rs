@@ -142,11 +142,13 @@ pub(crate) mod rust {
 
   // SAFETY: The length of data must be 16.
   unsafe fn hadamard4x4(data: &mut [i32]) {
+    debug_assert_eq!(data.len(), 16);
     hadamard2d::<{ 4 * 4 }, 4, 4>(&mut *(data.as_mut_ptr() as *mut [i32; 16]));
   }
 
   // SAFETY: The length of data must be 64.
   unsafe fn hadamard8x8(data: &mut [i32]) {
+    debug_assert_eq!(data.len(), 64);
     hadamard2d::<{ 8 * 8 }, 8, 8>(&mut *(data.as_mut_ptr() as *mut [i32; 64]));
   }
 
@@ -166,6 +168,7 @@ pub(crate) mod rust {
     // Size of hadamard transform should be 4x4 or 8x8
     // 4x* and *x4 use 4x4 and all other use 8x8
     let size: usize = w.min(h).min(8);
+    debug_assert!(size == 4 || size == 8);
     let tx2d = if size == 4 { hadamard4x4 } else { hadamard8x8 };
 
     let mut sum: u64 = 0;
