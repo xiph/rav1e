@@ -182,10 +182,10 @@ pub(crate) mod rust {
     let n: usize = d * d;
     let one_over_n = if r == 1 { 455 } else { 164 };
 
-    assert!(iimg.len() > (y + d) * iimg_stride + stripe_w + d);
-    assert!(iimg_sq.len() > (y + d) * iimg_stride + stripe_w + d);
-    assert!(af.len() > stripe_w);
-    assert!(bf.len() > stripe_w);
+    assert!(iimg.len() > (y + d) * iimg_stride + stripe_w + 1 + d);
+    assert!(iimg_sq.len() > (y + d) * iimg_stride + stripe_w + 1 + d);
+    assert!(af.len() > stripe_w + 1);
+    assert!(bf.len() > stripe_w + 1);
 
     for x in start_x..stripe_w + 2 {
       // SAFETY: We perform the bounds checks above, once for the whole loop
