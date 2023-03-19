@@ -6,7 +6,8 @@
     ":automergePr",
     ":automergeRequireAllStatusChecks",
     ":enableVulnerabilityAlerts",
-    "group:allNonMajor"
+    "group:allNonMajor",
+    "schedule:earlyMondays"
   ],
   "fetchReleaseNotes": true
 }
