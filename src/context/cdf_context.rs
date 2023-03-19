@@ -600,7 +600,7 @@ trait CDFContextLogOps: CDFContextLogSize {
       let new_len = len + Self::CDF_LEN_MAX + 1;
       let capacity = log.data.capacity();
       debug_assert!(new_len <= capacity);
-      let dst = log.data.get_unchecked_mut(len) as *mut u16;
+      let dst = log.data.as_mut_ptr().add(len);
       dst.copy_from_nonoverlapping(cdf.as_ptr(), Self::CDF_LEN_MAX);
       *dst.add(Self::CDF_LEN_MAX) = offset as u16;
       log.data.set_len(new_len);
@@ -618,7 +618,7 @@ trait CDFContextLogOps: CDFContextLogSize {
     // SAFETY: We use unchecked pointers here for performance.
     // Since we know the length, we can ensure not to go OOB.
     unsafe {
-      let mut src = log.data.get_unchecked_mut(len) as *mut u16;
+      let mut src = log.data.as_mut_ptr().add(len);
       while len > checkpoint {
         len -= Self::CDF_LEN_MAX + 1;
         src = src.sub(Self::CDF_LEN_MAX + 1);
