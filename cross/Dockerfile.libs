@@ -1,0 +1,4 @@
+ARG CROSS_BASE_IMAGE
+FROM $CROSS_BASE_IMAGE
+
+ENTRYPOINT ["cross/entrypoint-build-libs.sh"]
