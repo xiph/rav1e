@@ -73,7 +73,7 @@ jobs:
          - conf: gnu
            name: gnu-avx2
            toolchain: stable
-           profile: release
+           profile: release-strip
            target_cpu: x86-64-v3
 
     if: github.repository_owner == 'xiph'
@@ -99,10 +99,6 @@ jobs:
       env:
         RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
       run: cargo build --profile ${{ matrix.profile }}
-
-    - name: Strip rav1e gnu-binary
-      if: matrix.conf == 'gnu'
-      run: strip target/${{ matrix.profile }}/rav1e.exe
 
     - name: Run cargo-c
       env:
@@ -161,8 +157,10 @@ jobs:
 
   linux-binaries:
     strategy:
+      fail-fast: false
       matrix:
         target:
+         - i686-unknown-linux-musl
          - x86_64-unknown-linux-musl
          - aarch64-unknown-linux-musl
         target_cpu:
@@ -170,27 +168,27 @@ jobs:
          - x86-64
          - x86-64-v2
          - x86-64-v3
+        build:
+         - binary
+         - sdk
         include:
-         - target: x86_64-unknown-linux-musl
-           name: linux-generic
-           binaries: rav1e
-           strip: strip
-           target_cpu: x86-64
-         - target: x86_64-unknown-linux-musl
-           name: linux-sse4
-           binaries: rav1e
-           strip: strip
-           target_cpu: x86-64-v2
-         - target: x86_64-unknown-linux-musl
-           name: linux-avx2
-           binaries: rav1e
-           strip: strip
-           target_cpu: x86-64-v3
+         - build: binary
+           pkgname: rav1e
+         - build: sdk
+           pkgname: librav1e
+         - target: i686-unknown-linux-musl
+           name: linux-i686
          - target: aarch64-unknown-linux-musl
-           target_cpu: default
            name: linux-aarch64
-           binaries: rav1e
-           strip: aarch64-linux-gnu-strip
+         - target: x86_64-unknown-linux-musl
+           target_cpu: x86-64
+           name: linux-generic
+         - target: x86_64-unknown-linux-musl
+           target_cpu: x86-64-v2
+           name: linux-sse4
+         - target: x86_64-unknown-linux-musl
+           target_cpu: x86-64-v3
+           name: linux-avx2
         exclude:
          - target: x86_64-unknown-linux-musl
            target_cpu: default
@@ -200,25 +198,21 @@ jobs:
            target_cpu: x86-64-v2
          - target: aarch64-unknown-linux-musl
            target_cpu: x86-64-v3
+         - target: i686-unknown-linux-musl
+           target_cpu: x86-64
+         - target: i686-unknown-linux-musl
+           target_cpu: x86-64-v2
+         - target: i686-unknown-linux-musl
+           target_cpu: x86-64-v3
 
     if: github.repository_owner == 'xiph'
     runs-on: ubuntu-latest
 
+    name: linux-binaries (${{ matrix.build }}, ${{ matrix.name }})
+
     steps:
     - uses: actions/checkout@v3
     - uses: ilammy/setup-nasm@v1
-
-    - name: Install musl tools
-      if: matrix.target != 'wasm32-unknown-unknown'
-      run: |
-        sudo apt-get update
-        sudo apt-get install musl-tools
-
-    - name: Install aarch64 tools
-      if: matrix.target == 'aarch64-unknown-linux-musl'
-      run: |
-        sudo apt-get update
-        sudo apt-get install binutils-aarch64-linux-gnu
 
     - name: Install ${{ matrix.target }} target
       uses: dtolnay/rust-toolchain@stable
@@ -226,69 +220,132 @@ jobs:
         target: ${{ matrix.target }}
 
     - name: Install cross
-      if: matrix.target == 'aarch64-unknown-linux-musl'
+      if: matrix.target != 'x86_64-unknown-linux-musl'
       env:
-        LINK: https://github.com/rust-embedded/cross/releases/download
-        CROSS_VERSION: 0.2.0
-        CROSS_FILE: cross-v0.2.0-x86_64-unknown-linux-musl
+        LINK: https://github.com/cross-rs/cross/releases/download
+        CROSS_VERSION: 0.2.5
+        CROSS_FILE: cross-x86_64-unknown-linux-musl
       run: |
         curl -L "$LINK/v$CROSS_VERSION/$CROSS_FILE.tar.gz" |
         tar xz -C $HOME/.cargo/bin
 
-    - name: Build rav1e for aarch64-musl
-      if: matrix.target == 'aarch64-unknown-linux-musl'
-      run: cross build --target ${{ matrix.target }} --release
+    - name: Install cargo-c
+      if: matrix.build == 'sdk'
+      env:
+        LINK: https://github.com/lu-zero/cargo-c/releases/latest/download
+        CARGO_C_FILE: cargo-c-x86_64-unknown-linux-musl.tar.gz
+      run: |
+        curl -L $LINK/$CARGO_C_FILE | tar xz -C ~/.cargo/bin
+
+    - name: Build rav1e for non-native architectures
+      if: matrix.build == 'binary' && matrix.target != 'x86_64-unknown-linux-musl'
+      run: cross build --target ${{ matrix.target }} --profile release-strip
+
+    - name: Build librav1e for non-native architectures
+      if: matrix.build == 'sdk' && matrix.target != 'x86_64-unknown-linux-musl'
+      env:
+        # We get around cross's lack of support for third-party subcommands by
+        # defining a custom Dockerfile whose entrypoint rewrites the
+        # "cargo build" command to "cargo cbuild"
+        CROSS_BUILD_DOCKERFILE: ./cross/Dockerfile.libs
+        CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS:
+          "-C target-feature=-crt-static"
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS:
+          "-C target-feature=-crt-static"
+      run: |
+        cp ~/.cargo/bin/cargo-c* $(dirname $(rustup which cargo))
+        cross build --target ${{ matrix.target }} --profile release-strip
 
     - name: Build rav1e
-      if: matrix.target != 'aarch64-unknown-linux-musl'
+      if: matrix.build == 'binary' && matrix.target == 'x86_64-unknown-linux-musl'
       env:
         RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
-      run: cargo build --target ${{ matrix.target }} --release
+      run: cargo build --target ${{ matrix.target }} --profile release-strip
 
-    - name: Strip musl rav1e
-      if: matrix.target != 'wasm32-unknown-unknown'
-      run: ${{ matrix.strip }} target/${{ matrix.target }}/release/rav1e
+    - name: Build librav1e
+      if: matrix.build == 'sdk' && matrix.target == 'x86_64-unknown-linux-musl'
+      env:
+        RUSTFLAGS:
+          "-C target-feature=-crt-static -C target-cpu=${{ matrix.target_cpu }}"
+      run: |
+        cargo cbuild --target ${{ matrix.target }} \
+          --library-type staticlib \
+          --library-type cdylib \
+          --profile release-strip
 
-    - name: Get the version
+    - name: Get pre-release artifact filename
+      if: |
+        startsWith(github.ref, 'refs/tags/p') ||
+        github.event_name == 'schedule'
+      run: |
+        echo "ARTIFACT_FILE=${{ matrix.pkgname }}-${{ matrix.name }}.tar.gz" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=${{ matrix.pkgname }} (${{ matrix.name }})" >> $GITHUB_ENV
+
+    - name: Get release artifact filename
       if: startsWith(github.ref, 'refs/tags/v')
-      id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "ARTIFACT_FILE=${{ matrix.pkgname }}-$VERSION-${{ matrix.name }}.tar.gz" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=${{ matrix.pkgname }} $VERSION (${{ matrix.name }})" >> $GITHUB_ENV
 
-    - name: Create a pre-release tar
+    - name: Create a binary tar
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        matrix.build == 'binary' &&
+          (startsWith(github.ref, 'refs/tags/p') ||
+           startsWith(github.ref, 'refs/tags/v') ||
+           github.event_name == 'schedule')
       run: |
-        cd target/${{ matrix.target }}/release
-        tar -czvf $GITHUB_WORKSPACE/rav1e-${{ matrix.name }}.tar.gz \
-                  ${{ matrix.binaries }}
+        cd target/${{ matrix.target }}/release-strip
+        tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE rav1e
 
-    - name: Create a release tar
-      if: startsWith(github.ref, 'refs/tags/v')
-      run: |
-        TAR_FILE=rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}
-        cd target/${{ matrix.target }}/release
-        tar -czvf $GITHUB_WORKSPACE/$TAR_FILE.tar.gz ${{ matrix.binaries }}
-
-    - name: Upload pre-release binaries
+    - name: Create a lib tar
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        matrix.build == 'sdk' &&
+          (startsWith(github.ref, 'refs/tags/p') ||
+           startsWith(github.ref, 'refs/tags/v') ||
+           github.event_name == 'schedule')
+      run: |
+        mkdir -p dist/{include/rav1e,lib/pkgconfig}
+        cp target/${{ matrix.target }}/release-strip/rav1e.h dist/include/rav1e/
+        cp target/${{ matrix.target }}/release-strip/librav1e.{a,so} dist/lib/
+        cp target/${{ matrix.target }}/release-strip/rav1e.pc dist/lib/pkgconfig
+        cd dist
+        tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE *
+
+    - name: Upload artifact
+      if: >
+        startsWith(github.ref, 'refs/tags/p') ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'schedule'
       uses: actions/upload-artifact@v3
       with:
-        name: rav1e (${{ matrix.name }})
-        path: rav1e-${{ matrix.name }}.tar.gz
-
-    - name: Upload release binaries
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v3
-      with:
-        name: rav1e ${{ steps.tagName.outputs.version }} (${{ matrix.name }})
-        path: rav1e-${{ steps.tagName.outputs.version }}-${{ matrix.name }}.tar.gz
+        name: ${{ env.ARTIFACT_NAME }}
+        path: ${{ env.ARTIFACT_FILE }}
 
   macos-binaries:
     if: github.repository_owner == 'xiph'
     runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target: 
+         - x86_64-apple-darwin
+         - aarch64-apple-darwin
+        build:
+         - binary
+         - sdk
+        include:
+         - target: x86_64-apple-darwin
+           name: macos
+         - target: aarch64-apple-darwin
+           name: macos-aarch64
+         - build: binary
+           pkgname: rav1e
+           ext: zip
+         - build: sdk
+           pkgname: librav1e
+           ext: tar.gz
 
     steps:
     - uses: actions/checkout@v3
@@ -296,50 +353,81 @@ jobs:
     - name: Install nasm
       run: brew install nasm
 
-    - name: Install stable
+    - name: Install ${{ matrix.target }} target
       uses: dtolnay/rust-toolchain@stable
+      with:
+        target: ${{ matrix.target }}
+
+    - name: Install cargo-c
+      if: matrix.build == 'sdk'
+      env:
+        LINK: https://github.com/lu-zero/cargo-c/releases/latest/download
+        CARGO_C_FILE: cargo-c-macos.zip
+      run: |
+        curl -sLo cargo-c-macos.zip $LINK/$CARGO_C_FILE
+        unzip -o cargo-c-macos.zip -d ~/.cargo/bin
+        rm cargo-c-macos.zip
 
     - name: Build rav1e
-      run: cargo build --release
+      if: matrix.build == 'binary'
+      run: cargo build --target ${{ matrix.target }} --profile release-strip
 
-    - name: Strip rav1e
-      run: strip target/release/rav1e
+    - name: Build librav1e
+      if: matrix.build == 'sdk'
+      run: |
+        cargo cbuild --target ${{ matrix.target }} \
+          --library-type staticlib \
+          --library-type cdylib \
+          --profile release-strip
 
-    - name: Get the version
+    - name: Get pre-release artifact filename
+      if: |
+        startsWith(github.ref, 'refs/tags/p') ||
+        github.event_name == 'schedule'
+      run: |
+        echo "ARTIFACT_FILE=${{ matrix.pkgname }}-${{ matrix.name }}.${{ matrix.ext }}" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=${{ matrix.pkgname }} (${{ matrix.name }})" >> $GITHUB_ENV
+
+    - name: Get release artifact filename
       if: startsWith(github.ref, 'refs/tags/v')
-      id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "ARTIFACT_FILE=${{ matrix.pkgname }}-$VERSION-${{ matrix.name }}.${{ matrix.ext }}" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=${{ matrix.pkgname }} $VERSION (${{ matrix.name }})" >> $GITHUB_ENV
 
-    - name: Create a pre-release zip
+    - name: Create a binary zip
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        matrix.build == 'binary' &&
+          (startsWith(github.ref, 'refs/tags/p') ||
+           startsWith(github.ref, 'refs/tags/v') ||
+           github.event_name == 'schedule')
       run: |
-        cd target/release
-        zip -9 $GITHUB_WORKSPACE/rav1e-macos.zip rav1e
+        cd target/${{ matrix.target }}/release-strip
+        zip -9 $GITHUB_WORKSPACE/$ARTIFACT_FILE rav1e
 
-    - name: Create a release zip
-      if: startsWith(github.ref, 'refs/tags/v')
-      run: |
-        ZIP_FILE=rav1e-${{ steps.tagName.outputs.version }}-macos.zip
-        cd target/release
-        zip -9 $GITHUB_WORKSPACE/$ZIP_FILE rav1e
-
-    - name: Upload pre-release binaries
+    - name: Create a lib tar
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        matrix.build == 'sdk' &&
+          (startsWith(github.ref, 'refs/tags/p') ||
+           startsWith(github.ref, 'refs/tags/v') ||
+           github.event_name == 'schedule')
+      run: |
+        mkdir -p dist/{include/rav1e,lib/pkgconfig}
+        cp target/${{ matrix.target }}/release-strip/rav1e.h dist/include/rav1e/
+        cp target/${{ matrix.target }}/release-strip/librav1e.{a,dylib} dist/lib/
+        cp target/${{ matrix.target }}/release-strip/rav1e.pc dist/lib/pkgconfig
+        cd dist
+        tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE *
+
+    - name: Upload artifact
+      if: >
+        startsWith(github.ref, 'refs/tags/p') ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'schedule'
       uses: actions/upload-artifact@v3
       with:
-        name: rav1e (MacOS)
-        path: rav1e-macos.zip
-
-    - name: Upload release binaries
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v3
-      with:
-        name: rav1e ${{ steps.tagName.outputs.version }} (MacOS)
-        path: rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+        name: ${{ env.ARTIFACT_NAME }}
+        path: ${{ env.ARTIFACT_FILE }}
 
   deploy:
     needs: [windows-rav1e-ch-binary, windows-binaries, linux-binaries, macos-binaries]
@@ -381,10 +469,19 @@ jobs:
           rav1e (Windows-msvc-generic)/rav1e.exe
           rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
           rav1e (linux-generic)/rav1e-linux-generic.tar.gz
+          rav1e (linux-i686)/rav1e-linux-i686.tar.gz
           rav1e (linux-sse4)/rav1e-linux-sse4.tar.gz
           rav1e (linux-avx2)/rav1e-linux-avx2.tar.gz
           rav1e (linux-aarch64)/rav1e-linux-aarch64.tar.gz
-          rav1e (MacOS)/rav1e-macos.zip
+          rav1e (macos)/rav1e-macos.zip
+          rav1e (macos-aarch64)/rav1e-macos-aarch64.zip
+          librav1e (linux-generic)/librav1e-linux-generic.tar.gz
+          librav1e (linux-i686)/librav1e-linux-i686.tar.gz
+          librav1e (linux-sse4)/librav1e-linux-sse4.tar.gz
+          librav1e (linux-avx2)/librav1e-linux-avx2.tar.gz
+          librav1e (linux-aarch64)/librav1e-linux-aarch64.tar.gz
+          librav1e (macos)/librav1e-macos.tar.gz
+          librav1e (macos-aarch64)/librav1e-macos-aarch64.tar.gz
           rav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
           rav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
           rav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
@@ -405,10 +502,19 @@ jobs:
           rav1e (Windows-msvc-generic)/rav1e.exe
           rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
           rav1e (linux-generic)/rav1e-linux-generic.tar.gz
+          rav1e (linux-i686)/rav1e-linux-i686.tar.gz
           rav1e (linux-sse4)/rav1e-linux-sse4.tar.gz
           rav1e (linux-avx2)/rav1e-linux-avx2.tar.gz
           rav1e (linux-aarch64)/rav1e-linux-aarch64.tar.gz
-          rav1e (MacOS)/rav1e-macos.zip
+          rav1e (macos)/rav1e-macos.zip
+          rav1e (macos-aarch64)/rav1e-macos-aarch64.zip
+          librav1e (linux-generic)/librav1e-linux-generic.tar.gz
+          librav1e (linux-i686)/librav1e-linux-i686.tar.gz
+          librav1e (linux-sse4)/librav1e-linux-sse4.tar.gz
+          librav1e (linux-avx2)/librav1e-linux-avx2.tar.gz
+          librav1e (linux-aarch64)/librav1e-linux-aarch64.tar.gz
+          librav1e (macos)/librav1e-macos.tar.gz
+          librav1e (macos-aarch64)/librav1e-macos-aarch64.tar.gz
           rav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
           rav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
           rav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
@@ -428,10 +534,19 @@ jobs:
           rav1e (Windows-msvc-generic)/rav1e.exe
           rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
           rav1e ${{ steps.tagName.outputs.version }} (linux-generic)/rav1e-${{ steps.tagName.outputs.version }}-linux-generic.tar.gz
+          rav1e ${{ steps.tagName.outputs.version }} (linux-i686)/rav1e-${{ steps.tagName.outputs.version }}-linux-i686.tar.gz
           rav1e ${{ steps.tagName.outputs.version }} (linux-sse4)/rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.tar.gz
           rav1e ${{ steps.tagName.outputs.version }} (linux-avx2)/rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.tar.gz
           rav1e ${{ steps.tagName.outputs.version }} (linux-aarch64)/rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
-          rav1e ${{ steps.tagName.outputs.version }} (MacOS)/rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+          rav1e ${{ steps.tagName.outputs.version }} (macos)/rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+          rav1e ${{ steps.tagName.outputs.version }} (macos-aarch64)/rav1e-${{ steps.tagName.outputs.version }}-macos-aarch64.zip
+          librav1e ${{ steps.tagName.outputs.version }} (linux-generic)/librav1e-${{ steps.tagName.outputs.version }}-linux-generic.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (linux-i686)/librav1e-${{ steps.tagName.outputs.version }}-linux-i686.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (linux-sse4)/librav1e-${{ steps.tagName.outputs.version }}-linux-sse4.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (linux-avx2)/librav1e-${{ steps.tagName.outputs.version }}-linux-avx2.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (linux-aarch64)/librav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (macos)/librav1e-${{ steps.tagName.outputs.version }}-macos.tar.gz
+          librav1e ${{ steps.tagName.outputs.version }} (macos-aarch64)/librav1e-${{ steps.tagName.outputs.version }}-macos-aarch64.tar.gz
           rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
           rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
           rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
