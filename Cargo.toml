@@ -187,6 +187,10 @@ lto = "thin"
 inherits = "release"
 lto = "off"
 
+[profile.release-strip]
+inherits = "release"
+strip = "symbols"
+
 [profile.bench]
 incremental = true
 
