@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::*;
+use std::marker::PhantomData;
 
 pub const CDF_LEN_MAX: usize = 16;
 
@@ -92,6 +93,11 @@ pub struct CDFContext {
   pub inter_tx_1_cdf: [[u16; TX_TYPES]; TX_SIZE_SQR_CONTEXTS],
 
   pub nmv_context: NMVContext,
+}
+
+pub struct CDFOffset<const CDF_LEN: usize> {
+  offset: usize,
+  phantom: PhantomData<[u16; CDF_LEN]>,
 }
 
 impl CDFContext {
@@ -538,6 +544,15 @@ impl CDFContext {
       ("coeff_br_cdf", coeff_br_cdf_start, coeff_br_cdf_end),
     ]
   }
+
+  pub fn offset<const CDF_LEN: usize>(
+    &self, cdf: *const [u16; CDF_LEN],
+  ) -> CDFOffset<CDF_LEN> {
+    CDFOffset {
+      offset: cdf as usize - self as *const _ as usize,
+      phantom: PhantomData::default(),
+    }
+  }
 }
 
 impl fmt::Debug for CDFContext {
@@ -548,7 +563,8 @@ impl fmt::Debug for CDFContext {
 
 macro_rules! symbol_with_update {
   ($self:ident, $w:ident, $s:expr, $cdf:expr) => {
-    $w.symbol_with_update($s, $cdf, &mut $self.fc_log);
+    let cdf = $self.fc.offset($cdf);
+    $w.symbol_with_update($s, cdf, &mut $self.fc_log, &mut $self.fc);
     symbol_with_update!($self, $cdf);
   };
   ($self:ident, $cdf:expr) => {
@@ -569,21 +585,21 @@ pub struct ContextWriterCheckpoint {
 }
 
 struct CDFContextLogPartition<const CDF_LEN_MAX_PLUS_1: usize> {
-  pub base: *const CDFContext,
   pub data: Vec<[u16; CDF_LEN_MAX_PLUS_1]>,
 }
 
 impl<const CDF_LEN_MAX_PLUS_1: usize>
   CDFContextLogPartition<CDF_LEN_MAX_PLUS_1>
 {
-  fn new(fc: &CDFContext, capacity: usize) -> Self {
-    Self { base: fc as _, data: Vec::with_capacity(capacity) }
+  fn new(capacity: usize) -> Self {
+    Self { data: Vec::with_capacity(capacity) }
   }
   #[inline(always)]
-  fn push(&mut self, cdf: &[u16]) {
-    debug_assert!(cdf.len() < CDF_LEN_MAX_PLUS_1);
-    let offset = cdf.as_ptr() as usize - self.base as usize;
-    debug_assert!(offset <= u16::MAX.into());
+  fn push<const CDF_LEN: usize>(
+    &mut self, fc: &mut CDFContext, cdf: CDFOffset<CDF_LEN>,
+  ) -> &mut [u16; CDF_LEN] {
+    debug_assert!(CDF_LEN < CDF_LEN_MAX_PLUS_1);
+    debug_assert!(cdf.offset <= u16::MAX.into());
     // SAFETY: Maintain an invariant of non-zero spare capacity, so that
     // branching may be deferred until writes are issued. Benchmarks indicate
     // this is faster than first testing capacity and possibly reallocating.
@@ -593,12 +609,16 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
       let capacity = self.data.capacity();
       debug_assert!(new_len <= capacity);
       let dst = self.data.as_mut_ptr().add(len) as *mut u16;
-      dst.copy_from_nonoverlapping(cdf.as_ptr(), CDF_LEN_MAX_PLUS_1 - 1);
-      *dst.add(CDF_LEN_MAX_PLUS_1 - 1) = offset as u16;
+      let base = fc as *mut _ as *mut u8;
+      let src = base.add(cdf.offset) as *const u16;
+      dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
+      *dst.add(CDF_LEN_MAX_PLUS_1 - 1) = cdf.offset as u16;
       self.data.set_len(new_len);
       if CDF_LEN_MAX_PLUS_1 > capacity.wrapping_sub(new_len) {
         self.data.reserve(CDF_LEN_MAX_PLUS_1);
       }
+      let cdf = base.add(cdf.offset) as *mut [u16; CDF_LEN];
+      &mut *cdf
     }
   }
   #[inline(always)]
@@ -629,13 +649,16 @@ pub struct CDFContextLog {
   large: CDFContextLogPartition<{ CDF_LEN_MAX + 1 }>,
 }
 
-impl CDFContextLog {
-  pub fn new(fc: &CDFContext) -> Self {
+impl Default for CDFContextLog {
+  fn default() -> Self {
     Self {
-      small: CDFContextLogPartition::new(fc, 1 << 16),
-      large: CDFContextLogPartition::new(fc, 1 << 9),
+      small: CDFContextLogPartition::new(1 << 16),
+      large: CDFContextLogPartition::new(1 << 9),
     }
   }
+}
+
+impl CDFContextLog {
   fn checkpoint(&self) -> CDFContextCheckpoint {
     CDFContextCheckpoint {
       small: self.small.data.len(),
@@ -643,11 +666,13 @@ impl CDFContextLog {
     }
   }
   #[inline(always)]
-  pub fn push(&mut self, cdf: &[u16]) {
-    if cdf.len() <= CDF_LEN_SMALL {
-      self.small.push(cdf);
+  pub fn push<const CDF_LEN: usize>(
+    &mut self, fc: &mut CDFContext, cdf: CDFOffset<CDF_LEN>,
+  ) -> &mut [u16; CDF_LEN] {
+    if CDF_LEN <= CDF_LEN_SMALL {
+      self.small.push(fc, cdf)
     } else {
-      self.large.push(cdf);
+      self.large.push(fc, cdf)
     }
   }
   #[inline(always)]
@@ -674,7 +699,7 @@ pub struct ContextWriter<'a> {
 impl<'a> ContextWriter<'a> {
   #[allow(clippy::let_and_return)]
   pub fn new(fc: &'a mut CDFContext, bc: BlockContext<'a>) -> Self {
-    let fc_log = CDFContextLog::new(fc);
+    let fc_log = CDFContextLog::default();
     #[allow(unused_mut)]
     let mut cw = ContextWriter {
       bc,

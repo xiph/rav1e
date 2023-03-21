@@ -18,7 +18,7 @@ cfg_if::cfg_if! {
   }
 }
 
-use crate::context::CDFContextLog;
+use crate::context::{CDFContext, CDFContextLog, CDFOffset};
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
 
@@ -43,7 +43,8 @@ pub trait Writer {
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32;
   /// Write a symbol `s`, using the passed in cdf reference; updates the referenced cdf.
   fn symbol_with_update<const CDF_LEN: usize>(
-    &mut self, s: u32, cdf: &mut [u16; CDF_LEN], log: &mut CDFContextLog,
+    &mut self, s: u32, cdf: CDFOffset<CDF_LEN>, log: &mut CDFContextLog,
+    fc: &mut CDFContext,
   );
   /// Write a bool using passed in probability
   fn bool(&mut self, val: bool, f: u16);
@@ -545,7 +546,8 @@ where
   ///       must be greater 32704. There should be at most 16 values.
   ///       The lower 6 bits of the last value hold the count.
   fn symbol_with_update<const CDF_LEN: usize>(
-    &mut self, s: u32, cdf: &mut [u16; CDF_LEN], log: &mut CDFContextLog,
+    &mut self, s: u32, cdf: CDFOffset<CDF_LEN>, log: &mut CDFContextLog,
+    fc: &mut CDFContext,
   ) {
     #[cfg(feature = "desync_finder")]
     {
@@ -553,7 +555,7 @@ where
         self.print_backtrace(s);
       }
     }
-    log.push(cdf);
+    let cdf = log.push(fc, cdf);
     self.symbol(s, cdf);
 
     update_cdf(cdf, s);
