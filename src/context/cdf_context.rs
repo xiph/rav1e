@@ -572,123 +572,98 @@ pub struct ContextWriterCheckpoint {
   pub bc: BlockContextCheckpoint,
 }
 
-struct CDFContextLogBase {
+struct CDFContextLogPartition<const CDF_LEN_MAX_PLUS_1: usize> {
   pub base: *const CDFContext,
-  pub data: Vec<u16>,
+  pub data: Vec<[u16; CDF_LEN_MAX_PLUS_1]>,
 }
 
-impl CDFContextLogBase {
+impl<const CDF_LEN_MAX_PLUS_1: usize>
+  CDFContextLogPartition<CDF_LEN_MAX_PLUS_1>
+{
   fn new(fc: &CDFContext, capacity: usize) -> Self {
     Self { base: fc as _, data: Vec::with_capacity(capacity) }
   }
-}
-
-trait CDFContextLogSize {
-  const CDF_LEN_MAX: usize;
-}
-trait CDFContextLogOps: CDFContextLogSize {
   #[inline(always)]
-  fn push(log: &mut CDFContextLogBase, cdf: &[u16]) {
-    debug_assert!(cdf.len() <= Self::CDF_LEN_MAX);
-    let offset = cdf.as_ptr() as usize - log.base as usize;
+  fn push(&mut self, cdf: &[u16]) {
+    debug_assert!(cdf.len() < CDF_LEN_MAX_PLUS_1);
+    let offset = cdf.as_ptr() as usize - self.base as usize;
     debug_assert!(offset <= u16::MAX.into());
     // SAFETY: Maintain an invariant of non-zero spare capacity, so that
     // branching may be deferred until writes are issued. Benchmarks indicate
     // this is faster than first testing capacity and possibly reallocating.
     unsafe {
-      let len = log.data.len();
-      let new_len = len + Self::CDF_LEN_MAX + 1;
-      let capacity = log.data.capacity();
+      let len = self.data.len();
+      let new_len = len + 1;
+      let capacity = self.data.capacity();
       debug_assert!(new_len <= capacity);
-      let dst = log.data.as_mut_ptr().add(len);
-      dst.copy_from_nonoverlapping(cdf.as_ptr(), Self::CDF_LEN_MAX);
-      *dst.add(Self::CDF_LEN_MAX) = offset as u16;
-      log.data.set_len(new_len);
-      if Self::CDF_LEN_MAX + 1 > capacity.wrapping_sub(new_len) {
-        log.data.reserve(Self::CDF_LEN_MAX + 1);
+      let dst = self.data.as_mut_ptr().add(len) as *mut u16;
+      dst.copy_from_nonoverlapping(cdf.as_ptr(), CDF_LEN_MAX_PLUS_1 - 1);
+      *dst.add(CDF_LEN_MAX_PLUS_1 - 1) = offset as u16;
+      self.data.set_len(new_len);
+      if CDF_LEN_MAX_PLUS_1 > capacity.wrapping_sub(new_len) {
+        self.data.reserve(CDF_LEN_MAX_PLUS_1);
       }
     }
   }
   #[inline(always)]
-  fn rollback(
-    log: &mut CDFContextLogBase, fc: &mut CDFContext, checkpoint: usize,
-  ) {
+  fn rollback(&mut self, fc: &mut CDFContext, checkpoint: usize) {
     let base = fc as *mut _ as *mut u8;
-    let mut len = log.data.len();
+    let mut len = self.data.len();
     // SAFETY: We use unchecked pointers here for performance.
     // Since we know the length, we can ensure not to go OOB.
     unsafe {
-      let mut src = log.data.as_mut_ptr().add(len);
+      let mut src = self.data.as_mut_ptr().add(len);
       while len > checkpoint {
-        len -= Self::CDF_LEN_MAX + 1;
-        src = src.sub(Self::CDF_LEN_MAX + 1);
-        let offset = *src.add(Self::CDF_LEN_MAX) as usize;
+        len -= 1;
+        src = src.sub(1);
+        let src = src as *mut u16;
+        let offset = *src.add(CDF_LEN_MAX_PLUS_1 - 1) as usize;
         let dst = base.add(offset) as *mut u16;
-        dst.copy_from_nonoverlapping(src, Self::CDF_LEN_MAX);
+        dst.copy_from_nonoverlapping(src, CDF_LEN_MAX_PLUS_1 - 1);
       }
-      log.data.set_len(len);
+      self.data.set_len(len);
     }
   }
 }
 
-struct CDFContextLogSmall(CDFContextLogBase);
-struct CDFContextLogLarge(CDFContextLogBase);
-
-impl CDFContextLogOps for CDFContextLogSmall {}
-impl CDFContextLogOps for CDFContextLogLarge {}
-impl CDFContextLogSize for CDFContextLogSmall {
-  const CDF_LEN_MAX: usize = 4;
-}
-impl CDFContextLogSize for CDFContextLogLarge {
-  const CDF_LEN_MAX: usize = CDF_LEN_MAX;
-}
-impl CDFContextLogSmall {
-  fn new(fc: &CDFContext) -> Self {
-    Self(CDFContextLogBase::new(fc, 1 << 18))
-  }
-}
-impl CDFContextLogLarge {
-  fn new(fc: &CDFContext) -> Self {
-    Self(CDFContextLogBase::new(fc, 1 << 13))
-  }
-}
+const CDF_LEN_SMALL: usize = 4;
 
 pub struct CDFContextLog {
-  small: CDFContextLogSmall,
-  large: CDFContextLogLarge,
+  small: CDFContextLogPartition<{ CDF_LEN_SMALL + 1 }>,
+  large: CDFContextLogPartition<{ CDF_LEN_MAX + 1 }>,
 }
 
 impl CDFContextLog {
   pub fn new(fc: &CDFContext) -> Self {
     Self {
-      small: CDFContextLogSmall::new(fc),
-      large: CDFContextLogLarge::new(fc),
+      small: CDFContextLogPartition::new(fc, 1 << 16),
+      large: CDFContextLogPartition::new(fc, 1 << 9),
     }
   }
   fn checkpoint(&self) -> CDFContextCheckpoint {
     CDFContextCheckpoint {
-      small: self.small.0.data.len(),
-      large: self.large.0.data.len(),
+      small: self.small.data.len(),
+      large: self.large.data.len(),
     }
   }
   #[inline(always)]
   pub fn push(&mut self, cdf: &[u16]) {
-    if cdf.len() <= CDFContextLogSmall::CDF_LEN_MAX {
-      CDFContextLogSmall::push(&mut self.small.0, cdf);
+    if cdf.len() <= CDF_LEN_SMALL {
+      self.small.push(cdf);
     } else {
-      CDFContextLogLarge::push(&mut self.large.0, cdf);
+      self.large.push(cdf);
     }
   }
   #[inline(always)]
   pub fn rollback(
     &mut self, fc: &mut CDFContext, checkpoint: &CDFContextCheckpoint,
   ) {
-    CDFContextLogSmall::rollback(&mut self.small.0, fc, checkpoint.small);
-    CDFContextLogLarge::rollback(&mut self.large.0, fc, checkpoint.large);
+    self.small.rollback(fc, checkpoint.small);
+    self.large.rollback(fc, checkpoint.large);
   }
   pub fn clear(&mut self) {
-    self.small.0.data.clear();
-    self.large.0.data.clear();
+    self.small.data.clear();
+    self.large.data.clear();
   }
 }
 
