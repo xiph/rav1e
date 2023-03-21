@@ -186,7 +186,6 @@ impl<'a> ContextWriter<'a> {
   ) {
     assert!(comp != 0);
     assert!((MV_LOW..=MV_UPP).contains(&comp));
-    let mvcomp = &mut self.fc.nmv_context.comps[axis];
     let mut offset: u32 = 0;
     let sign: u32 = u32::from(comp < 0);
     let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
@@ -196,39 +195,50 @@ impl<'a> ContextWriter<'a> {
     let hp = offset & 1; // high precision mv data
 
     // Sign
-    let cdf = &mut mvcomp.sign_cdf;
-    symbol_with_update!(self, w, sign, cdf);
+    {
+      let mvcomp = &self.fc.nmv_context.comps[axis];
+      let cdf = &mvcomp.sign_cdf;
+      symbol_with_update!(self, w, sign, cdf);
+    }
 
     // Class
-    symbol_with_update!(self, w, mv_class as u32, &mut mvcomp.classes_cdf);
+    {
+      let mvcomp = &self.fc.nmv_context.comps[axis];
+      let cdf = &mvcomp.classes_cdf;
+      symbol_with_update!(self, w, mv_class as u32, cdf);
+    }
 
     // Integer bits
     if mv_class == MV_CLASS_0 {
-      let cdf = &mut mvcomp.class0_cdf;
+      let mvcomp = &self.fc.nmv_context.comps[axis];
+      let cdf = &mvcomp.class0_cdf;
       symbol_with_update!(self, w, d, cdf);
     } else {
       let n = mv_class + CLASS0_BITS - 1; // number of bits
       for i in 0..n {
-        let cdf = &mut mvcomp.bits_cdf[i];
+        let mvcomp = &self.fc.nmv_context.comps[axis];
+        let cdf = &mvcomp.bits_cdf[i];
         symbol_with_update!(self, w, (d >> i) & 1, cdf);
       }
     }
     // Fractional bits
     if precision > MvSubpelPrecision::MV_SUBPEL_NONE {
+      let mvcomp = &self.fc.nmv_context.comps[axis];
       let cdf = if mv_class == MV_CLASS_0 {
-        &mut mvcomp.class0_fp_cdf[d as usize]
+        &mvcomp.class0_fp_cdf[d as usize]
       } else {
-        &mut mvcomp.fp_cdf
+        &mvcomp.fp_cdf
       };
       symbol_with_update!(self, w, fr, cdf);
     }
 
     // High precision bit
     if precision > MvSubpelPrecision::MV_SUBPEL_LOW_PRECISION {
+      let mvcomp = &self.fc.nmv_context.comps[axis];
       let cdf = if mv_class == MV_CLASS_0 {
-        &mut mvcomp.class0_hp_cdf
+        &mvcomp.class0_hp_cdf
       } else {
-        &mut mvcomp.hp_cdf
+        &mvcomp.hp_cdf
       };
       symbol_with_update!(self, w, hp, cdf);
     }

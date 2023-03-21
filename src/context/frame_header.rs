@@ -75,7 +75,7 @@ impl<'a> ContextWriter<'a> {
 
     if fi.reference_mode != ReferenceMode::SINGLE && sz >= 2 {
       let ctx = self.get_comp_mode_ctx(bo);
-      let cdf = &mut self.fc.comp_mode_cdf[ctx];
+      let cdf = &self.fc.comp_mode_cdf[ctx];
       symbol_with_update!(self, w, comp_mode as u32, cdf);
     } else {
       assert!(!comp_mode);
@@ -84,7 +84,7 @@ impl<'a> ContextWriter<'a> {
     if comp_mode {
       let comp_ref_type: u32 = 1; // bidir
       let ctx = self.get_comp_ref_type_ctx(bo);
-      let cdf = &mut self.fc.comp_ref_type_cdf[ctx];
+      let cdf = &self.fc.comp_ref_type_cdf[ctx];
       symbol_with_update!(self, w, comp_ref_type, cdf);
 
       if comp_ref_type == 0 {
@@ -92,27 +92,27 @@ impl<'a> ContextWriter<'a> {
       } else {
         let compref = rf[0] == GOLDEN_FRAME || rf[0] == LAST3_FRAME;
         let ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
-        let cdf = &mut self.fc.comp_ref_cdf[ctx][0];
+        let cdf = &self.fc.comp_ref_cdf[ctx][0];
         symbol_with_update!(self, w, compref as u32, cdf);
         if !compref {
           let compref_p1 = rf[0] == LAST2_FRAME;
           let ctx = self.get_pred_ctx_last_or_last2(bo);
-          let cdf = &mut self.fc.comp_ref_cdf[ctx][1];
+          let cdf = &self.fc.comp_ref_cdf[ctx][1];
           symbol_with_update!(self, w, compref_p1 as u32, cdf);
         } else {
           let compref_p2 = rf[0] == GOLDEN_FRAME;
           let ctx = self.get_pred_ctx_last3_or_gold(bo);
-          let cdf = &mut self.fc.comp_ref_cdf[ctx][2];
+          let cdf = &self.fc.comp_ref_cdf[ctx][2];
           symbol_with_update!(self, w, compref_p2 as u32, cdf);
         }
         let comp_bwdref = rf[1] == ALTREF_FRAME;
         let ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
-        let cdf = &mut self.fc.comp_bwd_ref_cdf[ctx][0];
+        let cdf = &self.fc.comp_bwd_ref_cdf[ctx][0];
         symbol_with_update!(self, w, comp_bwdref as u32, cdf);
         if !comp_bwdref {
           let comp_bwdref_p1 = rf[1] == ALTREF2_FRAME;
           let ctx = self.get_pred_ctx_brf_or_arf2(bo);
-          let cdf = &mut self.fc.comp_bwd_ref_cdf[ctx][1];
+          let cdf = &self.fc.comp_bwd_ref_cdf[ctx][1];
           symbol_with_update!(self, w, comp_bwdref_p1 as u32, cdf);
         }
       }
@@ -120,38 +120,38 @@ impl<'a> ContextWriter<'a> {
       let b0_ctx = self.get_ref_frame_ctx_b0(bo);
       let b0 = rf[0] != NONE_FRAME && rf[0].is_bwd_ref();
 
-      let cdf = &mut self.fc.single_ref_cdfs[b0_ctx][0];
+      let cdf = &self.fc.single_ref_cdfs[b0_ctx][0];
       symbol_with_update!(self, w, b0 as u32, cdf);
       if b0 {
         let b1_ctx = self.get_pred_ctx_brfarf2_or_arf(bo);
         let b1 = rf[0] == ALTREF_FRAME;
 
-        let cdf = &mut self.fc.single_ref_cdfs[b1_ctx][1];
+        let cdf = &self.fc.single_ref_cdfs[b1_ctx][1];
         symbol_with_update!(self, w, b1 as u32, cdf);
         if !b1 {
           let b5_ctx = self.get_pred_ctx_brf_or_arf2(bo);
           let b5 = rf[0] == ALTREF2_FRAME;
 
-          let cdf = &mut self.fc.single_ref_cdfs[b5_ctx][5];
+          let cdf = &self.fc.single_ref_cdfs[b5_ctx][5];
           symbol_with_update!(self, w, b5 as u32, cdf);
         }
       } else {
         let b2_ctx = self.get_pred_ctx_ll2_or_l3gld(bo);
         let b2 = rf[0] == LAST3_FRAME || rf[0] == GOLDEN_FRAME;
 
-        let cdf = &mut self.fc.single_ref_cdfs[b2_ctx][2];
+        let cdf = &self.fc.single_ref_cdfs[b2_ctx][2];
         symbol_with_update!(self, w, b2 as u32, cdf);
         if !b2 {
           let b3_ctx = self.get_pred_ctx_last_or_last2(bo);
           let b3 = rf[0] != LAST_FRAME;
 
-          let cdf = &mut self.fc.single_ref_cdfs[b3_ctx][3];
+          let cdf = &self.fc.single_ref_cdfs[b3_ctx][3];
           symbol_with_update!(self, w, b3 as u32, cdf);
         } else {
           let b4_ctx = self.get_pred_ctx_last3_or_gold(bo);
           let b4 = rf[0] != LAST3_FRAME;
 
-          let cdf = &mut self.fc.single_ref_cdfs[b4_ctx][4];
+          let cdf = &self.fc.single_ref_cdfs[b4_ctx][4];
           symbol_with_update!(self, w, b4 as u32, cdf);
         }
       }
@@ -177,15 +177,15 @@ impl<'a> ContextWriter<'a> {
       match filter {
         RestorationFilter::None => match rp.rp_cfg.lrf_type {
           RESTORE_WIENER => {
-            let cdf = &mut self.fc.lrf_wiener_cdf;
+            let cdf = &self.fc.lrf_wiener_cdf;
             symbol_with_update!(self, w, 0, cdf);
           }
           RESTORE_SGRPROJ => {
-            let cdf = &mut self.fc.lrf_sgrproj_cdf;
+            let cdf = &self.fc.lrf_sgrproj_cdf;
             symbol_with_update!(self, w, 0, cdf);
           }
           RESTORE_SWITCHABLE => {
-            let cdf = &mut self.fc.lrf_switchable_cdf;
+            let cdf = &self.fc.lrf_switchable_cdf;
             symbol_with_update!(self, w, 0, cdf);
           }
           RESTORE_NONE => {}
@@ -194,12 +194,12 @@ impl<'a> ContextWriter<'a> {
         RestorationFilter::Sgrproj { set, xqd } => {
           match rp.rp_cfg.lrf_type {
             RESTORE_SGRPROJ => {
-              let cdf = &mut self.fc.lrf_sgrproj_cdf;
+              let cdf = &self.fc.lrf_sgrproj_cdf;
               symbol_with_update!(self, w, 1, cdf);
             }
             RESTORE_SWITCHABLE => {
               // Does *not* write 'RESTORE_SGRPROJ'
-              let cdf = &mut self.fc.lrf_switchable_cdf;
+              let cdf = &self.fc.lrf_switchable_cdf;
               symbol_with_update!(self, w, 2, cdf);
             }
             _ => unreachable!(),
@@ -232,12 +232,12 @@ impl<'a> ContextWriter<'a> {
         RestorationFilter::Wiener { coeffs } => {
           match rp.rp_cfg.lrf_type {
             RESTORE_WIENER => {
-              let cdf = &mut self.fc.lrf_wiener_cdf;
+              let cdf = &self.fc.lrf_wiener_cdf;
               symbol_with_update!(self, w, 1, cdf);
             }
             RESTORE_SWITCHABLE => {
               // Does *not* write 'RESTORE_WIENER'
-              let cdf = &mut self.fc.lrf_switchable_cdf;
+              let cdf = &self.fc.lrf_switchable_cdf;
               symbol_with_update!(self, w, 1, cdf);
             }
             _ => unreachable!(),
