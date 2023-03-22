@@ -34,20 +34,8 @@
 //! [`Context`]: struct.Context.html
 //! [`Context::receive_packet`]: struct.Context.html#method.receive_packet
 
+// Safety lints
 #![deny(bare_trait_objects)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::cast_ptr_alignment)]
-#![allow(clippy::cognitive_complexity)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::verbose_bit_mask)]
-#![allow(clippy::unreadable_literal)]
-#![allow(clippy::many_single_char_names)]
-#![allow(clippy::wrong_self_convention)]
-#![allow(clippy::missing_safety_doc)]
-#![allow(clippy::comparison_chain)]
-#![allow(clippy::upper_case_acronyms)]
-#![allow(clippy::enum_variant_names)]
 // Performance lints
 #![warn(clippy::linkedlist)]
 #![warn(clippy::mutex_integer)]
@@ -57,15 +45,22 @@
 #![warn(clippy::mem_forget)]
 #![warn(clippy::path_buf_push_overwrite)]
 // Clarity/formatting lints
+#![allow(clippy::comparison_chain)]
+#![allow(clippy::enum_variant_names)]
 #![warn(clippy::map_flatten)]
 #![warn(clippy::mut_mut)]
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
 #![warn(clippy::range_plus_one)]
+#![allow(clippy::upper_case_acronyms)]
 // Documentation lints
 #![warn(clippy::doc_markdown)]
 #![warn(clippy::missing_errors_doc)]
 #![warn(clippy::missing_panics_doc)]
+// FIXME: We should fix instances of this lint and change it to `warn`
+#![allow(clippy::missing_safety_doc)]
 
 // Override assert! and assert_eq! in tests
 #[cfg(test)]

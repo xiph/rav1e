@@ -8,14 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 #![deny(bare_trait_objects)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::cast_ptr_alignment)]
-#![allow(clippy::cognitive_complexity)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::verbose_bit_mask)]
-#![allow(clippy::unreadable_literal)]
-#![allow(clippy::many_single_char_names)]
 // Performance lints
 #![warn(clippy::linkedlist)]
 #![warn(clippy::missing_const_for_fn)]
@@ -26,17 +18,20 @@
 #![warn(clippy::mem_forget)]
 #![warn(clippy::path_buf_push_overwrite)]
 // Clarity/formatting lints
+#![allow(clippy::comparison_chain)]
+#![allow(clippy::enum_variant_names)]
 #![warn(clippy::map_flatten)]
 #![warn(clippy::mut_mut)]
 #![warn(clippy::needless_borrow)]
 #![warn(clippy::needless_continue)]
+#![allow(clippy::needless_range_loop)]
+#![allow(clippy::too_many_arguments)]
 #![warn(clippy::range_plus_one)]
+#![allow(clippy::upper_case_acronyms)]
 // Documentation lints
 #![warn(clippy::doc_markdown)]
 #![warn(clippy::missing_errors_doc)]
 #![warn(clippy::missing_panics_doc)]
-// FIXME: Temporarily disabled due to https://github.com/rust-lang/rust-clippy/issues/9142
-#![allow(clippy::undocumented_unsafe_blocks)]
 
 #[macro_use]
 extern crate log;
