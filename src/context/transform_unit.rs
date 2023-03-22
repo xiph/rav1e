@@ -550,7 +550,7 @@ impl<'a> ContextWriter<'a> {
           symbol_with_update!(self, w, s, cdf);
         } else {
           let cdf = &mut self.fc.inter_tx_3_cdf[square_tx_size as usize];
-          symbol_with_update!(self, w, s, cdf, 2);
+          symbol_with_update!(self, w, s, cdf);
         }
       } else {
         let intra_dir = y_mode;
@@ -658,10 +658,10 @@ impl<'a> ContextWriter<'a> {
 
     if tx_size_cat > 0 {
       let cdf = &mut self.fc.tx_size_cdf[tx_size_cat - 1][tx_size_ctx];
-      symbol_with_update!(self, w, depth as u32, cdf, 3);
+      symbol_with_update!(self, w, depth as u32, cdf);
     } else {
       let cdf = &mut self.fc.tx_size_8x8_cdf[tx_size_ctx];
-      symbol_with_update!(self, w, depth as u32, cdf, 2);
+      symbol_with_update!(self, w, depth as u32, cdf);
     }
   }
 
@@ -737,7 +737,7 @@ impl<'a> ContextWriter<'a> {
     if tx_size != TX_4X4 && depth < MAX_VARTX_DEPTH {
       let ctx = self.txfm_partition_context(bo, bsize, tx_size, tbx, tby);
       let cdf = &mut self.fc.txfm_partition_cdf[ctx];
-      symbol_with_update!(self, w, txfm_split as u32, cdf, 2);
+      symbol_with_update!(self, w, txfm_split as u32, cdf);
     } else {
       debug_assert!(!txfm_split);
     }

@@ -246,7 +246,7 @@ impl<'a> ContextWriter<'a> {
   ) {
     let ctx = self.bc.skip_context(bo);
     let cdf = &mut self.fc.skip_cdfs[ctx];
-    symbol_with_update!(self, w, skip as u32, cdf, 2);
+    symbol_with_update!(self, w, skip as u32, cdf);
   }
 
   pub fn get_segment_pred(
@@ -331,7 +331,7 @@ impl<'a> ContextWriter<'a> {
     if has_rows && has_cols {
       if ctx < PARTITION_TYPES {
         let cdf = &mut self.fc.partition_w8_cdf[ctx];
-        symbol_with_update!(self, w, p as u32, cdf, 4);
+        symbol_with_update!(self, w, p as u32, cdf);
       } else if ctx < 4 * PARTITION_TYPES {
         let cdf = &mut self.fc.partition_cdf[ctx - PARTITION_TYPES];
         symbol_with_update!(self, w, p as u32, cdf);

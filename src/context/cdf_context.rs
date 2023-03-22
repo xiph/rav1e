@@ -560,10 +560,6 @@ macro_rules! symbol_with_update {
       }
     }
   };
-  ($self:ident, $w:ident, $s:expr, $cdf:expr, $cdf_len:expr) => {
-    $w.symbol_with_update::<$cdf_len>($s, $cdf, &mut $self.fc_log);
-    symbol_with_update!($self, $cdf);
-  };
 }
 
 #[derive(Clone)]
