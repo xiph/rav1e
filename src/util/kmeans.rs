@@ -17,10 +17,10 @@ where
   i64: TryInto<T>,
   <i64 as std::convert::TryInto<T>>::Error: std::fmt::Debug,
 {
-  let mut low = {
-    let mut i = 0..K;
-    [(); K].map(|_| (i.next().unwrap() * (data.len() - 1)) / (K - 1))
-  };
+  let mut low = [0; K];
+  for (i, val) in low.iter_mut().enumerate() {
+    *val = (i * (data.len() - 1)) / (K - 1);
+  }
   let mut means = low.map(|i| unsafe { *data.get_unchecked(i) });
   let mut high = low;
   let mut sum = [0i64; K];
