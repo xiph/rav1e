@@ -174,7 +174,9 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
   fs.apply_tile_state_mut(|ts| {
-    let offset = TileBlockOffset(BlockOffset { x: 1, y: 1 });
+    let first_chroma = if bsize == BlockSize::BLOCK_4X4 { 1 } else { 0 };
+    let offset =
+      TileBlockOffset(BlockOffset { x: first_chroma, y: first_chroma });
     b.iter(|| rdo_cfl_alpha(ts, offset, bsize, bsize.tx_size(), &fi))
   });
 }
