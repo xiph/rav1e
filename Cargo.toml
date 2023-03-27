@@ -69,7 +69,7 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3"
 bitstream-io = "1"
 cfg-if = "1.0"
-clap = { version = "4.1.11", optional = true, default-features = false, features = [
+clap = { version = "4.1.13", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
@@ -111,7 +111,7 @@ av1-grain = { version = "0.2.2", features = ["serialize"] }
 serde-big-array = { version = "0.5.1", optional = true }
 
 [dependencies.image]
-version = "0.24.5"
+version = "0.24.6"
 optional = true
 default-features = false
 features = ["png"]
