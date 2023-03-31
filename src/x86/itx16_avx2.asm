@@ -7379,8 +7379,9 @@ ALIGN function_align
 
 cglobal inv_txfm_add_identity_identity_32x32_10bpc, 4, 8, 8, dst, stride, c, eob
     %undef cmp
-    vpbroadcastd         m5, [pw_8192]
     vpbroadcastd         m7, [pixel_10bpc_max]
+.pass1:
+    vpbroadcastd         m5, [pw_8192]
     pxor                 m6, m6
     lea                  r6, [strideq*3]
     lea                  r5, [strideq*5]
@@ -7445,6 +7446,10 @@ ALIGN function_align
     packssdw             m3, [cq+128*7]
     REPX   {pmulhrsw x, m5}, m0, m1, m2, m3
     jmp m(inv_txfm_add_identity_identity_8x32_10bpc).main_zero
+
+cglobal inv_txfm_add_identity_identity_32x32_12bpc, 4, 8, 8, dst, stride, c, eob
+    vpbroadcastd         m7, [pixel_12bpc_max]
+    jmp m(inv_txfm_add_identity_identity_32x32_10bpc).pass1
 
 %macro IDCT64_PART2_END 6-10 ; out, src[1-2], tmp[1-3], (offset[1-4])
 %if %1 & 1
