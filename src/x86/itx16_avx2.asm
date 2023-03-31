@@ -6923,7 +6923,7 @@ cglobal inv_txfm_add_dct_dct_32x16_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 8, 16, 32*40, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*4]
@@ -7210,7 +7210,7 @@ cglobal inv_txfm_add_dct_dct_32x32_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 8, 16, 32*83, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*7]
@@ -7378,7 +7378,7 @@ ALIGN function_align
     jmp m(idct_16x16_internal_8bpc).main
 
 cglobal inv_txfm_add_identity_identity_32x32_10bpc, 4, 8, 8, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd         m7, [pixel_10bpc_max]
 .pass1:
     vpbroadcastd         m5, [pw_8192]
@@ -7491,7 +7491,7 @@ cglobal inv_txfm_add_dct_dct_16x64_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 10, 16, 32*98, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m11, [pd_2048]
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
@@ -7833,7 +7833,7 @@ cglobal inv_txfm_add_dct_dct_32x64_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 11, 16, 32*134, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
     lea                  r6, [rsp+32*6]
@@ -8062,7 +8062,7 @@ cglobal inv_txfm_add_dct_dct_64x16_10bpc, 4, 7, 0, dst, stride, c, eob
     RET
 .normal:
     PROLOGUE              0, 8, 16, 32*96, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m11, [pd_2048]
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
@@ -8281,7 +8281,7 @@ cglobal inv_txfm_add_dct_dct_64x32_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 8, 16, 32*163, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m11, [pd_2048]
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
@@ -8430,7 +8430,7 @@ cglobal inv_txfm_add_dct_dct_64x64_10bpc, 4, 7, 0, dst, stride, c, eob
     test               eobd, eobd
     jz .dconly
     PROLOGUE              0, 11, 16, 32*195, dst, stride, c, eob
-    %undef cmp
+%undef cmp
     vpbroadcastd        m11, [pd_2048]
     vpbroadcastd        m12, [clip_18b_min]
     vpbroadcastd        m13, [clip_18b_max]
