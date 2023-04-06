@@ -9,9 +9,11 @@
 
 use crate::decoder::VideoDetails;
 use rav1e::prelude::*;
+use rust_hawktracer::*;
 use std::io::Write;
 use std::slice;
 
+#[hawktracer(write_y4m_frame)]
 pub fn write_y4m_frame<T: Pixel>(
   y4m_enc: &mut y4m::Encoder<Box<dyn Write + Send>>, rec: &Frame<T>,
   y4m_details: VideoDetails,

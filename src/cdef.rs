@@ -322,6 +322,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
   }
 }
 
+#[hawktracer(cdef_analyze_superblock_range)]
 pub fn cdef_analyze_superblock_range<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sb_w: usize, sb_h: usize,
@@ -336,6 +337,7 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
   ret
 }
 
+#[hawktracer(cdef_analyze_superblock)]
 pub fn cdef_analyze_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset,
@@ -396,6 +398,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 /// # Panics
 ///
 /// - If called with invalid parameters
+#[hawktracer(cdef_filter_superblock)]
 pub fn cdef_filter_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
   blocks: &TileBlocks<'_>, tile_sbo: TileSuperBlockOffset, cdef_index: u8,

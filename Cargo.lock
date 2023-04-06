@@ -1492,6 +1492,7 @@ checksum = "67cc853071df5815fa6c087452d1b533f7c884c836b8a7393b4ff88090cc4c95"
 dependencies = [
  "cmake",
  "itertools 0.8.2",
+ "pkg-config",
 ]
 
 [[package]]

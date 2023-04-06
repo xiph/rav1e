@@ -10,18 +10,17 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
-use crate::serialize::{Deserialize, Serialize};
-use thiserror::Error;
-
 use self::BlockSize::*;
 use self::TxSize::*;
 use crate::context::*;
 use crate::frame::*;
 use crate::predict::*;
 use crate::recon_intra::*;
+use crate::serialize::{Deserialize, Serialize};
 use crate::tiling::*;
 use crate::transform::TxSize;
 use crate::util::*;
+use thiserror::Error;
 
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, PartialOrd, Copy, Clone, Debug)]
