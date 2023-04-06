@@ -28,6 +28,7 @@ use crate::me::estimate_motion;
 use crate::me::MVSamplingMode;
 use crate::me::MotionSearchResult;
 use crate::motion_compensate;
+use crate::partition::PartitionType::*;
 use crate::partition::RefType::*;
 use crate::partition::*;
 use crate::predict::{
@@ -43,9 +44,9 @@ use crate::write_tx_tree;
 use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
 
-use crate::partition::PartitionType::*;
 use arrayvec::*;
 use itertools::izip;
+use rust_hawktracer::*;
 use std::fmt;
 use std::mem::MaybeUninit;
 
@@ -810,6 +811,7 @@ const fn dmv_in_range(mv: MotionVector, ref_mv: MotionVector) -> bool {
 }
 
 #[inline]
+#[hawktracer(luma_chroma_mode_rdo)]
 fn luma_chroma_mode_rdo<T: Pixel>(
   luma_mode: PredictionMode, fi: &FrameInvariants<T>, bsize: BlockSize,
   tile_bo: TileBlockOffset, ts: &mut TileStateMut<'_, T>,
@@ -956,6 +958,7 @@ fn luma_chroma_mode_rdo<T: Pixel>(
 ///
 /// - If the best RD found is negative.
 ///   This should never happen and indicates a development error.
+#[hawktracer(rdo_mode_decision)]
 pub fn rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1113,6 +1116,7 @@ pub fn rdo_mode_decision<T: Pixel>(
   }
 }
 
+#[hawktracer(inter_frame_rdo_mode_decision)]
 fn inter_frame_rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1385,6 +1389,7 @@ fn inter_frame_rdo_mode_decision<T: Pixel>(
   best
 }
 
+#[hawktracer(intra_frame_rdo_mode_decision)]
 fn intra_frame_rdo_mode_decision<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, bsize: BlockSize, tile_bo: TileBlockOffset,
@@ -1581,6 +1586,7 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
 /// # Panics
 ///
 /// - If the block size is invalid for subsampling.
+#[hawktracer(rdo_cfl_alpha)]
 pub fn rdo_cfl_alpha<T: Pixel>(
   ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset, bsize: BlockSize,
   luma_tx_size: TxSize, fi: &FrameInvariants<T>,
@@ -1935,6 +1941,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
 ///
 /// - If the best RD found is negative.
 ///   This should never happen, and indicates a development error.
+#[hawktracer(rdo_partition_decision)]
 pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
@@ -2012,6 +2019,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
   }
 }
 
+#[hawktracer(rdo_loop_plane_error)]
 fn rdo_loop_plane_error<T: Pixel>(
   base_sbo: TileSuperBlockOffset, offset_sbo: TileSuperBlockOffset,
   sb_w: usize, sb_h: usize, fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
@@ -2088,6 +2096,7 @@ fn rdo_loop_plane_error<T: Pixel>(
 /// # Panics
 ///
 /// - If both CDEF and LRF are disabled.
+#[hawktracer(rdo_loop_decision)]
 pub fn rdo_loop_decision<T: Pixel, W: Writer>(
   base_sbo: TileSuperBlockOffset, fi: &FrameInvariants<T>,
   ts: &mut TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,

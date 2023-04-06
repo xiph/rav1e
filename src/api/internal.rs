@@ -818,7 +818,6 @@ impl<T: Pixel> ContextInner<T> {
 
   /// Computes lookahead intra cost approximations and fills in
   /// `lookahead_intra_costs` on the `FrameInvariants`.
-  #[hawktracer(compute_lookahead_intra_costs)]
   fn compute_lookahead_intra_costs(&mut self, output_frameno: u64) {
     let frame_data = self.frame_data.get(&output_frameno).unwrap();
     let fd = &frame_data.as_ref();
@@ -1261,47 +1260,7 @@ impl<T: Pixel> ContextInner<T> {
         return Err(EncoderStatus::NotReady);
       }
 
-      let frame_data = self
-        .frame_data
-        .get_mut(&cur_output_frameno)
-        .unwrap()
-        .as_mut()
-        .unwrap();
-      let sef_data = encode_show_existing_frame(
-        &frame_data.fi,
-        &mut frame_data.fs,
-        &self.inter_cfg,
-      );
-      let bits = (sef_data.len() * 8) as i64;
-      self.packet_data.extend(sef_data);
-      self.rc_state.update_state(
-        bits,
-        FRAME_SUBTYPE_SEF,
-        frame_data.fi.show_frame,
-        0,
-        false,
-        false,
-      );
-      let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
-      } else {
-        (None, None)
-      };
-
-      self.output_frameno += 1;
-
-      let input_frameno = frame_data.fi.input_frameno;
-      let frame_type = frame_data.fi.frame_type;
-      let qp = frame_data.fi.base_q_idx;
-      let enc_stats = frame_data.fs.enc_stats.clone();
-      self.finalize_packet(
-        rec,
-        source,
-        input_frameno,
-        frame_type,
-        qp,
-        enc_stats,
-      )
+      self.encode_show_existing_packet(cur_output_frameno)
     } else if let Some(Some(_)) = self.frame_q.get(
       &self
         .frame_data
@@ -1315,51 +1274,117 @@ impl<T: Pixel> ContextInner<T> {
       if !self.rc_state.ready() {
         return Err(EncoderStatus::NotReady);
       }
-      let mut frame_data =
-        self.frame_data.remove(&cur_output_frameno).unwrap().unwrap();
 
-      let mut log_isqrt_mean_scale = 0i64;
+      self.encode_normal_packet(cur_output_frameno)
+    } else {
+      Err(EncoderStatus::NeedMoreData)
+    }
+  }
 
-      if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
+  #[hawktracer(encode_show_existing_packet)]
+  pub fn encode_show_existing_packet(
+    &mut self, cur_output_frameno: u64,
+  ) -> Result<Packet<T>, EncoderStatus> {
+    let frame_data =
+      self.frame_data.get_mut(&cur_output_frameno).unwrap().as_mut().unwrap();
+    let sef_data = encode_show_existing_frame(
+      &frame_data.fi,
+      &mut frame_data.fs,
+      &self.inter_cfg,
+    );
+    let bits = (sef_data.len() * 8) as i64;
+    self.packet_data.extend(sef_data);
+    self.rc_state.update_state(
+      bits,
+      FRAME_SUBTYPE_SEF,
+      frame_data.fi.show_frame,
+      0,
+      false,
+      false,
+    );
+    let (rec, source) = if frame_data.fi.show_frame {
+      (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
+    } else {
+      (None, None)
+    };
+
+    self.output_frameno += 1;
+
+    let input_frameno = frame_data.fi.input_frameno;
+    let frame_type = frame_data.fi.frame_type;
+    let qp = frame_data.fi.base_q_idx;
+    let enc_stats = frame_data.fs.enc_stats.clone();
+    self.finalize_packet(rec, source, input_frameno, frame_type, qp, enc_stats)
+  }
+
+  #[hawktracer(encode_normal_packet)]
+  pub fn encode_normal_packet(
+    &mut self, cur_output_frameno: u64,
+  ) -> Result<Packet<T>, EncoderStatus> {
+    let mut frame_data =
+      self.frame_data.remove(&cur_output_frameno).unwrap().unwrap();
+
+    let mut log_isqrt_mean_scale = 0i64;
+
+    if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
+      if self.config.tune == Tune::Psychovisual {
+        let frame =
+          self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
+        coded_data.activity_mask = ActivityMask::from_plane(&frame.planes[0]);
+        coded_data.activity_mask.fill_scales(
+          frame_data.fi.sequence.bit_depth,
+          &mut coded_data.activity_scales,
+        );
+        log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
+      } else {
+        coded_data.activity_mask = ActivityMask::default();
+        log_isqrt_mean_scale = coded_data.compute_temporal_scores();
+      }
+      #[cfg(feature = "dump_lookahead_data")]
+      {
+        use crate::encoder::Scales::*;
+        let input_frameno = frame_data.fi.input_frameno;
         if self.config.tune == Tune::Psychovisual {
-          let frame =
-            self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
-          coded_data.activity_mask =
-            ActivityMask::from_plane(&frame.planes[0]);
-          coded_data.activity_mask.fill_scales(
-            frame_data.fi.sequence.bit_depth,
-            &mut coded_data.activity_scales,
-          );
-          log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
-        } else {
-          coded_data.activity_mask = ActivityMask::default();
-          log_isqrt_mean_scale = coded_data.compute_temporal_scores();
-        }
-        #[cfg(feature = "dump_lookahead_data")]
-        {
-          use crate::encoder::Scales::*;
-          let input_frameno = frame_data.fi.input_frameno;
-          if self.config.tune == Tune::Psychovisual {
-            coded_data.dump_scales(
-              Self::build_dump_properties(),
-              ActivityScales,
-              input_frameno,
-            );
-            coded_data.dump_scales(
-              Self::build_dump_properties(),
-              SpatiotemporalScales,
-              input_frameno,
-            );
-          }
           coded_data.dump_scales(
             Self::build_dump_properties(),
-            DistortionScales,
+            ActivityScales,
+            input_frameno,
+          );
+          coded_data.dump_scales(
+            Self::build_dump_properties(),
+            SpatiotemporalScales,
             input_frameno,
           );
         }
+        coded_data.dump_scales(
+          Self::build_dump_properties(),
+          DistortionScales,
+          input_frameno,
+        );
       }
+    }
 
-      let fti = frame_data.fi.get_frame_subtype();
+    let fti = frame_data.fi.get_frame_subtype();
+    let qps = self.rc_state.select_qi(
+      self,
+      cur_output_frameno,
+      fti,
+      self.maybe_prev_log_base_q,
+      log_isqrt_mean_scale,
+    );
+    frame_data.fi.set_quantizers(&qps);
+
+    if self.rc_state.needs_trial_encode(fti) {
+      let mut trial_fs = frame_data.fs.clone();
+      let data = encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
+      self.rc_state.update_state(
+        (data.len() * 8) as i64,
+        fti,
+        frame_data.fi.show_frame,
+        qps.log_target_q,
+        true,
+        false,
+      );
       let qps = self.rc_state.select_qi(
         self,
         cur_output_frameno,
@@ -1368,123 +1393,90 @@ impl<T: Pixel> ContextInner<T> {
         log_isqrt_mean_scale,
       );
       frame_data.fi.set_quantizers(&qps);
+    }
 
-      if self.rc_state.needs_trial_encode(fti) {
-        let mut trial_fs = frame_data.fs.clone();
-        let data =
-          encode_frame(&frame_data.fi, &mut trial_fs, &self.inter_cfg);
-        self.rc_state.update_state(
-          (data.len() * 8) as i64,
-          fti,
-          frame_data.fi.show_frame,
-          qps.log_target_q,
-          true,
-          false,
-        );
-        let qps = self.rc_state.select_qi(
-          self,
-          cur_output_frameno,
-          fti,
-          self.maybe_prev_log_base_q,
-          log_isqrt_mean_scale,
-        );
-        frame_data.fi.set_quantizers(&qps);
-      }
+    let data =
+      encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
+    #[cfg(feature = "dump_lookahead_data")]
+    {
+      let input_frameno = frame_data.fi.input_frameno;
+      let data_location = Self::build_dump_properties();
+      frame_data.fs.segmentation.dump_threshold(data_location, input_frameno);
+    }
+    let enc_stats = frame_data.fs.enc_stats.clone();
+    self.maybe_prev_log_base_q = Some(qps.log_base_q);
+    // TODO: Add support for dropping frames.
+    self.rc_state.update_state(
+      (data.len() * 8) as i64,
+      fti,
+      frame_data.fi.show_frame,
+      qps.log_target_q,
+      false,
+      false,
+    );
+    self.packet_data.extend(data);
 
-      let data =
-        encode_frame(&frame_data.fi, &mut frame_data.fs, &self.inter_cfg);
-      #[cfg(feature = "dump_lookahead_data")]
-      {
-        let input_frameno = frame_data.fi.input_frameno;
-        let data_location = Self::build_dump_properties();
-        frame_data
-          .fs
-          .segmentation
-          .dump_threshold(data_location, input_frameno);
-      }
-      let enc_stats = frame_data.fs.enc_stats.clone();
-      self.maybe_prev_log_base_q = Some(qps.log_base_q);
-      // TODO: Add support for dropping frames.
-      self.rc_state.update_state(
-        (data.len() * 8) as i64,
-        fti,
-        frame_data.fi.show_frame,
-        qps.log_target_q,
-        false,
-        false,
-      );
-      self.packet_data.extend(data);
+    let planes =
+      if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
 
-      let planes =
-        if frame_data.fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
+    Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
+      frame_data.fi.width,
+      frame_data.fi.height,
+      planes,
+    );
 
-      Arc::get_mut(&mut frame_data.fs.rec).unwrap().pad(
-        frame_data.fi.width,
-        frame_data.fi.height,
-        planes,
-      );
-
-      let (rec, source) = if frame_data.fi.show_frame {
-        (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
-      } else {
-        (None, None)
-      };
-
-      update_rec_buffer(
-        cur_output_frameno,
-        &mut frame_data.fi,
-        &frame_data.fs,
-      );
-
-      // Copy persistent fields into subsequent FrameInvariants.
-      let rec_buffer = frame_data.fi.rec_buffer.clone();
-      for subsequent_fi in self
-        .frame_data
-        .iter_mut()
-        .skip_while(|(&output_frameno, _)| {
-          output_frameno <= cur_output_frameno
-        })
-        // Here we want the next valid non-show-existing-frame inter frame.
-        //
-        // Copying to show-existing-frame frames isn't actually required
-        // for correct encoding, but it's needed for the reconstruction to
-        // work correctly.
-        .filter_map(|(_, frame_data)| frame_data.as_mut().map(|fd| &mut fd.fi))
-        .take_while(|fi| fi.frame_type != FrameType::KEY)
-      {
-        subsequent_fi.rec_buffer = rec_buffer.clone();
-        subsequent_fi.set_ref_frame_sign_bias();
-
-        // Stop after the first non-show-existing-frame.
-        if !subsequent_fi.is_show_existing_frame() {
-          break;
-        }
-      }
-
-      self.frame_data.insert(cur_output_frameno, Some(frame_data));
-      let frame_data =
-        self.frame_data.get(&cur_output_frameno).unwrap().as_ref().unwrap();
-      let fi = &frame_data.fi;
-
-      self.output_frameno += 1;
-
-      if fi.show_frame {
-        let input_frameno = fi.input_frameno;
-        let frame_type = fi.frame_type;
-        let qp = fi.base_q_idx;
-        self.finalize_packet(
-          rec,
-          source,
-          input_frameno,
-          frame_type,
-          qp,
-          enc_stats,
-        )
-      } else {
-        Err(EncoderStatus::Encoded)
-      }
+    let (rec, source) = if frame_data.fi.show_frame {
+      (Some(frame_data.fs.rec.clone()), Some(frame_data.fs.input.clone()))
     } else {
-      Err(EncoderStatus::NeedMoreData)
+      (None, None)
+    };
+
+    update_rec_buffer(cur_output_frameno, &mut frame_data.fi, &frame_data.fs);
+
+    // Copy persistent fields into subsequent FrameInvariants.
+    let rec_buffer = frame_data.fi.rec_buffer.clone();
+    for subsequent_fi in self
+      .frame_data
+      .iter_mut()
+      .skip_while(|(&output_frameno, _)| output_frameno <= cur_output_frameno)
+      // Here we want the next valid non-show-existing-frame inter frame.
+      //
+      // Copying to show-existing-frame frames isn't actually required
+      // for correct encoding, but it's needed for the reconstruction to
+      // work correctly.
+      .filter_map(|(_, frame_data)| frame_data.as_mut().map(|fd| &mut fd.fi))
+      .take_while(|fi| fi.frame_type != FrameType::KEY)
+    {
+      subsequent_fi.rec_buffer = rec_buffer.clone();
+      subsequent_fi.set_ref_frame_sign_bias();
+
+      // Stop after the first non-show-existing-frame.
+      if !subsequent_fi.is_show_existing_frame() {
+        break;
+      }
+    }
+
+    self.frame_data.insert(cur_output_frameno, Some(frame_data));
+    let frame_data =
+      self.frame_data.get(&cur_output_frameno).unwrap().as_ref().unwrap();
+    let fi = &frame_data.fi;
+
+    self.output_frameno += 1;
+
+    if fi.show_frame {
+      let input_frameno = fi.input_frameno;
+      let frame_type = fi.frame_type;
+      let qp = fi.base_q_idx;
+      self.finalize_packet(
+        rec,
+        source,
+        input_frameno,
+        frame_type,
+        qp,
+        enc_stats,
+      )
+    } else {
+      Err(EncoderStatus::Encoded)
     }
   }
 
@@ -1554,6 +1546,7 @@ impl<T: Pixel> ContextInner<T> {
     })
   }
 
+  #[hawktracer(garbage_collect)]
   fn garbage_collect(&mut self, cur_input_frameno: u64) {
     if cur_input_frameno == 0 {
       return;

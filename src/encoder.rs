@@ -41,6 +41,7 @@ use crate::wasm_bindgen::*;
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use rust_hawktracer::*;
 
 use std::collections::VecDeque;
 use std::io::Write;
@@ -49,7 +50,6 @@ use std::sync::Arc;
 use std::{fmt, io, mem};
 
 use crate::rayon::iter::*;
-use rust_hawktracer::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -570,6 +570,7 @@ pub struct SegmentationState {
 }
 
 impl SegmentationState {
+  #[hawktracer(SegmentationState_update_threshold)]
   pub fn update_threshold(&mut self, base_q_idx: u8, bd: usize) {
     let base_ac_q = ac_q(base_q_idx, 0, bd).get() as u64;
     let real_ac_q = ArrayVec::<_, MAX_SEGMENTS>::from_iter(
@@ -747,6 +748,7 @@ impl<T: Pixel> CodedFrameData<T> {
 
   // Assumes that we have already computed activity scales and distortion scales
   // Returns -0.5 log2(mean(scale))
+  #[hawktracer(compute_spatiotemporal_scores)]
   pub fn compute_spatiotemporal_scores(&mut self) -> i64 {
     let mut scores = self
       .distortion_scales
@@ -772,6 +774,7 @@ impl<T: Pixel> CodedFrameData<T> {
 
   // Assumes that we have already computed distortion_scales
   // Returns -0.5 log2(mean(scale))
+  #[hawktracer(compute_temporal_scores)]
   pub fn compute_temporal_scores(&mut self) -> i64 {
     let inv_mean = DistortionScale::inv_mean(&self.distortion_scales);
     for scale in self.distortion_scales.iter_mut() {
@@ -1654,6 +1657,7 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 /// # Panics
 ///
 /// - If the block size is invalid for subsampling
+#[hawktracer(motion_compensate)]
 pub fn motion_compensate<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, luma_mode: PredictionMode, ref_frames: [RefType; 2],
@@ -1882,6 +1886,7 @@ pub fn save_block_motion<T: Pixel>(
   }
 }
 
+#[hawktracer(encode_block_pre_cdef)]
 pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
   seq: &Sequence, ts: &TileStateMut<'_, T>, cw: &mut ContextWriter, w: &mut W,
   bsize: BlockSize, tile_bo: TileBlockOffset, skip: bool,
@@ -1922,6 +1927,7 @@ pub fn encode_block_pre_cdef<T: Pixel, W: Writer>(
 ///
 /// - If chroma and luma do not match for inter modes
 /// - If an invalid motion vector is found
+#[hawktracer(encode_block_post_cdef)]
 pub fn encode_block_post_cdef<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut W, luma_mode: PredictionMode,
@@ -2546,6 +2552,7 @@ pub fn write_tx_tree<T: Pixel, W: Writer>(
   (partition_has_coeff, tx_dist)
 }
 
+#[hawktracer(encode_block_with_modes)]
 pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
@@ -2612,6 +2619,7 @@ pub fn encode_block_with_modes<T: Pixel, W: Writer>(
   );
 }
 
+#[hawktracer(encode_partition_bottomup)]
 fn encode_partition_bottomup<T: Pixel, W: Writer>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w_pre_cdef: &mut W, w_post_cdef: &mut W,
@@ -3353,6 +3361,7 @@ pub struct SBSQueueEntry {
   pub w_post_cdef: WriterBase<WriterRecorder>,
 }
 
+#[hawktracer(check_lf_queue)]
 fn check_lf_queue<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   cw: &mut ContextWriter, w: &mut WriterBase<WriterEncoder>,
@@ -3669,6 +3678,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 /// # Panics
 ///
 /// - If the frame packets cannot be written
+#[hawktracer(encode_show_existing_frame)]
 pub fn encode_show_existing_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {
@@ -3743,6 +3753,7 @@ fn get_initial_segmentation<T: Pixel>(
 /// # Panics
 ///
 /// - If the frame packets cannot be written
+#[hawktracer(encode_frame)]
 pub fn encode_frame<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
 ) -> Vec<u8> {

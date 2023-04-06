@@ -54,6 +54,7 @@ use crate::error::*;
 use crate::stats::*;
 use rav1e::config::CpuFeatureLevel;
 use rav1e::prelude::*;
+use rust_hawktracer::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
@@ -104,6 +105,7 @@ impl<D: Decoder> Source<D> {
     }
   }
 
+  #[hawktracer(Source_read_frame)]
   fn read_frame<T: Pixel>(
     &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
   ) -> Result<(), CliError> {
@@ -139,6 +141,7 @@ impl<D: Decoder> Source<D> {
 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
+#[hawktracer(process_frame)]
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
@@ -304,7 +307,6 @@ fn do_encode<T: Pixel, D: Decoder>(
 
 fn main() {
   #[cfg(feature = "tracing")]
-  use rust_hawktracer::*;
   init_logger();
 
   #[cfg(feature = "tracing")]
@@ -321,6 +323,7 @@ fn main() {
   });
 }
 
+#[cfg(feature = "tracing")]
 fn init_logger() {
   use std::str::FromStr;
   fn level_colored(l: log::Level) -> console::StyledObject<&'static str> {

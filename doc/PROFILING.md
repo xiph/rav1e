@@ -73,6 +73,10 @@ We use [rust\_hawktracer](https://github.com/AlexEne/rust_hawktracer) to
 measure specific codepath timings. Building `--features=tracing` enables it.
 Use the standard [hawktrace-convert](https://hawktracer.org) to produce graphs.
 
+Currently there are issues where rust_hawktracer fails to build, as a result
+we have set it to use the system hawktracer library. On Arch Linux this may
+be installed from the AUR package hawktracer-git.
+
 ## Codegen Inspection
 
 ### Assembly

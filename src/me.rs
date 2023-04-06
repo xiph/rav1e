@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::api::InterConfig;
 use crate::context::{
   BlockOffset, PlaneBlockOffset, SuperBlockOffset, TileBlockOffset,
   TileSuperBlockOffset, MAX_SB_SIZE_LOG2, MIB_SIZE_LOG2, MI_SIZE,
@@ -18,17 +19,14 @@ use crate::mc::MotionVector;
 use crate::partition::*;
 use crate::predict::PredictionMode;
 use crate::tiling::*;
+use crate::util::ILog;
 use crate::util::{clamp, Pixel};
 use crate::FrameInvariants;
 
 use arrayvec::*;
-
-use crate::api::InterConfig;
-use crate::util::ILog;
+use rust_hawktracer::*;
 use std::ops::{Index, IndexMut};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
-
-use rust_hawktracer::*;
 
 #[derive(Debug, Copy, Clone, Default)]
 pub struct MEStats {
@@ -153,7 +151,6 @@ pub enum MVSamplingMode {
   CORNER { right: bool, bottom: bool },
 }
 
-#[hawktracer(estimate_tile_motion)]
 pub fn estimate_tile_motion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
   inter_cfg: &InterConfig,
@@ -386,6 +383,7 @@ impl MotionEstimationSubsets {
   }
 }
 
+#[hawktracer(get_subset_predictors)]
 fn get_subset_predictors(
   tile_bo: TileBlockOffset, tile_me_stats: &TileMEStats<'_>,
   frame_ref_opt: Option<ReadGuardMEStats<'_>>, ref_frame_id: usize,
@@ -692,6 +690,7 @@ fn refine_subsampled_motion_estimate<T: Pixel>(
   }
 }
 
+#[hawktracer(full_pixel_me)]
 fn full_pixel_me<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>,
   org_region: &PlaneRegion<T>, p_ref: &Plane<T>, tile_bo: TileBlockOffset,
@@ -883,6 +882,7 @@ fn sub_pixel_me<T: Pixel>(
   );
 }
 
+#[hawktracer(get_best_predictor)]
 fn get_best_predictor<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
   p_ref: &Plane<T>, predictors: &[MotionVector], bit_depth: usize,
@@ -953,6 +953,7 @@ const DIAMOND_R1_PATTERN: [MotionVector; 4] = search_pattern!(
 /// For each step size, candidate motion vectors are examined for improvement
 /// to the current search location. The search location is moved to the best
 /// candidate (if any). This is repeated until the search location stops moving.
+#[hawktracer(fullpel_diamond_search)]
 fn fullpel_diamond_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
   p_ref: &Plane<T>, current: &mut MotionSearchResult, bit_depth: usize,
@@ -1052,6 +1053,7 @@ const SQUARE_REFINE_PATTERN: [MotionVector; 8] = search_pattern!(
 ///
 /// `current` provides the initial search location and serves as
 /// the output for the final search results.
+#[hawktracer(hexagon_search)]
 fn hexagon_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
   p_ref: &Plane<T>, current: &mut MotionSearchResult, bit_depth: usize,
@@ -1166,6 +1168,7 @@ const UMH_PATTERN: [MotionVector; 16] = search_pattern!(
 /// the output for the final search results.
 ///
 /// `me_range` parameter determines how far these stages can search.
+#[hawktracer(uneven_multi_hex_search)]
 fn uneven_multi_hex_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
   p_ref: &Plane<T>, current: &mut MotionSearchResult, bit_depth: usize,
@@ -1306,6 +1309,7 @@ fn uneven_multi_hex_search<T: Pixel>(
 /// For each step size, candidate motion vectors are examined for improvement
 /// to the current search location. The search location is moved to the best
 /// candidate (if any). This is repeated until the search location stops moving.
+#[hawktracer(subpel_diamond_search)]
 fn subpel_diamond_search<T: Pixel>(
   fi: &FrameInvariants<T>, po: PlaneOffset, org_region: &PlaneRegion<T>,
   _p_ref: &Plane<T>, bit_depth: usize, pmv: [MotionVector; 2], lambda: u32,
@@ -1458,6 +1462,7 @@ fn compute_mv_rd<T: Pixel>(
   MVCandidateRD { cost: 256 * sad as u64 + rate as u64 * lambda as u64, sad }
 }
 
+#[hawktracer(full_search)]
 fn full_search<T: Pixel>(
   fi: &FrameInvariants<T>, x_lo: isize, x_hi: isize, y_lo: isize, y_hi: isize,
   w: usize, h: usize, org_region: &PlaneRegion<T>, p_ref: &Plane<T>,

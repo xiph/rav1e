@@ -14,13 +14,12 @@ use crate::encoder::FrameInvariants;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
+use crate::rayon::iter::*;
 use crate::tiling::*;
 use crate::util::{clamp, ILog, Pixel};
 use crate::DeblockState;
 use rust_hawktracer::*;
 use std::cmp;
-
-use crate::rayon::iter::*;
 
 fn deblock_adjusted_level(
   deblock: &DeblockState, block: &Block, pli: usize, vertical: bool,

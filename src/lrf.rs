@@ -15,6 +15,7 @@ cfg_if::cfg_if! {
   }
 }
 
+use crate::api::SGRComplexityLevel;
 use crate::color::ChromaSampling::Cs400;
 use crate::context::{MAX_PLANES, SB_SIZE};
 use crate::encoder::FrameInvariants;
@@ -24,8 +25,6 @@ use crate::frame::{
 use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
 use rust_hawktracer::*;
-
-use crate::api::SGRComplexityLevel;
 use std::cmp;
 use std::iter::FusedIterator;
 use std::ops::{Index, IndexMut};
@@ -527,6 +526,7 @@ impl<'a, T: Pixel> Iterator for HorzPaddedIter<'a, T> {
 impl<T: Pixel> ExactSizeIterator for HorzPaddedIter<'_, T> {}
 impl<T: Pixel> FusedIterator for HorzPaddedIter<'_, T> {}
 
+#[hawktracer(setup_integral_image)]
 pub fn setup_integral_image<T: Pixel>(
   integral_image_buffer: &mut IntegralImageBuffer,
   integral_image_stride: usize, crop_w: usize, crop_h: usize, stripe_w: usize,
@@ -626,6 +626,7 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
+#[hawktracer(sgrproj_stripe_filter)]
 pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
@@ -842,6 +843,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 
 // Input params follow the same rules as sgrproj_stripe_filter.
 // Inputs are relative to the colocated slice views.
+#[hawktracer(sgrproj_solve)]
 pub fn sgrproj_solve<T: Pixel>(
   set: u8, fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
@@ -1093,6 +1095,7 @@ pub fn sgrproj_solve<T: Pixel>(
   }
 }
 
+#[hawktracer(wiener_stripe_filter)]
 fn wiener_stripe_filter<T: Pixel>(
   coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>, crop_w: usize, crop_h: usize,
   stripe_w: usize, stripe_h: usize, stripe_x: usize, stripe_y: isize,

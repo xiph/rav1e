@@ -16,9 +16,11 @@ use crate::tiling::TileStateMut;
 use crate::util::Pixel;
 use crate::FrameInvariants;
 use crate::FrameState;
+use rust_hawktracer::*;
 
 pub const MAX_SEGMENTS: usize = 8;
 
+#[hawktracer(segmentation_optimize)]
 pub fn segmentation_optimize<T: Pixel>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
 ) {
@@ -158,6 +160,7 @@ fn segmentation_optimize_inner<T: Pixel>(
   fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
 }
 
+#[hawktracer(select_segment)]
 pub fn select_segment<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &TileStateMut<'_, T>, tile_bo: TileBlockOffset,
   bsize: BlockSize, skip: bool,

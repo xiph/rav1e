@@ -21,10 +21,9 @@ cfg_if::cfg_if! {
 
 pub use tables::*;
 
+use crate::scan_order::av1_scan_orders;
 use crate::transform::{TxSize, TxType};
 use crate::util::*;
-
-use crate::scan_order::av1_scan_orders;
 use std::convert::Into;
 use std::mem;
 use std::num::{NonZeroU16, NonZeroU32, NonZeroU64};
