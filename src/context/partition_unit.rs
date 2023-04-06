@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use super::cdf_context::ContextWriter;
-
 use super::*;
 
 // Generates 4 bit field in which each bit set to 1 represents

@@ -742,7 +742,6 @@ pub enum MetricsEnabled {
   All,
 }
 
-#[hawktracer(calculate_frame_metrics)]
 pub fn calculate_frame_metrics<T: Pixel>(
   frame1: &Frame<T>, frame2: &Frame<T>, bit_depth: usize, cs: ChromaSampling,
   metrics: MetricsEnabled,

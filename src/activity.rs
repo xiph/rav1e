@@ -20,7 +20,7 @@ pub struct ActivityMask {
 }
 
 impl ActivityMask {
-  #[hawktracer(activity_mask_from_plane)]
+  #[hawktracer(ActivityMask_from_plane)]
   pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
     let PlaneConfig { width, height, .. } = luma_plane.cfg;
 
@@ -55,7 +55,7 @@ impl ActivityMask {
     ActivityMask { variances: variances.into_boxed_slice() }
   }
 
-  #[hawktracer(activity_mask_fill_scales)]
+  #[hawktracer(ActivityMask_fill_scales)]
   pub fn fill_scales(
     &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,
   ) {
