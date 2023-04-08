@@ -6090,7 +6090,7 @@ cglobal inv_txfm_add_dct_dct_32x64_8bpc, 4, 7, 0, dst, stride, c, eob
     sar                 r6d, 8+1
     jmp m(inv_txfm_add_dct_dct_32x8_8bpc).dconly3
 ALIGN function_align ; bottom three-quarters are zero
-.main_part1_fast:
+cglobal_label .main_part1_fast
     vpbroadcastd         m1, [o(idct64_mul+4*0)]
     vpbroadcastd         m8, [o(idct64_mul+4*1)]
     vpbroadcastd         m2, [o(idct64_mul+4*6)]
@@ -6104,7 +6104,7 @@ ALIGN function_align ; bottom three-quarters are zero
     mova                 m6, m3
     mova                 m5, m2
     jmp .main_part1b
-.main_part1:
+cglobal_label .main_part1
     ; idct64 steps 1-5:
     ; in1/31/17/15 -> t32a/33/34a/35/60/61a/62/63a
     ; in7/25/23/ 9 -> t56a/57/58a/59/36/37a/38/39a
@@ -6163,7 +6163,7 @@ ALIGN function_align ; bottom three-quarters are zero
     mova          [r4+64*5], m5
     add                  r4, 64*8
     ret
-.main_part2:
+cglobal_label .main_part2
     vpbroadcastd        m11, [o(pw_1567_3784  -16*13)]
     vpbroadcastd        m12, [o(pw_m3784_1567 -16*13)]
     lea                  r6, [r4+64*7]
