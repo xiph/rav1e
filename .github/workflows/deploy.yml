@@ -444,16 +444,16 @@ jobs:
           Cargo.lock
           rav1e (Windows-msvc-generic)/rav1e.exe
           rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
-          rav1e (linux-generic)/rav1e-${{ steps.tagName.outputs.version }}-linux-generic.tar.gz
-          rav1e (linux-sse4)/rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.tar.gz
-          rav1e (linux-avx2)/rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.tar.gz
-          rav1e (linux-aarch64)/rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
-          rav1e (MacOS)/rav1e-${{ steps.tagName.outputs.version }}-macos.zip
-          rav1e (Windows-msvc-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
-          rav1e (Windows-msvc-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
-          rav1e (Windows-msvc-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
-          rav1e (Windows-gnu-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-generic.zip
-          rav1e (Windows-gnu-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-sse4.zip
-          rav1e (Windows-gnu-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-avx2.zip
+          rav1e ${{ steps.tagName.outputs.version }} (linux-generic)/rav1e-${{ steps.tagName.outputs.version }}-linux-generic.tar.gz
+          rav1e ${{ steps.tagName.outputs.version }} (linux-sse4)/rav1e-${{ steps.tagName.outputs.version }}-linux-sse4.tar.gz
+          rav1e ${{ steps.tagName.outputs.version }} (linux-avx2)/rav1e-${{ steps.tagName.outputs.version }}-linux-avx2.tar.gz
+          rav1e ${{ steps.tagName.outputs.version }} (linux-aarch64)/rav1e-${{ steps.tagName.outputs.version }}-linux-aarch64.tar.gz
+          rav1e ${{ steps.tagName.outputs.version }} (MacOS)/rav1e-${{ steps.tagName.outputs.version }}-macos.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-generic.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-sse4.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-msvc-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-msvc-avx2.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-gnu-generic)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-generic.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-gnu-sse4)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-sse4.zip
+          rav1e ${{ steps.tagName.outputs.version }} (Windows-gnu-avx2)/rav1e-${{ steps.tagName.outputs.version }}-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
