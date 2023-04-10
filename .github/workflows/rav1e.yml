@@ -20,9 +20,6 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
           components: clippy, rustfmt
       - name: Run rustfmt
         run: |
@@ -124,11 +121,9 @@ jobs:
           curl -L "$LINK/grcov-x86_64-unknown-linux-musl.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
       - name: Install ${{ matrix.toolchain }}
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: ${{ matrix.toolchain }}
-          override: true
       - name: Install llvm-tools-preview
         if: matrix.conf == 'grcov-codecov'
         run: |
@@ -294,11 +289,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
           target: ${{ matrix.target }}
-          default: true
       - name: Generate Cargo.version for cache key
         run: |
           cargo --version > Cargo.version
@@ -368,12 +359,10 @@ jobs:
           curl -LO "$LINK/$SCCACHE_FILE.tar.gz"
           tar xzf "$SCCACHE_FILE.tar.gz"
           echo "$Env:GITHUB_WORKSPACE/$SCCACHE_FILE" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Install ${{ matrix.toolchain }}
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install stable-${{ matrix.target }}
+        uses: dtolnay/rust-toolchain@master
         with:
-          profile: minimal
           toolchain: stable-${{ matrix.target }}
-          override: true
       - name: Install cargo-c
         if: matrix.conf == 'cargo-c'
         run: |
