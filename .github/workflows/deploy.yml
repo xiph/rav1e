@@ -126,7 +126,7 @@ jobs:
       id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "::set-output name=version::$VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Package pre-release binaries
       if: >
@@ -263,7 +263,7 @@ jobs:
       id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "::set-output name=version::$VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Create a pre-release tar
       if: >
@@ -323,7 +323,7 @@ jobs:
       id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "::set-output name=version::$VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
 
     - name: Create a pre-release zip
       if: >
@@ -380,14 +380,14 @@ jobs:
       id: tagName
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
-        echo "::set-output name=version::$VERSION"
+        echo "version=$VERSION"  >> $GITHUB_OUTPUT
 
     - name: Get date for a scheduled pre-release
       if: github.event_name == 'schedule'
       id: tagDate
       run: |
         DATE=$(date "+%Y%m%d")
-        echo "::set-output name=date::$DATE"
+        echo "date=$DATE" >> $GITHUB_OUTPUT
 
     - name: Create a scheduled pre-release
       if: github.event_name == 'schedule'
