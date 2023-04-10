@@ -19,10 +19,6 @@ jobs:
 
     - name: Install stable
       uses: dtolnay/rust-toolchain@stable
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
 
     - name: Build rav1e-ch (unstable)
       env:
@@ -94,12 +90,10 @@ jobs:
         curl -LO "$LINK/$CARGO_C_FILE.zip"
         7z e -y "$CARGO_C_FILE.zip" -o"${env:USERPROFILE}\.cargo\bin"
 
-    - name: Install stable
-      uses: dtolnay/rust-toolchain@stable
+    - name: Install ${{ matrix.toolchain }}
+      uses: dtolnay/rust-toolchain@master
       with:
-        profile: minimal
         toolchain: ${{ matrix.toolchain }}
-        override: true
 
     - name: Build rav1e
       env:
@@ -229,10 +223,7 @@ jobs:
     - name: Install ${{ matrix.target }} target
       uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
-        toolchain: stable
         target: ${{ matrix.target }}
-        override: true
 
     - name: Install cross
       if: matrix.target == 'aarch64-unknown-linux-musl'
@@ -307,10 +298,6 @@ jobs:
 
     - name: Install stable
       uses: dtolnay/rust-toolchain@stable
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
 
     - name: Build rav1e
       run: cargo build --release
@@ -367,10 +354,6 @@ jobs:
 
     - name: Install Rust stable
       uses: dtolnay/rust-toolchain@stable
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
 
     - name: Create Cargo.lock
       run: cargo update
