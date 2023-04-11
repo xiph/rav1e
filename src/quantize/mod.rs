@@ -272,6 +272,7 @@ impl QuantizationContext {
     &self, coeffs: &[T], qcoeffs: &mut [T], tx_size: TxSize, tx_type: TxType,
   ) -> usize {
     let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
+    let iscan = av1_scan_orders[tx_size as usize][tx_type as usize].iscan;
 
     qcoeffs[0] = {
       let coeff: i32 = i32::cast_from(coeffs[0]) << self.log_tx_scale;
@@ -291,12 +292,18 @@ impl QuantizationContext {
         .align_power_of_two_and_shift(self.log_tx_scale),
     );
     let eob = {
+      let eob_minus_one = iscan
+        .iter()
+        .zip(coeffs)
+        .map(|(&i, &c)| if c.abs() >= deadzone { i } else { 0 })
+        .max()
+        .unwrap_or(0);
       // We skip the DC coefficient since it has its own quantizer index.
-      let eob_minus_two =
-        scan[1..].iter().rposition(|&i| coeffs[i as usize].abs() >= deadzone);
-      eob_minus_two
-        .map(|n| n + 2)
-        .unwrap_or_else(|| usize::from(qcoeffs[0] != T::cast_from(0)))
+      if eob_minus_one > 0 {
+        eob_minus_one as usize + 1
+      } else {
+        usize::from(qcoeffs[0] != T::cast_from(0))
+      }
     };
 
     // Here we use different rounding biases depending on whether we've
