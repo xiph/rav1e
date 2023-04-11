@@ -49,7 +49,7 @@ fn write_b_bench(b: &mut Bencher, tx_size: TxSize, qindex: usize) {
     speed_settings: SpeedSettings::from_preset(10),
     ..Default::default()
   });
-  let sequence = Arc::new(Sequence::new(&Default::default()));
+  let sequence = Arc::new(Sequence::new(&config));
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut w = WriterEncoder::new();
   let mut fc = CDFContext::new(fi.base_q_idx);
@@ -138,7 +138,7 @@ fn cdef_frame_bench(b: &mut Bencher, width: usize, height: usize) {
     speed_settings: SpeedSettings::from_preset(10),
     ..Default::default()
   });
-  let sequence = Arc::new(Sequence::new(&Default::default()));
+  let sequence = Arc::new(Sequence::new(&config));
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let fb = FrameBlocks::new(fi.sb_width * 16, fi.sb_height * 16);
   let mut fs = FrameState::new(&fi);
@@ -170,7 +170,7 @@ fn cfl_rdo_bench(b: &mut Bencher, bsize: BlockSize) {
     speed_settings: SpeedSettings::from_preset(10),
     ..Default::default()
   });
-  let sequence = Arc::new(Sequence::new(&Default::default()));
+  let sequence = Arc::new(Sequence::new(&config));
   let fi = FrameInvariants::<u16>::new(config, sequence);
   let mut fs = FrameState::new(&fi);
   fs.apply_tile_state_mut(|ts| {
