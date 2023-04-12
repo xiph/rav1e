@@ -317,6 +317,7 @@ impl QuantizationContext {
     // To that end, we want to bias more toward rounding to zero for
     // that tail of zeroes and ones than we do for the larger coefficients.
     let mut level_mode = 1;
+    let ac_quant = self.ac_quant.get() as u32;
     for &pos in scan.iter().take(eob).skip(1) {
       let coeff = i32::cast_from(coeffs[pos as usize]) << self.log_tx_scale;
       let abs_coeff = coeff.unsigned_abs();
@@ -328,7 +329,8 @@ impl QuantizationContext {
         self.ac_offset0
       };
 
-      let abs_qcoeff: u32 = divu_pair(abs_coeff + offset, self.ac_mul_add);
+      let abs_qcoeff: u32 =
+        level0 + (abs_coeff + offset >= (level0 + 1) * ac_quant) as u32;
       if level_mode != 0 && abs_qcoeff == 0 {
         level_mode = 0;
       } else if abs_qcoeff > 1 {
