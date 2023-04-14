@@ -249,12 +249,22 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
 }
 
 extern {
-  fn rav1e_cdef_dir_8bpc_rav1e_avx2(
+  fn rav1e_cdef_dir_8bpc_ssse3(
     tmp: *const u8, tmp_stride: isize, var: *mut u32,
   ) -> i32;
-}
 
-extern {
+  fn rav1e_cdef_dir_8bpc_avx2(
+    tmp: *const u8, tmp_stride: isize, var: *mut u32,
+  ) -> i32;
+
+  fn rav1e_cdef_dir_16bpc_ssse3(
+    tmp: *const u16, tmp_stride: isize, var: *mut u32, bitdepth_max: i32,
+  ) -> i32;
+
+  fn rav1e_cdef_dir_16bpc_sse4(
+    tmp: *const u16, tmp_stride: isize, var: *mut u32, bitdepth_max: i32,
+  ) -> i32;
+
   fn rav1e_cdef_dir_16bpc_avx2(
     tmp: *const u16, tmp_stride: isize, var: *mut u32, bitdepth_max: i32,
   ) -> i32;
@@ -263,13 +273,20 @@ extern {
 cpu_function_lookup_table!(
   CDEF_DIR_LBD_FNS: [Option<CdefDirLBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_cdef_dir_8bpc_rav1e_avx2))]
+  [
+    (SSSE3, Some(rav1e_cdef_dir_8bpc_ssse3)),
+    (AVX2, Some(rav1e_cdef_dir_8bpc_avx2))
+  ]
 );
 
 cpu_function_lookup_table!(
   CDEF_DIR_HBD_FNS: [Option<CdefDirHBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_cdef_dir_16bpc_avx2))]
+  [
+    (SSSE3, Some(rav1e_cdef_dir_16bpc_ssse3)),
+    (SSE4_1, Some(rav1e_cdef_dir_16bpc_sse4)),
+    (AVX2, Some(rav1e_cdef_dir_16bpc_avx2))
+  ]
 );
 
 #[cfg(test)]
@@ -477,6 +494,9 @@ mod test {
 
   test_cdef_filter_block!((1, 1), (1, 0), (0, 0), avx2, "avx2");
   test_cdef_filter_block_hbd!((1, 1), (1, 0), (0, 0), avx2, "avx2");
+  test_cdef_dir!(ssse3, "ssse3");
   test_cdef_dir!(avx2, "avx2");
+  test_cdef_dir_hbd!(ssse3, "ssse3");
+  test_cdef_dir_hbd!(sse4, "sse4.1");
   test_cdef_dir_hbd!(avx2, "avx2");
 }
