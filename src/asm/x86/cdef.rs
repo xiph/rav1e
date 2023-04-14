@@ -249,7 +249,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
 }
 
 extern {
-  fn rav1e_cdef_dir_8bpc_avx2(
+  fn rav1e_cdef_dir_8bpc_rav1e_avx2(
     tmp: *const u8, tmp_stride: isize, var: *mut u32,
   ) -> i32;
 }
@@ -263,7 +263,7 @@ extern {
 cpu_function_lookup_table!(
   CDEF_DIR_LBD_FNS: [Option<CdefDirLBDFn>],
   default: None,
-  [(AVX2, Some(rav1e_cdef_dir_8bpc_avx2))]
+  [(AVX2, Some(rav1e_cdef_dir_8bpc_rav1e_avx2))]
 );
 
 cpu_function_lookup_table!(
