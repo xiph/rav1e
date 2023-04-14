@@ -281,7 +281,7 @@ mod test {
   use rand::random;
   use std::str::FromStr;
 
-  macro_rules! test_cdef_fns {
+  macro_rules! test_cdef_filter_block {
     ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
       $(
         paste::item! {
@@ -320,9 +320,6 @@ mod test {
 
             // SAFETY: Calling functions with raw pointers--we created the
             // planes above and only read from the start.
-            //
-            // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
-            #[allow(clippy::undocumented_unsafe_blocks)]
             unsafe {
               cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
               cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
@@ -334,5 +331,152 @@ mod test {
     }
   }
 
-  test_cdef_fns!((1, 1), (1, 0), (0, 0), avx2, "avx2");
+  macro_rules! test_cdef_filter_block_hbd {
+    ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
+      $(
+        paste::item! {
+          #[interpolate_test(dir_0, 0)]
+          #[interpolate_test(dir_1, 1)]
+          #[interpolate_test(dir_2, 2)]
+          #[interpolate_test(dir_3, 3)]
+          #[interpolate_test(dir_4, 4)]
+          #[interpolate_test(dir_5, 5)]
+          #[interpolate_test(dir_6, 6)]
+          #[interpolate_test(dir_7, 7)]
+          fn [<cdef_filter_block_hbd_dec_ $XDEC _ $YDEC _ $OPT>](dir: usize) {
+            if !is_x86_feature_detected!($OPTLIT) {
+              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+              return;
+            }
+
+            let width = 8 >> $XDEC;
+            let height = 8 >> $YDEC;
+            let area = width * height;
+            // dynamic allocation: test
+            let mut src = vec![0u16; area];
+            // dynamic allocation: test
+            let mut dst = Plane::from_slice(&vec![0u16; area], width);
+            for (s, d) in src.iter_mut().zip(dst.data.iter_mut()) {
+              *s = (random::<u8>() as u16) << 2;
+              *d = (random::<u8>() as u16) << 2;
+            }
+            let mut rust_dst = dst.clone();
+
+            let src_stride = width as isize;
+            let pri_strength = 1;
+            let sec_strength = 0;
+            let damping = 2;
+            let bit_depth = 10;
+
+            // SAFETY: Calling functions with raw pointers--we created the
+            // planes above and only read from the start.
+            unsafe {
+              cdef_filter_block(&mut dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+              cdef_filter_block(&mut rust_dst.as_region_mut(), src.as_ptr(), src_stride, pri_strength, sec_strength, dir, damping, bit_depth, $XDEC, $YDEC, CDEF_HAVE_NONE, CpuFeatureLevel::RUST);
+              assert_eq!(rust_dst.data_origin(), dst.data_origin());
+            }
+          }
+        }
+      )*
+    }
+  }
+
+  macro_rules! test_cdef_dir {
+    ($OPT:ident, $OPTLIT:literal) => {
+      paste::item! {
+        #[test]
+        fn [<cdef_dir_ $OPT>]() {
+          use crate::context::{TileSuperBlockOffset, SuperBlockOffset};
+
+          if !is_x86_feature_detected!($OPTLIT) {
+            eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+            return;
+          }
+
+          let width = 8;
+          let height = 8;
+          let area = width * height;
+          // dynamic allocation: test
+          let mut src = vec![0u8; area];
+          for s in src.iter_mut() {
+            *s = random::<u8>();
+          }
+          let src = Plane::from_slice(&src, width);
+          let bit_depth = 8;
+          let coeff_shift = bit_depth - 8;
+          let sbo = TileSuperBlockOffset(SuperBlockOffset{ x:0, y:0 });
+
+          let mut var_asm: u32 = 0;
+          let mut var_rust: u32 = 0;
+          let in_po = sbo.plane_offset(&src.cfg);
+          let dir_asm = cdef_find_dir::<u8>(
+            &src.slice(in_po),
+            &mut var_asm,
+            coeff_shift,
+            CpuFeatureLevel::from_str($OPTLIT).unwrap(),
+          );
+          let dir_rust = cdef_find_dir::<u8>(
+            &src.slice(in_po),
+            &mut var_rust,
+            coeff_shift,
+            CpuFeatureLevel::RUST,
+          );
+          assert_eq!(var_asm, var_rust);
+          assert_eq!(dir_asm, dir_rust);
+        }
+      }
+    }
+  }
+
+  macro_rules! test_cdef_dir_hbd {
+    ($OPT:ident, $OPTLIT:literal) => {
+      paste::item! {
+        #[test]
+        fn [<cdef_dir_ $OPT _hbd>]() {
+          use crate::context::{TileSuperBlockOffset, SuperBlockOffset};
+
+          if !is_x86_feature_detected!($OPTLIT) {
+            eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
+            return;
+          }
+
+          let width = 8;
+          let height = 8;
+          let area = width * height;
+          // dynamic allocation: test
+          let mut src = vec![0u16; area];
+          for s in src.iter_mut() {
+            *s = (random::<u8>() as u16) << 2;
+          }
+          let src = Plane::from_slice(&src, width);
+          let bit_depth = 10;
+          let coeff_shift = bit_depth - 8;
+          let sbo = TileSuperBlockOffset(SuperBlockOffset{ x:0, y:0 });
+
+          let mut var_asm: u32 = 0;
+          let mut var_rust: u32 = 0;
+          let in_po = sbo.plane_offset(&src.cfg);
+          let dir_asm = cdef_find_dir::<u16>(
+            &src.slice(in_po),
+            &mut var_asm,
+            coeff_shift,
+            CpuFeatureLevel::from_str($OPTLIT).unwrap(),
+          );
+          let dir_rust = cdef_find_dir::<u16>(
+            &src.slice(in_po),
+            &mut var_rust,
+            coeff_shift,
+            CpuFeatureLevel::RUST,
+          );
+          assert_eq!(var_asm, var_rust);
+          assert_eq!(dir_asm, dir_rust);
+        }
+      }
+    }
+  }
+
+  test_cdef_filter_block!((1, 1), (1, 0), (0, 0), avx2, "avx2");
+  test_cdef_filter_block_hbd!((1, 1), (1, 0), (0, 0), avx2, "avx2");
+  test_cdef_dir!(avx2, "avx2");
+  test_cdef_dir_hbd!(avx2, "avx2");
 }
