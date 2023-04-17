@@ -246,7 +246,7 @@ jobs:
       env:
         # We get around cross's lack of support for third-party subcommands by
         # defining a custom Dockerfile whose entrypoint rewrites the
-        # "cargo build" command to "cargo cbuild"
+        # "cargo build" command to "cargo cinstall"
         CROSS_BUILD_DOCKERFILE: ./cross/Dockerfile.libs
         CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS:
           "-C target-feature=-crt-static"
@@ -268,7 +268,8 @@ jobs:
         RUSTFLAGS:
           "-C target-feature=-crt-static -C target-cpu=${{ matrix.target_cpu }}"
       run: |
-        cargo cbuild --target ${{ matrix.target }} \
+        cargo cinstall --target ${{ matrix.target }} \
+          --prefix dist \
           --library-type staticlib \
           --library-type cdylib \
           --profile release-strip
@@ -305,10 +306,6 @@ jobs:
            startsWith(github.ref, 'refs/tags/v') ||
            github.event_name == 'schedule')
       run: |
-        mkdir -p dist/{include/rav1e,lib/pkgconfig}
-        cp target/${{ matrix.target }}/release-strip/rav1e.h dist/include/rav1e/
-        cp target/${{ matrix.target }}/release-strip/librav1e.{a,so} dist/lib/
-        cp target/${{ matrix.target }}/release-strip/rav1e.pc dist/lib/pkgconfig
         cd dist
         tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE *
 
@@ -375,7 +372,8 @@ jobs:
     - name: Build librav1e
       if: matrix.build == 'sdk'
       run: |
-        cargo cbuild --target ${{ matrix.target }} \
+        cargo cinstall --target ${{ matrix.target }} \
+          --prefix dist \
           --library-type staticlib \
           --library-type cdylib \
           --profile release-strip
@@ -412,10 +410,6 @@ jobs:
            startsWith(github.ref, 'refs/tags/v') ||
            github.event_name == 'schedule')
       run: |
-        mkdir -p dist/{include/rav1e,lib/pkgconfig}
-        cp target/${{ matrix.target }}/release-strip/rav1e.h dist/include/rav1e/
-        cp target/${{ matrix.target }}/release-strip/librav1e.{a,dylib} dist/lib/
-        cp target/${{ matrix.target }}/release-strip/rav1e.pc dist/lib/pkgconfig
         cd dist
         tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE *
 
