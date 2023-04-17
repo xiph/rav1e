@@ -53,9 +53,9 @@ extern {
 ///
 /// - If in `check_asm` mode, panics on mismatch between native and ASM results.
 #[allow(clippy::let_and_return)]
-pub fn cdef_dist_kernel<T: Pixel>(
+pub fn cdef_dist_kernel<T: Pixel, const BD: usize>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  cpu: CpuFeatureLevel,
 ) -> u32 {
   debug_assert!(src.plane_cfg.xdec == 0);
   debug_assert!(src.plane_cfg.ydec == 0);
@@ -67,7 +67,7 @@ pub fn cdef_dist_kernel<T: Pixel>(
   debug_assert!(h <= 8);
 
   let call_rust =
-    || -> u32 { rust::cdef_dist_kernel(dst, src, w, h, bit_depth, cpu) };
+    || -> u32 { rust::cdef_dist_kernel::<_, BD>(dst, src, w, h, cpu) };
   #[cfg(feature = "check_asm")]
   let ref_dist = call_rust();
 
@@ -112,7 +112,7 @@ pub fn cdef_dist_kernel<T: Pixel>(
     }
   };
 
-  let dist = apply_ssim_boost(sse, svar, dvar, bit_depth);
+  let dist = apply_ssim_boost::<BD>(sse, svar, dvar);
   #[cfg(feature = "check_asm")]
   assert_eq!(
     dist, ref_dist,
@@ -315,41 +315,41 @@ pub mod test {
 
   #[test]
   fn cdef_dist_simd_random() {
-    cdef_diff_tester(8, random_planes::<u8>);
+    cdef_diff_tester::<_, 8>(random_planes::<u8>);
   }
 
   #[test]
   fn cdef_dist_simd_random_hbd() {
-    cdef_diff_tester(10, random_planes::<u16>);
-    cdef_diff_tester(12, random_planes::<u16>);
+    cdef_diff_tester::<_, 10>(random_planes::<u16>);
+    cdef_diff_tester::<_, 12>(random_planes::<u16>);
   }
 
   #[test]
   fn cdef_dist_simd_large() {
-    cdef_diff_tester(8, max_planes::<u8>);
+    cdef_diff_tester::<_, 8>(max_planes::<u8>);
   }
 
   #[test]
   fn cdef_dist_simd_large_hbd() {
-    cdef_diff_tester(10, max_planes::<u16>);
-    cdef_diff_tester(12, max_planes::<u16>);
+    cdef_diff_tester::<_, 10>(max_planes::<u16>);
+    cdef_diff_tester::<_, 12>(max_planes::<u16>);
   }
 
   #[test]
   fn cdef_dist_simd_large_diff() {
-    cdef_diff_tester(8, max_diff_planes::<u8>);
+    cdef_diff_tester::<_, 8>(max_diff_planes::<u8>);
   }
 
   #[test]
   fn cdef_dist_simd_large_diff_hbd() {
-    cdef_diff_tester(10, max_diff_planes::<u16>);
-    cdef_diff_tester(12, max_diff_planes::<u16>);
+    cdef_diff_tester::<_, 10>(max_diff_planes::<u16>);
+    cdef_diff_tester::<_, 12>(max_diff_planes::<u16>);
   }
 
-  fn cdef_diff_tester<T: Pixel>(
-    bd: usize, gen_planes: fn(bd: usize) -> (Plane<T>, Plane<T>),
+  fn cdef_diff_tester<T: Pixel, const BD: usize>(
+    gen_planes: fn(bd: usize) -> (Plane<T>, Plane<T>),
   ) {
-    let (src_plane, dst_plane) = gen_planes(bd);
+    let (src_plane, dst_plane) = gen_planes(BD);
 
     let mut fail = false;
 
@@ -361,21 +361,19 @@ pub mod test {
         let src_region = src_plane.region(area);
         let dst_region = dst_plane.region(area);
 
-        let rust = rust::cdef_dist_kernel(
+        let rust = rust::cdef_dist_kernel::<_, BD>(
           &src_region,
           &dst_region,
           w,
           h,
-          bd,
           CpuFeatureLevel::default(),
         );
 
-        let simd = cdef_dist_kernel(
+        let simd = cdef_dist_kernel::<_, BD>(
           &src_region,
           &dst_region,
           w,
           h,
-          bd,
           CpuFeatureLevel::default(),
         );
 

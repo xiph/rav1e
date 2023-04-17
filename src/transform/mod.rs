@@ -450,7 +450,7 @@ mod test {
   use crate::frame::*;
   use rand::random;
 
-  fn test_roundtrip<T: Pixel>(
+  fn test_roundtrip<T: Pixel, const BD: usize>(
     tx_size: TxSize, tx_type: TxType, tolerance: i16,
   ) {
     let cpu = CpuFeatureLevel::default();
@@ -474,14 +474,20 @@ mod test {
       *d = T::cast_from(random::<u8>());
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
-    forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8, cpu);
-    inverse_transform_add(
+    forward_transform::<_, BD>(
+      res,
+      freq,
+      tx_size.width(),
+      tx_size,
+      tx_type,
+      cpu,
+    );
+    inverse_transform_add::<_, BD>(
       freq,
       &mut dst.as_region_mut(),
       coeff_area,
       tx_size,
       tx_type,
-      8,
       cpu,
     );
 
@@ -526,7 +532,7 @@ mod test {
     }
   }
 
-  fn roundtrips<T: Pixel>() {
+  fn roundtrips<T: Pixel, const BD: usize>() {
     let combinations = [
       (TX_4X4, DCT_DCT, 0),
       (TX_4X4, ADST_DCT, 0),
@@ -577,17 +583,17 @@ mod test {
     ];
     for &(tx_size, tx_type, tolerance) in combinations.iter() {
       println!("Testing combination {:?}, {:?}", tx_size, tx_type);
-      test_roundtrip::<T>(tx_size, tx_type, tolerance);
+      test_roundtrip::<T, BD>(tx_size, tx_type, tolerance);
     }
   }
 
   #[test]
   fn roundtrips_u8() {
-    roundtrips::<u8>();
+    roundtrips::<u8, 8>();
   }
 
   #[test]
   fn roundtrips_u16() {
-    roundtrips::<u16>();
+    roundtrips::<u16, 10>();
   }
 }

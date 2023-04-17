@@ -19,7 +19,7 @@ use crate::FrameState;
 
 pub const MAX_SEGMENTS: usize = 8;
 
-pub fn segmentation_optimize<T: Pixel>(
+pub fn segmentation_optimize<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
 ) {
   assert!(fi.enable_segmentation);
@@ -50,11 +50,11 @@ pub fn segmentation_optimize<T: Pixel>(
       }
       assert_ne!(min_segment, MAX_SEGMENTS);
       fs.segmentation.min_segment = min_segment as u8;
-      fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
+      fs.segmentation.update_threshold::<BD>(fi.base_q_idx);
       return;
     }
 
-    segmentation_optimize_inner(fi, fs, offset_lower_limit);
+    segmentation_optimize_inner::<_, BD>(fi, fs, offset_lower_limit);
 
     /* Figure out parameters */
     fs.segmentation.preskip = false;
@@ -73,7 +73,7 @@ pub fn segmentation_optimize<T: Pixel>(
 }
 
 // Select target quantizers for each segment by fitting to log(scale).
-fn segmentation_optimize_inner<T: Pixel>(
+fn segmentation_optimize_inner<T: Pixel, const BD: usize>(
   fi: &FrameInvariants<T>, fs: &mut FrameState<T>, offset_lower_limit: i16,
 ) {
   use crate::quantize::{ac_q, select_ac_qi};
@@ -112,8 +112,7 @@ fn segmentation_optimize_inner<T: Pixel>(
   // See `distortion_scale_for` for more information.
   let compute_delta = |centroids: &[i16]| {
     use crate::util::{bexp64, blog64};
-    let log2_base_ac_q_q57 =
-      blog64(ac_q(fi.base_q_idx, 0, fi.config.bit_depth).get().into());
+    let log2_base_ac_q_q57 = blog64(ac_q::<BD>(fi.base_q_idx, 0).get().into());
     centroids
       .iter()
       .rev()
@@ -128,8 +127,7 @@ fn segmentation_optimize_inner<T: Pixel>(
       // and take the delta from the base quantizer index.
       .map(|q| {
         // Avoid going into lossless mode by never bringing qidx below 1.
-        select_ac_qi(q, fi.config.bit_depth).max(1) as i16
-          - fi.base_q_idx as i16
+        select_ac_qi::<BD>(q).max(1) as i16 - fi.base_q_idx as i16
       })
       .collect::<ArrayVec<_, MAX_SEGMENTS>>()
   };
@@ -155,7 +153,7 @@ fn segmentation_optimize_inner<T: Pixel>(
     data[SegLvl::SEG_LVL_ALT_Q as usize] = delta.max(offset_lower_limit);
   }
 
-  fs.segmentation.update_threshold(fi.base_q_idx, fi.config.bit_depth);
+  fs.segmentation.update_threshold::<BD>(fi.base_q_idx);
 }
 
 pub fn select_segment<T: Pixel>(

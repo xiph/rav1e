@@ -56,11 +56,11 @@ impl ActivityMask {
   }
 
   #[hawktracer(activity_mask_fill_scales)]
-  pub fn fill_scales(
-    &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,
+  pub fn fill_scales<const BD: usize>(
+    &self, activity_scales: &mut Box<[DistortionScale]>,
   ) {
     for (dst, &src) in activity_scales.iter_mut().zip(self.variances.iter()) {
-      *dst = ssim_boost(src, src, bit_depth);
+      *dst = ssim_boost::<BD>(src, src);
     }
   }
 }
@@ -146,21 +146,20 @@ fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
 }
 
 #[inline(always)]
-pub fn ssim_boost(svar: u32, dvar: u32, bit_depth: usize) -> DistortionScale {
-  DistortionScale(apply_ssim_boost(
+pub fn ssim_boost<const BD: usize>(svar: u32, dvar: u32) -> DistortionScale {
+  DistortionScale(apply_ssim_boost::<BD>(
     DistortionScale::default().0,
     svar,
     dvar,
-    bit_depth,
   ))
 }
 
 /// Apply ssim boost to a given input
 #[inline(always)]
-pub fn apply_ssim_boost(
-  input: u32, svar: u32, dvar: u32, bit_depth: usize,
+pub fn apply_ssim_boost<const BD: usize>(
+  input: u32, svar: u32, dvar: u32,
 ) -> u32 {
-  let coeff_shift = bit_depth - 8;
+  let coeff_shift = BD - 8;
 
   // Scale dvar and svar to lbd range to prevent overflows.
   let svar = (svar >> (2 * coeff_shift)) as u64;
@@ -199,7 +198,7 @@ mod ssim_boost_tests {
     let max_pix_diff = (1 << 12) - 1;
     let max_pix_sse = max_pix_diff * max_pix_diff;
     let max_variance = max_pix_diff * 8 * 8 / 4;
-    apply_ssim_boost(max_pix_sse * 8 * 8, max_variance, max_variance, 12);
+    apply_ssim_boost::<12>(max_pix_sse * 8 * 8, max_variance, max_variance);
   }
 
   /// Floating point reference version of `ssim_boost`
@@ -234,8 +233,8 @@ mod ssim_boost_tests {
         let dvar = rng.gen_range(0..(1 << scale));
 
         let float = reference_ssim_boost(svar, dvar, 12);
-        let fixed =
-          apply_ssim_boost(1 << 23, svar, dvar, 12) as f64 / (1 << 23) as f64;
+        let fixed = apply_ssim_boost::<12>(1 << 23, svar, dvar) as f64
+          / (1 << 23) as f64;
 
         // Compare the two versions
         max_relative_error =
@@ -259,8 +258,13 @@ mod ssim_boost_tests {
     let scale = ((1 << bd) - 1) << (6 - 2 + bd - 8);
     for svar in scale..(scale << 2) {
       let float = ((scale << 1) as f64 / svar as f64).cbrt();
-      let fixed =
-        apply_ssim_boost(1 << 23, svar, svar, bd) as f64 / (1 << 23) as f64;
+      let fixed = match bd {
+        8 => apply_ssim_boost::<8>(1 << 23, svar, svar),
+        10 => apply_ssim_boost::<10>(1 << 23, svar, svar),
+        12 => apply_ssim_boost::<12>(1 << 23, svar, svar),
+        _ => unimplemented!(),
+      } as f64
+        / (1 << 23) as f64;
 
       // Compare the two versions
       max_relative_error =

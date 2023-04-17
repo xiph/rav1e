@@ -18,7 +18,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// We gather both intra and inter costs for the frames,
   /// as well as an importance-block-based difference,
   /// and use all three metrics.
-  pub(super) fn cost_scenecut(
+  pub(super) fn cost_scenecut<const BD: usize>(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
     input_frameno: u64,
   ) -> ScenecutResult {
@@ -49,10 +49,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
         let intra_costs =
           self.intra_costs.entry(input_frameno).or_insert_with(|| {
-            estimate_intra_costs(
+            estimate_intra_costs::<_, BD>(
               temp_plane,
               &*frame2,
-              self.bit_depth,
               self.cpu_feature_level,
             )
           });
@@ -67,10 +66,9 @@ impl<T: Pixel> SceneChangeDetector<T> {
         };
       });
       s.spawn(|_| {
-        mv_inter_cost = estimate_inter_costs(
+        mv_inter_cost = estimate_inter_costs::<_, BD>(
           frame2_inter_ref,
           frame1,
-          self.bit_depth,
           self.encoder_config.clone(),
           self.sequence.clone(),
           buffer,

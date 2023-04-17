@@ -32,7 +32,7 @@ pub(crate) mod rust {
   /// w and h can be at most 128, the size of the largest block.
   pub fn get_sad<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
-    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    h: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
     debug_assert!(w <= 128 && h <= 128);
     let plane_org =
@@ -157,7 +157,7 @@ pub(crate) mod rust {
   /// 4x4 transforms instead of 8x8 transforms when width or height < 8.
   pub fn get_satd<T: Pixel>(
     plane_org: &PlaneRegion<'_, T>, plane_ref: &PlaneRegion<'_, T>, w: usize,
-    h: usize, _bit_depth: usize, _cpu: CpuFeatureLevel,
+    h: usize, _cpu: CpuFeatureLevel,
   ) -> u32 {
     assert!(w <= 128 && h <= 128);
     assert!(plane_org.rect().width >= w && plane_org.rect().height >= h);
@@ -186,9 +186,8 @@ pub(crate) mod rust {
 
         // Revert to sad on edge blocks (frame edges)
         if chunk_w != size || chunk_h != size {
-          sum += get_sad(
-            &chunk_org, &chunk_ref, chunk_w, chunk_h, _bit_depth, _cpu,
-          ) as u64;
+          sum +=
+            get_sad(&chunk_org, &chunk_ref, chunk_w, chunk_h, _cpu) as u64;
           continue;
         }
 
@@ -235,8 +234,7 @@ pub(crate) mod rust {
   #[inline(never)]
   pub fn get_weighted_sse<T: Pixel>(
     src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>, scale: &[u32],
-    scale_stride: usize, w: usize, h: usize, _bit_depth: usize,
-    _cpu: CpuFeatureLevel,
+    scale_stride: usize, w: usize, h: usize, _cpu: CpuFeatureLevel,
   ) -> u64 {
     let src1 = src1.subregion(Area::Rect { x: 0, y: 0, width: w, height: h });
     // Always chunk and apply scaling on the sse of squares the size of
@@ -301,9 +299,9 @@ pub(crate) mod rust {
   /// Computes a distortion metric of the sum of squares weighted by activity.
   /// w and h should be <= 8.
   #[inline(never)]
-  pub fn cdef_dist_kernel<T: Pixel>(
+  pub fn cdef_dist_kernel<T: Pixel, const BD: usize>(
     src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
-    bit_depth: usize, _cpu: CpuFeatureLevel,
+    _cpu: CpuFeatureLevel,
   ) -> u32 {
     // TODO: Investigate using different constants in ssim boost for block sizes
     // smaller than 8x8.
@@ -370,7 +368,7 @@ pub(crate) mod rust {
     dvar =
       ((dvar as u64 * div + (1 << scale_shift >> 1)) >> scale_shift) as u32;
 
-    apply_ssim_boost(sse, svar, dvar, bit_depth)
+    apply_ssim_boost::<BD>(sse, svar, dvar)
   }
 }
 
@@ -442,7 +440,6 @@ pub mod test {
       (64, 16, 116384),
     ];
 
-    let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
     for (w, h, distortion) in blocks {
@@ -453,14 +450,7 @@ pub mod test {
 
       assert_eq!(
         distortion,
-        get_sad(
-          &input_region,
-          &rec_region,
-          w,
-          h,
-          bit_depth,
-          CpuFeatureLevel::default()
-        )
+        get_sad(&input_region, &rec_region, w, h, CpuFeatureLevel::default())
       );
     }
   }
@@ -475,7 +465,7 @@ pub mod test {
     get_sad_same_inner::<u16>();
   }
 
-  fn get_satd_same_inner<T: Pixel>() {
+  fn get_satd_same_inner<T: Pixel, const BD: usize>() {
     let blocks: Vec<(usize, usize, u32)> = vec![
       (4, 4, 1408),
       (4, 8, 2016),
@@ -501,7 +491,6 @@ pub mod test {
       (64, 16, 21312),
     ];
 
-    let bit_depth: usize = 8;
     let (input_plane, rec_plane) = setup_planes::<T>();
 
     for (w, h, distortion) in blocks {
@@ -512,12 +501,11 @@ pub mod test {
 
       assert_eq!(
         distortion,
-        get_satd(
+        get_satd::<_, BD>(
           &input_region,
           &rec_region,
           w,
           h,
-          bit_depth,
           CpuFeatureLevel::default()
         )
       );
@@ -526,11 +514,11 @@ pub mod test {
 
   #[test]
   fn get_satd_same_u8() {
-    get_satd_same_inner::<u8>();
+    get_satd_same_inner::<u8, 8>();
   }
 
   #[test]
   fn get_satd_same_u16() {
-    get_satd_same_inner::<u16>();
+    get_satd_same_inner::<u16, 10>();
   }
 }

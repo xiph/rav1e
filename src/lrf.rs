@@ -626,7 +626,7 @@ pub fn setup_integral_image<T: Pixel>(
   }
 }
 
-pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
+pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel, const BD: usize>(
   set: u8, xqd: [i8; 2], fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, integral_image_stride: usize,
   cdeffed: &PlaneSlice<U>, out: &mut PlaneRegionMut<U>,
@@ -647,19 +647,6 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   let s_r2: u32 = SGRPROJ_PARAMS_S[set as usize][0];
   let s_r1: u32 = SGRPROJ_PARAMS_S[set as usize][1];
 
-  let fn_ab_r1 = match fi.sequence.bit_depth {
-    8 => sgrproj_box_ab_r1::<8>,
-    10 => sgrproj_box_ab_r1::<10>,
-    12 => sgrproj_box_ab_r1::<12>,
-    _ => unimplemented!(),
-  };
-  let fn_ab_r2 = match fi.sequence.bit_depth {
-    8 => sgrproj_box_ab_r2::<8>,
-    10 => sgrproj_box_ab_r2::<10>,
-    12 => sgrproj_box_ab_r2::<12>,
-    _ => unimplemented!(),
-  };
-
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
   // the spec doesn't make clear: Although the spec defines computation
@@ -668,7 +655,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   let integral_image = &integral_image_buffer.integral_image;
   let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
-    fn_ab_r2(
+    sgrproj_box_ab_r2::<BD>(
       &mut a_r2[0],
       &mut b_r2[0],
       integral_image,
@@ -682,7 +669,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   }
   if s_r1 > 0 {
     let integral_image_offset = integral_image_stride + 1;
-    fn_ab_r1(
+    sgrproj_box_ab_r1::<BD>(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
@@ -693,7 +680,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       s_r1,
       fi.cpu_feature_level,
     );
-    fn_ab_r1(
+    sgrproj_box_ab_r1::<BD>(
       &mut a_r1[1],
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
@@ -712,7 +699,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
   for y in (0..stripe_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_ab: [&[u32]; 2] = if s_r2 > 0 {
-      fn_ab_r2(
+      sgrproj_box_ab_r2::<BD>(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
@@ -751,7 +738,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       let y = y + dy;
       if s_r1 > 0 {
         let integral_image_offset = integral_image_stride + 1;
-        fn_ab_r1(
+        sgrproj_box_ab_r1::<BD>(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
@@ -793,9 +780,9 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
       let line = &cdeffed[y];
 
       #[inline(always)]
-      fn apply_filter<U: Pixel>(
+      fn apply_filter<U: Pixel, const BD: usize>(
         out: &mut [U], line: &[U], f_r1: &[u32], f_r2_ab: &[u32],
-        stripe_w: usize, bit_depth: usize, w0: i32, w1: i32, w2: i32,
+        stripe_w: usize, w0: i32, w1: i32, w2: i32,
       ) {
         let line_it = line[..stripe_w].iter();
         let f_r2_ab_it = f_r2_ab[..stripe_w].iter();
@@ -809,17 +796,16 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
           let v = w0 * f_r2_ab as i32 + w1 * u + w2 * f_r1 as i32;
           let s = (v + (1 << (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS) >> 1))
             >> (SGRPROJ_RST_BITS + SGRPROJ_PRJ_BITS);
-          *o = U::cast_from(clamp(s, 0, (1 << bit_depth) - 1));
+          *o = U::cast_from(clamp(s, 0, (1 << BD) - 1));
         }
       }
 
-      apply_filter(
+      apply_filter::<_, BD>(
         &mut out[y],
         line,
         &f_r1,
         f_r2_ab[dy],
         stripe_w,
-        fi.sequence.bit_depth,
         w0,
         w1,
         w2,
@@ -842,7 +828,7 @@ pub fn sgrproj_stripe_filter<T: Pixel, U: Pixel>(
 
 // Input params follow the same rules as sgrproj_stripe_filter.
 // Inputs are relative to the colocated slice views.
-pub fn sgrproj_solve<T: Pixel>(
+pub fn sgrproj_solve<T: Pixel, const BD: usize>(
   set: u8, fi: &FrameInvariants<T>,
   integral_image_buffer: &IntegralImageBuffer, input: &PlaneRegion<'_, T>,
   cdeffed: &PlaneSlice<T>, cdef_w: usize, cdef_h: usize,
@@ -865,19 +851,6 @@ pub fn sgrproj_solve<T: Pixel>(
   let mut h: [[f64; 2]; 2] = [[0., 0.], [0., 0.]];
   let mut c: [f64; 2] = [0., 0.];
 
-  let fn_ab_r1 = match fi.sequence.bit_depth {
-    8 => sgrproj_box_ab_r1::<8>,
-    10 => sgrproj_box_ab_r1::<10>,
-    12 => sgrproj_box_ab_r1::<12>,
-    _ => unimplemented!(),
-  };
-  let fn_ab_r2 = match fi.sequence.bit_depth {
-    8 => sgrproj_box_ab_r2::<8>,
-    10 => sgrproj_box_ab_r2::<10>,
-    12 => sgrproj_box_ab_r2::<12>,
-    _ => unimplemented!(),
-  };
-
   /* prime the intermediate arrays */
   // One oddness about the radius=2 intermediate array computations that
   // the spec doesn't make clear: Although the spec defines computation
@@ -886,7 +859,7 @@ pub fn sgrproj_solve<T: Pixel>(
   let integral_image = &integral_image_buffer.integral_image;
   let sq_integral_image = &integral_image_buffer.sq_integral_image;
   if s_r2 > 0 {
-    fn_ab_r2(
+    sgrproj_box_ab_r2::<BD>(
       &mut a_r2[0],
       &mut b_r2[0],
       integral_image,
@@ -900,7 +873,7 @@ pub fn sgrproj_solve<T: Pixel>(
   }
   if s_r1 > 0 {
     let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
-    fn_ab_r1(
+    sgrproj_box_ab_r1::<BD>(
       &mut a_r1[0],
       &mut b_r1[0],
       &integral_image[integral_image_offset..],
@@ -911,7 +884,7 @@ pub fn sgrproj_solve<T: Pixel>(
       s_r1,
       fi.cpu_feature_level,
     );
-    fn_ab_r1(
+    sgrproj_box_ab_r1::<BD>(
       &mut a_r1[1],
       &mut b_r1[1],
       &integral_image[integral_image_offset..],
@@ -930,7 +903,7 @@ pub fn sgrproj_solve<T: Pixel>(
   for y in (0..cdef_h).step_by(2) {
     // get results to use y and y+1
     let f_r2_01: [&[u32]; 2] = if s_r2 > 0 {
-      fn_ab_r2(
+      sgrproj_box_ab_r2::<BD>(
         &mut a_r2[(y / 2 + 1) % 2],
         &mut b_r2[(y / 2 + 1) % 2],
         integral_image,
@@ -963,7 +936,7 @@ pub fn sgrproj_solve<T: Pixel>(
       let y = y + dy;
       if s_r1 > 0 {
         let integral_image_offset = SOLVE_IMAGE_STRIDE + 1;
-        fn_ab_r1(
+        sgrproj_box_ab_r1::<BD>(
           &mut a_r1[(y + 2) % 3],
           &mut b_r1[(y + 2) % 3],
           &integral_image[integral_image_offset..],
@@ -1093,16 +1066,15 @@ pub fn sgrproj_solve<T: Pixel>(
   }
 }
 
-fn wiener_stripe_filter<T: Pixel>(
-  coeffs: [[i8; 3]; 2], fi: &FrameInvariants<T>, crop_w: usize, crop_h: usize,
-  stripe_w: usize, stripe_h: usize, stripe_x: usize, stripe_y: isize,
-  cdeffed: &Plane<T>, deblocked: &Plane<T>, out: &mut Plane<T>,
+fn wiener_stripe_filter<T: Pixel, const BD: usize>(
+  coeffs: [[i8; 3]; 2], crop_w: usize, crop_h: usize, stripe_w: usize,
+  stripe_h: usize, stripe_x: usize, stripe_y: isize, cdeffed: &Plane<T>,
+  deblocked: &Plane<T>, out: &mut Plane<T>,
 ) {
-  let bit_depth = fi.sequence.bit_depth;
-  let round_h = if bit_depth == 12 { 5 } else { 3 };
-  let round_v = if bit_depth == 12 { 9 } else { 11 };
-  let offset = 1 << (bit_depth + WIENER_BITS - round_h - 1);
-  let limit = (1 << (bit_depth + 1 + WIENER_BITS - round_h)) - 1;
+  let round_h = if BD == 12 { 5 } else { 3 };
+  let round_v = if BD == 12 { 9 } else { 11 };
+  let offset = 1 << (BD + WIENER_BITS - round_h - 1);
+  let limit = (1 << (BD + 1 + WIENER_BITS - round_h)) - 1;
 
   let mut coeffs_ = [[0; 3]; 2];
   for i in 0..2 {
@@ -1197,7 +1169,7 @@ fn wiener_stripe_filter<T: Pixel>(
       *dst = T::cast_from(clamp(
         (acc + (1 << round_v >> 1)) >> round_v,
         0,
-        (1 << bit_depth) - 1,
+        (1 << BD) - 1,
       ));
     }
   }
@@ -1482,7 +1454,7 @@ impl RestorationState {
   }
 
   #[hawktracer(lrf_filter_frame)]
-  pub fn lrf_filter_frame<T: Pixel>(
+  pub fn lrf_filter_frame<T: Pixel, const BD: usize>(
     &mut self, out: &mut Frame<T>, pre_cdef: &Frame<T>,
     fi: &FrameInvariants<T>,
   ) {
@@ -1530,9 +1502,8 @@ impl RestorationState {
           let ru = rp.restoration_unit_by_stripe(si, rux);
           match ru.filter {
             RestorationFilter::Wiener { coeffs } => {
-              wiener_stripe_filter(
+              wiener_stripe_filter::<_, BD>(
                 coeffs,
-                fi,
                 crop_w,
                 crop_h,
                 size,
@@ -1562,7 +1533,7 @@ impl RestorationState {
                   .slice(PlaneOffset { x: x as isize, y: stripe_start_y }),
               );
 
-              sgrproj_stripe_filter(
+              sgrproj_stripe_filter::<_, _, BD>(
                 set,
                 xqd,
                 fi,

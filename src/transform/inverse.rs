@@ -1602,9 +1602,9 @@ pub(crate) mod rust {
   use std::cmp;
 
   #[cold_for_target_arch("x86_64", "aarch64")]
-  pub fn inverse_transform_add<T: Pixel>(
+  pub fn inverse_transform_add<T: Pixel, const BD: usize>(
     input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
-    tx_size: TxSize, tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
+    tx_size: TxSize, tx_type: TxType, _cpu: CpuFeatureLevel,
   ) {
     let width: usize = tx_size.width();
     let height: usize = tx_size.height();
@@ -1619,7 +1619,7 @@ pub(crate) mod rust {
     let tx_types_1d = get_1d_tx_types(tx_type);
 
     // perform inv txfm on every row
-    let range = bd + 8;
+    let range = BD + 8;
     let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][ILog::ilog(width) - 3];
     // 64 point transforms only signal 32 coeffs. We only take chunks of 32
     //   and skip over the last 32 transforms here.
@@ -1645,7 +1645,7 @@ pub(crate) mod rust {
     }
 
     // perform inv txfm on every col
-    let range = cmp::max(bd + 6, 16);
+    let range = cmp::max(BD + 6, 16);
     let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][ILog::ilog(height) - 3];
     for c in 0..width {
       let mut temp_in: [i32; 64] = [0; 64];
@@ -1664,7 +1664,7 @@ pub(crate) mod rust {
         .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(height))
       {
         let v: i32 = (*out).as_();
-        let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
+        let v = clamp(v + round_shift(*temp, 4), 0, (1 << BD) - 1);
         *out = T::cast_from(v);
       }
     }

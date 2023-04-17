@@ -92,8 +92,7 @@ declare_asm_hbd_sse_fn![
 #[allow(clippy::let_and_return)]
 pub fn get_weighted_sse<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, scale: &[u32],
-  scale_stride: usize, w: usize, h: usize, bit_depth: usize,
-  cpu: CpuFeatureLevel,
+  scale_stride: usize, w: usize, h: usize, cpu: CpuFeatureLevel,
 ) -> u64 {
   // Assembly breaks if imp block size changes.
   assert_eq!(IMPORTANCE_BLOCK_SIZE >> 1, 4);
@@ -101,7 +100,7 @@ pub fn get_weighted_sse<T: Pixel>(
   let bsize_opt = BlockSize::from_width_and_height_opt(w, h);
 
   let call_rust = || -> u64 {
-    rust::get_weighted_sse(dst, src, scale, scale_stride, w, h, bit_depth, cpu)
+    rust::get_weighted_sse(dst, src, scale, scale_stride, w, h, cpu)
   };
 
   #[cfg(feature = "check_asm")]
@@ -381,7 +380,6 @@ pub mod test {
         SCALE_STRIDE,
         block.width(),
         block.height(),
-        bd,
         CpuFeatureLevel::default(),
       );
 
@@ -392,7 +390,6 @@ pub mod test {
         SCALE_STRIDE,
         block.width(),
         block.height(),
-        bd,
         CpuFeatureLevel::default(),
       );
 

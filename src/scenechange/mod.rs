@@ -86,8 +86,6 @@ pub struct SceneChangeDetector<T: Pixel> {
   score_deque: Vec<ScenecutResult>,
   /// Number of pixels in scaled frame for fast mode
   pixels: usize,
-  /// The bit depth of the video.
-  bit_depth: usize,
   /// The CPU feature level to be used.
   cpu_feature_level: CpuFeatureLevel,
   encoder_config: EncoderConfig,
@@ -147,7 +145,6 @@ impl<T: Pixel> SceneChangeDetector<T> {
       deque_offset,
       score_deque,
       pixels,
-      bit_depth,
       cpu_feature_level,
       encoder_config,
       sequence,
@@ -165,7 +162,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   ///
   /// This will gracefully handle the first frame in the video as well.
   #[hawktracer(analyze_next_frame)]
-  pub fn analyze_next_frame(
+  pub fn analyze_next_frame<const BD: usize>(
     &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
     previous_keyframe: u64,
   ) -> bool {
@@ -196,9 +193,13 @@ impl<T: Pixel> SceneChangeDetector<T> {
       && frame_set.len() > self.deque_offset + 1
       && self.score_deque.is_empty()
     {
-      self.initialize_score_deque(frame_set, input_frameno, self.deque_offset);
+      self.initialize_score_deque::<BD>(
+        frame_set,
+        input_frameno,
+        self.deque_offset,
+      );
     } else if self.score_deque.is_empty() {
-      self.initialize_score_deque(
+      self.initialize_score_deque::<BD>(
         frame_set,
         input_frameno,
         frame_set.len() - 1,
@@ -209,7 +210,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // Running single frame comparison and adding it to deque
     // Decrease deque offset if there is no new frames
     if frame_set.len() > self.deque_offset + 1 {
-      self.run_comparison(
+      self.run_comparison::<BD>(
         frame_set[self.deque_offset].clone(),
         frame_set[self.deque_offset + 1].clone(),
         input_frameno + self.deque_offset as u64,
@@ -219,7 +220,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     }
 
     // Adaptive scenecut check
-    let (scenecut, score) = self.adaptive_scenecut();
+    let (scenecut, score) = self.adaptive_scenecut::<BD>();
     let scenecut = self.handle_min_max_intervals(distance).unwrap_or(scenecut);
     debug!(
       "[SC-Detect] Frame {}: Raw={:5.1}  ImpBl={:5.1}  Bwd={:5.1}  Fwd={:5.1}  Th={:.1}  {}",
@@ -253,12 +254,12 @@ impl<T: Pixel> SceneChangeDetector<T> {
   }
 
   // Initially fill score deque with frame scores
-  fn initialize_score_deque(
+  fn initialize_score_deque<const BD: usize>(
     &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
     init_len: usize,
   ) {
     for x in 0..init_len {
-      self.run_comparison(
+      self.run_comparison::<BD>(
         frame_set[x].clone(),
         frame_set[x + 1].clone(),
         input_frameno + x as u64,
@@ -268,14 +269,14 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
   /// Runs scene change comparison beetween 2 given frames
   /// Insert result to start of score deque
-  fn run_comparison(
+  fn run_comparison<const BD: usize>(
     &mut self, frame1: Arc<Frame<T>>, frame2: Arc<Frame<T>>,
     input_frameno: u64,
   ) {
     let mut result = if self.speed_mode == SceneDetectionSpeed::Fast {
       self.fast_scenecut(frame1, frame2)
     } else {
-      self.cost_scenecut(frame1, frame2, input_frameno)
+      self.cost_scenecut::<BD>(frame1, frame2, input_frameno)
     };
 
     // Subtract the highest metric value of surrounding frames from the current one
@@ -322,7 +323,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// Compares current scene score to adapted threshold based on previous scores
   /// Value of current frame is offset by lookahead, if lookahead >=5
   /// Returns true if current scene score is higher than adapted threshold
-  fn adaptive_scenecut(&mut self) -> (bool, ScenecutResult) {
+  fn adaptive_scenecut<const BD: usize>(&mut self) -> (bool, ScenecutResult) {
     let score = self.score_deque[self.deque_offset];
 
     // We use the importance block algorithm's cost metrics as a secondary algorithm
@@ -333,8 +334,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
     // the importance block algorithm is over the threshold either on this frame (hard scenecut)
     // or within the past few frames (pan). This helps filter out a few false positives
     // produced by the cost-based algorithm.
-    let imp_block_threshold =
-      IMP_BLOCK_DIFF_THRESHOLD * (self.bit_depth as f64) / 8.0;
+    let imp_block_threshold = IMP_BLOCK_DIFF_THRESHOLD * (BD as f64) / 8.0;
     if !&self.score_deque[self.deque_offset..]
       .iter()
       .any(|result| result.imp_block_cost >= imp_block_threshold)

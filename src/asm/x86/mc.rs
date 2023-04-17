@@ -91,15 +91,14 @@ const fn get_2d_mode_idx(mode_x: FilterMode, mode_y: FilterMode) -> usize {
 /// - If `width * height` is greater than the length of `tmp1` or `tmp2`
 /// - If `width` and `height` do not fit within the bounds of `src`
 #[inline(always)]
-pub fn put_8tap<T: Pixel>(
+pub fn put_8tap<T: Pixel, const BD: usize>(
   dst: &mut PlaneRegionMut<'_, T>, src: PlaneSlice<'_, T>, width: usize,
   height: usize, col_frac: i32, row_frac: i32, mode_x: FilterMode,
-  mode_y: FilterMode, bit_depth: usize, cpu: CpuFeatureLevel,
+  mode_y: FilterMode, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
-    rust::put_8tap(
-      dst, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-      cpu,
+    rust::put_8tap::<_, BD>(
+      dst, src, width, height, col_frac, row_frac, mode_x, mode_y, cpu,
     );
   };
   #[cfg(feature = "check_asm")]
@@ -149,7 +148,7 @@ pub fn put_8tap<T: Pixel>(
             height as i32,
             col_frac,
             row_frac,
-            (1 << bit_depth) - 1,
+            (1 << BD) - 1,
           ),
           None => call_rust(dst),
         }
@@ -176,15 +175,14 @@ pub fn put_8tap<T: Pixel>(
 /// - If `width * height` is greater than the length of `tmp1` or `tmp2`
 /// - If `width` and `height` do not fit within the bounds of `src`
 #[inline(always)]
-pub fn prep_8tap<T: Pixel>(
+pub fn prep_8tap<T: Pixel, const BD: usize>(
   tmp: &mut [i16], src: PlaneSlice<'_, T>, width: usize, height: usize,
   col_frac: i32, row_frac: i32, mode_x: FilterMode, mode_y: FilterMode,
-  bit_depth: usize, cpu: CpuFeatureLevel,
+  cpu: CpuFeatureLevel,
 ) {
   let call_rust = |tmp: &mut [i16]| {
-    rust::prep_8tap(
-      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, bit_depth,
-      cpu,
+    rust::prep_8tap::<_, BD>(
+      tmp, src, width, height, col_frac, row_frac, mode_x, mode_y, cpu,
     );
   };
   #[cfg(feature = "check_asm")]
@@ -223,7 +221,7 @@ pub fn prep_8tap<T: Pixel>(
           None => call_rust(tmp),
         }
       }
-      PixelType::U16 if bit_depth > 8 => {
+      PixelType::U16 if BD > 8 => {
         match PREP_HBD_FNS[cpu.as_index()][get_2d_mode_idx(mode_x, mode_y)] {
           Some(func) => (func)(
             tmp.as_mut_ptr() as *mut _,
@@ -233,7 +231,7 @@ pub fn prep_8tap<T: Pixel>(
             height as i32,
             col_frac,
             row_frac,
-            (1 << bit_depth) - 1,
+            (1 << BD) - 1,
           ),
           None => call_rust(tmp),
         }
@@ -253,12 +251,12 @@ pub fn prep_8tap<T: Pixel>(
 /// - If `width` is not between 2 and 128
 /// - If `width * height` is greater than the length of `tmp1` or `tmp2`
 /// - If `width` and `height` do not fit within the bounds of `dst`
-pub fn mc_avg<T: Pixel>(
+pub fn mc_avg<T: Pixel, const BD: usize>(
   dst: &mut PlaneRegionMut<'_, T>, tmp1: &[i16], tmp2: &[i16], width: usize,
-  height: usize, bit_depth: usize, cpu: CpuFeatureLevel,
+  height: usize, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
-    rust::mc_avg(dst, tmp1, tmp2, width, height, bit_depth, cpu);
+    rust::mc_avg::<_, BD>(dst, tmp1, tmp2, width, height, cpu);
   };
   #[cfg(feature = "check_asm")]
   let ref_dst = {
@@ -292,7 +290,7 @@ pub fn mc_avg<T: Pixel>(
         ),
         None => call_rust(dst),
       },
-      PixelType::U16 if bit_depth > 8 => match AVG_HBD_FNS[cpu.as_index()] {
+      PixelType::U16 if BD > 8 => match AVG_HBD_FNS[cpu.as_index()] {
         Some(func) => (func)(
           dst.data_ptr_mut() as *mut _,
           T::to_asm_stride(dst.plane_cfg.stride),
@@ -300,7 +298,7 @@ pub fn mc_avg<T: Pixel>(
           tmp2.as_ptr(),
           width as i32,
           height as i32,
-          (1 << bit_depth) - 1,
+          (1 << BD) - 1,
         ),
         None => call_rust(dst),
       },
@@ -652,8 +650,8 @@ mod test {
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
-                super::put_8tap(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-                super::put_8tap(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::RUST);
+                super::put_8tap::<_, 8>(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::put_8tap::<_, 8>(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::RUST);
 
                 assert_eq!(&*dst1.data, &*dst2.data);
               }
@@ -670,8 +668,8 @@ mod test {
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
-                super::put_8tap(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-                super::put_8tap(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::RUST);
+                super::put_8tap::<_, 8>(&mut dst1.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::put_8tap::<_, 8>(&mut dst2.as_region_mut(), src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::RUST);
 
                 assert_eq!(&*dst1.data, &*dst2.data);
               }
@@ -740,8 +738,8 @@ mod test {
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
-                super::prep_8tap(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-                super::prep_8tap(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::RUST);
+                super::prep_8tap::<_, 8>(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::prep_8tap::<_, 8>(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::RUST);
               }
             } else {
               // dynamic allocation: test
@@ -752,8 +750,8 @@ mod test {
 
               for mv in &test_mvs {
                 let (row_frac, col_frac, src) = get_params(&src, PlaneOffset { x: 0, y: 0 }, *mv);
-                super::prep_8tap(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::from_str($OPTLIT).unwrap());
-                super::prep_8tap(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, 8, CpuFeatureLevel::RUST);
+                super::prep_8tap::<_, 8>(&mut dst1.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::from_str($OPTLIT).unwrap());
+                super::prep_8tap::<_, 8>(&mut dst2.data, src, 8, 8, col_frac, row_frac, $mode_x, $mode_y, CpuFeatureLevel::RUST);
               }
             };
 

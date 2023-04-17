@@ -24,7 +24,6 @@ type DequantizeFn = unsafe fn(
   _eob: usize,
   rcoeffs_ptr: *mut i16,
   tx_size: TxSize,
-  bit_depth: usize,
   dc_delta_q: i8,
   ac_delta_q: i8,
 );
@@ -32,18 +31,17 @@ type DequantizeFn = unsafe fn(
 cpu_function_lookup_table!(
   DEQUANTIZE_FNS: [Option<DequantizeFn>],
   default: None,
-  [(AVX2, Some(dequantize_avx2))]
+  [(AVX2, Some(dequantize_avx2_8bpc))]
 );
 
 #[inline(always)]
-pub fn dequantize<T: Coefficient>(
+pub fn dequantize<T: Coefficient, const BD: usize>(
   qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
-  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, cpu: CpuFeatureLevel,
+  dc_delta_q: i8, ac_delta_q: i8, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |rcoeffs: &mut [T]| {
-    crate::quantize::rust::dequantize(
-      qindex, coeffs, eob, rcoeffs, tx_size, bit_depth, dc_delta_q,
-      ac_delta_q, cpu,
+    crate::quantize::rust::dequantize::<_, BD>(
+      qindex, coeffs, eob, rcoeffs, tx_size, dc_delta_q, ac_delta_q, cpu,
     );
   };
 
@@ -67,7 +65,6 @@ pub fn dequantize<T: Coefficient>(
             eob,
             rcoeffs.as_mut_ptr() as *mut _,
             tx_size,
-            bit_depth,
             dc_delta_q,
             ac_delta_q,
           )
@@ -87,18 +84,19 @@ pub fn dequantize<T: Coefficient>(
 }
 
 #[target_feature(enable = "avx2")]
-unsafe fn dequantize_avx2(
+unsafe fn dequantize_avx2_8bpc(
   qindex: u8, coeffs_ptr: *const i16, _eob: usize, rcoeffs_ptr: *mut i16,
-  tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+  tx_size: TxSize, dc_delta_q: i8, ac_delta_q: i8,
 ) {
+  const BD: usize = 8;
   let log_tx_scale = _mm256_set1_epi32(get_log_tx_scale(tx_size) as i32);
 
   let quants_ac =
-    _mm256_set1_epi32(ac_q(qindex, ac_delta_q, bit_depth).get() as i32);
+    _mm256_set1_epi32(ac_q::<BD>(qindex, ac_delta_q).get() as i32);
   // Use the dc quantize as first vector element for the first iteration
   let mut quants = _mm256_insert_epi32(
     quants_ac,
-    dc_q(qindex, dc_delta_q, bit_depth).get() as i32,
+    dc_q::<BD>(qindex, dc_delta_q).get() as i32,
     0,
   );
 
@@ -169,12 +167,10 @@ mod test {
       TX_8X32, TX_32X8, TX_16X64, TX_64X16,
     ];
 
-    let bd: usize = 8;
-
     for &tx_size in &tx_sizes {
       let qindex: u8 = rng.gen_range((MINQ as u8)..(MAXQ as u8));
-      let dc_quant = dc_q(qindex, 0, bd).get() as i16;
-      let ac_quant = ac_q(qindex, 0, bd).get() as i16;
+      let dc_quant = dc_q::<8>(qindex, 0).get() as i16;
+      let ac_quant = ac_q::<8>(qindex, 0).get() as i16;
 
       // Test the min, max, and random eobs
       let eobs = {
@@ -200,13 +196,12 @@ mod test {
         }
 
         // Rely on quantize's internal tests
-        dequantize(
+        dequantize::<_, 8>(
           qindex,
           &qcoeffs.data,
           eob,
           &mut rcoeffs.data,
           tx_size,
-          bd,
           0,
           0,
           CpuFeatureLevel::default(),

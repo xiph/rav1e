@@ -199,9 +199,9 @@ impl PredictionMode {
   /// # Panics
   ///
   /// - If called on an inter `PredictionMode`
-  pub fn predict_intra<T: Pixel>(
+  pub fn predict_intra<T: Pixel, const BD: usize>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
-    tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
+    tx_size: TxSize, ac: &[i16], intra_param: IntraParam,
     ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
   ) {
@@ -239,9 +239,8 @@ impl PredictionMode {
       _ => intra_mode_to_angle(mode) + (angle_delta * ANGLE_STEP) as isize,
     };
 
-    dispatch_predict_intra::<T>(
-      mode, variant, dst, tx_size, bit_depth, ac, angle, ief_params, edge_buf,
-      cpu,
+    dispatch_predict_intra::<T, BD>(
+      mode, variant, dst, tx_size, ac, angle, ief_params, edge_buf, cpu,
     );
   }
 
@@ -298,7 +297,7 @@ impl PredictionMode {
   /// # Panics
   ///
   /// - If called on an intra `PredictionMode`
-  pub fn predict_inter_single<T: Pixel>(
+  pub fn predict_inter_single<T: Pixel, const BD: usize>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frame: RefType, mv: MotionVector,
@@ -313,7 +312,7 @@ impl PredictionMode {
     {
       let (row_frac, col_frac, src) =
         PredictionMode::get_mv_params(&rec.frame.planes[p], frame_po, mv);
-      put_8tap(
+      put_8tap::<_, BD>(
         dst,
         src,
         width,
@@ -322,7 +321,6 @@ impl PredictionMode {
         row_frac,
         mode,
         mode,
-        fi.sequence.bit_depth,
         fi.cpu_feature_level,
       );
     }
@@ -333,7 +331,7 @@ impl PredictionMode {
   /// # Panics
   ///
   /// - If called on an intra `PredictionMode`
-  pub fn predict_inter_compound<T: Pixel>(
+  pub fn predict_inter_compound<T: Pixel, const BD: usize>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
@@ -353,7 +351,7 @@ impl PredictionMode {
           frame_po,
           mvs[i],
         );
-        prep_8tap(
+        prep_8tap::<_, BD>(
           buffer.get_buffer_mut(i),
           src,
           width,
@@ -362,25 +360,23 @@ impl PredictionMode {
           row_frac,
           mode,
           mode,
-          fi.sequence.bit_depth,
           fi.cpu_feature_level,
         );
       }
     }
-    mc_avg(
+    mc_avg::<_, BD>(
       dst,
       buffer.get_buffer(0),
       buffer.get_buffer(1),
       width,
       height,
-      fi.sequence.bit_depth,
       fi.cpu_feature_level,
     );
   }
 
   /// Inter prediction that determines whether compound mode is being used based
   /// on the second [`RefType`] in [`ref_frames`].
-  pub fn predict_inter<T: Pixel>(
+  pub fn predict_inter<T: Pixel, const BD: usize>(
     self, fi: &FrameInvariants<T>, tile_rect: TileRect, p: usize,
     po: PlaneOffset, dst: &mut PlaneRegionMut<'_, T>, width: usize,
     height: usize, ref_frames: [RefType; 2], mvs: [MotionVector; 2],
@@ -390,7 +386,7 @@ impl PredictionMode {
       && ref_frames[1] != RefType::NONE_FRAME;
 
     if !is_compound {
-      self.predict_inter_single(
+      self.predict_inter_single::<_, BD>(
         fi,
         tile_rect,
         p,
@@ -402,7 +398,7 @@ impl PredictionMode {
         mvs[0],
       )
     } else {
-      self.predict_inter_compound(
+      self.predict_inter_compound::<_, BD>(
         fi,
         tile_rect,
         p,
@@ -692,10 +688,10 @@ pub(crate) mod rust {
   use std::mem::size_of;
 
   #[inline(always)]
-  pub fn dispatch_predict_intra<T: Pixel>(
+  pub fn dispatch_predict_intra<T: Pixel, const BD: usize>(
     mode: PredictionMode, variant: PredictionVariant,
-    dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
-    ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
+    dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, ac: &[i16],
+    angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
     edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
   ) {
     let width = tx_size.width();
@@ -712,11 +708,11 @@ pub(crate) mod rust {
     match mode {
       PredictionMode::DC_PRED => {
         (match variant {
-          PredictionVariant::NONE => pred_dc_128,
+          PredictionVariant::NONE => pred_dc_128::<_, BD>,
           PredictionVariant::LEFT => pred_dc_left,
           PredictionVariant::TOP => pred_dc_top,
           PredictionVariant::BOTH => pred_dc,
-        })(dst, above_slice, left_slice, width, height, bit_depth)
+        })(dst, above_slice, left_slice, width, height)
       }
       PredictionMode::V_PRED if angle == 90 => {
         pred_v(dst, above_slice, width, height)
@@ -731,7 +727,7 @@ pub(crate) mod rust {
       | PredictionMode::D113_PRED
       | PredictionMode::D157_PRED
       | PredictionMode::D203_PRED
-      | PredictionMode::D67_PRED => pred_directional(
+      | PredictionMode::D67_PRED => pred_directional::<_, BD>(
         dst,
         above_slice,
         left_and_left_below_slice,
@@ -739,7 +735,6 @@ pub(crate) mod rust {
         angle as usize,
         width,
         height,
-        bit_depth,
         ief_params,
       ),
       PredictionMode::SMOOTH_PRED => {
@@ -754,28 +749,23 @@ pub(crate) mod rust {
       PredictionMode::PAETH_PRED => {
         pred_paeth(dst, above_slice, left_slice, top_left[0], width, height)
       }
-      PredictionMode::UV_CFL_PRED => (match variant {
-        PredictionVariant::NONE => pred_cfl_128,
-        PredictionVariant::LEFT => pred_cfl_left,
-        PredictionVariant::TOP => pred_cfl_top,
-        PredictionVariant::BOTH => pred_cfl,
-      })(
-        dst,
-        ac,
-        angle as i16,
-        above_slice,
-        left_slice,
-        width,
-        height,
-        bit_depth,
-      ),
+      PredictionMode::UV_CFL_PRED => {
+        (match variant {
+          PredictionVariant::NONE => pred_cfl_128::<_, BD>,
+          PredictionVariant::LEFT => pred_cfl_left::<_, BD>,
+          PredictionVariant::TOP => pred_cfl_top::<_, BD>,
+          PredictionVariant::BOTH => pred_cfl::<_, BD>,
+        })(
+          dst, ac, angle as i16, above_slice, left_slice, width, height
+        )
+      }
       _ => unimplemented!(),
     }
   }
 
   pub(crate) fn pred_dc<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T], width: usize,
-    height: usize, _bit_depth: usize,
+    height: usize,
   ) {
     let edges = left[..height].iter().chain(above[..width].iter());
     let len = (width + height) as u32;
@@ -791,11 +781,11 @@ pub(crate) mod rust {
     }
   }
 
-  pub(crate) fn pred_dc_128<T: Pixel>(
+  pub(crate) fn pred_dc_128<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, _above: &[T], _left: &[T],
-    width: usize, height: usize, bit_depth: usize,
+    width: usize, height: usize,
   ) {
-    let v = T::cast_from(128u32 << (bit_depth - 8));
+    let v = T::cast_from(128u32 << (BD - 8));
     for line in output.rows_iter_mut().take(height) {
       line[..width].fill(v);
     }
@@ -803,7 +793,7 @@ pub(crate) mod rust {
 
   pub(crate) fn pred_dc_left<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, _above: &[T], left: &[T],
-    width: usize, height: usize, _bit_depth: usize,
+    width: usize, height: usize,
   ) {
     let sum = left[..].iter().fold(0u32, |acc, &v| {
       let v: u32 = v.into();
@@ -817,7 +807,7 @@ pub(crate) mod rust {
 
   pub(crate) fn pred_dc_top<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], _left: &[T],
-    width: usize, height: usize, _bit_depth: usize,
+    width: usize, height: usize,
   ) {
     let sum = above[..width].iter().fold(0u32, |acc, &v| {
       let v: u32 = v.into();
@@ -1045,9 +1035,9 @@ pub(crate) mod rust {
     }
   }
 
-  pub(crate) fn pred_cfl_inner<T: Pixel>(
+  pub(crate) fn pred_cfl_inner<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, width: usize,
-    height: usize, bit_depth: usize,
+    height: usize,
   ) {
     if alpha == 0 {
       return;
@@ -1057,7 +1047,7 @@ pub(crate) mod rust {
     assert!(output.plane_cfg.stride >= width);
     assert!(output.rows_iter().len() >= height);
 
-    let sample_max = (1 << bit_depth) - 1;
+    let sample_max = (1 << BD) - 1;
     let avg: i32 = output[0][0].into();
 
     for (line, luma) in
@@ -1071,43 +1061,43 @@ pub(crate) mod rust {
     }
   }
 
-  pub(crate) fn pred_cfl<T: Pixel>(
+  pub(crate) fn pred_cfl<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, above: &[T],
-    left: &[T], width: usize, height: usize, bit_depth: usize,
+    left: &[T], width: usize, height: usize,
   ) {
-    pred_dc(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
+    pred_dc(output, above, left, width, height);
+    pred_cfl_inner::<_, BD>(output, ac, alpha, width, height);
   }
 
-  pub(crate) fn pred_cfl_128<T: Pixel>(
+  pub(crate) fn pred_cfl_128<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, above: &[T],
-    left: &[T], width: usize, height: usize, bit_depth: usize,
+    left: &[T], width: usize, height: usize,
   ) {
-    pred_dc_128(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
+    pred_dc_128::<_, BD>(output, above, left, width, height);
+    pred_cfl_inner::<_, BD>(output, ac, alpha, width, height);
   }
 
-  pub(crate) fn pred_cfl_left<T: Pixel>(
+  pub(crate) fn pred_cfl_left<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, above: &[T],
-    left: &[T], width: usize, height: usize, bit_depth: usize,
+    left: &[T], width: usize, height: usize,
   ) {
-    pred_dc_left(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
+    pred_dc_left(output, above, left, width, height);
+    pred_cfl_inner::<_, BD>(output, ac, alpha, width, height);
   }
 
-  pub(crate) fn pred_cfl_top<T: Pixel>(
+  pub(crate) fn pred_cfl_top<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, ac: &[i16], alpha: i16, above: &[T],
-    left: &[T], width: usize, height: usize, bit_depth: usize,
+    left: &[T], width: usize, height: usize,
   ) {
-    pred_dc_top(output, above, left, width, height, bit_depth);
-    pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
+    pred_dc_top(output, above, left, width, height);
+    pred_cfl_inner::<_, BD>(output, ac, alpha, width, height);
   }
 
   #[allow(clippy::clone_double_ref)]
-  pub(crate) fn pred_directional<T: Pixel>(
+  pub(crate) fn pred_directional<T: Pixel, const BD: usize>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     top_left: &[T], p_angle: usize, width: usize, height: usize,
-    bit_depth: usize, ief_params: Option<IntraEdgeFilterParameters>,
+    ief_params: Option<IntraEdgeFilterParameters>,
   ) {
     #[allow(clippy::collapsible_if)]
     #[allow(clippy::collapsible_else_if)]
@@ -1217,7 +1207,7 @@ pub(crate) mod rust {
       edge.copy_from_slice(edge_filtered.as_slice());
     }
 
-    fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
+    fn upsample_edge<T: Pixel, const BD: usize>(size: usize, edge: &mut [T]) {
       // The input edge should be valid in the -1..size range,
       // where the -1 index is the top-left edge pixel. Since
       // negative indices are unsafe in Rust, the caller is
@@ -1241,14 +1231,14 @@ pub(crate) mod rust {
           + (9 * dup[i + 1].to_i32().unwrap())
           + (9 * dup[i + 2].to_i32().unwrap())
           - dup[i + 3].to_i32().unwrap();
-        s = ((s + 8) / 16).clamp(0, (1 << bit_depth) - 1);
+        s = ((s + 8) / 16).clamp(0, (1 << BD) - 1);
 
         edge[2 * i + 1] = T::cast_from(s);
         edge[2 * i + 2] = dup[i + 2];
       }
     }
 
-    let sample_max = (1 << bit_depth) - 1;
+    let sample_max = (1 << BD) - 1;
 
     let max_x = output.plane_cfg.width as isize - 1;
     let max_y = output.plane_cfg.height as isize - 1;
@@ -1326,7 +1316,7 @@ pub(crate) mod rust {
         p_angle as isize - 90,
       );
       if upsample_above {
-        upsample_edge(num_px.0, above_filtered.as_mut_slice(), bit_depth);
+        upsample_edge::<_, BD>(num_px.0, &mut above_filtered[..]);
       }
       upsample_left = select_ief_upsample(
         width,
@@ -1335,7 +1325,7 @@ pub(crate) mod rust {
         p_angle as isize - 180,
       );
       if upsample_left {
-        upsample_edge(num_px.1, left_filtered.as_mut_slice(), bit_depth);
+        upsample_edge::<_, BD>(num_px.1, &mut left_filtered[..]);
       }
 
       left_filtered.reverse();
@@ -1503,16 +1493,16 @@ mod test {
 
     let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
 
-    pred_dc(&mut output.as_region_mut(), above, left, 4, 4, 8);
+    pred_dc(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [32u8; 16]);
 
-    pred_dc_top(&mut output.as_region_mut(), above, left, 4, 4, 8);
+    pred_dc_top(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [35u8; 16]);
 
-    pred_dc_left(&mut output.as_region_mut(), above, left, 4, 4, 8);
+    pred_dc_left(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [30u8; 16]);
 
-    pred_dc_128(&mut output.as_region_mut(), above, left, 4, 4, 8);
+    pred_dc_128::<_, 8>(&mut output.as_region_mut(), above, left, 4, 4);
     assert_eq!(&output.data[..], [128u8; 16]);
 
     pred_v(&mut output.as_region_mut(), above, 4, 4);
@@ -1588,7 +1578,7 @@ mod test {
       [33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36, 33, 34, 35, 36],
     ];
     for (&angle, expected) in angles.iter().zip(expected.iter()) {
-      pred_directional(
+      pred_directional::<_, 8>(
         &mut output.as_region_mut(),
         above,
         left,
@@ -1596,7 +1586,6 @@ mod test {
         angle,
         4,
         4,
-        8,
         None,
       );
       assert_eq!(&output.data[..], expected);
@@ -1611,7 +1600,7 @@ mod test {
 
     let mut o = Plane::from_slice(&vec![0u16; 32 * 32], 32);
 
-    pred_dc(&mut o.as_region_mut(), &above[..4], &left[..4], 4, 4, 16);
+    pred_dc(&mut o.as_region_mut(), &above[..4], &left[..4], 4, 4);
 
     for l in o.data.chunks(32).take(4) {
       for v in l[..4].iter() {

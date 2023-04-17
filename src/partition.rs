@@ -591,7 +591,7 @@ fn supersample_chroma_bsize(
   }
 }
 
-pub fn get_intra_edges<T: Pixel>(
+pub fn get_intra_edges<T: Pixel, const BD: usize>(
   dst: &PlaneRegion<'_, T>,
   partition_bo: TileBlockOffset, // partition bo, BlockOffset
   bx: usize,
@@ -599,7 +599,6 @@ pub fn get_intra_edges<T: Pixel>(
   partition_size: BlockSize, // partition size, BlockSize
   po: PlaneOffset,
   tx_size: TxSize,
-  bit_depth: usize,
   opt_mode: Option<PredictionMode>,
   enable_intra_edge_filter: bool,
   intra_param: IntraParam,
@@ -610,7 +609,7 @@ pub fn get_intra_edges<T: Pixel>(
   let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
     unsafe { Aligned::uninitialized() };
   //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
-  let base = 128u16 << (bit_depth - 8);
+  let base = 128u16 << (BD - 8);
 
   {
     // left pixels are ordered from bottom to top and right-aligned
