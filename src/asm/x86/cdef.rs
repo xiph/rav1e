@@ -294,7 +294,7 @@ mod test {
           #[interpolate_test(dir_6, 6)]
           #[interpolate_test(dir_7, 7)]
           fn [<cdef_filter_block_dec_ $XDEC _ $YDEC _ $OPT>](dir: usize) {
-            if !is_x86_feature_detected!($OPTLIT) {
+            if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
               eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
               return;
             }

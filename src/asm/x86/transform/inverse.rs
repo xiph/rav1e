@@ -405,6 +405,7 @@ mod test {
   use super::*;
   use crate::asm::shared::transform::inverse::test::*;
   use crate::transform::TxSize::*;
+  use std::str::FromStr;
 
   macro_rules! test_itx_fns {
     ($(($ENUM:expr, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:tt, $OPT_ENUM:expr) => {
@@ -412,7 +413,7 @@ mod test {
         paste::item! {
           #[test]
           fn [<inv_txfm2d_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]() {
-            if !is_x86_feature_detected!($OPTLIT) {
+            if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
               eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
               return;
             }
