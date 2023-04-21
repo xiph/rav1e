@@ -633,7 +633,7 @@ mod test {
         paste::item! {
           #[test]
           fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
-            if !is_x86_feature_detected!($OPTLIT) {
+            if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
               eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
               return;
             }
@@ -720,7 +720,7 @@ mod test {
         paste::item! {
           #[test]
           fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
-            if !is_x86_feature_detected!($OPTLIT) {
+            if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
               eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
               return;
             }
