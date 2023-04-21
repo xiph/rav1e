@@ -44,6 +44,7 @@ impl Default for CpuFeatureLevel {
         && is_x86_feature_detected!("avx512f")
         && is_x86_feature_detected!("avx512vl")
     }
+    #[allow(deprecated)] // Until MSRV >= 1.69.0
     fn avx512icl_detected() -> bool {
       // Per dav1d, these are the flags needed.
       avx512_detected()
