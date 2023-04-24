@@ -120,6 +120,9 @@ jobs:
         run: |
           curl -L "$LINK/grcov-x86_64-unknown-linux-musl.tar.bz2" |
           tar xj -C $HOME/.cargo/bin
+      - name: Install Intel SDE
+        if: matrix.conf == 'grcov-codecov'
+        uses: petarpetrovt/setup-sde@v2.1
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
@@ -222,6 +225,8 @@ jobs:
           RUSTDOCFLAGS: >
             -Cinstrument-coverage -Ccodegen-units=1 -Clink-dead-code
             -Coverflow-checks=off
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: >
+            ${{ env.SDE_PATH }}/sde -icx --
         run: |
           cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
                      --features=decode_test,decode_test_dav1d,quick_test
