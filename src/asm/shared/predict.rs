@@ -17,18 +17,32 @@ mod test {
   use crate::predict::{PredictionMode, PredictionVariant};
   use crate::transform::TxSize;
   use crate::util::Aligned;
-  use num_traits::*;
+  use crate::Pixel;
+
   #[test]
-  fn pred_matches_u8() {
+  fn pred_matches() {
+    for cpu in
+      &CpuFeatureLevel::all()[..=CpuFeatureLevel::default().as_index()]
+    {
+      pred_matches_inner::<u8>(*cpu, 8);
+      pred_matches_inner::<u16>(*cpu, 10);
+      pred_matches_inner::<u16>(*cpu, 12);
+    }
+  }
+
+  fn pred_matches_inner<T: Pixel>(cpu: CpuFeatureLevel, bit_depth: usize) {
     let tx_size = TxSize::TX_4X4;
-    let bit_depth = 8;
-    let cpu = CpuFeatureLevel::default();
-    let ac = [0i16; 32 * 32];
     // SAFETY: We write to the array below before reading from it.
-    let mut edge_buf: Aligned<[u8; 4 * MAX_TX_SIZE + 1]> =
+    let mut ac: Aligned<[i16; 32 * 32]> = unsafe { Aligned::uninitialized() };
+    for i in 0..ac.data.len() {
+      ac.data[i] = i as i16 - 16 * 32;
+    }
+    // SAFETY: We write to the array below before reading from it.
+    let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
       unsafe { Aligned::uninitialized() };
     for i in 0..edge_buf.data.len() {
-      edge_buf.data[i] = (i + 32).saturating_sub(2 * MAX_TX_SIZE).as_();
+      edge_buf.data[i] =
+        T::cast_from((i + 32).saturating_sub(2 * MAX_TX_SIZE));
     }
 
     for (mode, variant) in [
@@ -48,6 +62,10 @@ mod test {
       (PredictionMode::SMOOTH_V_PRED, PredictionVariant::BOTH),
       (PredictionMode::SMOOTH_H_PRED, PredictionVariant::BOTH),
       (PredictionMode::PAETH_PRED, PredictionVariant::BOTH),
+      (PredictionMode::UV_CFL_PRED, PredictionVariant::BOTH),
+      (PredictionMode::UV_CFL_PRED, PredictionVariant::TOP),
+      (PredictionMode::UV_CFL_PRED, PredictionVariant::LEFT),
+      (PredictionMode::UV_CFL_PRED, PredictionVariant::NONE),
     ]
     .iter()
     {
@@ -68,38 +86,43 @@ mod test {
           [194, 197, 200, 203, 206, 209, 212].iter()
         }
         PredictionMode::D67_PRED => [58, 61, 64, 67, 70, 73, 76].iter(),
+        PredictionMode::UV_CFL_PRED => [
+          -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 1,
+          2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+        ]
+        .iter(),
         _ => [0].iter(),
       };
       for angle in angles {
         let expected = {
-          let mut plane = Plane::from_slice(&[0u8; 4 * 4], 4);
+          let mut plane = Plane::from_slice(&[T::zero(); 4 * 4], 4);
           rust::dispatch_predict_intra(
             *mode,
             *variant,
             &mut plane.as_region_mut(),
             tx_size,
             bit_depth,
-            &ac,
+            &ac.data,
             *angle,
             None,
             &edge_buf,
             cpu,
           );
-          let mut data = [0u8; 4 * 4];
+          let mut data = [T::zero(); 4 * 4];
           for (v, d) in data.iter_mut().zip(plane.data[..].iter()) {
             *v = *d;
           }
           data
         };
 
-        let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
+        let mut output = Plane::from_slice(&[T::zero(); 4 * 4], 4);
         dispatch_predict_intra(
           *mode,
           *variant,
           &mut output.as_region_mut(),
           tx_size,
           bit_depth,
-          &ac,
+          &ac.data,
           *angle,
           None,
           &edge_buf,
@@ -108,10 +131,12 @@ mod test {
         assert_eq!(
           expected,
           &output.data[..],
-          "mode={:?} variant={:?} angle={}",
+          "mode={:?} variant={:?} angle={} bit_depth={} cpu={:?}",
           *mode,
           *variant,
-          *angle
+          *angle,
+          bit_depth,
+          cpu
         );
       }
     }

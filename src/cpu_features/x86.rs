@@ -25,6 +25,12 @@ pub enum CpuFeatureLevel {
 }
 
 impl CpuFeatureLevel {
+  #[cfg(test)]
+  pub(crate) const fn all() -> &'static [Self] {
+    use CpuFeatureLevel::*;
+    &[RUST, SSE2, SSSE3, SSE4_1, AVX2, AVX512, AVX512ICL]
+  }
+
   pub const fn len() -> usize {
     CpuFeatureLevel::AVX512ICL as usize + 1
   }
