@@ -14,6 +14,14 @@ pub enum CpuFeatureLevel {
   RUST,
 }
 
+impl CpuFeatureLevel {
+  #[cfg(test)]
+  pub(crate) const fn all() -> &'static [Self] {
+    use CpuFeatureLevel::*;
+    &[RUST, NEON]
+  }
+}
+
 impl Default for CpuFeatureLevel {
   fn default() -> CpuFeatureLevel {
     CpuFeatureLevel::RUST

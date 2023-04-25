@@ -18,6 +18,12 @@ pub enum CpuFeatureLevel {
 }
 
 impl CpuFeatureLevel {
+  #[cfg(test)]
+  pub(crate) const fn all() -> &'static [Self] {
+    use CpuFeatureLevel::*;
+    &[RUST, NEON]
+  }
+
   pub const fn len() -> usize {
     CpuFeatureLevel::NEON as usize + 1
   }
