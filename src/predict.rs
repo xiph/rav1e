@@ -534,7 +534,7 @@ pub struct AngleDelta {
   pub uv: i8,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct IntraEdgeFilterParameters {
   pub plane: usize,
   pub above_ref_frame_types: Option<[RefType; 2]>,
@@ -1296,28 +1296,20 @@ pub(crate) mod rust {
             + 1, // left
         );
 
-        if output.rect().y > 0 {
-          let filter_strength = select_ief_strength(
-            width,
-            height,
-            smooth_filter,
-            p_angle as isize - 90,
-          );
-          filter_edge(
-            num_px.0,
-            filter_strength,
-            above_filtered.as_mut_slice(),
-          );
-        }
-        if output.rect().x > 0 {
-          let filter_strength = select_ief_strength(
-            width,
-            height,
-            smooth_filter,
-            p_angle as isize - 180,
-          );
-          filter_edge(num_px.1, filter_strength, left_filtered.as_mut_slice());
-        }
+        let filter_strength = select_ief_strength(
+          width,
+          height,
+          smooth_filter,
+          p_angle as isize - 90,
+        );
+        filter_edge(num_px.0, filter_strength, above_filtered.as_mut_slice());
+        let filter_strength = select_ief_strength(
+          width,
+          height,
+          smooth_filter,
+          p_angle as isize - 180,
+        );
+        filter_edge(num_px.1, filter_strength, left_filtered.as_mut_slice());
       }
 
       let num_px = (
