@@ -85,6 +85,7 @@ pub mod test {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::{AsRegion, Plane};
   use crate::scan_order::av1_scan_orders;
+  use crate::transform::TxSize::*;
   use crate::transform::*;
   use rand::{random, thread_rng, Rng};
 
@@ -195,4 +196,74 @@ pub mod test {
       assert_eq!(rust_dst.data_origin(), dst.data_origin());
     }
   }
+
+  macro_rules! test_itx_fns {
+    ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr) => {
+      paste::item! {
+        $(
+          $(
+            #[test]
+            fn [<inv_txfm2d_add_ $TYPE2 _$TYPE1 _$W x $H>]() {
+              for &cpu in
+                &CpuFeatureLevel::all()[..=CpuFeatureLevel::default().as_index()]
+              {
+                test_transform(
+                  [<TX_ $W X $H>],
+                  $ENUM,
+                  cpu
+                );
+              }
+            }
+          )*
+        )*
+      }
+    };
+
+    ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*]) => {
+      $(
+        test_itx_fns!($TYPES_VALID, $W, $H);
+      )*
+    };
+
+    ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
+     $TYPES84:tt, $DIMS84:tt) => {
+      test_itx_fns!([$TYPES64], $DIMS64);
+      test_itx_fns!([$TYPES64, $TYPES32], $DIMS32);
+      test_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16);
+      test_itx_fns!(
+        [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84
+      );
+    };
+  }
+
+  test_itx_fns!(
+    // 64x
+    [(TxType::DCT_DCT, dct, dct)],
+    [(64, 64), (64, 32), (32, 64), (16, 64), (64, 16)],
+    // 32x
+    [(TxType::IDTX, identity, identity)],
+    [(32, 32), (32, 16), (16, 32), (32, 8), (8, 32)],
+    // 16x16
+    [
+      (TxType::DCT_ADST, dct, adst),
+      (TxType::ADST_DCT, adst, dct),
+      (TxType::DCT_FLIPADST, dct, flipadst),
+      (TxType::FLIPADST_DCT, flipadst, dct),
+      (TxType::V_DCT, dct, identity),
+      (TxType::H_DCT, identity, dct),
+      (TxType::ADST_ADST, adst, adst),
+      (TxType::ADST_FLIPADST, adst, flipadst),
+      (TxType::FLIPADST_ADST, flipadst, adst),
+      (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
+    ],
+    [(16, 16)],
+    // 8x, 4x and 16x (minus 16x16)
+    [
+      (TxType::V_ADST, adst, identity),
+      (TxType::H_ADST, identity, adst),
+      (TxType::V_FLIPADST, flipadst, identity),
+      (TxType::H_FLIPADST, identity, flipadst)
+    ],
+    [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)]
+  );
 }
