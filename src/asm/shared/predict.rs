@@ -14,7 +14,9 @@ mod test {
   use crate::frame::{AsRegion, Plane};
   use crate::predict::dispatch_predict_intra;
   use crate::predict::rust;
-  use crate::predict::{PredictionMode, PredictionVariant};
+  use crate::predict::{
+    IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
+  };
   use crate::transform::TxSize;
   use crate::util::Aligned;
   use crate::Pixel;
@@ -42,8 +44,18 @@ mod test {
       unsafe { Aligned::uninitialized() };
     for i in 0..edge_buf.data.len() {
       edge_buf.data[i] =
-        T::cast_from((i + 32).saturating_sub(2 * MAX_TX_SIZE));
+        T::cast_from(((i ^ 1) + 32).saturating_sub(2 * MAX_TX_SIZE));
     }
+
+    let ief_params_all = [
+      None,
+      Some(IntraEdgeFilterParameters::default()),
+      Some(IntraEdgeFilterParameters {
+        above_mode: Some(PredictionMode::SMOOTH_PRED),
+        left_mode: Some(PredictionMode::SMOOTH_PRED),
+        ..Default::default()
+      }),
+    ];
 
     for (mode, variant) in [
       (PredictionMode::DC_PRED, PredictionVariant::BOTH),
@@ -94,50 +106,65 @@ mod test {
         _ => [0].iter(),
       };
       for angle in angles {
-        let expected = {
-          let mut plane = Plane::from_slice(&[T::zero(); 4 * 4], 4);
-          rust::dispatch_predict_intra(
+        for ief_params in match mode {
+          PredictionMode::V_PRED if *angle == 90 => [None].iter(),
+          PredictionMode::H_PRED if *angle == 180 => [None].iter(),
+          PredictionMode::V_PRED
+          | PredictionMode::H_PRED
+          | PredictionMode::D45_PRED
+          | PredictionMode::D135_PRED
+          | PredictionMode::D113_PRED
+          | PredictionMode::D157_PRED
+          | PredictionMode::D203_PRED
+          | PredictionMode::D67_PRED => ief_params_all.iter(),
+          _ => [None].iter(),
+        } {
+          let expected = {
+            let mut plane = Plane::from_slice(&[T::zero(); 4 * 4], 4);
+            rust::dispatch_predict_intra(
+              *mode,
+              *variant,
+              &mut plane.as_region_mut(),
+              tx_size,
+              bit_depth,
+              &ac.data,
+              *angle,
+              *ief_params,
+              &edge_buf,
+              cpu,
+            );
+            let mut data = [T::zero(); 4 * 4];
+            for (v, d) in data.iter_mut().zip(plane.data[..].iter()) {
+              *v = *d;
+            }
+            data
+          };
+
+          let mut output = Plane::from_slice(&[T::zero(); 4 * 4], 4);
+          dispatch_predict_intra(
             *mode,
             *variant,
-            &mut plane.as_region_mut(),
+            &mut output.as_region_mut(),
             tx_size,
             bit_depth,
             &ac.data,
             *angle,
-            None,
+            *ief_params,
             &edge_buf,
             cpu,
           );
-          let mut data = [T::zero(); 4 * 4];
-          for (v, d) in data.iter_mut().zip(plane.data[..].iter()) {
-            *v = *d;
-          }
-          data
-        };
-
-        let mut output = Plane::from_slice(&[T::zero(); 4 * 4], 4);
-        dispatch_predict_intra(
-          *mode,
-          *variant,
-          &mut output.as_region_mut(),
-          tx_size,
-          bit_depth,
-          &ac.data,
-          *angle,
-          None,
-          &edge_buf,
-          cpu,
-        );
-        assert_eq!(
-          expected,
-          &output.data[..],
-          "mode={:?} variant={:?} angle={} bit_depth={} cpu={:?}",
-          *mode,
-          *variant,
-          *angle,
-          bit_depth,
-          cpu
-        );
+          assert_eq!(
+            expected,
+            &output.data[..],
+            "mode={:?} variant={:?} angle={} ief_params.use_smooth_filter={:?} bit_depth={} cpu={:?}",
+            *mode,
+            *variant,
+            *angle,
+            ief_params.map(|p| p.use_smooth_filter()),
+            bit_depth,
+            cpu
+          );
+        }
       }
     }
   }
