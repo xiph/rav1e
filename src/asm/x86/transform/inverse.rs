@@ -438,259 +438,87 @@ mod test {
   use super::*;
   use crate::asm::shared::transform::inverse::test::*;
   use crate::transform::TxSize::*;
-  use std::str::FromStr;
 
   macro_rules! test_itx_fns {
-    ($(($ENUM:expr, $TYPE1:ident, $TYPE2:ident, $W:expr, $H:expr)),*, $OPT:ident, $OPTLIT:tt, $OPT_ENUM:expr) => {
-      $(
-        paste::item! {
-          #[test]
-          fn [<inv_txfm2d_add_$TYPE2 _$TYPE1 _$W x $H _$OPT>]() {
-            if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
-              eprintln!("Ignoring {} test, not supported on this machine!", $OPTLIT);
-              return;
-            }
+    ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr,
+     $OPT_LOWER:ident, $OPT_UPPER:ident) => {
+      paste::item! {
+        $(
+          $(
+            #[test]
+            fn [<inv_txfm2d_add_ $TYPE2 _$TYPE1 _$W x $H _$OPT_LOWER>]() {
+              if CpuFeatureLevel::default() < CpuFeatureLevel::$OPT_UPPER {
+                eprintln!("Ignoring {:?} test, not supported on this machine!", CpuFeatureLevel::$OPT_UPPER);
+                return;
+              }
 
-            test_transform(
-              [<TX_ $W X $H>],
-              $ENUM,
-              $OPT_ENUM,
-            );
-          }
-        }
+              test_transform(
+                [<TX_ $W X $H>],
+                $ENUM,
+                CpuFeatureLevel::$OPT_UPPER,
+              );
+            }
+          )*
+        )*
+      }
+    };
+
+    ($TYPES:tt, $W:expr, $H:expr, [$(($OPT_LOWER:ident, $OPT_UPPER:ident)),+]) => {
+      $(
+        test_itx_fns!($TYPES, $W, $H, $OPT_LOWER, $OPT_UPPER);
       )*
-    }
+    };
+
+    ($TYPES_VALID:tt, [$(($W:expr, $H:expr)),*], $OPT:tt) => {
+      $(
+        test_itx_fns!($TYPES_VALID, $W, $H, $OPT);
+      )*
+    };
+
+    ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
+     $TYPES84:tt, $DIMS84:tt, $OPT:tt) => {
+      test_itx_fns!([$TYPES64], $DIMS64, $OPT);
+      test_itx_fns!([$TYPES64, $TYPES32], $DIMS32, $OPT);
+      test_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16, $OPT);
+      test_itx_fns!(
+        [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
+      );
+    };
+
+    ($OPT:tt) => {
+      test_itx_fns!(
+        // 64x
+        [(TxType::DCT_DCT, dct, dct)],
+        [(64, 64), (64, 32), (32, 64), (16, 64), (64, 16)],
+        // 32x
+        [(TxType::IDTX, identity, identity)],
+        [(32, 32), (32, 16), (16, 32), (32, 8), (8, 32)],
+        // 16x16
+        [
+          (TxType::DCT_ADST, dct, adst),
+          (TxType::ADST_DCT, adst, dct),
+          (TxType::DCT_FLIPADST, dct, flipadst),
+          (TxType::FLIPADST_DCT, flipadst, dct),
+          (TxType::V_DCT, dct, identity),
+          (TxType::H_DCT, identity, dct),
+          (TxType::ADST_ADST, adst, adst),
+          (TxType::ADST_FLIPADST, adst, flipadst),
+          (TxType::FLIPADST_ADST, flipadst, adst),
+          (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
+        ],
+        [(16, 16)],
+        // 8x, 4x and 16x (minus 16x16)
+        [
+          (TxType::V_ADST, adst, identity),
+          (TxType::H_ADST, identity, adst),
+          (TxType::V_FLIPADST, flipadst, identity),
+          (TxType::H_FLIPADST, identity, flipadst)
+        ],
+        [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+        $OPT
+      );
+    };
   }
 
-  test_itx_fns!(
-    (TxType::DCT_DCT, dct, dct, 64, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 32),
-    (TxType::DCT_DCT, dct, dct, 32, 64),
-    (TxType::DCT_DCT, dct, dct, 16, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 16),
-    (TxType::IDTX, identity, identity, 32, 32),
-    (TxType::IDTX, identity, identity, 32, 16),
-    (TxType::IDTX, identity, identity, 16, 32),
-    (TxType::IDTX, identity, identity, 32, 8),
-    (TxType::IDTX, identity, identity, 8, 32),
-    (TxType::DCT_ADST, dct, adst, 16, 16),
-    (TxType::ADST_DCT, adst, dct, 16, 16),
-    (TxType::DCT_FLIPADST, dct, flipadst, 16, 16),
-    (TxType::FLIPADST_DCT, flipadst, dct, 16, 16),
-    (TxType::V_DCT, dct, identity, 16, 16),
-    (TxType::H_DCT, identity, dct, 16, 16),
-    (TxType::ADST_ADST, adst, adst, 16, 16),
-    (TxType::ADST_FLIPADST, adst, flipadst, 16, 16),
-    (TxType::FLIPADST_ADST, flipadst, adst, 16, 16),
-    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16),
-    (TxType::V_ADST, adst, identity, 16, 8),
-    (TxType::H_ADST, identity, adst, 16, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 8),
-    (TxType::V_ADST, adst, identity, 8, 16),
-    (TxType::H_ADST, identity, adst, 8, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 16),
-    (TxType::V_ADST, adst, identity, 16, 4),
-    (TxType::H_ADST, identity, adst, 16, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 4),
-    (TxType::V_ADST, adst, identity, 4, 16),
-    (TxType::H_ADST, identity, adst, 4, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 16),
-    (TxType::V_ADST, adst, identity, 8, 8),
-    (TxType::H_ADST, identity, adst, 8, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 8),
-    (TxType::V_ADST, adst, identity, 8, 4),
-    (TxType::H_ADST, identity, adst, 8, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 4),
-    (TxType::V_ADST, adst, identity, 4, 8),
-    (TxType::H_ADST, identity, adst, 4, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 8),
-    (TxType::V_ADST, adst, identity, 4, 4),
-    (TxType::H_ADST, identity, adst, 4, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 4),
-    avx2,
-    "avx2",
-    CpuFeatureLevel::AVX2
-  );
-
-  test_itx_fns!(
-    (TxType::DCT_DCT, dct, dct, 64, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 32),
-    (TxType::DCT_DCT, dct, dct, 32, 64),
-    (TxType::DCT_DCT, dct, dct, 16, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 16),
-    (TxType::IDTX, identity, identity, 32, 32),
-    (TxType::IDTX, identity, identity, 32, 16),
-    (TxType::IDTX, identity, identity, 16, 32),
-    (TxType::IDTX, identity, identity, 32, 8),
-    (TxType::IDTX, identity, identity, 8, 32),
-    (TxType::DCT_ADST, dct, adst, 16, 16),
-    (TxType::ADST_DCT, adst, dct, 16, 16),
-    (TxType::DCT_FLIPADST, dct, flipadst, 16, 16),
-    (TxType::FLIPADST_DCT, flipadst, dct, 16, 16),
-    (TxType::V_DCT, dct, identity, 16, 16),
-    (TxType::H_DCT, identity, dct, 16, 16),
-    (TxType::ADST_ADST, adst, adst, 16, 16),
-    (TxType::ADST_FLIPADST, adst, flipadst, 16, 16),
-    (TxType::FLIPADST_ADST, flipadst, adst, 16, 16),
-    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16),
-    (TxType::V_ADST, adst, identity, 16, 8),
-    (TxType::H_ADST, identity, adst, 16, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 8),
-    (TxType::V_ADST, adst, identity, 8, 16),
-    (TxType::H_ADST, identity, adst, 8, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 16),
-    (TxType::V_ADST, adst, identity, 16, 4),
-    (TxType::H_ADST, identity, adst, 16, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 4),
-    (TxType::V_ADST, adst, identity, 4, 16),
-    (TxType::H_ADST, identity, adst, 4, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 16),
-    (TxType::V_ADST, adst, identity, 8, 8),
-    (TxType::H_ADST, identity, adst, 8, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 8),
-    (TxType::V_ADST, adst, identity, 8, 4),
-    (TxType::H_ADST, identity, adst, 8, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 4),
-    (TxType::V_ADST, adst, identity, 4, 8),
-    (TxType::H_ADST, identity, adst, 4, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 8),
-    (TxType::V_ADST, adst, identity, 4, 4),
-    (TxType::H_ADST, identity, adst, 4, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 4),
-    ssse3,
-    "ssse3",
-    CpuFeatureLevel::SSSE3
-  );
-
-  test_itx_fns!(
-    (TxType::DCT_DCT, dct, dct, 64, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 32),
-    (TxType::DCT_DCT, dct, dct, 32, 64),
-    (TxType::DCT_DCT, dct, dct, 16, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 16),
-    (TxType::IDTX, identity, identity, 32, 32),
-    (TxType::IDTX, identity, identity, 32, 16),
-    (TxType::IDTX, identity, identity, 16, 32),
-    (TxType::IDTX, identity, identity, 32, 8),
-    (TxType::IDTX, identity, identity, 8, 32),
-    (TxType::DCT_ADST, dct, adst, 16, 16),
-    (TxType::ADST_DCT, adst, dct, 16, 16),
-    (TxType::DCT_FLIPADST, dct, flipadst, 16, 16),
-    (TxType::FLIPADST_DCT, flipadst, dct, 16, 16),
-    (TxType::V_DCT, dct, identity, 16, 16),
-    (TxType::H_DCT, identity, dct, 16, 16),
-    (TxType::ADST_ADST, adst, adst, 16, 16),
-    (TxType::ADST_FLIPADST, adst, flipadst, 16, 16),
-    (TxType::FLIPADST_ADST, flipadst, adst, 16, 16),
-    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16),
-    (TxType::V_ADST, adst, identity, 16, 8),
-    (TxType::H_ADST, identity, adst, 16, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 8),
-    (TxType::V_ADST, adst, identity, 8, 16),
-    (TxType::H_ADST, identity, adst, 8, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 16),
-    (TxType::V_ADST, adst, identity, 16, 4),
-    (TxType::H_ADST, identity, adst, 16, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 4),
-    (TxType::V_ADST, adst, identity, 4, 16),
-    (TxType::H_ADST, identity, adst, 4, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 16),
-    (TxType::V_ADST, adst, identity, 8, 8),
-    (TxType::H_ADST, identity, adst, 8, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 8),
-    (TxType::V_ADST, adst, identity, 8, 4),
-    (TxType::H_ADST, identity, adst, 8, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 4),
-    (TxType::V_ADST, adst, identity, 4, 8),
-    (TxType::H_ADST, identity, adst, 4, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 8),
-    (TxType::V_ADST, adst, identity, 4, 4),
-    (TxType::H_ADST, identity, adst, 4, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 4),
-    sse4,
-    "sse4.1",
-    CpuFeatureLevel::SSE4_1
-  );
-
-  test_itx_fns!(
-    (TxType::DCT_DCT, dct, dct, 64, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 32),
-    (TxType::DCT_DCT, dct, dct, 32, 64),
-    (TxType::DCT_DCT, dct, dct, 16, 64),
-    (TxType::DCT_DCT, dct, dct, 64, 16),
-    (TxType::IDTX, identity, identity, 32, 32),
-    (TxType::IDTX, identity, identity, 32, 16),
-    (TxType::IDTX, identity, identity, 16, 32),
-    (TxType::IDTX, identity, identity, 32, 8),
-    (TxType::IDTX, identity, identity, 8, 32),
-    (TxType::DCT_ADST, dct, adst, 16, 16),
-    (TxType::ADST_DCT, adst, dct, 16, 16),
-    (TxType::DCT_FLIPADST, dct, flipadst, 16, 16),
-    (TxType::FLIPADST_DCT, flipadst, dct, 16, 16),
-    (TxType::V_DCT, dct, identity, 16, 16),
-    (TxType::H_DCT, identity, dct, 16, 16),
-    (TxType::ADST_ADST, adst, adst, 16, 16),
-    (TxType::ADST_FLIPADST, adst, flipadst, 16, 16),
-    (TxType::FLIPADST_ADST, flipadst, adst, 16, 16),
-    (TxType::FLIPADST_FLIPADST, flipadst, flipadst, 16, 16),
-    (TxType::V_ADST, adst, identity, 16, 8),
-    (TxType::H_ADST, identity, adst, 16, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 8),
-    (TxType::V_ADST, adst, identity, 8, 16),
-    (TxType::H_ADST, identity, adst, 8, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 16),
-    (TxType::V_ADST, adst, identity, 16, 4),
-    (TxType::H_ADST, identity, adst, 16, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 16, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 16, 4),
-    (TxType::V_ADST, adst, identity, 4, 16),
-    (TxType::H_ADST, identity, adst, 4, 16),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 16),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 16),
-    (TxType::V_ADST, adst, identity, 8, 8),
-    (TxType::H_ADST, identity, adst, 8, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 8),
-    (TxType::V_ADST, adst, identity, 8, 4),
-    (TxType::H_ADST, identity, adst, 8, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 8, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 8, 4),
-    (TxType::V_ADST, adst, identity, 4, 8),
-    (TxType::H_ADST, identity, adst, 4, 8),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 8),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 8),
-    (TxType::V_ADST, adst, identity, 4, 4),
-    (TxType::H_ADST, identity, adst, 4, 4),
-    (TxType::V_FLIPADST, flipadst, identity, 4, 4),
-    (TxType::H_FLIPADST, identity, flipadst, 4, 4),
-    avx512icl,
-    "avx512icl",
-    CpuFeatureLevel::AVX512ICL
-  );
+  test_itx_fns!([(avx512icl, AVX512ICL), (avx2, AVX2), (ssse3, SSSE3)]);
 }
