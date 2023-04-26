@@ -128,11 +128,11 @@ pub mod test {
       coeffs[pos as usize] = T::cast_from(0);
     }
 
-    eob
+    eob + 1
   }
 
-  pub fn test_transform(
-    tx_size: TxSize, tx_type: TxType, cpu: CpuFeatureLevel,
+  pub fn test_transform<T: Pixel>(
+    tx_size: TxSize, tx_type: TxType, bit_depth: usize, cpu: CpuFeatureLevel,
   ) {
     let sub_h_iterations: usize = match tx_size.height().max(tx_size.width()) {
       4 => 2,
@@ -143,24 +143,23 @@ pub mod test {
     };
 
     for sub_h in 0..sub_h_iterations {
-      let mut src_storage = [0u8; 64 * 64];
+      let mut src_storage = [T::zero(); 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
-      let mut dst =
-        Plane::from_slice(&vec![0u8; tx_size.area()], tx_size.width());
+      let mut dst = Plane::from_slice(&vec![T::zero(); 64 * 64], 64);
       // SAFETY: We write to the array below before reading from it.
       let mut res_storage: Aligned<[i16; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
       let res = &mut res_storage.data[..tx_size.area()];
       // SAFETY: We write to the array below before reading from it.
-      let mut freq_storage: Aligned<[i16; 64 * 64]> =
+      let mut freq_storage: Aligned<[T::Coeff; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
       let freq = &mut freq_storage.data[..tx_size.area()];
       for ((r, s), d) in
         res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
       {
-        *s = random::<u8>();
-        *d = random::<u8>();
-        *r = i16::from(*s) - i16::from(*d);
+        *s = T::cast_from(random::<u16>() >> (16 - bit_depth));
+        *d = T::cast_from(random::<u16>() >> (16 - bit_depth));
+        *r = i16::cast_from(*s) - i16::cast_from(*d);
       }
       forward_transform(
         res,
@@ -168,7 +167,7 @@ pub mod test {
         tx_size.width(),
         tx_size,
         tx_type,
-        8,
+        bit_depth,
         CpuFeatureLevel::RUST,
       );
 
@@ -181,7 +180,7 @@ pub mod test {
         eob,
         tx_size,
         tx_type,
-        8,
+        bit_depth,
         cpu,
       );
       inverse_transform_add(
@@ -190,7 +189,7 @@ pub mod test {
         eob,
         tx_size,
         tx_type,
-        8,
+        bit_depth,
         CpuFeatureLevel::RUST,
       );
       assert_eq!(rust_dst.data_origin(), dst.data_origin());
@@ -207,11 +206,9 @@ pub mod test {
               for &cpu in
                 &CpuFeatureLevel::all()[..=CpuFeatureLevel::default().as_index()]
               {
-                test_transform(
-                  [<TX_ $W X $H>],
-                  $ENUM,
-                  cpu
-                );
+                test_transform::<u8>([<TX_ $W X $H>], $ENUM, 8, cpu);
+                test_transform::<u16>([<TX_ $W X $H>], $ENUM, 10, cpu);
+                test_transform::<u16>([<TX_ $W X $H>], $ENUM, 12, cpu);
               }
             }
           )*
