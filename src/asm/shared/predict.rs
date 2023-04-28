@@ -9,10 +9,15 @@
 
 #[cfg(test)]
 mod test {
+  use interpolate_name::interpolate_test;
+  use rand::random;
+
   use crate::context::MAX_TX_SIZE;
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::{AsRegion, Plane};
+  use crate::partition::BlockSize;
   use crate::predict::dispatch_predict_intra;
+  use crate::predict::pred_cfl_ac;
   use crate::predict::rust;
   use crate::predict::{
     IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
@@ -166,6 +171,52 @@ mod test {
           );
         }
       }
+    }
+  }
+
+  #[interpolate_test(444, 0, 0)]
+  #[interpolate_test(422, 1, 0)]
+  #[interpolate_test(420, 1, 1)]
+  fn pred_cfl_ac_matches(xdec: usize, ydec: usize) {
+    pred_cfl_ac_matches_inner::<u8>(xdec, ydec, 8);
+    pred_cfl_ac_matches_inner::<u16>(xdec, ydec, 10);
+    pred_cfl_ac_matches_inner::<u16>(xdec, ydec, 12);
+  }
+
+  fn pred_cfl_ac_matches_inner<T: Pixel>(
+    xdec: usize, ydec: usize, bit_depth: usize,
+  ) {
+    let h_pad = 0;
+    let w_pad = 0;
+    let plane_bsize = BlockSize::BLOCK_16X16;
+
+    let mut plane = Plane::from_slice(&[T::zero(); 32 * 32], 32);
+    for p in plane.data_origin_mut() {
+      *p = T::cast_from(random::<u16>() >> (16 - bit_depth));
+    }
+    let luma = &plane.as_region();
+
+    let mut ac_ref = Aligned::new([0i16; 32 * 32]);
+
+    let cpu = CpuFeatureLevel::RUST;
+    (match (xdec, ydec) {
+      (0, 0) => rust::pred_cfl_ac::<T, 0, 0>,
+      (1, 0) => rust::pred_cfl_ac::<T, 1, 0>,
+      (_, _) => rust::pred_cfl_ac::<T, 1, 1>,
+    })(&mut ac_ref.data, luma, plane_bsize, w_pad, h_pad, cpu);
+
+    for &cpu in
+      &CpuFeatureLevel::all()[..=CpuFeatureLevel::default().as_index()]
+    {
+      let mut ac = Aligned::new([0i16; 32 * 32]);
+
+      (match (xdec, ydec) {
+        (0, 0) => pred_cfl_ac::<T, 0, 0>,
+        (1, 0) => pred_cfl_ac::<T, 1, 0>,
+        (_, _) => pred_cfl_ac::<T, 1, 1>,
+      })(&mut ac.data, luma, plane_bsize, w_pad, h_pad, cpu);
+
+      assert_eq!(&ac_ref.data[..], &ac.data[..])
     }
   }
 }
