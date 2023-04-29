@@ -57,6 +57,8 @@ jobs:
             toolchain: stable
           - conf: dav1d-tests
             toolchain: stable
+          - conf: dav1d-tests-arm64
+            toolchain: stable
           - conf: no-asm-tests
             toolchain: stable
           - conf: grcov-codecov
@@ -103,6 +105,7 @@ jobs:
           mv -f $SCCACHE_FILE/sccache $HOME/.local/bin/sccache
           echo "$HOME/.local/bin" >> $GITHUB_PATH
       - name: Install dependencies
+        if: matrix.conf != 'dav1d-tests-arm64'
         run: |
           sudo sed -i 's/jammy/kinetic/g' /etc/apt/sources.list
           sudo apt update
@@ -132,6 +135,19 @@ jobs:
         if: matrix.conf == 'grcov-codecov'
         run: |
           rustup component add llvm-tools-preview
+      - name: Install aarch64 toolchain, qemu-user and libdav1d-dev:arm64
+        if: matrix.conf == 'dav1d-tests-arm64'
+        env:
+          LINK: http://ports.ubuntu.com/ubuntu-ports/pool
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          { echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu kinetic main universe'
+            echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu kinetic-updates main universe'
+            echo 'deb [arch=arm64] http://azure.ports.ubuntu.com/ kinetic main universe'
+          } | sudo tee /etc/apt/sources.list
+          sudo dpkg --add-architecture arm64
+          sudo apt update
+          sudo apt install qemu-user gcc-aarch64-linux-gnu libdav1d-dev:arm64
       - name: Generate Cargo.lock and Cargo.version
         run: |
           cargo update
@@ -172,6 +188,17 @@ jobs:
           cargo test --workspace --verbose --release \
                      --features=decode_test_dav1d \
                      --color=always -- --color=always --ignored
+      - name: Run dav1d tests (arm64)
+        if: matrix.conf == 'dav1d-tests-arm64'
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER: qemu-aarch64
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS: -Clinker=aarch64-linux-gnu-gcc
+          PKG_CONFIG_PATH: /usr/lib/aarch64-linux-gnu/pkgconfig
+          PKG_CONFIG_SYSROOT_DIR: /
+        run: |
+          cargo test --lib --verbose --release --target=aarch64-unknown-linux-gnu \
+                     --no-default-features --features=asm,decode_test_dav1d -- \
+                     --include-ignored
       - name: Run build
         if: matrix.conf == 'beta-build'
         run: |
