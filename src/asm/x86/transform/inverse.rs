@@ -292,7 +292,7 @@ macro_rules! impl_itx_hbd_fns {
 impl_itx_hbd_fns!(
   // 64x
   [(TxType::DCT_DCT, dct, dct)],
-  [],
+  [(64, 64), (64, 32), (32, 64), (64, 16), (16, 64)],
   // 32x
   [(TxType::IDTX, identity, identity)],
   [(32, 32), (32, 16), (16, 32), (32, 8), (8, 32)],
