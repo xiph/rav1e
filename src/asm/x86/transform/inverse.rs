@@ -395,11 +395,10 @@ cpu_function_lookup_table!(
 );
 
 impl_itx_hbd_fns!(
-  // 64x
-  [(TxType::DCT_DCT, dct, dct)],
-  [],
-  // 32x
+  // 32x (DCT and IDTX swapped due to incomplete DCT implementation)
   [(TxType::IDTX, identity, identity)],
+  [(32, 32), (32, 16), (16, 32)],
+  [(TxType::DCT_DCT, dct, dct)],
   [(32, 8), (8, 32)],
   // 16x16
   [
