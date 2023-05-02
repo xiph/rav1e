@@ -62,6 +62,7 @@ decl_angular_ipred_fn! {
   rav1e_ipred_smooth_8bpc_avx512icl,
   rav1e_ipred_z1_8bpc_ssse3,
   rav1e_ipred_z1_8bpc_avx2,
+  rav1e_ipred_z3_8bpc_ssse3,
   rav1e_ipred_z3_8bpc_avx2,
   rav1e_ipred_paeth_8bpc_ssse3,
   rav1e_ipred_paeth_8bpc_avx2,
@@ -105,7 +106,9 @@ decl_angular_ipred_hbd_fn! {
   rav1e_ipred_smooth_16bpc_ssse3,
   rav1e_ipred_smooth_16bpc_avx2,
   rav1e_ipred_smooth_16bpc_avx512icl,
+  rav1e_ipred_z1_16bpc_ssse3,
   rav1e_ipred_z1_16bpc_avx2,
+  rav1e_ipred_z3_16bpc_ssse3,
   rav1e_ipred_z3_16bpc_avx2,
   rav1e_ipred_paeth_16bpc_ssse3,
   rav1e_ipred_paeth_16bpc_avx2,
@@ -116,6 +119,13 @@ decl_angular_ipred_hbd_fn! {
 // the distance between the predicted block's top-left pixel and the frame's edge.
 // It is required for the intra edge filtering process.
 extern {
+
+  fn rav1e_ipred_z2_8bpc_ssse3(
+    dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
+    width: libc::c_int, height: libc::c_int, angle: libc::c_int,
+    dx: libc::c_int, dy: libc::c_int,
+  );
+
   fn rav1e_ipred_z2_8bpc_avx2(
     dst: *mut u8, stride: libc::ptrdiff_t, topleft: *const u8,
     width: libc::c_int, height: libc::c_int, angle: libc::c_int,
@@ -467,26 +477,43 @@ pub fn dispatch_predict_intra<T: Pixel>(
             | PredictionMode::D157_PRED
             | PredictionMode::D203_PRED
             | PredictionMode::D67_PRED => {
+              let (enable_ief, ief_smooth_filter) =
+                if let Some(params) = ief_params {
+                  (
+                    true as libc::c_int,
+                    params.use_smooth_filter() as libc::c_int,
+                  )
+                } else {
+                  (false as libc::c_int, false as libc::c_int)
+                };
+
+              // dav1d assembly uses the unused integer bits to hold IEF parameters
+              let angle_arg =
+                angle | (enable_ief << 10) | (ief_smooth_filter << 9);
+
+              // From dav1d, bw and bh are the frame width and height rounded to 8px units
+              let (bw, bh) = (
+                ((dst.plane_cfg.width + 7) >> 3) << 3,
+                ((dst.plane_cfg.height + 7) >> 3) << 3,
+              );
+              // From dav1d, dx and dy are the distance from the predicted block to the frame edge
+              let (dx, dy) = (
+                (bw as isize - dst.rect().x) as libc::c_int,
+                (bh as isize - dst.rect().y) as libc::c_int,
+              );
+
               if angle <= 90 {
-                let (enable_ief, ief_smooth_filter) =
-                  if let Some(params) = ief_params {
-                    (
-                      true as libc::c_int,
-                      params.use_smooth_filter() as libc::c_int,
-                    )
-                  } else {
-                    (false as libc::c_int, false as libc::c_int)
-                  };
-
-                // dav1d assembly uses the unused integer bits to hold IEF parameters
-                let angle_arg =
-                  angle | (enable_ief << 10) | (ief_smooth_filter << 9);
-
                 rav1e_ipred_z1_8bpc_ssse3(
                   dst_ptr, stride, edge_ptr, w, h, angle_arg,
                 );
+              } else if angle < 180 {
+                rav1e_ipred_z2_8bpc_ssse3(
+                  dst_ptr, stride, edge_ptr, w, h, angle_arg, dx, dy,
+                );
               } else {
-                call_rust(dst)
+                rav1e_ipred_z3_8bpc_ssse3(
+                  dst_ptr, stride, edge_ptr, w, h, angle_arg,
+                );
               }
             }
             PredictionMode::SMOOTH_PRED => {
@@ -754,6 +781,40 @@ pub fn dispatch_predict_intra<T: Pixel>(
               rav1e_ipred_h_16bpc_ssse3(
                 dst_ptr, stride, edge_ptr, w, h, angle, 0, 0, bd_max,
               );
+            }
+            PredictionMode::V_PRED
+            | PredictionMode::H_PRED
+            | PredictionMode::D45_PRED
+            | PredictionMode::D135_PRED
+            | PredictionMode::D113_PRED
+            | PredictionMode::D157_PRED
+            | PredictionMode::D203_PRED
+            | PredictionMode::D67_PRED => {
+              let (enable_ief, ief_smooth_filter) =
+                if let Some(params) = ief_params {
+                  (
+                    true as libc::c_int,
+                    params.use_smooth_filter() as libc::c_int,
+                  )
+                } else {
+                  (false as libc::c_int, false as libc::c_int)
+                };
+
+              // dav1d assembly uses the unused integer bits to hold IEF parameters
+              let angle_arg =
+                angle | (enable_ief << 10) | (ief_smooth_filter << 9);
+
+              if angle <= 90 {
+                rav1e_ipred_z1_16bpc_ssse3(
+                  dst_ptr, stride, edge_ptr, w, h, angle_arg, 0, 0, bd_max,
+                );
+              } else if angle < 180 {
+                call_rust(dst);
+              } else {
+                rav1e_ipred_z3_16bpc_ssse3(
+                  dst_ptr, stride, edge_ptr, w, h, angle_arg, 0, 0, bd_max,
+                );
+              }
             }
             PredictionMode::SMOOTH_PRED => {
               rav1e_ipred_smooth_16bpc_ssse3(
