@@ -695,7 +695,7 @@ pub(crate) mod rust {
   use crate::transform::TxSize;
   use crate::util::{round_shift, Aligned};
   use crate::Pixel;
-  use std::mem::size_of;
+  use std::mem::{size_of, MaybeUninit};
 
   #[inline(always)]
   pub fn dispatch_predict_intra<T: Pixel>(
@@ -1206,7 +1206,10 @@ pub(crate) mod rust {
 
       // Copy the edge buffer to avoid predicting from
       // just-filtered samples.
-      let mut edge_filtered = vec![T::cast_from(0); edge.len()];
+      let mut edge_filtered =
+        [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 1];
+      let edge_filtered =
+        init_slice_repeat_mut(&mut edge_filtered[..edge.len()], T::zero());
       edge_filtered.copy_from_slice(&edge[..edge.len()]);
 
       for i in 1..size {
@@ -1220,7 +1223,7 @@ pub(crate) mod rust {
 
         edge_filtered[i] = T::cast_from((s + 8) >> 4);
       }
-      edge.copy_from_slice(edge_filtered.as_slice());
+      edge.copy_from_slice(edge_filtered);
     }
 
     fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
@@ -1229,7 +1232,8 @@ pub(crate) mod rust {
       // negative indices are unsafe in Rust, the caller is
       // expected to globally offset it by 1, which makes the
       // input range 0..=size.
-      let mut dup = vec![T::cast_from(0); size + 3];
+      let mut dup = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE];
+      let dup = init_slice_repeat_mut(&mut dup[..size + 3], T::zero());
       dup[0] = edge[0];
       dup[1..=size + 1].copy_from_slice(&edge[0..=size]);
       dup[size + 2] = edge[size];
@@ -1270,10 +1274,16 @@ pub(crate) mod rust {
 
     // Initialize above and left edge buffers of the largest possible needed size if upsampled
     // The first value is the top left pixel, also mutable and indexed at -1 in the spec
-    let mut above_filtered: Vec<T> =
-      vec![T::cast_from(0); (width + height) * 2 + 1];
-    let mut left_filtered: Vec<T> =
-      vec![T::cast_from(0); (width + height) * 2 + 1];
+    let mut above_filtered = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 1];
+    let above_filtered = init_slice_repeat_mut(
+      &mut above_filtered[..=(width + height) * 2],
+      T::zero(),
+    );
+    let mut left_filtered = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 1];
+    let left_filtered = init_slice_repeat_mut(
+      &mut left_filtered[..=(width + height) * 2],
+      T::zero(),
+    );
 
     if enable_edge_filter {
       above_filtered[1..=above.len()].clone_from_slice(above);
@@ -1302,14 +1312,14 @@ pub(crate) mod rust {
           smooth_filter,
           p_angle as isize - 90,
         );
-        filter_edge(num_px.0, filter_strength, above_filtered.as_mut_slice());
+        filter_edge(num_px.0, filter_strength, above_filtered);
         let filter_strength = select_ief_strength(
           width,
           height,
           smooth_filter,
           p_angle as isize - 180,
         );
-        filter_edge(num_px.1, filter_strength, left_filtered.as_mut_slice());
+        filter_edge(num_px.1, filter_strength, left_filtered);
       }
 
       let num_px = (
@@ -1324,7 +1334,7 @@ pub(crate) mod rust {
         p_angle as isize - 90,
       );
       if upsample_above {
-        upsample_edge(num_px.0, above_filtered.as_mut_slice(), bit_depth);
+        upsample_edge(num_px.0, above_filtered, bit_depth);
       }
       upsample_left = select_ief_upsample(
         width,
@@ -1333,12 +1343,12 @@ pub(crate) mod rust {
         p_angle as isize - 180,
       );
       if upsample_left {
-        upsample_edge(num_px.1, left_filtered.as_mut_slice(), bit_depth);
+        upsample_edge(num_px.1, left_filtered, bit_depth);
       }
 
       left_filtered.reverse();
-      above_edge = above_filtered.as_slice();
-      left_edge = left_filtered.as_slice();
+      above_edge = above_filtered;
+      left_edge = left_filtered;
     }
 
     const fn dr_intra_derivative(p_angle: usize) -> usize {
