@@ -1103,155 +1103,191 @@ pub(crate) mod rust {
     pred_cfl_inner(output, ac, alpha, width, height, bit_depth);
   }
 
+  #[allow(clippy::collapsible_if)]
+  #[allow(clippy::collapsible_else_if)]
+  #[allow(clippy::needless_return)]
+  pub(crate) const fn select_ief_strength(
+    width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
+  ) -> u8 {
+    let block_wh = width + height;
+    let abs_delta = angle_delta.unsigned_abs();
+
+    if smooth_filter {
+      if block_wh <= 8 {
+        if abs_delta >= 64 {
+          return 2;
+        }
+        if abs_delta >= 40 {
+          return 1;
+        }
+      } else if block_wh <= 16 {
+        if abs_delta >= 48 {
+          return 2;
+        }
+        if abs_delta >= 20 {
+          return 1;
+        }
+      } else if block_wh <= 24 {
+        if abs_delta >= 4 {
+          return 3;
+        }
+      } else {
+        return 3;
+      }
+    } else {
+      if block_wh <= 8 {
+        if abs_delta >= 56 {
+          return 1;
+        }
+      } else if block_wh <= 16 {
+        if abs_delta >= 40 {
+          return 1;
+        }
+      } else if block_wh <= 24 {
+        if abs_delta >= 32 {
+          return 3;
+        }
+        if abs_delta >= 16 {
+          return 2;
+        }
+        if abs_delta >= 8 {
+          return 1;
+        }
+      } else if block_wh <= 32 {
+        if abs_delta >= 32 {
+          return 3;
+        }
+        if abs_delta >= 4 {
+          return 2;
+        }
+        return 1;
+      } else {
+        return 3;
+      }
+    }
+
+    return 0;
+  }
+
+  pub(crate) const fn select_ief_upsample(
+    width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
+  ) -> bool {
+    let block_wh = width + height;
+    let abs_delta = angle_delta.unsigned_abs();
+
+    if abs_delta == 0 || abs_delta >= 40 {
+      false
+    } else if smooth_filter {
+      block_wh <= 8
+    } else {
+      block_wh <= 16
+    }
+  }
+
+  pub(crate) fn filter_edge<T: Pixel>(
+    size: usize, strength: u8, edge: &mut [T],
+  ) {
+    const INTRA_EDGE_KERNEL: [[u32; 5]; 3] =
+      [[0, 4, 8, 4, 0], [0, 5, 6, 5, 0], [2, 4, 4, 4, 2]];
+
+    if strength == 0 {
+      return;
+    }
+
+    // Copy the edge buffer to avoid predicting from
+    // just-filtered samples.
+    let mut edge_filtered = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 1];
+    let edge_filtered =
+      init_slice_repeat_mut(&mut edge_filtered[..edge.len()], T::zero());
+    edge_filtered.copy_from_slice(&edge[..edge.len()]);
+
+    for i in 1..size {
+      let mut s = 0;
+
+      for j in 0..INTRA_EDGE_KERNEL[0].len() {
+        let k = (i + j).saturating_sub(2).min(size - 1);
+        s += INTRA_EDGE_KERNEL[(strength - 1) as usize][j]
+          * edge[k].to_u32().unwrap();
+      }
+
+      edge_filtered[i] = T::cast_from((s + 8) >> 4);
+    }
+    edge.copy_from_slice(edge_filtered);
+  }
+
+  pub(crate) fn upsample_edge<T: Pixel>(
+    size: usize, edge: &mut [T], bit_depth: usize,
+  ) {
+    // The input edge should be valid in the -1..size range,
+    // where the -1 index is the top-left edge pixel. Since
+    // negative indices are unsafe in Rust, the caller is
+    // expected to globally offset it by 1, which makes the
+    // input range 0..=size.
+    let mut dup = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE];
+    let dup = init_slice_repeat_mut(&mut dup[..size + 3], T::zero());
+    dup[0] = edge[0];
+    dup[1..=size + 1].copy_from_slice(&edge[0..=size]);
+    dup[size + 2] = edge[size];
+
+    // Past here the edge is being filtered, and its
+    // effective range is shifted from -1..size to
+    // -2..2*size-1. Again, because this is safe Rust,
+    // we cannot use negative indices, and the actual range
+    // will be 0..=2*size. The caller is expected to adjust
+    // its indices on receipt of the filtered edge.
+    edge[0] = dup[0];
+
+    for i in 0..size {
+      let mut s = -dup[i].to_i32().unwrap()
+        + (9 * dup[i + 1].to_i32().unwrap())
+        + (9 * dup[i + 2].to_i32().unwrap())
+        - dup[i + 3].to_i32().unwrap();
+      s = ((s + 8) / 16).clamp(0, (1 << bit_depth) - 1);
+
+      edge[2 * i + 1] = T::cast_from(s);
+      edge[2 * i + 2] = dup[i + 2];
+    }
+  }
+
+  pub(crate) const fn dr_intra_derivative(p_angle: usize) -> usize {
+    match p_angle {
+      3 => 1023,
+      6 => 547,
+      9 => 372,
+      14 => 273,
+      17 => 215,
+      20 => 178,
+      23 => 151,
+      26 => 132,
+      29 => 116,
+      32 => 102,
+      36 => 90,
+      39 => 80,
+      42 => 71,
+      45 => 64,
+      48 => 57,
+      51 => 51,
+      54 => 45,
+      58 => 40,
+      61 => 35,
+      64 => 31,
+      67 => 27,
+      70 => 23,
+      73 => 19,
+      76 => 15,
+      81 => 11,
+      84 => 7,
+      87 => 3,
+      _ => 0,
+    }
+  }
+
   #[allow(clippy::clone_double_ref)]
   pub(crate) fn pred_directional<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     top_left: &[T], p_angle: usize, width: usize, height: usize,
     bit_depth: usize, ief_params: Option<IntraEdgeFilterParameters>,
   ) {
-    #[allow(clippy::collapsible_if)]
-    #[allow(clippy::collapsible_else_if)]
-    #[allow(clippy::needless_return)]
-    const fn select_ief_strength(
-      width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
-    ) -> u8 {
-      let block_wh = width + height;
-      let abs_delta = angle_delta.unsigned_abs();
-
-      if smooth_filter {
-        if block_wh <= 8 {
-          if abs_delta >= 64 {
-            return 2;
-          }
-          if abs_delta >= 40 {
-            return 1;
-          }
-        } else if block_wh <= 16 {
-          if abs_delta >= 48 {
-            return 2;
-          }
-          if abs_delta >= 20 {
-            return 1;
-          }
-        } else if block_wh <= 24 {
-          if abs_delta >= 4 {
-            return 3;
-          }
-        } else {
-          return 3;
-        }
-      } else {
-        if block_wh <= 8 {
-          if abs_delta >= 56 {
-            return 1;
-          }
-        } else if block_wh <= 16 {
-          if abs_delta >= 40 {
-            return 1;
-          }
-        } else if block_wh <= 24 {
-          if abs_delta >= 32 {
-            return 3;
-          }
-          if abs_delta >= 16 {
-            return 2;
-          }
-          if abs_delta >= 8 {
-            return 1;
-          }
-        } else if block_wh <= 32 {
-          if abs_delta >= 32 {
-            return 3;
-          }
-          if abs_delta >= 4 {
-            return 2;
-          }
-          return 1;
-        } else {
-          return 3;
-        }
-      }
-
-      return 0;
-    }
-
-    const fn select_ief_upsample(
-      width: usize, height: usize, smooth_filter: bool, angle_delta: isize,
-    ) -> bool {
-      let block_wh = width + height;
-      let abs_delta = angle_delta.unsigned_abs();
-
-      if abs_delta == 0 || abs_delta >= 40 {
-        false
-      } else if smooth_filter {
-        block_wh <= 8
-      } else {
-        block_wh <= 16
-      }
-    }
-
-    fn filter_edge<T: Pixel>(size: usize, strength: u8, edge: &mut [T]) {
-      const INTRA_EDGE_KERNEL: [[u32; 5]; 3] =
-        [[0, 4, 8, 4, 0], [0, 5, 6, 5, 0], [2, 4, 4, 4, 2]];
-
-      if strength == 0 {
-        return;
-      }
-
-      // Copy the edge buffer to avoid predicting from
-      // just-filtered samples.
-      let mut edge_filtered =
-        [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 1];
-      let edge_filtered =
-        init_slice_repeat_mut(&mut edge_filtered[..edge.len()], T::zero());
-      edge_filtered.copy_from_slice(&edge[..edge.len()]);
-
-      for i in 1..size {
-        let mut s = 0;
-
-        for j in 0..INTRA_EDGE_KERNEL[0].len() {
-          let k = (i + j).saturating_sub(2).min(size - 1);
-          s += INTRA_EDGE_KERNEL[(strength - 1) as usize][j]
-            * edge[k].to_u32().unwrap();
-        }
-
-        edge_filtered[i] = T::cast_from((s + 8) >> 4);
-      }
-      edge.copy_from_slice(edge_filtered);
-    }
-
-    fn upsample_edge<T: Pixel>(size: usize, edge: &mut [T], bit_depth: usize) {
-      // The input edge should be valid in the -1..size range,
-      // where the -1 index is the top-left edge pixel. Since
-      // negative indices are unsafe in Rust, the caller is
-      // expected to globally offset it by 1, which makes the
-      // input range 0..=size.
-      let mut dup = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE];
-      let dup = init_slice_repeat_mut(&mut dup[..size + 3], T::zero());
-      dup[0] = edge[0];
-      dup[1..=size + 1].copy_from_slice(&edge[0..=size]);
-      dup[size + 2] = edge[size];
-
-      // Past here the edge is being filtered, and its
-      // effective range is shifted from -1..size to
-      // -2..2*size-1. Again, because this is safe Rust,
-      // we cannot use negative indices, and the actual range
-      // will be 0..=2*size. The caller is expected to adjust
-      // its indices on receipt of the filtered edge.
-      edge[0] = dup[0];
-
-      for i in 0..size {
-        let mut s = -dup[i].to_i32().unwrap()
-          + (9 * dup[i + 1].to_i32().unwrap())
-          + (9 * dup[i + 2].to_i32().unwrap())
-          - dup[i + 3].to_i32().unwrap();
-        s = ((s + 8) / 16).clamp(0, (1 << bit_depth) - 1);
-
-        edge[2 * i + 1] = T::cast_from(s);
-        edge[2 * i + 2] = dup[i + 2];
-      }
-    }
-
     let sample_max = (1 << bit_depth) - 1;
 
     let max_x = output.plane_cfg.width as isize - 1;
@@ -1343,39 +1379,6 @@ pub(crate) mod rust {
       left_filtered.reverse();
       above_edge = above_filtered;
       left_edge = left_filtered;
-    }
-
-    const fn dr_intra_derivative(p_angle: usize) -> usize {
-      match p_angle {
-        3 => 1023,
-        6 => 547,
-        9 => 372,
-        14 => 273,
-        17 => 215,
-        20 => 178,
-        23 => 151,
-        26 => 132,
-        29 => 116,
-        32 => 102,
-        36 => 90,
-        39 => 80,
-        42 => 71,
-        45 => 64,
-        48 => 57,
-        51 => 51,
-        54 => 45,
-        58 => 40,
-        61 => 35,
-        64 => 31,
-        67 => 27,
-        70 => 23,
-        73 => 19,
-        76 => 15,
-        81 => 11,
-        84 => 7,
-        87 => 3,
-        _ => 0,
-      }
     }
 
     let dx = if p_angle < 90 {
