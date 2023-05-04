@@ -16,9 +16,10 @@ pub enum CpuFeatureLevel {
 
 impl CpuFeatureLevel {
   #[cfg(test)]
+  #[allow(unused)]
   pub(crate) const fn all() -> &'static [Self] {
     use CpuFeatureLevel::*;
-    &[RUST, NEON]
+    &[RUST]
   }
 }
 
