@@ -823,7 +823,7 @@ impl<'a> ContextWriter<'a> {
   fn find_matching_mv_and_update_weight(
     mv: MotionVector, mv_stack: &mut ArrayVec<CandidateMV, 9>, weight: u32,
   ) -> bool {
-    for mut mv_cand in mv_stack {
+    for mv_cand in mv_stack {
       if mv.row == mv_cand.this_mv.row && mv.col == mv_cand.this_mv.col {
         mv_cand.weight += weight;
         return true;
@@ -1117,7 +1117,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn add_offset(mv_stack: &mut ArrayVec<CandidateMV, 9>) {
-    for mut cand_mv in mv_stack {
+    for cand_mv in mv_stack {
       cand_mv.weight += REF_CAT_LEVEL;
     }
   }
