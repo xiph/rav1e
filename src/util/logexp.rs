@@ -7,11 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use const_fn_assert::cfn_debug_assert;
-
 /// Convert an integer into a Q57 fixed-point fraction.
 pub const fn q57(v: i32) -> i64 {
-  cfn_debug_assert!(v >= -64 && v <= 63);
+  debug_assert!(v >= -64 && v <= 63);
   (v as i64) << 57
 }
 

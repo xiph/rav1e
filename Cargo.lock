@@ -470,12 +470,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "const_fn_assert"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27d614f23f34f7b5165a77dc1591f497e2518f9cec4b4f4b92bfc4dc6cf7a190"
-
-[[package]]
 name = "crc32fast"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1369,7 +1363,6 @@ dependencies = [
  "clap 4.2.5",
  "clap_complete",
  "console",
- "const_fn_assert",
  "criterion",
  "crossbeam",
  "dav1d-sys",
