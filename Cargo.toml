@@ -103,7 +103,6 @@ itertools = "0.10"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.84", optional = true }
 rust_hawktracer = "0.7.0"
-const_fn_assert = "0.1.2"
 nom = { version = "7.1.3", optional = true }
 new_debug_unreachable = "1.0.4"
 once_cell = "1.17.1"
