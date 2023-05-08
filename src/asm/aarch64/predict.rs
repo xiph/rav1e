@@ -10,6 +10,9 @@
 use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::partition::BlockSize;
+use crate::predict::rust::{
+  dr_intra_derivative, select_ief_strength, select_ief_upsample,
+};
 use crate::predict::{
   rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
 };
@@ -18,6 +21,9 @@ use crate::transform::TxSize;
 use crate::util::Aligned;
 use crate::{Pixel, PixelType};
 use libc;
+use libc::{c_int, ptrdiff_t};
+use std::mem::MaybeUninit;
+use PixelType::{U16, U8};
 
 macro_rules! decl_cfl_ac_fn {
   ($($f:ident),+) => {
@@ -155,6 +161,190 @@ decl_cfl_pred_hbd_fn! {
   rav1e_ipred_cfl_top_16bpc_neon
 }
 
+extern {
+  fn rav1e_ipred_z1_upsample_edge_8bpc_neon(
+    out: *mut u8, hsz: c_int, _in: *const u8, end: c_int,
+  );
+  fn rav1e_ipred_z1_upsample_edge_16bpc_neon(
+    out: *mut u16, hsz: c_int, _in: *const u16, end: c_int,
+    bit_depth_max: c_int,
+  );
+  fn rav1e_ipred_z1_filter_edge_8bpc_neon(
+    out: *mut u8, sz: c_int, _in: *const u8, end: c_int, strength: c_int,
+  );
+  fn rav1e_ipred_z1_filter_edge_16bpc_neon(
+    out: *mut u16, sz: c_int, _in: *const u16, end: c_int, strength: c_int,
+  );
+  fn rav1e_ipred_z1_fill1_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, top: *const u8, width: c_int,
+    height: c_int, dx: c_int, max_base_x: c_int,
+  );
+  fn rav1e_ipred_z1_fill1_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, top: *const u16, width: c_int,
+    height: c_int, dx: c_int, max_base_x: c_int,
+  );
+  fn rav1e_ipred_z1_fill2_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, top: *const u8, width: c_int,
+    height: c_int, dx: c_int, max_base_x: c_int,
+  );
+  fn rav1e_ipred_z1_fill2_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, top: *const u16, width: c_int,
+    height: c_int, dx: c_int, max_base_x: c_int,
+  );
+  fn rav1e_ipred_z3_fill1_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, left: *const u8, width: c_int,
+    height: c_int, dy: c_int, max_base_y: c_int,
+  );
+  fn rav1e_ipred_z3_fill1_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, left: *const u16, width: c_int,
+    height: c_int, dy: c_int, max_base_y: c_int,
+  );
+  fn rav1e_ipred_z3_fill2_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, left: *const u8, width: c_int,
+    height: c_int, dy: c_int, max_base_y: c_int,
+  );
+  fn rav1e_ipred_z3_fill2_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, left: *const u16, width: c_int,
+    height: c_int, dy: c_int, max_base_y: c_int,
+  );
+  fn rav1e_ipred_reverse_8bpc_neon(dst: *mut u8, src: *const u8, n: c_int);
+  fn rav1e_ipred_reverse_16bpc_neon(dst: *mut u16, src: *const u16, n: c_int);
+}
+#[inline]
+unsafe fn ipred_z1_upsample_edge<T: Pixel>(
+  o: *mut T, sz: c_int, i: *const T, n: c_int, m: c_int,
+) {
+  match T::type_enum() {
+    U8 => rav1e_ipred_z1_upsample_edge_8bpc_neon(o as _, sz, i as _, n),
+    U16 => rav1e_ipred_z1_upsample_edge_16bpc_neon(o as _, sz, i as _, n, m),
+  }
+}
+#[inline]
+unsafe fn ipred_z1_filter_edge<T: Pixel>(
+  o: *mut T, sz: c_int, i: *const T, n: c_int, s: c_int,
+) {
+  match T::type_enum() {
+    U8 => rav1e_ipred_z1_filter_edge_8bpc_neon(o as _, sz, i as _, n, s),
+    U16 => rav1e_ipred_z1_filter_edge_16bpc_neon(o as _, sz, i as _, n, s),
+  }
+}
+#[inline]
+unsafe fn ipred_reverse<T: Pixel>(o: *mut T, i: *const T, n: c_int) {
+  match T::type_enum() {
+    U8 => rav1e_ipred_reverse_8bpc_neon(o as _, i as _, n),
+    U16 => rav1e_ipred_reverse_16bpc_neon(o as _, i as _, n),
+  }
+}
+
+#[rustfmt::skip]
+struct Fill(
+  [unsafe extern fn(*mut u8, ptrdiff_t, *const u8, c_int, c_int, c_int, c_int); 2],
+  [unsafe extern fn(*mut u16, ptrdiff_t, *const u16, c_int, c_int, c_int, c_int); 2],
+);
+impl Fill {
+  unsafe fn ipred_fill<T: Pixel>(
+    self, dst: *mut T, stride: ptrdiff_t, src: *const T, w: c_int, h: c_int,
+    d: c_int, max_base: c_int, upsample: bool,
+  ) {
+    let u = upsample as usize;
+    match T::type_enum() {
+      U8 => self.0[u](dst as _, stride, src as _, w, h, d, max_base),
+      U16 => self.1[u](dst as _, stride, src as _, w, h, d, max_base),
+    }
+  }
+}
+const Z1: Fill = Fill(
+  [rav1e_ipred_z1_fill1_8bpc_neon, rav1e_ipred_z1_fill2_8bpc_neon],
+  [rav1e_ipred_z1_fill1_16bpc_neon, rav1e_ipred_z1_fill2_16bpc_neon],
+);
+const Z3: Fill = Fill(
+  [rav1e_ipred_z3_fill1_8bpc_neon, rav1e_ipred_z3_fill2_8bpc_neon],
+  [rav1e_ipred_z3_fill1_16bpc_neon, rav1e_ipred_z3_fill2_16bpc_neon],
+);
+
+unsafe fn ipred_z1<T: Pixel>(
+  dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+  h: c_int, bd_max: c_int, edge_filter: bool, smooth_filter: bool,
+) {
+  let mut dx = dr_intra_derivative(angle as _) as c_int;
+  let mut out = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 15 * 2 + 16];
+  let out = out.as_mut_ptr() as *mut T;
+
+  let upsample_above = edge_filter
+    && select_ief_upsample(w as _, h as _, smooth_filter, 90 - angle);
+  let max_base_x = if upsample_above {
+    ipred_z1_upsample_edge(out, w + h, src, w + w.min(h), bd_max);
+    dx <<= 1;
+    2 * (w + h) - 2
+  } else {
+    let strength =
+      select_ief_strength(w as _, h as _, smooth_filter, 90 - angle) as c_int;
+    if strength != 0 {
+      ipred_z1_filter_edge(out, w + h, src, w + w.min(h), strength);
+      w + h - 1
+    } else {
+      let n = w + w.min(h);
+      out.copy_from_nonoverlapping(src.add(1), n as usize);
+      n - 1
+    }
+  };
+
+  let base_inc = 1 + upsample_above as c_int;
+  let pad_pixels = w + 15;
+  let fill_pixel = out.add(max_base_x as usize).read();
+  let base = out.add(max_base_x as usize + 1);
+  for i in 0..(pad_pixels * base_inc) as usize {
+    base.add(i).write(fill_pixel);
+  }
+
+  Z1.ipred_fill(dst, stride, out, w, h, dx, max_base_x, upsample_above);
+}
+
+unsafe fn ipred_z3<T: Pixel>(
+  dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+  h: c_int, bd_max: c_int, edge_filter: bool, smooth_filter: bool,
+) {
+  assert!(angle > 180);
+  let mut dy = dr_intra_derivative(270 - angle as usize) as c_int;
+  let mut tmp = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 4 + 16];
+  let mut out = [MaybeUninit::<T>::uninit(); MAX_TX_SIZE * 8 + 15 * 2];
+  let out = out.as_mut_ptr() as *mut T;
+  let tmp = tmp.as_mut_ptr() as *mut T;
+
+  let upsample_left = edge_filter
+    && select_ief_upsample(w as _, h as _, smooth_filter, angle - 180);
+  let max_base_y = if upsample_left {
+    tmp.write(src.read());
+    ipred_reverse(tmp.add(1), src, h + w.max(h));
+    ipred_z1_upsample_edge(out, w + h, tmp, h + w.min(h), bd_max);
+    dy <<= 1;
+    2 * (w + h) - 2
+  } else {
+    let strength =
+      select_ief_strength(w as _, h as _, smooth_filter, angle - 180) as c_int;
+    if strength != 0 {
+      tmp.write(src.read());
+      ipred_reverse(tmp.add(1), src, h + w.max(h));
+      ipred_z1_filter_edge(out, w + h, tmp, h + w.min(h), strength);
+      w + h - 1
+    } else {
+      let n = w + w.min(h);
+      ipred_reverse(out, src, n);
+      n - 1
+    }
+  };
+
+  let base_inc = 1 + upsample_left as c_int;
+  let pad_pixels = (h + 15).max(64 - max_base_y - 1);
+  let fill_pixel = out.add(max_base_y as usize).read();
+  let base = out.add(max_base_y as usize + 1);
+  for i in 0..(pad_pixels * base_inc) as usize {
+    base.add(i).write(fill_pixel);
+  }
+
+  Z3.ipred_fill(dst, stride, out, w, h, dy, max_base_y, upsample_left);
+}
+
 #[inline(always)]
 pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
@@ -245,6 +435,33 @@ pub fn dispatch_predict_intra<T: Pixel>(
         PredictionMode::H_PRED if angle == 180 => {
           rav1e_ipred_h_16bpc_neon(
             dst_u16, stride, edge_u16, w, h, angle, 0, 0, bd_max,
+          );
+        }
+        PredictionMode::H_PRED
+        | PredictionMode::V_PRED
+        | PredictionMode::D45_PRED
+        | PredictionMode::D135_PRED
+        | PredictionMode::D113_PRED
+        | PredictionMode::D157_PRED
+        | PredictionMode::D203_PRED
+        | PredictionMode::D67_PRED => {
+          if angle >= 90 && angle <= 180 {
+            return call_rust(dst);
+          }
+          let edge_filter = ief_params.is_some();
+          let smooth_filter = ief_params
+            .map(IntraEdgeFilterParameters::use_smooth_filter)
+            .unwrap_or_default();
+          (if angle < 90 { ipred_z1 } else { ipred_z3 })(
+            dst.data_ptr_mut(),
+            stride,
+            edge_buf.data.as_ptr().add(2 * MAX_TX_SIZE),
+            angle as isize,
+            w,
+            h,
+            bd_max,
+            edge_filter,
+            smooth_filter,
           );
         }
         PredictionMode::SMOOTH_PRED => {
