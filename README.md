@@ -152,13 +152,10 @@ cargo run --release --bin rav1e -- input.y4m -o output.ivf
 _(Find a y4m-file for testing at [`tests/small_input.y4m`](tests/small_input.y4m) or at http://ultravideo.cs.tut.fi/#testsequences)_
 
 ### Decompressing video
-Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can build compatible aomdec using the following:
+Encoder output should be compatible with any AV1 decoder compliant with the v1.0.0 specification. You can decode using [dav1d](https://code.videolan.org/videolan/dav1d), which is now packaged [![in over 40 repositories](https://repology.org/badge/tiny-repos/dav1d.svg)](https://repology.org/project/dav1d/versions).
 
 ```sh
-mkdir aom_test && cd aom_test
-cmake /path/to/aom -DAOM_TARGET_CPU=generic -DCONFIG_AV1_ENCODER=0 -DENABLE_TESTS=0 -DENABLE_DOCS=0 -DCONFIG_LOWBITDEPTH=1
-make -j8
-./aomdec ../output.ivf -o output.y4m
+dav1d -i output.ivf -o output.y4m
 ```
 
 ### Configuring
