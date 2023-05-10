@@ -65,13 +65,13 @@ sudo dnf install libaom-devel libdav1d-devel
 Run encode-decode integration tests against libaom with:
 
 ```sh
-cargo test --release --features=decode_test
+cargo test --release --features=decode_test --lib -- test_encode_decode
 ```
 
 Run the encode-decode tests against `dav1d` with:
 
 ```sh
-cargo test --release --features=decode_test_dav1d
+cargo test --release --features=decode_test_dav1d --lib -- test_encode_decode
 ```
 
 Run regular benchmarks with:
