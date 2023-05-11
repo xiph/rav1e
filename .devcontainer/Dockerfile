@@ -23,3 +23,5 @@ ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconf
 ENV PKG_CONFIG_SYSROOT_DIR_aarch64_unknown_linux_gnu=/
 ENV CUSTOM_LIBFUZZER_PATH=/usr/lib/llvm-14/lib/libFuzzer.a
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER="sde64 -icl --"
+LABEL dev.containers.source=https://github.com/xiph/rav1e
+LABEL dev.containers.id=rav1e

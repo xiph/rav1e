@@ -1,0 +1,32 @@
+name: Build devcontainer image
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/devcontainer.yml'
+      - '.devcontainer/**'
+
+jobs:
+  devcontainer:
+    if: github.repository_owner == 'xiph'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install devcontainer-cli
+        run: npm install -g @devcontainers/cli
+      - name: Authenticate with ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+      - name: Build devcontainer image
+        run: |
+          IMAGE_NAME=rav1e-devcontainer
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
+          VERSION=latest
+          IMAGE_TAG=${IMAGE_ID,,}:$VERSION
+          devcontainer build --image-name $IMAGE_TAG --push \
+            --workspace-folder $PWD --config .devcontainer/build.json

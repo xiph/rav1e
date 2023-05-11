@@ -1,6 +1,4 @@
 {
 	"name": "rav1e-devcontainer",
-	"build": {
-		"dockerfile": "Dockerfile"
-	}
+	"image": "ghcr.io/xiph/rav1e-devcontainer:latest"
 }
