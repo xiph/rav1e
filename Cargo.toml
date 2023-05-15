@@ -166,6 +166,7 @@ bench = false
 [[bench]]
 name = "bench"
 path = "benches/bench.rs"
+required-features = ["bench"]
 harness = false
 
 [profile.dev]
