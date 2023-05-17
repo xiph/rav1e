@@ -1,5 +1,9 @@
 # Contributing to rav1e
 
+## Development Container
+
+To get started quickly, contributors may use the [rav1e-devcontainer](https://ghcr.io/xiph/rav1e-devcontainer) image which includes the tools referenced in this guide. It can be launched from GitHub in a [*new Codespace*](https://github.com/codespaces/new?repo=xiph/rav1e). It can also be run locally with [VS Code and the Dev Containers extension](https://code.visualstudio.com/docs/devcontainers/containers#_getting-started) or via the [Dev Container CLI](https://www.npmjs.com/package/@devcontainers/cli).
+
 ## Toolchain
 
 rav1e uses the stable version of Rust (the stable toolchain).
