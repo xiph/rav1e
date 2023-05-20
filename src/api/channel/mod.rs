@@ -16,9 +16,9 @@ use crate::api::util::*;
 use crossbeam::channel::*;
 
 use crate::rate::RCState;
-use crate::rayon::ThreadPool;
 use crate::util::Pixel;
 
+use rayon::ThreadPool;
 use std::sync::Arc;
 
 mod data;

@@ -14,10 +14,10 @@ use crate::encoder::FrameInvariants;
 use crate::partition::RefType::*;
 use crate::predict::PredictionMode::*;
 use crate::quantize::*;
-use crate::rayon::iter::*;
 use crate::tiling::*;
 use crate::util::{clamp, ILog, Pixel};
 use crate::DeblockState;
+use rayon::iter::*;
 use rust_hawktracer::*;
 use std::cmp;
 
