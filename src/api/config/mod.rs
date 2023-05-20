@@ -9,10 +9,10 @@
 
 use thiserror::Error;
 
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use std::sync::Arc;
 
 use crate::api::{ChromaSampling, Context, ContextInner, PixelRange};
-use crate::rayon::{ThreadPool, ThreadPoolBuilder};
 use crate::util::Pixel;
 
 mod encoder;

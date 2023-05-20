@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct Context<T: Pixel> {
   pub(crate) inner: ContextInner<T>,
   pub(crate) config: EncoderConfig,
-  pub(crate) pool: Option<Arc<crate::rayon::ThreadPool>>,
+  pub(crate) pool: Option<Arc<rayon::ThreadPool>>,
   pub(crate) is_flushing: bool,
 }
 

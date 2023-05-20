@@ -41,6 +41,7 @@ use crate::wasm_bindgen::*;
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
 use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use rayon::iter::*;
 use rust_hawktracer::*;
 
 use std::collections::VecDeque;
@@ -48,8 +49,6 @@ use std::io::Write;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::{fmt, io, mem};
-
-use crate::rayon::iter::*;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

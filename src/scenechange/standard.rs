@@ -42,7 +42,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       clone
     };
 
-    crate::rayon::scope(|s| {
+    rayon::scope(|s| {
       s.spawn(|_| {
         let temp_plane =
           self.temp_plane.get_or_insert_with(|| frame2.planes[0].clone());
