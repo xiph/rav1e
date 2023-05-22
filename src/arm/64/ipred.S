@@ -1946,7 +1946,6 @@ function ipred_z2_fill1_8bpc_neon, export=1
         mov             w8,  #(1 << 6)            // xpos = 1 << 6
         sub             x9,  x9,  w10, uxtw
         sub             w8,  w8,  w6              // xpos -= dx
-        mov             w15, #64
 
         movrel          x11, increments
         ld1             {v31.8h},  [x11]          // increments
@@ -2587,7 +2586,6 @@ function ipred_z2_fill1_8bpc_neon, export=1
 1:
         add             v13.8h,  v23.8h,  v25.8h  // ypos -= 8*dy
         movi            v12.16b, #64
-        movi            v20.16b, #2
         movi            v10.16b, #0x3e
 
         xtn             v27.8b,  v23.8h           // (uint8_t)ypos
@@ -2665,7 +2663,6 @@ function ipred_z2_fill2_8bpc_neon, export=1
         cmp             w4,  #8
         mov             w8,  #(2 << 6)            // xpos = 2 << 6
         sub             w8,  w8,  w6              // xpos -= dx
-        mov             w15, #64
 
         movrel          x11, increments
         ld1             {v31.8h},  [x11]          // increments
@@ -2911,7 +2908,6 @@ function ipred_z2_fill3_8bpc_neon, export=1
         cmp             w4,  #8
         mov             w8,  #(1 << 6)            // xpos = 1 << 6
         sub             w8,  w8,  w6              // xpos -= dx
-        mov             w15, #64
 
         movrel          x11, increments
         ld1             {v31.8h},  [x11]          // increments
