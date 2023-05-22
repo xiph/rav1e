@@ -740,6 +740,22 @@ impl<T: Pixel> CodedFrameData<T> {
     }
   }
 
+  // Assumes that we have already computed block importances and lookahead intra costs
+  #[hawktracer(compute_distortion_scales)]
+  pub fn compute_distortion_scales(&mut self) {
+    let block_importances = self.block_importances.iter();
+    let lookahead_intra_costs = self.lookahead_intra_costs.iter();
+    let distortion_scales = self.distortion_scales.iter_mut();
+    for ((&propagate_cost, &intra_cost), distortion_scale) in
+      block_importances.zip(lookahead_intra_costs).zip(distortion_scales)
+    {
+      *distortion_scale = crate::rdo::distortion_scale_for(
+        propagate_cost as f64,
+        intra_cost as f64,
+      );
+    }
+  }
+
   // Assumes that we have already computed activity scales and distortion scales
   // Returns -0.5 log2(mean(scale))
   #[hawktracer(compute_spatiotemporal_scores)]

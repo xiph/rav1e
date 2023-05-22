@@ -1227,17 +1227,7 @@ impl<T: Pixel> ContextInner<T> {
         .unwrap()
         .fi;
       let coded_data = fi.coded_frame_data.as_mut().unwrap();
-      let block_importances = coded_data.block_importances.iter();
-      let lookahead_intra_costs = coded_data.lookahead_intra_costs.iter();
-      let distortion_scales = coded_data.distortion_scales.iter_mut();
-      for ((&propagate_cost, &intra_cost), distortion_scale) in
-        block_importances.zip(lookahead_intra_costs).zip(distortion_scales)
-      {
-        *distortion_scale = crate::rdo::distortion_scale_for(
-          propagate_cost as f64,
-          intra_cost as f64,
-        );
-      }
+      coded_data.compute_distortion_scales();
       #[cfg(feature = "dump_lookahead_data")]
       {
         use byteorder::{NativeEndian, WriteBytesExt};
