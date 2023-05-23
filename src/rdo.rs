@@ -503,7 +503,7 @@ pub fn spatiotemporal_scale<T: Pixel>(
 }
 
 pub fn distortion_scale_for(
-  propagate_cost: f64, intra_cost: f64,
+  propagate_cost: f64, intra_cost: f64, log_base_q: i64,
 ) -> DistortionScale {
   // The mbtree paper \cite{mbtree} uses the following formula:
   //
@@ -528,10 +528,8 @@ pub fn distortion_scale_for(
   //     scale = 2^(QP_delta / -3)
   //           = (1 + (propagate_cost / intra_cost))^(strength / 3)
   //
-  //  The original paper empirically chooses strength = 2.0, but strength = 1.0
-  //  seems to work best in rav1e currently, this may have something to do with
-  //  the fact that they use 16x16 blocks whereas our "importance blocks" are
-  //  8x8, but everything should be scale invariant here so that's weird.
+  //  The original paper empirically chooses strength = 2.0, but strength = 2.625
+  //  seems to work best in rav1e currently.
   //
   // @article{mbtree,
   //   title={A novel macroblock-tree algorithm for high-performance
@@ -546,9 +544,12 @@ pub fn distortion_scale_for(
     return DistortionScale::default(); // no scaling
   }
 
-  let strength = 1.0; // empirical, see comment above
+  // Estimated fit for minimising 99.7th percentile:
+  // strength / 3 = poly1d([ 0.1002447, 0.27802458])(log_base_q)
   let frac = (intra_cost + propagate_cost) / intra_cost;
-  frac.powf(strength / 3.0).into()
+  let q = log_base_q;
+  let exp = 0x19a_9a32 * (q >> 28) + 0x8e_593c_afc6_82b8;
+  frac.powf(exp as f64 / (1u64 << 57) as f64).into()
 }
 
 /// Fixed point arithmetic version of distortion scale

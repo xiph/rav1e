@@ -526,23 +526,20 @@ fn chroma_offset(
 pub(crate) enum DynRelQ {
   Static,
   Temporal(i64),
-  #[allow(unused)]
   Spatial(i64),
   Spatiotemporal(i64),
 }
 
 impl DynRelQ {
-  fn log_dyn_target_q(self, _log_base_q: i64, log_target_q: i64) -> i64 {
+  fn log_dyn_target_q(self, log_base_q: i64, log_target_q: i64) -> i64 {
     match self {
       Self::Static => log_target_q,
       Self::Spatial(log_isqrt_mean_scale) => {
         log_target_q + log_isqrt_mean_scale
       }
-      Self::Temporal(log_isqrt_rel_scale) => {
-        log_target_q + log_isqrt_rel_scale
-      }
+      Self::Temporal(log_isqrt_rel_scale) => log_base_q + log_isqrt_rel_scale,
       Self::Spatiotemporal(log_isqrt_rel_scale) => {
-        log_target_q + log_isqrt_rel_scale
+        log_base_q + log_isqrt_rel_scale
       }
     }
   }

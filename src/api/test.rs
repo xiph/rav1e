@@ -2277,7 +2277,7 @@ fn min_quantizer_bounds_correctly() {
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
-      assert_eq!(68, frame_data.fi.base_q_idx);
+      assert_eq!(92, frame_data.fi.base_q_idx);
     } else {
       assert_eq!(96, frame_data.fi.base_q_idx);
     }
@@ -2342,9 +2342,9 @@ fn max_quantizer_bounds_correctly() {
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
-      assert_eq!(95, frame_data.fi.base_q_idx);
+      assert_eq!(111, frame_data.fi.base_q_idx);
     } else {
-      assert_eq!(115, frame_data.fi.base_q_idx);
+      assert_eq!(114, frame_data.fi.base_q_idx);
     }
   }
 
@@ -2373,7 +2373,7 @@ fn max_quantizer_bounds_correctly() {
     ctx.inner.encode_packet(i).unwrap();
     let frame_data = ctx.inner.frame_data.get(&i).unwrap().as_ref().unwrap();
     if i == 0 {
-      assert!(frame_data.fi.base_q_idx < 95);
+      assert!(frame_data.fi.base_q_idx < 111);
     } else {
       assert!(frame_data.fi.base_q_idx < 115);
     }

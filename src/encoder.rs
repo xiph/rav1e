@@ -743,7 +743,7 @@ impl<T: Pixel> CodedFrameData<T> {
 
   // Assumes that we have already computed block importances and lookahead intra costs
   #[hawktracer(compute_distortion_scales)]
-  pub fn compute_distortion_scales(&mut self) {
+  pub fn compute_distortion_scales(&mut self, log_base_q: i64) {
     let block_importances = self.block_importances.iter();
     let lookahead_intra_costs = self.lookahead_intra_costs.iter();
     let distortion_scales = self.distortion_scales.iter_mut();
@@ -753,6 +753,7 @@ impl<T: Pixel> CodedFrameData<T> {
       *distortion_scale = crate::rdo::distortion_scale_for(
         propagate_cost as f64,
         intra_cost as f64,
+        log_base_q,
       );
     }
   }
