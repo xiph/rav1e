@@ -7,11 +7,10 @@ use crate::encoder::{
   FrameInvariants, FrameState, Sequence, IMPORTANCE_BLOCK_SIZE,
 };
 use crate::frame::{AsRegion, PlaneOffset};
-use crate::me::{estimate_tile_motion, RefMEStats};
+use crate::me::{estimate_tile_motion, FrameMEStats, RefMEStats};
 use crate::partition::{get_intra_edges, BlockSize};
-use crate::predict::{IntraParam, PredictionMode};
+use crate::predict::{pred_cfl_ac, IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
-use crate::transform::TxSize;
 use crate::Pixel;
 use rayon::iter::*;
 use rust_hawktracer::*;
@@ -28,64 +27,91 @@ pub(crate) const IMP_BLOCK_AREA_IN_MV_UNITS: i64 =
 
 #[hawktracer(estimate_intra_costs)]
 pub(crate) fn estimate_intra_costs<T: Pixel>(
-  temp_plane: &mut Plane<T>, frame: &Frame<T>, bit_depth: usize,
-  cpu_feature_level: CpuFeatureLevel,
+  temp_frame: &mut Frame<T>, frame: &Frame<T>, bit_depth: usize,
+  planes: usize, cpu_feature_level: CpuFeatureLevel,
 ) -> Box<[u32]> {
-  let plane = &frame.planes[0];
-  let plane_after_prediction = temp_plane;
-
-  let bsize = BlockSize::from_width_and_height(
-    IMPORTANCE_BLOCK_SIZE,
-    IMPORTANCE_BLOCK_SIZE,
-  );
-  let tx_size = bsize.tx_size();
-
-  let h_in_imp_b = plane.cfg.height / IMPORTANCE_BLOCK_SIZE;
-  let w_in_imp_b = plane.cfg.width / IMPORTANCE_BLOCK_SIZE;
+  let h_in_imp_b = frame.planes[0].cfg.height / IMPORTANCE_BLOCK_SIZE;
+  let w_in_imp_b = frame.planes[0].cfg.width / IMPORTANCE_BLOCK_SIZE;
   let mut intra_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
 
-  for y in 0..h_in_imp_b {
-    for x in 0..w_in_imp_b {
-      let plane_org = plane.region(Area::Rect {
-        x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-        y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-        width: IMPORTANCE_BLOCK_SIZE,
-        height: IMPORTANCE_BLOCK_SIZE,
-      });
+  estimate_plane_intra_costs::<T, 0, 0>(
+    &mut temp_frame.planes[0],
+    &frame.planes[0],
+    None,
+    bit_depth,
+    cpu_feature_level,
+    &mut intra_costs,
+    w_in_imp_b,
+    h_in_imp_b,
+  );
+
+  for (plane_rec, plane) in
+    temp_frame.planes[1..planes].iter_mut().zip(&frame.planes[1..planes])
+  {
+    let xdec = plane.cfg.xdec;
+    let ydec = plane.cfg.ydec;
+    (match (xdec, ydec) {
+      (0, 0) => estimate_plane_intra_costs::<T, 0, 0>,
+      (_, 0) => estimate_plane_intra_costs::<T, 1, 0>,
+      (_, _) => estimate_plane_intra_costs::<T, 1, 1>,
+    })(
+      plane_rec,
+      plane,
+      Some(&frame.planes[0]),
+      bit_depth,
+      cpu_feature_level,
+      &mut intra_costs,
+      w_in_imp_b,
+      h_in_imp_b,
+    );
+  }
+
+  intra_costs.into_boxed_slice()
+}
+
+fn estimate_plane_intra_costs<
+  T: Pixel,
+  const XDEC: usize,
+  const YDEC: usize,
+>(
+  plane_rec: &mut Plane<T>, plane: &Plane<T>, plane_y: Option<&Plane<T>>,
+  bit_depth: usize, cpu_feature_level: CpuFeatureLevel,
+  intra_costs: &mut Vec<u32>, w_in_imp_b: usize, h_in_imp_b: usize,
+) {
+  let bsize = BlockSize::from_width_and_height(
+    IMPORTANCE_BLOCK_SIZE >> XDEC,
+    IMPORTANCE_BLOCK_SIZE >> YDEC,
+  );
+  let tx_size = bsize.tx_size();
+  let width = IMPORTANCE_BLOCK_SIZE >> XDEC;
+  let height = IMPORTANCE_BLOCK_SIZE >> YDEC;
+  let mut ac = [0i16; IMPORTANCE_BLOCK_SIZE * IMPORTANCE_BLOCK_SIZE];
+  for y_ in 0..h_in_imp_b {
+    for x_ in 0..w_in_imp_b {
+      let x = (x_ * IMPORTANCE_BLOCK_SIZE) as isize >> XDEC;
+      let y = (y_ * IMPORTANCE_BLOCK_SIZE) as isize >> YDEC;
+      let plane_org = plane.region(Area::Rect { x, y, width, height });
 
       // TODO: other intra prediction modes.
       let edge_buf = get_intra_edges(
         &plane.as_region(),
-        TileBlockOffset(BlockOffset { x, y }),
+        TileBlockOffset(BlockOffset { x: x_, y: y_ }),
         0,
         0,
         bsize,
-        PlaneOffset {
-          x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-          y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-        },
-        TxSize::TX_8X8,
+        PlaneOffset { x, y },
+        tx_size,
         bit_depth,
         Some(PredictionMode::DC_PRED),
         false,
         IntraParam::None,
       );
 
-      let mut plane_after_prediction_region = plane_after_prediction
-        .region_mut(Area::Rect {
-          x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-          y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-          width: IMPORTANCE_BLOCK_SIZE,
-          height: IMPORTANCE_BLOCK_SIZE,
-        });
+      let mut plane_after_prediction_region =
+        plane_rec.region_mut(Area::Rect { x, y, width, height });
 
       PredictionMode::DC_PRED.predict_intra(
-        TileRect {
-          x: x * IMPORTANCE_BLOCK_SIZE,
-          y: y * IMPORTANCE_BLOCK_SIZE,
-          width: IMPORTANCE_BLOCK_SIZE,
-          height: IMPORTANCE_BLOCK_SIZE,
-        },
+        TileRect { x: x as usize, y: y as usize, width, height },
         &mut plane_after_prediction_region,
         tx_size,
         bit_depth,
@@ -97,14 +123,9 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       );
 
       let plane_after_prediction_region =
-        plane_after_prediction.region(Area::Rect {
-          x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-          y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-          width: IMPORTANCE_BLOCK_SIZE,
-          height: IMPORTANCE_BLOCK_SIZE,
-        });
+        plane_rec.region(Area::Rect { x, y, width, height });
 
-      let intra_cost = get_satd(
+      let mut satd = get_satd(
         &plane_org,
         &plane_after_prediction_region,
         bsize.width(),
@@ -113,11 +134,74 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
         cpu_feature_level,
       );
 
-      intra_costs.push(intra_cost);
+      if let Some(plane) = plane_y {
+        let luma = &plane.region(Area::Rect {
+          x: x << XDEC,
+          y: y << YDEC,
+          width: width << XDEC,
+          height: height << YDEC,
+        });
+        pred_cfl_ac::<T, XDEC, YDEC>(
+          &mut ac,
+          luma,
+          bsize,
+          0,
+          0,
+          cpu_feature_level,
+        );
+
+        let thresh = 4;
+        let mut progress = 1;
+        for alpha in 1..=15 {
+          if alpha > thresh && progress < alpha {
+            break;
+          }
+          let mut flag = 0;
+          for sign in (-1..1).step_by(2) {
+            let mut plane_after_prediction_region =
+              plane_rec.region_mut(Area::Rect { x, y, width, height });
+
+            PredictionMode::UV_CFL_PRED.predict_intra(
+              TileRect { x: x as usize, y: y as usize, width, height },
+              &mut plane_after_prediction_region,
+              tx_size,
+              bit_depth,
+              &ac,
+              IntraParam::Alpha(sign * alpha),
+              None,
+              &edge_buf,
+              cpu_feature_level,
+            );
+
+            let plane_after_prediction_region =
+              plane_rec.region(Area::Rect { x, y, width, height });
+
+            let new_satd = get_satd(
+              &plane_org,
+              &plane_after_prediction_region,
+              bsize.width(),
+              bsize.height(),
+              bit_depth,
+              cpu_feature_level,
+            );
+            if new_satd <= satd {
+              satd = new_satd;
+              flag = thresh;
+            }
+          }
+          progress += flag;
+        }
+      }
+
+      let intra_cost = satd << (XDEC + YDEC);
+
+      if intra_costs.len() < h_in_imp_b * w_in_imp_b {
+        intra_costs.push(intra_cost);
+      } else {
+        intra_costs[y_ * w_in_imp_b + x_] += intra_cost;
+      }
     }
   }
-
-  intra_costs.into_boxed_slice()
 }
 
 #[hawktracer(estimate_importance_block_difference)]
@@ -180,6 +264,7 @@ pub(crate) fn estimate_importance_block_difference<T: Pixel>(
 pub(crate) fn estimate_inter_costs<T: Pixel>(
   frame: Arc<Frame<T>>, ref_frame: Arc<Frame<T>>, bit_depth: usize,
   mut config: EncoderConfig, sequence: Arc<Sequence>, buffer: RefMEStats,
+  planes: usize,
 ) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
@@ -218,17 +303,43 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   compute_motion_vectors(&mut fi, &mut fs, &inter_cfg);
 
   // Estimate inter costs
-  let plane_org = &frame.planes[0];
-  let plane_ref = &ref_frame.planes[0];
-  let h_in_imp_b = plane_org.cfg.height / IMPORTANCE_BLOCK_SIZE;
-  let w_in_imp_b = plane_org.cfg.width / IMPORTANCE_BLOCK_SIZE;
+  let h_in_imp_b = frame.planes[0].cfg.height / IMPORTANCE_BLOCK_SIZE;
+  let w_in_imp_b = frame.planes[0].cfg.width / IMPORTANCE_BLOCK_SIZE;
   let stats = &fs.frame_me_stats.read().expect("poisoned lock")[0];
-  let bsize = BlockSize::from_width_and_height(
-    IMPORTANCE_BLOCK_SIZE,
-    IMPORTANCE_BLOCK_SIZE,
-  );
 
   let mut inter_costs = 0;
+  for (plane_org, plane_ref) in
+    frame.planes.iter().zip(&ref_frame.planes).take(planes)
+  {
+    let xdec = plane_org.cfg.xdec;
+    let ydec = plane_org.cfg.ydec;
+    inter_costs += (match (xdec, ydec) {
+      (0, 0) => estimate_plane_inter_costs::<T, 0, 0>,
+      (_, 0) => estimate_plane_inter_costs::<T, 1, 0>,
+      (_, _) => estimate_plane_inter_costs::<T, 1, 1>,
+    })(
+      plane_org, plane_ref, bit_depth, &fi, stats, w_in_imp_b, h_in_imp_b,
+    );
+  }
+  inter_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
+}
+
+fn estimate_plane_inter_costs<
+  T: Pixel,
+  const XDEC: usize,
+  const YDEC: usize,
+>(
+  plane_org: &Plane<T>, plane_ref: &Plane<T>, bit_depth: usize,
+  fi: &FrameInvariants<T>, stats: &FrameMEStats, w_in_imp_b: usize,
+  h_in_imp_b: usize,
+) -> u64 {
+  let bsize = BlockSize::from_width_and_height(
+    IMPORTANCE_BLOCK_SIZE >> XDEC,
+    IMPORTANCE_BLOCK_SIZE >> YDEC,
+  );
+  let mut inter_costs = 0;
+  let width = IMPORTANCE_BLOCK_SIZE >> XDEC;
+  let height = IMPORTANCE_BLOCK_SIZE >> YDEC;
   (0..h_in_imp_b).for_each(|y| {
     (0..w_in_imp_b).for_each(|x| {
       let mv = stats[y * 2][x * 2].mv;
@@ -239,30 +350,33 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
       let reference_y = y as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
       let region_org = plane_org.region(Area::Rect {
-        x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-        y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-        width: IMPORTANCE_BLOCK_SIZE,
-        height: IMPORTANCE_BLOCK_SIZE,
+        x: (x * width) as isize,
+        y: (y * height) as isize,
+        width,
+        height,
       });
 
       let region_ref = plane_ref.region(Area::Rect {
-        x: reference_x as isize / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-        y: reference_y as isize / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-        width: IMPORTANCE_BLOCK_SIZE,
-        height: IMPORTANCE_BLOCK_SIZE,
+        x: (reference_x as isize >> XDEC)
+          / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
+        y: (reference_y as isize >> YDEC)
+          / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
+        width,
+        height,
       });
 
-      inter_costs += get_satd(
+      inter_costs += (get_satd(
         &region_org,
         &region_ref,
         bsize.width(),
         bsize.height(),
         bit_depth,
         fi.cpu_feature_level,
-      ) as u64;
+      ) as u64)
+        << (XDEC + YDEC);
     });
   });
-  inter_costs as f64 / (w_in_imp_b * h_in_imp_b) as f64
+  inter_costs
 }
 
 #[hawktracer(compute_motion_vectors)]

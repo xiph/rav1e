@@ -96,7 +96,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   /// These are cached for reuse later in rav1e.
   pub(crate) intra_costs: BTreeMap<u64, Box<[u32]>>,
   /// Temporary buffer used by estimate_intra_costs.
-  pub(crate) temp_plane: Option<Plane<T>>,
+  pub(crate) temp_frame: Option<Frame<T>>,
 }
 
 impl<T: Pixel> SceneChangeDetector<T> {
@@ -152,7 +152,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       encoder_config,
       sequence,
       intra_costs: BTreeMap::new(),
-      temp_plane: None,
+      temp_frame: None,
     }
   }
 

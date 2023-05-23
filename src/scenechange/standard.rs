@@ -8,7 +8,10 @@ use crate::{
   frame::Frame,
   me::FrameMEStats,
 };
-use v_frame::{math::Fixed, pixel::Pixel};
+use v_frame::{
+  math::Fixed,
+  pixel::{ChromaSampling::Cs400, Pixel},
+};
 
 use super::{SceneChangeDetector, ScenecutResult};
 
@@ -32,6 +35,8 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     let cols = 2 * self.encoder_config.width.align_power_of_two_and_shift(3);
     let rows = 2 * self.encoder_config.height.align_power_of_two_and_shift(3);
+    let planes =
+      if self.encoder_config.chroma_sampling == Cs400 { 1 } else { 3 };
 
     let buffer = if let Some(buffer) = &self.frame_me_stats_buffer {
       Arc::clone(buffer)
@@ -44,15 +49,16 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
     rayon::scope(|s| {
       s.spawn(|_| {
-        let temp_plane =
-          self.temp_plane.get_or_insert_with(|| frame2.planes[0].clone());
+        let temp_frame =
+          self.temp_frame.get_or_insert_with(|| (*frame2).clone());
 
         let intra_costs =
           self.intra_costs.entry(input_frameno).or_insert_with(|| {
             estimate_intra_costs(
-              temp_plane,
+              temp_frame,
               &*frame2,
               self.bit_depth,
+              planes,
               self.cpu_feature_level,
             )
           });
@@ -74,6 +80,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
           self.encoder_config.clone(),
           self.sequence.clone(),
           buffer,
+          planes,
         );
       });
       s.spawn(|_| {

@@ -845,17 +845,20 @@ impl<T: Pixel> ContextInner<T> {
       .unwrap_or_else(|| {
         let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
 
-        let temp_plane = self
+        let temp_frame = self
           .keyframe_detector
-          .temp_plane
-          .get_or_insert_with(|| frame.planes[0].clone());
+          .temp_frame
+          .get_or_insert_with(|| (**frame).clone());
+
+        let planes = if fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
 
         // We use the cached values from scenechange if available,
         // otherwise we need to calculate them here.
         estimate_intra_costs(
-          temp_plane,
+          temp_frame,
           &**frame,
           fi.sequence.bit_depth,
+          planes,
           fi.cpu_feature_level,
         )
       });
@@ -893,16 +896,47 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
+  fn estimate_plane_inter_cost<const XDEC: usize, const YDEC: usize>(
+    x: usize, y: usize, reference_x: i64, reference_y: i64,
+    plane_org: &Plane<T>, plane_ref: &Plane<T>, bit_depth: usize,
+    cpu_feature_level: CpuFeatureLevel,
+  ) -> f32 {
+    let width: usize = IMPORTANCE_BLOCK_SIZE >> XDEC;
+    let height: usize = IMPORTANCE_BLOCK_SIZE >> YDEC;
+
+    let region_org = plane_org.region(Area::Rect {
+      x: (x * width) as isize,
+      y: (y * height) as isize,
+      width,
+      height,
+    });
+
+    let region_ref = plane_ref.region(Area::Rect {
+      x: reference_x as isize
+        / (IMP_BLOCK_MV_UNITS_PER_PIXEL << XDEC) as isize,
+      y: reference_y as isize
+        / (IMP_BLOCK_MV_UNITS_PER_PIXEL << YDEC) as isize,
+      width,
+      height,
+    });
+
+    get_satd(
+      &region_org,
+      &region_ref,
+      width,
+      height,
+      bit_depth,
+      cpu_feature_level,
+    ) as f32
+  }
+
   #[hawktracer(update_block_importances)]
   fn update_block_importances(
     fi: &FrameInvariants<T>, me_stats: &crate::me::FrameMEStats,
     frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
-    bsize: BlockSize, len: usize,
-    reference_frame_block_importances: &mut [f32],
+    len: usize, reference_frame_block_importances: &mut [f32],
   ) {
     let coded_data = fi.coded_frame_data.as_ref().unwrap();
-    let plane_org = &frame.planes[0];
-    let plane_ref = &reference_frame.planes[0];
     let lookahead_intra_costs_lines =
       coded_data.lookahead_intra_costs.chunks_exact(coded_data.w_in_imp_b);
     let block_importances_lines =
@@ -929,30 +963,27 @@ impl<T: Pixel> ContextInner<T> {
               let reference_y =
                 y as i64 * IMP_BLOCK_SIZE_IN_MV_UNITS + mv.row as i64;
 
-              let region_org = plane_org.region(Area::Rect {
-                x: (x * IMPORTANCE_BLOCK_SIZE) as isize,
-                y: (y * IMPORTANCE_BLOCK_SIZE) as isize,
-                width: IMPORTANCE_BLOCK_SIZE,
-                height: IMPORTANCE_BLOCK_SIZE,
-              });
-
-              let region_ref = plane_ref.region(Area::Rect {
-                x: reference_x as isize
-                  / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-                y: reference_y as isize
-                  / IMP_BLOCK_MV_UNITS_PER_PIXEL as isize,
-                width: IMPORTANCE_BLOCK_SIZE,
-                height: IMPORTANCE_BLOCK_SIZE,
-              });
-
-              let inter_cost = get_satd(
-                &region_org,
-                &region_ref,
-                bsize.width(),
-                bsize.height(),
-                bit_depth,
-                fi.cpu_feature_level,
-              ) as f32;
+              let planes =
+                if fi.sequence.chroma_sampling == Cs400 { 1 } else { 3 };
+              let mut inter_cost = 0.;
+              for (plane_org, plane_ref) in
+                frame.planes.iter().zip(&reference_frame.planes).take(planes)
+              {
+                inter_cost += match (plane_org.cfg.xdec, plane_org.cfg.ydec) {
+                  (0, 0) => Self::estimate_plane_inter_cost::<0, 0>,
+                  (_, 0) => Self::estimate_plane_inter_cost::<1, 0>,
+                  (_, _) => Self::estimate_plane_inter_cost::<1, 1>,
+                }(
+                  x,
+                  y,
+                  reference_x,
+                  reference_y,
+                  plane_org,
+                  plane_ref,
+                  bit_depth,
+                  fi.cpu_feature_level,
+                );
+              }
 
               let intra_cost = intra_cost as f32;
               //          let intra_cost = lookahead_intra_costs[x] as f32;
@@ -1096,11 +1127,6 @@ impl<T: Pixel> ContextInner<T> {
     // Now compute and propagate the block importances from the end. The
     // current output frame will get its block importances from the future
     // frames.
-    let bsize = BlockSize::from_width_and_height(
-      IMPORTANCE_BLOCK_SIZE,
-      IMPORTANCE_BLOCK_SIZE,
-    );
-
     for &output_frameno in output_framenos.iter().skip(1).rev() {
       // TODO: see comment above about key frames not having references.
       if self
@@ -1183,7 +1209,6 @@ impl<T: Pixel> ContextInner<T> {
               frame,
               reference_frame,
               bit_depth,
-              bsize,
               len,
               reference_frame_block_importances,
             );
