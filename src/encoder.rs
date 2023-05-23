@@ -670,6 +670,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub default_filter: FilterMode,
   pub enable_segmentation: bool,
   pub t35_metadata: Box<[T35]>,
+  pub ref_log_isqrt_mean_scale: i64,
   /// Target CPU feature level.
   pub cpu_feature_level: crate::cpu_features::CpuFeatureLevel,
 
@@ -958,6 +959,7 @@ impl<T: Pixel> FrameInvariants<T> {
         .transform
         .enable_inter_tx_split,
       t35_metadata: Box::new([]),
+      ref_log_isqrt_mean_scale: 0,
       sequence,
       config,
       coded_frame_data: None,
@@ -1208,6 +1210,7 @@ impl<T: Pixel> FrameInvariants<T> {
       default_filter: self.default_filter,
       enable_segmentation: self.enable_segmentation,
       t35_metadata: self.t35_metadata.clone(),
+      ref_log_isqrt_mean_scale: self.ref_log_isqrt_mean_scale,
       cpu_feature_level: self.cpu_feature_level,
     }
   }

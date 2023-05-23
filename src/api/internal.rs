@@ -1255,6 +1255,51 @@ impl<T: Pixel> ContextInner<T> {
         )
         .unwrap();
       }
+      let cur_keyframe = fi.frame_type == FrameType::KEY;
+      let mut ref_log_isqrt_mean_scale = fi.ref_log_isqrt_mean_scale;
+      if output_framenos.len() > 1 {
+        let fi = &mut self
+          .frame_data
+          .get_mut(&output_framenos[1])
+          .unwrap()
+          .as_mut()
+          .unwrap()
+          .fi;
+        let next_keyframe = fi.frame_type == FrameType::KEY;
+        // Estimate the mean scale from the first P-frame.
+        if cur_keyframe && !next_keyframe {
+          let coded_data = fi.coded_frame_data.as_mut().unwrap();
+          coded_data.compute_distortion_scales();
+          ref_log_isqrt_mean_scale = if self.config.tune == Tune::Psychovisual
+          {
+            let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+            coded_data.activity_mask =
+              ActivityMask::from_plane(&frame.planes[0]);
+            coded_data.activity_mask.fill_scales(
+              fi.sequence.bit_depth,
+              &mut coded_data.activity_scales,
+            );
+            coded_data.compute_spatiotemporal_scores()
+          } else {
+            coded_data.compute_temporal_scores()
+          };
+        }
+        // Propagate the estimated mean scale to all frames in the group.
+        if !next_keyframe {
+          fi.ref_log_isqrt_mean_scale = ref_log_isqrt_mean_scale;
+        }
+      }
+      // Back-propagate the estimated mean scale from the first P-frame.
+      if cur_keyframe {
+        let fi = &mut self
+          .frame_data
+          .get_mut(&output_framenos[0])
+          .unwrap()
+          .as_mut()
+          .unwrap()
+          .fi;
+        fi.ref_log_isqrt_mean_scale = ref_log_isqrt_mean_scale
+      }
     }
   }
 
