@@ -9,5 +9,8 @@
     "group:allNonMajor",
     "schedule:earlyMondays"
   ],
-  "fetchReleaseNotes": true
+  "fetchReleaseNotes": true,
+  "lockFileMaintenance": {
+    "enabled": true
+  }
 }
