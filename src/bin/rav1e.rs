@@ -349,7 +349,6 @@ fn do_encode<T: Pixel, D: Decoder>(
 }
 
 fn main() {
-  #[cfg(feature = "tracing")]
   init_logger();
 
   #[cfg(feature = "tracing")]
@@ -366,7 +365,6 @@ fn main() {
   });
 }
 
-#[cfg(feature = "tracing")]
 fn init_logger() {
   use std::str::FromStr;
   fn level_colored(l: log::Level) -> console::StyledObject<&'static str> {
