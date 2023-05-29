@@ -87,7 +87,7 @@ coercing the compiler to auto-vectorize a function.
 
 Simple setup:
 
-- Install cargo-show-asm: `cargo install cargo-asm-asm`
+- Install cargo-show-asm: `cargo install cargo-show-asm`
 - Generate the list of functions: `cargo asm > fn.list`
 - Search for the function you want to analyze: `grep cdef_dist fn.list`
   - If the function doesn't appear, it may be inlined by the compiler.
