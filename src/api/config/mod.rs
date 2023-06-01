@@ -29,7 +29,7 @@ pub use rate::{RateControlConfig, RateControlSummary};
 mod speedsettings;
 pub use speedsettings::*;
 
-pub use crate::tiling::TilingInfo;
+pub use crate::tiling::{TilingInfo, MAX_TILE_RATE};
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
@@ -90,6 +90,14 @@ pub enum InvalidConfig {
   /// Framerate denominator is invalid.
   #[error("invalid framerate denominator {actual} (expected > 0, <= {max})")]
   InvalidFrameRateDen {
+    /// The actual value.
+    actual: u64,
+    /// The maximal supported value.
+    max: u64,
+  },
+  /// Framerate is invalid.
+  #[error("invalid framerate {actual} (expected > 0, <= {max})")]
+  InvalidFrameRate {
     /// The actual value.
     actual: u64,
     /// The maximal supported value.
@@ -372,6 +380,15 @@ impl Config {
       return Err(InvalidFrameRateDen {
         actual: config.time_base.den,
         max: u32::MAX as u64,
+      });
+    }
+
+    let max_frame_rate = MAX_TILE_RATE / (config.width * config.height) as f64;
+
+    if config.time_base.den / config.time_base.num > max_frame_rate as u64 {
+      return Err(InvalidFrameRate {
+        actual: config.time_base.den / config.time_base.num,
+        max: max_frame_rate as u64,
       });
     }
 
