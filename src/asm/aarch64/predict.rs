@@ -191,6 +191,36 @@ extern {
     dst: *mut u16, stride: ptrdiff_t, top: *const u16, width: c_int,
     height: c_int, dx: c_int, max_base_x: c_int,
   );
+  fn rav1e_ipred_z2_upsample_edge_8bpc_neon(
+    out: *mut u8, sz: c_int, _in: *const u8,
+  );
+  fn rav1e_ipred_z2_upsample_edge_16bpc_neon(
+    out: *mut u16, sz: c_int, _in: *const u16, bit_depth_max: c_int,
+  );
+  fn rav1e_ipred_z2_fill1_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, top: *const u8, left: *const u8,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
+  fn rav1e_ipred_z2_fill1_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, top: *const u16, left: *const u16,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
+  fn rav1e_ipred_z2_fill2_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, top: *const u8, left: *const u8,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
+  fn rav1e_ipred_z2_fill2_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, top: *const u16, left: *const u16,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
+  fn rav1e_ipred_z2_fill3_8bpc_neon(
+    dst: *mut u8, stride: ptrdiff_t, top: *const u8, left: *const u8,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
+  fn rav1e_ipred_z2_fill3_16bpc_neon(
+    dst: *mut u16, stride: ptrdiff_t, top: *const u16, left: *const u16,
+    width: c_int, height: c_int, dx: c_int, dy: c_int,
+  );
   fn rav1e_ipred_z3_fill1_8bpc_neon(
     dst: *mut u8, stride: ptrdiff_t, left: *const u8, width: c_int,
     height: c_int, dy: c_int, max_base_y: c_int,
@@ -217,6 +247,15 @@ unsafe fn ipred_z1_upsample_edge<T: Pixel>(
   match T::type_enum() {
     U8 => rav1e_ipred_z1_upsample_edge_8bpc_neon(o as _, sz, i as _, n),
     U16 => rav1e_ipred_z1_upsample_edge_16bpc_neon(o as _, sz, i as _, n, m),
+  }
+}
+#[inline]
+unsafe fn ipred_z2_upsample_edge<T: Pixel>(
+  o: *mut T, sz: c_int, i: *const T, m: c_int,
+) {
+  match T::type_enum() {
+    U8 => rav1e_ipred_z2_upsample_edge_8bpc_neon(o as _, sz, i as _),
+    U16 => rav1e_ipred_z2_upsample_edge_16bpc_neon(o as _, sz, i as _, m),
   }
 }
 #[inline]
@@ -262,6 +301,37 @@ const Z3: Fill = Fill(
   [rav1e_ipred_z3_fill1_16bpc_neon, rav1e_ipred_z3_fill2_16bpc_neon],
 );
 
+#[rustfmt::skip]
+struct Fill2(
+  [unsafe extern fn(*mut u8, ptrdiff_t, *const u8, *const u8, c_int, c_int, c_int, c_int); 3],
+  [unsafe extern fn(*mut u16, ptrdiff_t, *const u16, *const u16, c_int, c_int, c_int, c_int); 3],
+);
+impl Fill2 {
+  unsafe fn ipred_fill<T: Pixel>(
+    self, dst: *mut T, stride: ptrdiff_t, top: *const T, left: *const T,
+    w: c_int, h: c_int, dx: c_int, dy: c_int, upsample_above: bool,
+    upsample_left: bool,
+  ) {
+    let u = if upsample_left { 2 } else { upsample_above as usize };
+    match T::type_enum() {
+      U8 => self.0[u](dst as _, stride, top as _, left as _, w, h, dx, dy),
+      U16 => self.1[u](dst as _, stride, top as _, left as _, w, h, dx, dy),
+    }
+  }
+}
+const Z2: Fill2 = Fill2(
+  [
+    rav1e_ipred_z2_fill1_8bpc_neon,
+    rav1e_ipred_z2_fill2_8bpc_neon,
+    rav1e_ipred_z2_fill3_8bpc_neon,
+  ],
+  [
+    rav1e_ipred_z2_fill1_16bpc_neon,
+    rav1e_ipred_z2_fill2_16bpc_neon,
+    rav1e_ipred_z2_fill3_16bpc_neon,
+  ],
+);
+
 unsafe fn ipred_z1<T: Pixel>(
   dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
   h: c_int, bd_max: c_int, edge_filter: bool, smooth_filter: bool,
@@ -298,6 +368,73 @@ unsafe fn ipred_z1<T: Pixel>(
   }
 
   Z1.ipred_fill(dst, stride, out, w, h, dx, max_base_x, upsample_above);
+}
+
+unsafe fn ipred_z2<T: Pixel>(
+  dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
+  h: c_int, max_h: c_int, max_w: c_int, bd_max: c_int, edge_filter: bool,
+  smooth_filter: bool,
+) {
+  assert!(angle > 90 && angle < 180);
+  let mut dx = dr_intra_derivative((180 - angle) as _) as c_int;
+  let mut dy = dr_intra_derivative((angle - 90) as _) as c_int;
+  let us_left = edge_filter
+    && select_ief_upsample(w as _, h as _, smooth_filter, 180 - angle);
+  let us_above = edge_filter
+    && select_ief_upsample(w as _, h as _, smooth_filter, angle - 90);
+  let mut out = [MaybeUninit::<T>::uninit(); 3 * (MAX_TX_SIZE * 4 + 1)];
+  let out = out.as_mut_ptr() as *mut T;
+  let left = out.add(2 * (64 + 1));
+  let top = out.add(1 * (64 + 1));
+  let flipped = out;
+  if us_above {
+    ipred_z2_upsample_edge(top, w, src, bd_max);
+    dx <<= 1;
+  } else {
+    let strength =
+      select_ief_strength(w as _, h as _, smooth_filter, angle - 90) as c_int;
+
+    if edge_filter && strength != 0 {
+      ipred_z1_filter_edge(top.add(1), max_w.min(w), src, w, strength);
+      if max_w < w {
+        top.add((1 + max_w) as _).copy_from_nonoverlapping(
+          src.add((1 + max_w) as _),
+          (w - max_w) as _,
+        );
+      }
+    } else {
+      top.add(1).copy_from_nonoverlapping(src.add(1), w as _);
+    }
+  }
+  if us_left {
+    flipped.write(src.read());
+    ipred_reverse(flipped.add(1), src, h);
+    ipred_z2_upsample_edge(left, h, flipped, bd_max);
+    dy <<= 1;
+  } else {
+    let strength =
+      select_ief_strength(w as _, h as _, smooth_filter, 180 - angle) as c_int;
+
+    if edge_filter && strength != 0 {
+      flipped.write(src.read());
+      ipred_reverse(flipped.add(1), src, h);
+      ipred_z1_filter_edge(left.add(1), max_h.min(h), flipped, h, strength);
+      if max_h < h {
+        left.add((1 + max_h) as _).copy_from_nonoverlapping(
+          flipped.add((1 + max_h) as _),
+          (h - max_h) as _,
+        );
+      }
+    } else {
+      ipred_reverse(left.add(1), src, h);
+    }
+  }
+  let top_left = src.read();
+  top.write(top_left);
+  left.write(top_left);
+
+  assert!(!(us_above && us_left));
+  Z2.ipred_fill(dst, stride, top, left, w, h, dx, dy, us_above, us_left);
 }
 
 unsafe fn ipred_z3<T: Pixel>(
@@ -445,13 +582,35 @@ pub fn dispatch_predict_intra<T: Pixel>(
         | PredictionMode::D157_PRED
         | PredictionMode::D203_PRED
         | PredictionMode::D67_PRED => {
-          if angle >= 90 && angle <= 180 {
-            return call_rust(dst);
-          }
           let edge_filter = ief_params.is_some();
           let smooth_filter = ief_params
             .map(IntraEdgeFilterParameters::use_smooth_filter)
             .unwrap_or_default();
+          if angle >= 90 && angle <= 180 {
+            // From dav1d, bw and bh are the frame width and height rounded to 8px units
+            let (bw, bh) = (
+              ((dst.plane_cfg.width + 7) >> 3) << 3,
+              ((dst.plane_cfg.height + 7) >> 3) << 3,
+            );
+            // From dav1d, dx and dy are the distance from the predicted block to the frame edge
+            let (dx, dy) = (
+              (bw as isize - dst.rect().x) as libc::c_int,
+              (bh as isize - dst.rect().y) as libc::c_int,
+            );
+            return ipred_z2(
+              dst.data_ptr_mut(),
+              stride,
+              edge_buf.data.as_ptr().add(2 * MAX_TX_SIZE),
+              angle as isize,
+              w,
+              h,
+              dx,
+              dy,
+              bd_max,
+              edge_filter,
+              smooth_filter,
+            );
+          }
           (if angle < 90 { ipred_z1 } else { ipred_z3 })(
             dst.data_ptr_mut(),
             stride,
