@@ -108,6 +108,7 @@ decl_angular_ipred_hbd_fn! {
   rav1e_ipred_smooth_16bpc_avx512icl,
   rav1e_ipred_z1_16bpc_ssse3,
   rav1e_ipred_z1_16bpc_avx2,
+  rav1e_ipred_z2_16bpc_ssse3,
   rav1e_ipred_z3_16bpc_ssse3,
   rav1e_ipred_z3_16bpc_avx2,
   rav1e_ipred_paeth_16bpc_ssse3,
@@ -804,12 +805,25 @@ pub fn dispatch_predict_intra<T: Pixel>(
               let angle_arg =
                 angle | (enable_ief << 10) | (ief_smooth_filter << 9);
 
+              // From dav1d, bw and bh are the frame width and height rounded to 8px units
+              let (bw, bh) = (
+                ((dst.plane_cfg.width + 7) >> 3) << 3,
+                ((dst.plane_cfg.height + 7) >> 3) << 3,
+              );
+              // From dav1d, dx and dy are the distance from the predicted block to the frame edge
+              let (dx, dy) = (
+                (bw as isize - dst.rect().x) as libc::c_int,
+                (bh as isize - dst.rect().y) as libc::c_int,
+              );
+
               if angle <= 90 {
                 rav1e_ipred_z1_16bpc_ssse3(
                   dst_ptr, stride, edge_ptr, w, h, angle_arg, 0, 0, bd_max,
                 );
               } else if angle < 180 {
-                call_rust(dst);
+                rav1e_ipred_z2_16bpc_ssse3(
+                  dst_ptr, stride, edge_ptr, w, h, angle_arg, dx, dy, bd_max,
+                );
               } else {
                 rav1e_ipred_z3_16bpc_ssse3(
                   dst_ptr, stride, edge_ptr, w, h, angle_arg, 0, 0, bd_max,
