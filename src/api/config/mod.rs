@@ -475,3 +475,50 @@ impl Config {
     Ok(seq.tiling)
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::tiling::MAX_TILE_RATE;
+  use crate::{Config, EncoderConfig, InvalidConfig};
+
+  #[test]
+  fn invalid_frame_rate() {
+    let mut enc_config = EncoderConfig::default();
+    enc_config.width = 1280;
+    enc_config.height = 720;
+
+    // Test exceeding the maximum by 1.
+    enc_config.time_base.num = 1;
+    enc_config.time_base.den =
+      (MAX_TILE_RATE / (enc_config.width * enc_config.height) as f64) as u64
+        + 1u64;
+    {
+      let config = Config::new().with_encoder_config(enc_config.clone());
+      assert!(matches!(
+        config.validate(),
+        Err(InvalidConfig::InvalidFrameRate { .. })
+      ));
+    }
+
+    // Test 0 in the denominator.
+    enc_config.time_base.den = 0;
+    {
+      let config = Config::new().with_encoder_config(enc_config.clone());
+      assert!(matches!(
+        config.validate(),
+        Err(InvalidConfig::InvalidFrameRateDen { .. })
+      ));
+    }
+
+    // Test 0 in the numerator.
+    enc_config.time_base.num = 0;
+    enc_config.time_base.den = 1;
+    {
+      let config = Config::new().with_encoder_config(enc_config.clone());
+      assert!(matches!(
+        config.validate(),
+        Err(InvalidConfig::InvalidFrameRateNum { .. })
+      ));
+    }
+  }
+}
