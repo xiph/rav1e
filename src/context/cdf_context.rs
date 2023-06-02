@@ -550,7 +550,7 @@ impl CDFContext {
   ) -> CDFOffset<CDF_LEN> {
     CDFOffset {
       offset: cdf as usize - self as *const _ as usize,
-      phantom: PhantomData::default(),
+      phantom: PhantomData,
     }
   }
 }
