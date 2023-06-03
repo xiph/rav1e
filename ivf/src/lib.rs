@@ -139,7 +139,7 @@ pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {
 
 #[cfg(test)]
 mod tests {
-  use crate::read_header;
+  use crate::{read_header, read_packet};
   use std::io::{BufReader, ErrorKind::InvalidData};
 
   #[test]
@@ -167,6 +167,21 @@ mod tests {
         assert_eq!(header.h, 1080);
         assert_eq!(header.timebase_num, 1);
         assert_eq!(header.timebase_den, 24);
+      }
+      Err(e) => panic!("{}", e),
+    };
+  }
+
+  #[test]
+  fn read_valid_packet() {
+    let bytes: [u8; 13] = [
+      0x01, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+      0x01,
+    ];
+    let mut br = BufReader::new(&bytes[..]);
+    let _ = match read_packet(&mut br) {
+      Ok(packet) => {
+        assert_eq!(packet.pts, 3u64);
       }
       Err(e) => panic!("{}", e),
     };
