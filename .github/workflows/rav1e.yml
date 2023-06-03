@@ -269,6 +269,7 @@ jobs:
                 --ignore "../*" --ignore "target/*" --ignore "examples/*" \
                 --ignore "tests/*" --ignore "src/test_encode_decode/*" \
                 --ignore "src/x86/*" --ignore "src/ext/x86/*" \
+                --excl-line "grcov-excl-line|.*unreachable.*" \
                 --ignore "tools/*" --ignore "crates/*" -o lcov.info
       - name: Stop sccache server
         run: |
