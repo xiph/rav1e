@@ -136,3 +136,39 @@ pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {
 
   Ok(Packet { data: buf.into_boxed_slice(), pts })
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::read_header;
+  use std::io::{BufReader, ErrorKind::InvalidData};
+
+  #[test]
+  fn read_invalid_headers() {
+    // Invalid magic.
+    let mut br = BufReader::new(&b"FIKD"[..]);
+    let result = read_header(&mut br).map_err(|e| e.kind());
+    let expected = Err(InvalidData);
+    assert_eq!(result, expected);
+  }
+
+  #[test]
+  fn read_valid_headers() {
+    let bytes: [u8; 32] = [
+      0x44, 0x4b, 0x49, 0x46, 0x00, 0x00, 0x20, 0x00, 0x41, 0x56, 0x30, 0x31,
+      0x80, 0x07, 0x38, 0x04, 0x18, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+
+    let mut br = BufReader::new(&bytes[..]);
+    let _ = match read_header(&mut br) {
+      Ok(header) => {
+        assert_eq!(header.tag, [0x41, 0x56, 0x30, 0x31]);
+        assert_eq!(header.w, 1920);
+        assert_eq!(header.h, 1080);
+        assert_eq!(header.timebase_num, 1);
+        assert_eq!(header.timebase_den, 24);
+      }
+      Err(e) => panic!("{}", e),
+    };
+  }
+}
