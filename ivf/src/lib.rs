@@ -160,16 +160,12 @@ mod tests {
     ];
 
     let mut br = BufReader::new(&bytes[..]);
-    let _ = match read_header(&mut br) {
-      Ok(header) => {
-        assert_eq!(header.tag, [0x41, 0x56, 0x30, 0x31]);
-        assert_eq!(header.w, 1920);
-        assert_eq!(header.h, 1080);
-        assert_eq!(header.timebase_num, 1);
-        assert_eq!(header.timebase_den, 24);
-      }
-      Err(e) => panic!("{}", e),
-    };
+    let header = read_header(&mut br).unwrap();
+    assert_eq!(header.tag, [0x41, 0x56, 0x30, 0x31]);
+    assert_eq!(header.w, 1920);
+    assert_eq!(header.h, 1080);
+    assert_eq!(header.timebase_num, 1);
+    assert_eq!(header.timebase_den, 24);
   }
 
   #[test]
@@ -179,11 +175,7 @@ mod tests {
       0x01,
     ];
     let mut br = BufReader::new(&bytes[..]);
-    let _ = match read_packet(&mut br) {
-      Ok(packet) => {
-        assert_eq!(packet.pts, 3u64);
-      }
-      Err(e) => panic!("{}", e),
-    };
+    let packet = read_packet(&mut br).unwrap();
+    assert_eq!(packet.pts, 3u64);
   }
 }
