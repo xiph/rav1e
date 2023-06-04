@@ -522,35 +522,59 @@ fn chroma_offset(
   (0x19D_5D9F_D501_0B37 - y, 0xA4_D3C2_5E68_DC58 - y)
 }
 
+#[derive(Copy, Clone)]
+pub(crate) enum DynRelQ {
+  Static,
+  Temporal(i64),
+  #[allow(unused)]
+  Spatial(i64),
+  Spatiotemporal(i64),
+}
+
+impl DynRelQ {
+  fn log_dyn_target_q(self, _log_base_q: i64, log_target_q: i64) -> i64 {
+    match self {
+      Self::Static => log_target_q,
+      Self::Spatial(log_isqrt_mean_scale) => {
+        log_target_q + log_isqrt_mean_scale
+      }
+      Self::Temporal(log_isqrt_rel_scale) => {
+        log_target_q + log_isqrt_rel_scale
+      }
+      Self::Spatiotemporal(log_isqrt_rel_scale) => {
+        log_target_q + log_isqrt_rel_scale
+      }
+    }
+  }
+}
+
 impl QuantizerParameters {
   fn new_from_log_q(
     log_base_q: i64, log_target_q: i64, bit_depth: usize,
-    chroma_sampling: ChromaSampling, is_intra: bool,
-    log_isqrt_mean_scale: i64,
+    chroma_sampling: ChromaSampling, is_intra: bool, dyn_rel_q: DynRelQ,
   ) -> QuantizerParameters {
-    let scale = log_isqrt_mean_scale + q57(QSCALE + bit_depth as i32 - 8);
-
-    let mut log_q_y = log_target_q;
+    let scale = q57(QSCALE + bit_depth as i32 - 8);
+    let log_dyn_target_q =
+      dyn_rel_q.log_dyn_target_q(log_base_q, log_target_q);
+    let mut log_q_y = log_dyn_target_q;
     if !is_intra && bit_depth == 8 {
-      log_q_y = log_target_q
-        + (log_target_q >> 32) * Q_MODEL_MUL[chroma_sampling as usize]
+      log_q_y = log_dyn_target_q
+        + (log_dyn_target_q >> 32) * Q_MODEL_MUL[chroma_sampling as usize]
         + Q_MODEL_ADD[chroma_sampling as usize];
     }
 
     let quantizer = bexp64(log_q_y + scale);
-    let (offset_u, offset_v) =
-      chroma_offset(log_q_y + log_isqrt_mean_scale, chroma_sampling);
+    let (offset_u, offset_v) = chroma_offset(log_q_y, chroma_sampling);
     let mono = chroma_sampling == ChromaSampling::Cs400;
     let log_q_u = log_q_y + offset_u;
     let log_q_v = log_q_y + offset_v;
     let quantizer_u = bexp64(log_q_u + scale);
     let quantizer_v = bexp64(log_q_v + scale);
     let lambda = (::std::f64::consts::LN_2 / 6.0)
-      * (((log_target_q + log_isqrt_mean_scale) as f64)
-        * Q57_SQUARE_EXP_SCALE)
-        .exp();
+      * (((log_dyn_target_q) as f64) * Q57_SQUARE_EXP_SCALE).exp();
 
-    let scale = |q| bexp64((log_target_q - q) * 2 + q57(16)) as f64 / 65536.;
+    let scale =
+      |q| bexp64((log_dyn_target_q - q) * 2 + q57(16)) as f64 / 65536.;
     let dist_scale = [scale(log_q_y), scale(log_q_u), scale(log_q_v)];
 
     let base_q_idx = select_ac_qi(quantizer, bit_depth).max(1);
@@ -715,7 +739,7 @@ impl RCState {
       bit_depth,
       chroma_sampling,
       fti == 0,
-      0,
+      DynRelQ::Static,
     )
   }
 
@@ -723,7 +747,7 @@ impl RCState {
   #[hawktracer(select_qi)]
   pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
-    maybe_prev_log_base_q: Option<i64>, log_isqrt_mean_scale: i64,
+    maybe_prev_log_base_q: Option<i64>, dyn_rel_q: DynRelQ,
   ) -> QuantizerParameters {
     // Is rate control active?
     if self.target_bitrate <= 0 {
@@ -739,7 +763,7 @@ impl RCState {
         bit_depth,
         chroma_sampling,
         fti == 0,
-        log_isqrt_mean_scale,
+        dyn_rel_q,
       )
     } else {
       let mut nframes: [i32; FRAME_NSUBTYPES + 1] = [0; FRAME_NSUBTYPES + 1];
@@ -1038,7 +1062,7 @@ impl RCState {
         bit_depth,
         chroma_sampling,
         fti == 0,
-        log_isqrt_mean_scale,
+        dyn_rel_q,
       )
     }
   }
@@ -1262,7 +1286,9 @@ impl RCState {
     &self, ctx: &ContextInner<T>, output_frameno: u64,
   ) -> i64 {
     assert_eq!(self.twopass_state, PASS_SINGLE);
-    self.select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, 0).log_base_q
+    self
+      .select_qi(ctx, output_frameno, FRAME_SUBTYPE_I, None, DynRelQ::Static)
+      .log_base_q
   }
 
   // Initialize the first pass and emit a placeholder summary

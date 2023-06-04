@@ -20,7 +20,7 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::partition::*;
 use crate::rate::{
-  RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
+  DynRelQ, RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
   FRAME_SUBTYPE_SEF,
 };
 use crate::scenechange::SceneChangeDetector;
@@ -670,7 +670,7 @@ impl<T: Pixel> ContextInner<T> {
         output_frameno,
         fti,
         self.maybe_prev_log_base_q,
-        0,
+        DynRelQ::Static,
       )
     };
 
@@ -1383,10 +1383,10 @@ impl<T: Pixel> ContextInner<T> {
     let mut frame_data =
       self.frame_data.remove(&cur_output_frameno).unwrap().unwrap();
 
-    let mut log_isqrt_mean_scale = 0i64;
+    let mut dyn_rel_q = DynRelQ::Static;
 
     if let Some(coded_data) = frame_data.fi.coded_frame_data.as_mut() {
-      if self.config.tune == Tune::Psychovisual {
+      dyn_rel_q = if self.config.tune == Tune::Psychovisual {
         let frame =
           self.frame_q[&frame_data.fi.input_frameno].as_ref().unwrap();
         coded_data.activity_mask = ActivityMask::from_plane(&frame.planes[0]);
@@ -1394,11 +1394,11 @@ impl<T: Pixel> ContextInner<T> {
           frame_data.fi.sequence.bit_depth,
           &mut coded_data.activity_scales,
         );
-        log_isqrt_mean_scale = coded_data.compute_spatiotemporal_scores();
+        DynRelQ::Spatiotemporal(coded_data.compute_spatiotemporal_scores())
       } else {
         coded_data.activity_mask = ActivityMask::default();
-        log_isqrt_mean_scale = coded_data.compute_temporal_scores();
-      }
+        DynRelQ::Temporal(coded_data.compute_temporal_scores())
+      };
       #[cfg(feature = "dump_lookahead_data")]
       {
         use crate::encoder::Scales::*;
@@ -1429,7 +1429,7 @@ impl<T: Pixel> ContextInner<T> {
       cur_output_frameno,
       fti,
       self.maybe_prev_log_base_q,
-      log_isqrt_mean_scale,
+      dyn_rel_q,
     );
     frame_data.fi.set_quantizers(&qps);
 
@@ -1449,7 +1449,7 @@ impl<T: Pixel> ContextInner<T> {
         cur_output_frameno,
         fti,
         self.maybe_prev_log_base_q,
-        log_isqrt_mean_scale,
+        dyn_rel_q,
       );
       frame_data.fi.set_quantizers(&qps);
     }
