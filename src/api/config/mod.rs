@@ -383,7 +383,7 @@ impl Config {
       });
     }
 
-    let max_frame_rate = MAX_TILE_RATE / (config.width * config.height) as f64;
+    let max_frame_rate = (MAX_TILE_RATE / (config.width * config.height) as f64).ceil();
 
     if config.time_base.den / config.time_base.num > max_frame_rate as u64 {
       return Err(InvalidFrameRate {
