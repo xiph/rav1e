@@ -29,7 +29,7 @@ pub use rate::{RateControlConfig, RateControlSummary};
 mod speedsettings;
 pub use speedsettings::*;
 
-pub use crate::tiling::{TilingInfo, MAX_TILE_RATE};
+pub use crate::tiling::TilingInfo;
 
 /// Enumeration of possible invalid configuration errors.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
@@ -90,14 +90,6 @@ pub enum InvalidConfig {
   /// Framerate denominator is invalid.
   #[error("invalid framerate denominator {actual} (expected > 0, <= {max})")]
   InvalidFrameRateDen {
-    /// The actual value.
-    actual: u64,
-    /// The maximal supported value.
-    max: u64,
-  },
-  /// Framerate is invalid.
-  #[error("invalid framerate {actual} (expected > 0, <= {max})")]
-  InvalidFrameRate {
     /// The actual value.
     actual: u64,
     /// The maximal supported value.
@@ -383,15 +375,6 @@ impl Config {
       });
     }
 
-    let max_frame_rate = MAX_TILE_RATE / (config.width * config.height) as f64;
-
-    if config.time_base.den / config.time_base.num > max_frame_rate as u64 {
-      return Err(InvalidFrameRate {
-        actual: config.time_base.den / config.time_base.num,
-        max: max_frame_rate as u64,
-      });
-    }
-
     if let Some(delay) = config.reservoir_frame_delay {
       if !(12..=131_072).contains(&delay) {
         return Err(InvalidReservoirFrameDelay(delay));
@@ -473,52 +456,5 @@ impl Config {
     let seq = crate::encoder::Sequence::new(&self.enc);
 
     Ok(seq.tiling)
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::tiling::MAX_TILE_RATE;
-  use crate::{Config, EncoderConfig, InvalidConfig};
-
-  #[test]
-  fn invalid_frame_rate() {
-    let mut enc_config = EncoderConfig::default();
-    enc_config.width = 1280;
-    enc_config.height = 720;
-
-    // Test exceeding the maximum by 1.
-    enc_config.time_base.num = 1;
-    enc_config.time_base.den =
-      (MAX_TILE_RATE / (enc_config.width * enc_config.height) as f64) as u64
-        + 1u64;
-    {
-      let config = Config::new().with_encoder_config(enc_config.clone());
-      assert!(matches!(
-        config.validate(),
-        Err(InvalidConfig::InvalidFrameRate { .. })
-      ));
-    }
-
-    // Test 0 in the denominator.
-    enc_config.time_base.den = 0;
-    {
-      let config = Config::new().with_encoder_config(enc_config.clone());
-      assert!(matches!(
-        config.validate(),
-        Err(InvalidConfig::InvalidFrameRateDen { .. })
-      ));
-    }
-
-    // Test 0 in the numerator.
-    enc_config.time_base.num = 0;
-    enc_config.time_base.den = 1;
-    {
-      let config = Config::new().with_encoder_config(enc_config.clone());
-      assert!(matches!(
-        config.validate(),
-        Err(InvalidConfig::InvalidFrameRateNum { .. })
-      ));
-    }
   }
 }
