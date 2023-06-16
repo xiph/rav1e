@@ -1,6 +1,5 @@
-FROM mcr.microsoft.com/devcontainers/rust:1-1-bullseye
-RUN sed -i 's/bullseye/testing/g' /etc/apt/sources.list \
- && dpkg --add-architecture arm64 \
+FROM mcr.microsoft.com/devcontainers/rust:1-1-bookworm
+RUN dpkg --add-architecture arm64 \
  && apt-get update && export DEBIAN_FRONTEND=noninteractive \
  && apt-get install -y --no-install-recommends \
  libaom-dev libdav1d-dev libaom-dev:arm64 libdav1d-dev:arm64 \
