@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/rust:0-1-bullseye
+FROM mcr.microsoft.com/devcontainers/rust:1-1-bullseye
 RUN sed -i 's/bullseye/testing/g' /etc/apt/sources.list \
  && dpkg --add-architecture arm64 \
  && apt-get update && export DEBIAN_FRONTEND=noninteractive \
