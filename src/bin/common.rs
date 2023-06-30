@@ -17,6 +17,7 @@ use once_cell::sync::Lazy;
 use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
+use rav1e::config::CpuFeatureLevel;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -273,12 +274,17 @@ fn get_long_version() -> &'static str {
       rustflags = "(None)";
     }
     format!(
-      "{}\n{} {}\nCompiled CPU Features: {}\nAssembly: {}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}",
+      "{}\n{} {}\nCompiled CPU Features: {}\nRuntime Assembly Support: {}{}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}",
       get_version(),
       built_info::RUSTC_VERSION,
       built_info::TARGET,
       option_env!("CARGO_CFG_TARGET_FEATURE").unwrap_or("(None)"),
       if cfg!(feature = "asm") { "Enabled" } else { "Disabled" },
+      if cfg!(feature = "asm") {
+        format!("\nRuntime Assembly Level: {}", CpuFeatureLevel::default())
+      } else {
+        String::new()
+      },
       if cfg!(feature = "threading") { "Enabled" } else { "Disabled" },
       if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
       rustflags
