@@ -69,18 +69,18 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3"
 bitstream-io = "1"
 cfg-if = "1.0"
-clap = { version = "4.3.8", optional = true, default-features = false, features = [
+clap = { version = "4.3.11", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
   "derive",
 ] }
-clap_complete = { version = "4.3.1", optional = true }
+clap_complete = { version = "4.3.2", optional = true }
 libc = "0.2"
 y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
-num-derive = "0.3"
+num-derive = "0.4"
 paste = "1.0"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -88,7 +88,7 @@ dav1d-sys = { version = "0.7.1", optional = true }
 aom-sys = { version = "0.3.2", optional = true }
 scan_fmt = { version = "0.2.6", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
-v_frame = "0.3.4"
+v_frame = "0.3.5"
 av-metrics = { version = "0.9.1", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
 crossbeam = { version = "0.8", optional = true }
