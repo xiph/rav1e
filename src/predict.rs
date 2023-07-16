@@ -1282,7 +1282,6 @@ pub(crate) mod rust {
     }
   }
 
-  #[allow(clippy::clone_double_ref)]
   pub(crate) fn pred_directional<T: Pixel>(
     output: &mut PlaneRegionMut<'_, T>, above: &[T], left: &[T],
     top_left: &[T], p_angle: usize, width: usize, height: usize,
