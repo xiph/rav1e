@@ -16,9 +16,9 @@ use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::me::RefMEStats;
 use crate::util::Pixel;
-use debug_unreachable::debug_unreachable;
 use rust_hawktracer::*;
 use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::{cmp, u64};
 
@@ -29,13 +29,8 @@ const IMP_BLOCK_DIFF_THRESHOLD: f64 = 7.0;
 
 /// Fast integer division where divisor is a nonzero power of 2
 #[inline(always)]
-pub(crate) unsafe fn fast_idiv(n: usize, d: usize) -> usize {
+pub(crate) fn fast_idiv(n: usize, d: NonZeroUsize) -> usize {
   debug_assert!(d.is_power_of_two());
-
-  // Remove branch on bsf instruction on x86 (which is used when compiling without tzcnt enabled)
-  if d == 0 {
-    debug_unreachable!();
-  }
 
   n >> d.trailing_zeros()
 }
@@ -44,15 +39,20 @@ struct ScaleFunction<T: Pixel> {
   downscale_in_place:
     fn(/* &self: */ &Plane<T>, /* in_plane: */ &mut Plane<T>),
   downscale: fn(/* &self: */ &Plane<T>) -> Plane<T>,
-  factor: usize,
+  factor: NonZeroUsize,
 }
 
 impl<T: Pixel> ScaleFunction<T> {
   fn from_scale<const SCALE: usize>() -> Self {
+    assert!(
+      SCALE.is_power_of_two(),
+      "Scaling factor needs to be a nonzero power of two"
+    );
+
     Self {
       downscale: Plane::downscale::<SCALE>,
       downscale_in_place: Plane::downscale_in_place::<SCALE>,
-      factor: SCALE,
+      factor: NonZeroUsize::new(SCALE).unwrap(),
     }
   }
 }
@@ -121,15 +121,12 @@ impl<T: Pixel> SceneChangeDetector<T> {
     let score_deque = Vec::with_capacity(5 + lookahead_distance);
 
     // Downscaling factor for fast scenedetect (is currently always a power of 2)
-    let factor = scale_func.as_ref().map(|x| x.factor).unwrap_or(1);
+    let factor =
+      scale_func.as_ref().map_or(NonZeroUsize::new(1).unwrap(), |x| x.factor);
 
     let pixels = if speed_mode == SceneDetectionSpeed::Fast {
-      // SAFETY: factor should always be a power of 2 and not 0 because of
-      // the output of detect_scale_factor.
-      unsafe {
-        fast_idiv(sequence.max_frame_height as usize, factor)
-          * fast_idiv(sequence.max_frame_width as usize, factor)
-      }
+      fast_idiv(sequence.max_frame_height as usize, factor)
+        * fast_idiv(sequence.max_frame_width as usize, factor)
     } else {
       1
     };

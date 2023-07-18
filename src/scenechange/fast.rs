@@ -138,9 +138,8 @@ pub(super) fn detect_scale_factor<T: Pixel>(
       scale_factor,
       sequence.max_frame_width,
       sequence.max_frame_height,
-      // SAFETY: We ensure that scale_factor is set based on nonzero powers of 2.
-      unsafe { fast_idiv(sequence.max_frame_width as usize, scale_factor) },
-      unsafe { fast_idiv(sequence.max_frame_height as usize, scale_factor) }
+      fast_idiv(sequence.max_frame_width as usize, scale_factor),
+      fast_idiv(sequence.max_frame_height as usize, scale_factor)
     );
   }
 
