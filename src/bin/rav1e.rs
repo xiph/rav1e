@@ -409,7 +409,7 @@ fn init_logger() {
 cfg_if::cfg_if! {
   if #[cfg(any(target_os = "windows", target_arch = "wasm32"))] {
     fn print_rusage() {
-      eprintln!("Resource usage reporting is not supported on this platform");
+      eprintln!("Resource usage reporting is not currently supported on this platform");
     }
   } else {
     fn print_rusage() {
