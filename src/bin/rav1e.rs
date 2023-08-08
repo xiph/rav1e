@@ -101,6 +101,8 @@ use rust_hawktracer::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
+
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{Read, Seek, Write};
 use std::process::exit;
@@ -151,6 +153,7 @@ impl<D: Decoder> Source<D> {
   #[hawktracer(Source_read_frame)]
   fn read_frame<T: Pixel>(
     &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
+    fp: Option<FrameParameters>,
   ) -> Result<(), CliError> {
     if self.limit != 0 && self.count == self.limit {
       ctx.flush();
@@ -172,7 +175,7 @@ impl<D: Decoder> Source<D> {
           _ => return Err(CliError::new("Unsupported bit depth")),
         }
         self.count += 1;
-        let _ = ctx.send_frame(Some(Arc::new(frame)));
+        let _ = ctx.send_frame((Arc::new(frame), fp));
       }
       _ => {
         ctx.flush();
@@ -189,7 +192,7 @@ fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
   mut y4m_enc: Option<&mut y4m::Encoder<Box<dyn Write + Send>>>,
-  metrics_cli: MetricsEnabled,
+  metrics_cli: MetricsEnabled, dovi_payloads: Option<&BTreeMap<u64, T35>>,
 ) -> Result<Option<Vec<FrameSummary>>, CliError> {
   let y4m_details = source.input.get_video_details();
   let mut frame_summaries = Vec::new();
@@ -237,7 +240,24 @@ fn process_frame<T: Pixel, D: Decoder>(
       Ok((Some(frame_summaries), true))
     }
     Err(EncoderStatus::NeedMoreData) => {
-      source.read_frame(ctx, y4m_details)?;
+      let mut fp = None;
+      let mut t35_metadata: Option<Vec<T35>> = None;
+
+      if let Some(payloads) = dovi_payloads {
+        if let Some(payload) = payloads.get(&(source.count as u64)) {
+          let t35_list = t35_metadata.get_or_insert_with(Vec::new);
+          t35_list.push(payload.clone());
+        }
+      }
+
+      if let Some(t35_metadata) = t35_metadata {
+        fp = Some(FrameParameters {
+          t35_metadata: t35_metadata.into_boxed_slice(),
+          ..Default::default()
+        });
+      }
+
+      source.read_frame(ctx, y4m_details, fp)?;
       Ok((Some(frame_summaries), false))
     }
     Err(EncoderStatus::EnoughData) => {
@@ -296,7 +316,7 @@ fn do_encode<T: Pixel, D: Decoder>(
   output: &mut dyn Muxer, mut source: Source<D>, mut pass1file: Option<File>,
   mut pass2file: Option<File>,
   mut y4m_enc: Option<y4m::Encoder<Box<dyn Write + Send>>>,
-  metrics_enabled: MetricsEnabled,
+  metrics_enabled: MetricsEnabled, dovi_payloads: Option<&BTreeMap<u64, T35>>,
 ) -> Result<(), CliError> {
   let mut ctx: Context<T> =
     cfg.new_context().map_err(|e| e.context("Invalid encoder settings"))?;
@@ -323,6 +343,7 @@ fn do_encode<T: Pixel, D: Decoder>(
     pass2file.as_mut(),
     y4m_enc.as_mut(),
     metrics_enabled,
+    dovi_payloads,
   )? {
     if verbose != Verboseness::Quiet {
       for frame in frame_info {
@@ -632,6 +653,7 @@ fn run() -> Result<(), error::CliError> {
       pass2file,
       y4m_enc,
       cli.metrics_enabled,
+      cli.dovi_payloads.as_ref(),
     )?
   } else {
     do_encode::<u16, y4m::Decoder<Box<dyn Read + Send>>>(
@@ -644,6 +666,7 @@ fn run() -> Result<(), error::CliError> {
       pass2file,
       y4m_enc,
       cli.metrics_enabled,
+      cli.dovi_payloads.as_ref(),
     )?
   }
   if cli.benchmark {

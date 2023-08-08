@@ -18,6 +18,8 @@ use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
 use rav1e::config::CpuFeatureLevel;
+
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -195,6 +197,15 @@ pub struct CliOptions {
     help_heading = "ENCODE SETTINGS"
   )]
   pub film_grain_table: Option<PathBuf>,
+  /// Uses a Dolby Vision RPU file to add as T.35 metadata to the encode.
+  /// The RPU must be in the same format as for x265
+  #[clap(
+    long,
+    alias = "dolby-vision-rpu",
+    value_parser,
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub dovi_rpu: Option<PathBuf>,
 
   /// Pixel range
   #[clap(long, value_parser, help_heading = "VIDEO METADATA")]
@@ -339,6 +350,7 @@ pub struct ParsedCliOptions {
   pub photon_noise: u8,
   #[cfg(feature = "unstable")]
   pub slots: usize,
+  pub dovi_payloads: Option<BTreeMap<u64, T35>>,
 }
 
 #[cfg(feature = "serialize")]
@@ -466,6 +478,35 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     panic!("A limit cannot be set above 1 in still picture mode");
   }
 
+  let dovi_payloads = if let Some(rpu_file) = matches.dovi_rpu.as_ref() {
+    let rpus = dolby_vision::rpu::utils::parse_rpu_file(rpu_file)
+      .expect("Failed to read Dolby Vision RPU file");
+
+    let payloads: BTreeMap<u64, T35> = rpus
+      .iter()
+      .filter_map(|rpu| {
+        rpu
+          .write_av1_rpu_metadata_obu_t35_payload()
+          .map(|payload| T35 {
+            country_code: 0xB5,
+            country_code_extension_byte: 0x00,
+            data: payload.into_boxed_slice(),
+          })
+          .ok()
+      })
+      .zip(0u64..)
+      .map(|(payload, frame_no)| (frame_no, payload))
+      .collect();
+
+    if !payloads.is_empty() {
+      Some(payloads)
+    } else {
+      None
+    }
+  } else {
+    None
+  };
+
   #[cfg(feature = "unstable")]
   let slots = matches.slots;
 
@@ -484,6 +525,7 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     pass2file_name: matches.second_pass.clone(),
     save_config: save_config_path,
     photon_noise: matches.photon_noise,
+    dovi_payloads,
     #[cfg(feature = "unstable")]
     slots,
   })

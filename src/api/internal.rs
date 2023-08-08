@@ -520,12 +520,6 @@ impl<T: Pixel> ContextInner<T> {
       return Err(EncoderStatus::NeedMoreData);
     }
 
-    let t35_metadata = if let Some(t35) = self.t35_q.remove(&input_frameno) {
-      t35
-    } else {
-      Box::new([])
-    };
-
     if output_frameno_in_gop > 0 {
       let next_keyframe_input_frameno = self.next_keyframe_input_frameno(
         self.gop_input_frameno_start[&output_frameno],
@@ -554,6 +548,13 @@ impl<T: Pixel> ContextInner<T> {
           *self.gop_input_frameno_start.get_mut(&output_frameno).unwrap() =
             next_keyframe_input_frameno;
         } else {
+          let t35_metadata = if let Some(t35) = self.t35_q.get(&input_frameno)
+          {
+            t35.clone()
+          } else {
+            Box::new([])
+          };
+
           let fi = FrameInvariants::new_inter_frame(
             self.get_previous_coded_fi(output_frameno),
             &self.inter_cfg,
@@ -575,6 +576,12 @@ impl<T: Pixel> ContextInner<T> {
         return Err(EncoderStatus::NeedMoreData);
       }
     }
+
+    let t35_metadata = if let Some(t35) = self.t35_q.get(&input_frameno) {
+      t35.clone()
+    } else {
+      Box::new([])
+    };
 
     // Now that we know the input_frameno, look up the correct frame type
     let frame_type = if self.keyframes.contains(&input_frameno) {
@@ -1516,6 +1523,7 @@ impl<T: Pixel> ContextInner<T> {
     if let Ok(ref mut pkt) = ret {
       self.garbage_collect(pkt.input_frameno);
       pkt.opaque = self.opaque_q.remove(&pkt.input_frameno);
+      self.t35_q.remove(&pkt.input_frameno);
     }
 
     ret
