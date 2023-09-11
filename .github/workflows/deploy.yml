@@ -335,14 +335,19 @@ jobs:
         include:
          - target: x86_64-apple-darwin
            name: macos
+           macosx_deployment_target: "10.10"
          - target: aarch64-apple-darwin
            name: macos-aarch64
+           macosx_deployment_target: "11.0"
          - build: binary
            pkgname: rav1e
            ext: zip
          - build: sdk
            pkgname: librav1e
            ext: tar.gz
+
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
 
     steps:
     - uses: actions/checkout@v3
