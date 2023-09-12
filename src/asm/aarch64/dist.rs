@@ -109,6 +109,7 @@ pub fn get_sad<T: Pixel>(
 }
 
 #[inline(always)]
+#[allow(clippy::let_and_return)]
 pub fn get_satd<T: Pixel>(
   src: &PlaneRegion<'_, T>, dst: &PlaneRegion<'_, T>, w: usize, h: usize,
   bit_depth: usize, cpu: CpuFeatureLevel,

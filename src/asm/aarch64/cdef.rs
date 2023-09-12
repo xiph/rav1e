@@ -100,7 +100,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
         CDEF_FILTER_FNS[cpu.as_index()][decimate_index(xdec, ydec)],
       ) {
         (Some(pad), Some(func)) => {
-          let h = if ydec == 1 { 4 } else { 8 } as i32;
+          let h = if ydec == 1 { 4 } else { 8 };
           let tmpstride = if xdec == 1 { 8 } else { 16 } as isize;
           const MAXTMPSTRIDE: isize = 16;
           const TMPSIZE: usize = (12 * MAXTMPSTRIDE + 8) as usize;
@@ -167,7 +167,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
         // clause using Rust macros.  See comments above for
         // indexing/addressing notes.
         (Some(pad), Some(func)) => {
-          let h = if ydec == 1 { 4 } else { 8 } as i32;
+          let h = if ydec == 1 { 4 } else { 8 };
           let tmpstride = if xdec == 1 { 8 } else { 16 } as isize;
           const MAXTMPSTRIDE: isize = 16;
           const TMPSIZE: usize = (12 * MAXTMPSTRIDE + 8) as usize;
@@ -370,7 +370,7 @@ pub(crate) fn cdef_find_dir<T: Pixel>(
             img.as_ptr() as *const _,
             T::to_asm_stride(img.plane.cfg.stride),
             var as *mut u32,
-            (1 << coeff_shift + 8) - 1,
+            (1 << (coeff_shift + 8)) - 1,
           )
         }
       } else {

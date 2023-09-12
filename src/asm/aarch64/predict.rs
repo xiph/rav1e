@@ -385,7 +385,7 @@ unsafe fn ipred_z2<T: Pixel>(
   let mut out = [MaybeUninit::<T>::uninit(); 3 * (MAX_TX_SIZE * 4 + 1)];
   let out = out.as_mut_ptr() as *mut T;
   let left = out.add(2 * (64 + 1));
-  let top = out.add(1 * (64 + 1));
+  let top = out.add(64 + 1);
   let flipped = out;
   if us_above {
     ipred_z2_upsample_edge(top, w, src, bd_max);
@@ -586,7 +586,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
           let smooth_filter = ief_params
             .map(IntraEdgeFilterParameters::use_smooth_filter)
             .unwrap_or_default();
-          if angle >= 90 && angle <= 180 {
+          if (90..=180).contains(&angle) {
             // From dav1d, bw and bh are the frame width and height rounded to 8px units
             let (bw, bh) = (
               ((dst.plane_cfg.width + 7) >> 3) << 3,
