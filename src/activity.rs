@@ -215,7 +215,7 @@ mod ssim_boost_tests {
     const C3: f64 = 12338f64;
     const RATIO: f64 = C1 / C3;
 
-    RATIO * (svar + dvar + C2) / f64::sqrt(C1 * C1 + svar * dvar)
+    RATIO * (svar + dvar + C2) / f64::sqrt(C1.mul_add(C1, svar * dvar))
   }
 
   /// Test that `ssim_boost` has sufficient accuracy.

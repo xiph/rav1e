@@ -9,8 +9,9 @@
 
 use arg_enum_proc_macro::ArgEnum;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, ArgEnum, Default)]
 pub enum CpuFeatureLevel {
+  #[default]
   RUST,
 }
 
@@ -20,11 +21,5 @@ impl CpuFeatureLevel {
   pub(crate) const fn all() -> &'static [Self] {
     use CpuFeatureLevel::*;
     &[RUST]
-  }
-}
-
-impl Default for CpuFeatureLevel {
-  fn default() -> CpuFeatureLevel {
-    CpuFeatureLevel::RUST
   }
 }
