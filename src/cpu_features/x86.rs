@@ -95,8 +95,9 @@ impl Default for CpuFeatureLevel {
 // Create a static lookup table for CPUFeatureLevel enums
 // Note: keys are CpuFeatureLevels without any prefix (no CpuFeatureLevel::)
 macro_rules! cpu_function_lookup_table {
-  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
-    $pub static $name: [$type; crate::cpu_features::CpuFeatureLevel::len()] = {
+  // version for default visibility
+  ($name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    static $name: [$type; crate::cpu_features::CpuFeatureLevel::len()] = {
       use crate::cpu_features::CpuFeatureLevel;
       #[allow(unused_mut)]
       let mut out: [$type; CpuFeatureLevel::len()] = [$empty; CpuFeatureLevel::len()];
@@ -114,6 +115,9 @@ macro_rules! cpu_function_lookup_table {
       cpu_function_lookup_table!(waterfall_cpu_features(out, set, [SSE2, SSSE3, SSE4_1, AVX2, AVX512, AVX512ICL]));
       out
     };
+  };
+  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    $pub cpu_function_lookup_table!($name: [$type], default: $empty, [$(($key, $value)),*]);
   };
 
   // Fill empty output functions with the existent functions they support.
@@ -134,11 +138,6 @@ macro_rules! cpu_function_lookup_table {
     )*
   };
 
-  // version for default visibility
-  ($name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
-    cpu_function_lookup_table!(pub(self), $name: [$type], default: $empty, [$(($key, $value)),*]);
-  };
-
   // use $name_$key as our values
   ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
     paste::item!{
@@ -150,8 +149,10 @@ macro_rules! cpu_function_lookup_table {
 
   // version for default visibility
   ($name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
-    cpu_function_lookup_table!(
-      pub(self), $name: [$type], default: $empty, [$($key),*]
-    );
+     paste::item!{
+      cpu_function_lookup_table!(
+        $name: [$type], default: $empty, [$(($key, [<$name _$key>])),*]
+      );
+    }
   };
 }
