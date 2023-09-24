@@ -101,7 +101,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
             (func)(
               dst.data_ptr_mut() as *mut _,
               T::to_asm_stride(dst.plane_cfg.stride),
-              tmp.data.as_ptr().offset(3 * TMPSTRIDE) as *const u16,
+              tmp.data.as_ptr().offset(3 * TMPSTRIDE),
               TMPSTRIDE,
               pri_strength,
               sec_strength,
