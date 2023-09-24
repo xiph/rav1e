@@ -52,8 +52,9 @@ impl Default for CpuFeatureLevel {
 // Create a static lookup table for CPUFeatureLevel enums
 // Note: keys are CpuFeatureLevels without any prefix (no CpuFeatureLevel::)
 macro_rules! cpu_function_lookup_table {
-  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
-    $pub static $name: [$type; crate::cpu_features::CpuFeatureLevel::len()] = {
+  // version for default visibility
+  ($name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    static $name: [$type; crate::cpu_features::CpuFeatureLevel::len()] = {
       use crate::cpu_features::CpuFeatureLevel;
       #[allow(unused_mut)]
       let mut out: [$type; CpuFeatureLevel::len()] = [$empty; CpuFeatureLevel::len()];
@@ -73,6 +74,9 @@ macro_rules! cpu_function_lookup_table {
     };
   };
 
+  ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
+    $pub cpu_function_lookup_table!($name: [$type], default: $empty, [$(($key, $value)),*]);
+  };
   // Fill empty output functions with the existent functions they support.
   // cpus should be in order of lowest cpu level to highest
   // Used like an internal function
@@ -91,10 +95,6 @@ macro_rules! cpu_function_lookup_table {
     )*
   };
 
-  // version for default visibility
-  ($name:ident: [$type:ty], default: $empty:expr, [$(($key:ident, $value:expr)),*]) => {
-    cpu_function_lookup_table!(pub(self), $name: [$type], default: $empty, [$(($key, $value)),*]);
-  };
 
   // use $name_$key as our values
   ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
@@ -107,8 +107,10 @@ macro_rules! cpu_function_lookup_table {
 
   // version for default visibility
   ($name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
-    cpu_function_lookup_table!(
-      pub(self), $name: [$type], default: $empty, [$($key),*]
-    );
+    paste::item!{
+      cpu_function_lookup_table!(
+        $name: [$type], default: $empty, [$(($key, [<$name _$key>])),*]
+      );
+    }
   };
 }
