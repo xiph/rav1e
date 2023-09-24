@@ -374,6 +374,9 @@ impl BlockSize {
     })
   }
 
+  /// # Panics
+  ///
+  /// Will panic if the subsampling is not possible
   #[inline]
   pub fn largest_chroma_tx_size(self, xdec: usize, ydec: usize) -> TxSize {
     let plane_bsize = self
