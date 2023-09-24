@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ilammy/setup-nasm@v1
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -87,7 +87,7 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set no-asm-tests env vars
         if: matrix.conf == 'no-asm-tests'
         run: |
@@ -308,7 +308,7 @@ jobs:
 
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install sccache
         run: |
           brew install sccache
@@ -383,7 +383,7 @@ jobs:
 
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ilammy/setup-nasm@v1
       - name: Install sccache
         run: |
