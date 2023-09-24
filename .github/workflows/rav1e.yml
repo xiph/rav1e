@@ -106,7 +106,7 @@ jobs:
       - name: Install dependencies
         if: matrix.conf != 'dav1d-tests-arm64'
         run: |
-          sudo sed -i 's/jammy/kinetic/g' /etc/apt/sources.list
+          sudo sed -i 's/jammy/lunar/g' /etc/apt/sources.list
           sudo apt update
           sudo apt install nasm libaom-dev libdav1d-dev
       - name: Install cargo-c
@@ -140,9 +140,9 @@ jobs:
           LINK: http://ports.ubuntu.com/ubuntu-ports/pool
         run: |
           rustup target add aarch64-unknown-linux-gnu
-          { echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu kinetic main universe'
-            echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu kinetic-updates main universe'
-            echo 'deb [arch=arm64] http://azure.ports.ubuntu.com/ kinetic main universe'
+          { echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu lunar main universe'
+            echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu lunar-updates main universe'
+            echo 'deb [arch=arm64] http://azure.ports.ubuntu.com/ lunar main universe'
           } | sudo tee /etc/apt/sources.list
           sudo dpkg --add-architecture arm64
           sudo apt update
