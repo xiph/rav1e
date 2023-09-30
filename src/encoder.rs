@@ -2285,7 +2285,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
         po,
         skip,
         qidx,
-        &ac.data,
+        &[],
         IntraParam::AngleDelta(angle_delta.y),
         rdo_type,
         need_recon_pixel,
@@ -2322,9 +2322,12 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   bw_uv /= uv_tx_size.width_mi();
   bh_uv /= uv_tx_size.height_mi();
 
-  if chroma_mode.is_cfl() {
+  let ac_data = if chroma_mode.is_cfl() {
     luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
-  }
+    &ac.data[..]
+  } else {
+    &[]
+  };
 
   let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {
     TxType::DCT_DCT
@@ -2371,7 +2374,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
           po,
           skip,
           qidx,
-          &ac.data,
+          ac_data,
           if chroma_mode.is_cfl() {
             IntraParam::Alpha(alpha)
           } else {
