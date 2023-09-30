@@ -29,6 +29,16 @@ pub struct Aligned<T> {
   pub data: T,
 }
 
+impl<const N: usize, T> Aligned<[T; N]> {
+  #[inline(always)]
+  pub fn from_fn<F>(cb: F) -> Self
+  where
+    F: FnMut(usize) -> T,
+  {
+    Aligned { _alignment: [], data: std::array::from_fn(cb) }
+  }
+}
+
 impl<T> Aligned<T> {
   pub const fn new(data: T) -> Self {
     Aligned { _alignment: [], data }

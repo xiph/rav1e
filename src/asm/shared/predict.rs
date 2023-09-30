@@ -39,18 +39,10 @@ mod test {
 
   fn pred_matches_inner<T: Pixel>(cpu: CpuFeatureLevel, bit_depth: usize) {
     let tx_size = TxSize::TX_4X4;
-    // SAFETY: We write to the array below before reading from it.
-    let mut ac: Aligned<[i16; 32 * 32]> = unsafe { Aligned::uninitialized() };
-    for i in 0..ac.data.len() {
-      ac.data[i] = i as i16 - 16 * 32;
-    }
-    // SAFETY: We write to the array below before reading from it.
-    let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
-      unsafe { Aligned::uninitialized() };
-    for i in 0..edge_buf.data.len() {
-      edge_buf.data[i] =
-        T::cast_from(((i ^ 1) + 32).saturating_sub(2 * MAX_TX_SIZE));
-    }
+    let ac: Aligned<[i16; 32 * 32]> = Aligned::from_fn(|i| i as i16 - 16 * 32);
+    let edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> = Aligned::from_fn(|i| {
+      T::cast_from(((i ^ 1) + 32).saturating_sub(2 * MAX_TX_SIZE))
+    });
 
     let ief_params_all = [
       None,

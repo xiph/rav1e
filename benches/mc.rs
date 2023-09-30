@@ -263,7 +263,7 @@ fn bench_prep_8tap_top_left_lbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u8>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -294,7 +294,7 @@ fn bench_prep_8tap_top_lbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u8>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -325,7 +325,7 @@ fn bench_prep_8tap_left_lbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u8>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -356,7 +356,7 @@ fn bench_prep_8tap_center_lbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u8>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -387,7 +387,7 @@ fn bench_prep_8tap_top_left_hbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u16>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -418,7 +418,7 @@ fn bench_prep_8tap_top_hbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u16>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -449,7 +449,7 @@ fn bench_prep_8tap_left_hbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u16>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
@@ -480,7 +480,7 @@ fn bench_prep_8tap_center_hbd(c: &mut Criterion) {
   let w = 640;
   let h = 480;
   let input_plane = new_plane::<u16>(&mut ra, w, h);
-  let mut dst = unsafe { Aligned::<[i16; 128 * 128]>::uninitialized() };
+  let mut dst = Aligned::<[i16; 128 * 128]>::from_fn(|_| 0);
 
   let (row_frac, col_frac, src) = get_params(
     &input_plane,
