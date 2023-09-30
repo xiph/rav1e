@@ -1861,8 +1861,7 @@ impl<'a> ContextWriter<'a> {
     &mut self, eob: usize, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
     plane_type: usize, w: &mut W,
   ) {
-    let mut eob_extra: u32 = 0;
-    let eob_pt = Self::get_eob_pos_token(eob, &mut eob_extra);
+    let (eob_pt, eob_extra) = Self::get_eob_pos_token(eob);
     let eob_multi_size: usize = tx_size.area_log2() - 4;
     let eob_multi_ctx: usize = usize::from(tx_class != TX_CLASS_2D);
 

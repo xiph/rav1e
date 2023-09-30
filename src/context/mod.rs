@@ -164,16 +164,18 @@ pub const fn mv_class_base(mv_class: usize) -> u32 {
 pub fn log_in_base_2(n: u32) -> u8 {
   31 - cmp::min(31, n.leading_zeros() as u8)
 }
+
+/// Returns `(mv_class, offset)`
 #[inline(always)]
-pub fn get_mv_class(z: u32, offset: &mut u32) -> usize {
+pub fn get_mv_class(z: u32) -> (usize, u32) {
   let c = if z >= CLASS0_SIZE as u32 * 4096 {
     MV_CLASS_10
   } else {
     log_in_base_2(z >> 3) as usize
   };
 
-  *offset = z - mv_class_base(c);
-  c
+  let offset = z - mv_class_base(c);
+  (c, offset)
 }
 
 impl<'a> ContextWriter<'a> {
@@ -186,10 +188,9 @@ impl<'a> ContextWriter<'a> {
   ) {
     assert!(comp != 0);
     assert!((MV_LOW..=MV_UPP).contains(&comp));
-    let mut offset: u32 = 0;
     let sign: u32 = u32::from(comp < 0);
     let mag: u32 = if sign == 1 { -comp as u32 } else { comp as u32 };
-    let mv_class = get_mv_class(mag - 1, &mut offset);
+    let (mv_class, offset) = get_mv_class(mag - 1);
     let d = offset >> 3; // int mv data
     let fr = (offset >> 1) & 3; // fractional mv data
     let hp = offset & 1; // high precision mv data
