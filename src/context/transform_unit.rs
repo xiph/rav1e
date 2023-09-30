@@ -798,11 +798,13 @@ impl<'a> ContextWriter<'a> {
     av1_get_coded_tx_size(tx_size).height_log2()
   }
 
+  /// Returns `(eob_pt, eob_extra)`
+  ///
   /// # Panics
   ///
   /// - If `eob` is prior to the start of the group
   #[inline]
-  pub fn get_eob_pos_token(eob: usize, extra: &mut u32) -> u32 {
+  pub fn get_eob_pos_token(eob: usize) -> (u32, u32) {
     let t = if eob < 33 {
       eob_to_pos_small[eob] as u32
     } else {
@@ -810,9 +812,9 @@ impl<'a> ContextWriter<'a> {
       eob_to_pos_large[e] as u32
     };
     assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);
-    *extra = eob as u32 - k_eob_group_start[t as usize] as u32;
+    let extra = eob as u32 - k_eob_group_start[t as usize] as u32;
 
-    t
+    (t, extra)
   }
 
   pub fn get_nz_mag(levels: &[u8], bhl: usize, tx_class: TxClass) -> usize {
