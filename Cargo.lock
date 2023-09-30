@@ -556,16 +556,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dav1d-sys"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "615542bb14c18b795f46aba92258902168218d714090f5fff47e68c9a352ea2d"
-dependencies = [
- "libc",
- "system-deps",
-]
-
-[[package]]
 name = "diff"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -877,6 +867,15 @@ name = "libc"
 version = "0.2.147"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
+
+[[package]]
+name = "libdav1d-sys"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c21d55fe0bdbb33a65c97ce3351366a1b9edb8e5677bcff64114c4a9ad184b7c"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "libfuzzer-sys"
@@ -1298,13 +1297,13 @@ dependencies = [
  "console",
  "criterion",
  "crossbeam",
- "dav1d-sys",
  "fern",
  "image",
  "interpolate_name",
  "itertools 0.11.0",
  "ivf",
  "libc",
+ "libdav1d-sys",
  "libfuzzer-sys",
  "log",
  "maybe-rayon",
