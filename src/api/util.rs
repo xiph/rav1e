@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 #![deny(missing_docs)]
 
+use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::serialize::{Deserialize, Serialize};
 use crate::stats::EncoderStats;
@@ -136,6 +137,12 @@ impl fmt::Display for FrameType {
     }
   }
 }
+
+/// Dolby Vision T.35 metadata payload expected prefix.
+pub const T35_DOVI_PAYLOAD_PREFIX: &[u8] = &[
+  0x00, 0x03B, // Dolby
+  0x00, 0x00, 0x08, 0x00, 0x37, 0xCD, 0x08,
+];
 
 /// A single T.35 metadata packet.
 #[derive(Clone, Debug, Default)]
@@ -297,5 +304,21 @@ impl<T: Pixel> IntoFrame<T> for (Frame<T>, FrameParameters) {
 impl<T: Pixel> IntoFrame<T> for (Frame<T>, Option<FrameParameters>) {
   fn into(self) -> (Option<Arc<Frame<T>>>, Option<FrameParameters>) {
     (Some(Arc::new(self.0)), self.1)
+  }
+}
+
+impl T35 {
+  /// Whether the T.35 metadata is Dolby Vision Metadata.
+  pub fn is_dovi_metadata(&self) -> bool {
+    self.country_code == 0xB5 && self.data.starts_with(T35_DOVI_PAYLOAD_PREFIX)
+  }
+
+  /// Returns true if the T35 metadata can be added to the frame
+  pub fn is_valid_placement<T: Pixel>(&self, fi: &FrameInvariants<T>) -> bool {
+    if self.is_dovi_metadata() {
+      return fi.show_frame || fi.is_show_existing_frame();
+    }
+
+    true
   }
 }

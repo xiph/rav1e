@@ -3689,11 +3689,9 @@ pub fn encode_show_existing_frame<T: Pixel>(
   }
 
   for t35 in fi.t35_metadata.iter() {
-    let mut t35_buf = Vec::new();
-    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
-    t35_bw.write_t35_metadata_obu(t35).unwrap();
-    packet.write_all(&t35_buf).unwrap();
-    t35_buf.clear();
+    if t35.is_valid_placement(fi) {
+      write_t35_metadata_packet(&mut packet, t35);
+    }
   }
 
   let mut buf1 = Vec::new();
@@ -3770,11 +3768,9 @@ pub fn encode_frame<T: Pixel>(
   }
 
   for t35 in fi.t35_metadata.iter() {
-    let mut t35_buf = Vec::new();
-    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
-    t35_bw.write_t35_metadata_obu(t35).unwrap();
-    packet.write_all(&t35_buf).unwrap();
-    t35_buf.clear();
+    if t35.is_valid_placement(fi) {
+      write_t35_metadata_packet(&mut packet, t35);
+    }
   }
 
   let mut buf1 = Vec::new();
@@ -3828,6 +3824,14 @@ pub fn update_rec_buffer<T: Pixel>(
       fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
+}
+
+fn write_t35_metadata_packet(packet: &mut Vec<u8>, t35: &T35) {
+  let mut t35_buf = Vec::new();
+  let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
+  t35_bw.write_t35_metadata_obu(t35).unwrap();
+  packet.write_all(&t35_buf).unwrap();
+  t35_buf.clear();
 }
 
 #[cfg(test)]
