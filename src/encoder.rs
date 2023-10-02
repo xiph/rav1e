@@ -1358,11 +1358,13 @@ fn diff<T: Pixel>(
   dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
 ) {
   debug_assert!(dst.len() % src1.rect().width == 0);
+  let width = src1.rect().width;
+  if width == 0 || width != src2.rect().width {
+    return;
+  }
 
-  for ((l, s1), s2) in dst
-    .chunks_exact_mut(src1.rect().width)
-    .zip(src1.rows_iter())
-    .zip(src2.rows_iter())
+  for ((l, s1), s2) in
+    dst.chunks_exact_mut(width).zip(src1.rows_iter()).zip(src2.rows_iter())
   {
     for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
       *r = i16::cast_from(*v1) - i16::cast_from(*v2);
