@@ -1359,7 +1359,14 @@ fn diff<T: Pixel>(
 ) {
   debug_assert!(dst.len() % src1.rect().width == 0);
   let width = src1.rect().width;
-  if width == 0 || width != src2.rect().width {
+  let height = src1.rect().height;
+
+  if width == 0
+    || width != src2.rect().width
+    || height == 0
+    || src1.rows_iter().len() != src2.rows_iter().len()
+  {
+    debug_assert!(false);
     return;
   }
 
