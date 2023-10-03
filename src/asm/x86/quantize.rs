@@ -17,6 +17,7 @@ use crate::cpu_features::CpuFeatureLevel;
 use crate::quantize::*;
 use crate::transform::TxSize;
 use crate::util::*;
+use std::mem::MaybeUninit;
 
 type DequantizeFn = unsafe fn(
   qindex: u8,
@@ -37,10 +38,11 @@ cpu_function_lookup_table!(
 
 #[inline(always)]
 pub fn dequantize<T: Coefficient>(
-  qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
-  bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, cpu: CpuFeatureLevel,
+  qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [MaybeUninit<T>],
+  tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+  cpu: CpuFeatureLevel,
 ) {
-  let call_rust = |rcoeffs: &mut [T]| {
+  let call_rust = |rcoeffs: &mut [MaybeUninit<T>]| {
     crate::quantize::rust::dequantize(
       qindex, coeffs, eob, rcoeffs, tx_size, bit_depth, dc_delta_q,
       ac_delta_q, cpu,
@@ -48,10 +50,9 @@ pub fn dequantize<T: Coefficient>(
   };
 
   #[cfg(any(feature = "check_asm", test))]
-  let ref_rcoeffs = {
+  let mut ref_rcoeffs = {
     let area = av1_get_coded_tx_size(tx_size).area();
-    let mut copy = vec![T::cast_from(0); area];
-    copy[..].copy_from_slice(&rcoeffs[..area]);
+    let mut copy = vec![MaybeUninit::new(T::cast_from(0)); area];
     call_rust(&mut copy);
     copy
   };
@@ -82,7 +83,9 @@ pub fn dequantize<T: Coefficient>(
   #[cfg(any(feature = "check_asm", test))]
   {
     let area = av1_get_coded_tx_size(tx_size).area();
-    assert_eq!(&rcoeffs[..area], &ref_rcoeffs[..]);
+    let rcoeffs = unsafe { assume_slice_init_mut(&mut rcoeffs[..area]) };
+    let ref_rcoeffs = unsafe { assume_slice_init_mut(&mut ref_rcoeffs[..]) };
+    assert_eq!(rcoeffs, ref_rcoeffs);
   }
 }
 
@@ -157,6 +160,7 @@ mod test {
   use super::*;
   use rand::distributions::{Distribution, Uniform};
   use rand::{thread_rng, Rng};
+  use std::mem::MaybeUninit;
 
   #[test]
   fn dequantize_test() {
@@ -190,7 +194,7 @@ mod test {
 
       for &eob in &eobs {
         let mut qcoeffs = Aligned::new([0i16; 32 * 32]);
-        let mut rcoeffs = Aligned::new([0i16; 32 * 32]);
+        let mut rcoeffs = Aligned::new([MaybeUninit::new(0i16); 32 * 32]);
 
         // Generate quantized coefficients up to the eob
         let between = Uniform::from(-i16::MAX..=i16::MAX);

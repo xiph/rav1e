@@ -451,6 +451,7 @@ mod test {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::frame::*;
   use rand::random;
+  use std::mem::MaybeUninit;
 
   fn test_roundtrip<T: Pixel>(
     tx_size: TxSize, tx_type: TxType, tolerance: i16,
@@ -467,7 +468,7 @@ mod test {
     );
     let mut res_storage = [0i16; 64 * 64];
     let res = &mut res_storage[..tx_size.area()];
-    let mut freq_storage = [T::Coeff::cast_from(0); 64 * 64];
+    let mut freq_storage = [MaybeUninit::uninit(); 64 * 64];
     let freq = &mut freq_storage[..tx_size.area()];
     for ((r, s), d) in
       res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
@@ -477,6 +478,8 @@ mod test {
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform(res, freq, tx_size.width(), tx_size, tx_type, 8, cpu);
+    // SAFETY: forward_transform initialized freq
+    let freq = unsafe { slice_assume_init_mut(freq) };
     inverse_transform_add(
       freq,
       &mut dst.as_region_mut(),

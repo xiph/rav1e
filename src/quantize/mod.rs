@@ -359,10 +359,12 @@ impl QuantizationContext {
 pub mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
+  use std::mem::MaybeUninit;
 
   pub fn dequantize<T: Coefficient>(
-    qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [T], tx_size: TxSize,
-    bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8, _cpu: CpuFeatureLevel,
+    qindex: u8, coeffs: &[T], _eob: usize, rcoeffs: &mut [MaybeUninit<T>],
+    tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
+    _cpu: CpuFeatureLevel,
   ) {
     let log_tx_scale = get_log_tx_scale(tx_size) as i32;
     let offset = (1 << log_tx_scale) - 1;
@@ -376,7 +378,9 @@ pub mod rust {
       .enumerate()
     {
       let quant = if i == 0 { dc_quant } else { ac_quant };
-      *r = T::cast_from((c * quant + ((c >> 31) & offset)) >> log_tx_scale);
+      r.write(T::cast_from(
+        (c * quant + ((c >> 31) & offset)) >> log_tx_scale,
+      ));
     }
   }
 }

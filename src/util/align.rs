@@ -52,6 +52,13 @@ impl<T> Aligned<T> {
   }
 }
 
+#[inline(always)]
+pub unsafe fn slice_assume_init_mut<T>(
+  slice: &mut [MaybeUninit<T>],
+) -> &mut [T] {
+  unsafe { &mut *(slice as *mut [MaybeUninit<T>] as *mut [T]) }
+}
+
 /// An analog to a Box<[T]> where the underlying slice is aligned.
 /// Alignment is according to the architecture-specific SIMD constraints.
 pub struct AlignedBoxedSlice<T> {

@@ -9,6 +9,7 @@
 
 use crate::tiling::PlaneRegionMut;
 use crate::util::*;
+use std::mem::MaybeUninit;
 
 // Note: Input coeffs are mutable since the assembly uses them as a scratchpad
 pub type InvTxfmFunc =
@@ -27,13 +28,13 @@ pub fn call_inverse_func<T: Pixel>(
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
   // SAFETY: We write to the array below before reading from it.
-  let mut copied: Aligned<[T::Coeff; 32 * 32]> =
+  let mut copied: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     unsafe { Aligned::uninitialized() };
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
   for (a, b) in copied.data.iter_mut().zip(input) {
-    *a = *b;
+    a.write(*b);
   }
 
   // perform the inverse transform
@@ -57,13 +58,13 @@ pub fn call_inverse_hbd_func<T: Pixel>(
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
   // SAFETY: We write to the array below before reading from it.
-  let mut copied: Aligned<[T::Coeff; 32 * 32]> =
+  let mut copied: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     unsafe { Aligned::uninitialized() };
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
   for (a, b) in copied.data.iter_mut().zip(input) {
-    *a = *b;
+    a.write(*b);
   }
 
   // perform the inverse transform
@@ -89,6 +90,7 @@ pub mod test {
   use crate::transform::TxSize::*;
   use crate::transform::*;
   use rand::{random, thread_rng, Rng};
+  use std::mem::MaybeUninit;
 
   pub fn pick_eob<T: Coefficient>(
     coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,
@@ -147,12 +149,11 @@ pub mod test {
       let mut src_storage = [T::zero(); 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
       let mut dst = Plane::from_slice(&[T::zero(); 64 * 64], 64);
-      // SAFETY: We write to the array below before reading from it.
-      let mut res_storage: Aligned<[i16; 64 * 64]> =
+      let mut res_storage: Aligned<[MaybeUninit<i16>; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
       let res = &mut res_storage.data[..tx_size.area()];
       // SAFETY: We write to the array below before reading from it.
-      let mut freq_storage: Aligned<[T::Coeff; 64 * 64]> =
+      let mut freq_storage: Aligned<[MaybeUninit<T::Coeff>; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
       let freq = &mut freq_storage.data[..tx_size.area()];
       for ((r, s), d) in
@@ -160,8 +161,10 @@ pub mod test {
       {
         *s = T::cast_from(random::<u16>() >> (16 - bit_depth));
         *d = T::cast_from(random::<u16>() >> (16 - bit_depth));
-        *r = i16::cast_from(*s) - i16::cast_from(*d);
+        r.write(i16::cast_from(*s) - i16::cast_from(*d));
       }
+      // SAFETY: The loop just initialized res, and all three slices have the same length
+      let res = unsafe { slice_assume_init_mut(res) };
       forward_transform(
         res,
         freq,
@@ -171,6 +174,8 @@ pub mod test {
         bit_depth,
         CpuFeatureLevel::RUST,
       );
+      // SAFETY: forward_transform initialized freq
+      let freq = unsafe { slice_assume_init_mut(freq) };
 
       let eob: usize = pick_eob(freq, tx_size, tx_type, sub_h);
       let mut rust_dst = dst.clone();

@@ -15,6 +15,7 @@ use rav1e::bench::transform;
 use rav1e::bench::transform::{
   forward_transform, get_valid_txfm_types, TxSize,
 };
+use std::mem::MaybeUninit;
 
 fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
@@ -96,7 +97,7 @@ pub fn bench_forward_transforms(c: &mut Criterion) {
 
     let input: Vec<i16> =
       (0..area).map(|_| rng.gen_range(-255..256)).collect();
-    let mut output = vec![0i16; area];
+    let mut output = vec![MaybeUninit::new(0i16); area];
 
     for &tx_type in get_valid_txfm_types(tx_size) {
       group.bench_function(
