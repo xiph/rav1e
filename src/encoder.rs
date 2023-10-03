@@ -1355,9 +1355,12 @@ fn write_key_frame_obus<T: Pixel>(
 
 /// Write into `dst` the difference between the blocks at `src1` and `src2`
 fn diff<T: Pixel>(
-  dst: &mut [i16], src1: &PlaneRegion<'_, T>, src2: &PlaneRegion<'_, T>,
+  dst: &mut [MaybeUninit<i16>], src1: &PlaneRegion<'_, T>,
+  src2: &PlaneRegion<'_, T>,
 ) {
   debug_assert!(dst.len() % src1.rect().width == 0);
+  debug_assert_eq!(src1.rows_iter().count(), src1.rect().height);
+
   let width = src1.rect().width;
   let height = src1.rect().height;
 
@@ -1374,7 +1377,7 @@ fn diff<T: Pixel>(
     dst.chunks_exact_mut(width).zip(src1.rows_iter()).zip(src2.rows_iter())
   {
     for ((r, v1), v2) in l.iter_mut().zip(s1).zip(s2) {
-      *r = i16::cast_from(*v1) - i16::cast_from(*v2);
+      r.write(i16::cast_from(*v1) - i16::cast_from(*v2));
     }
   }
 }
@@ -1504,17 +1507,13 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  // SAFETY: We write to the array below before reading from it.
-  let mut residual_storage: Aligned<[i16; 64 * 64]> =
+  let mut residual_storage: Aligned<[MaybeUninit<i16>; 64 * 64]> =
     unsafe { Aligned::uninitialized() };
-  // SAFETY: We write to the array below before reading from it.
-  let mut coeffs_storage: Aligned<[T::Coeff; 64 * 64]> =
+  let mut coeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 64 * 64]> =
     unsafe { Aligned::uninitialized() };
-  // SAFETY: We write to the array below before reading from it.
   let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     unsafe { Aligned::uninitialized() };
-  // SAFETY: We write to the array below before reading from it.
-  let mut rcoeffs_storage: Aligned<[T::Coeff; 32 * 32]> =
+  let mut rcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
     unsafe { Aligned::uninitialized() };
   let residual = &mut residual_storage.data[..tx_size.area()];
   let coeffs = &mut coeffs_storage.data[..tx_size.area()];
@@ -1539,8 +1538,10 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
       &rec.subregion(area),
     );
   } else {
-    residual.fill(0);
+    residual.fill(MaybeUninit::new(0));
   }
+  // SAFETY: `diff()` inits `tx_size.area()` elements when it matches size of `subregion(area)`
+  let residual = unsafe { slice_assume_init_mut(residual) };
 
   forward_transform(
     residual,
@@ -1551,6 +1552,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     fi.sequence.bit_depth,
     fi.cpu_feature_level,
   );
+  // SAFETY: forward_transform initialized coeffs
+  let coeffs = unsafe { slice_assume_init_mut(coeffs) };
 
   let eob = ts.qc.quantize(coeffs, qcoeffs, tx_size, tx_type);
 
@@ -1596,6 +1599,8 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
     fi.ac_delta_q[p],
     fi.cpu_feature_level,
   );
+  // SAFETY: dequantize initialized rcoeffs
+  let rcoeffs = unsafe { slice_assume_init_mut(rcoeffs) };
 
   if eob == 0 {
     // All zero coefficients is a no-op

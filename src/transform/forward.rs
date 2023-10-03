@@ -22,6 +22,7 @@ cfg_if::cfg_if! {
 
 pub mod rust {
   use super::*;
+  use std::mem::MaybeUninit;
 
   use crate::transform::forward_shared::*;
   use crate::transform::{av1_round_shift_array, valid_av1_transform, TxSize};
@@ -99,8 +100,8 @@ pub mod rust {
   /// - If called with an invalid combination of `tx_size` and `tx_type`
   #[cold_for_target_arch("x86_64")]
   pub fn forward_transform<T: Coefficient>(
-    input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-    tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
+    input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
+    tx_size: TxSize, tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
   ) {
     assert!(valid_av1_transform(tx_size, tx_type));
 
@@ -114,7 +115,8 @@ pub mod rust {
     let txfm_size_row = tx_size.height();
 
     // SAFETY: We write to the array below before reading from it.
-    let mut tmp: Aligned<[i32; 64 * 64]> = unsafe { Aligned::uninitialized() };
+    let mut tmp: Aligned<[MaybeUninit<i32>; 64 * 64]> =
+      unsafe { Aligned::uninitialized() };
     let buf = &mut tmp.data[..txfm_size_col * txfm_size_row];
 
     let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
@@ -124,20 +126,22 @@ pub mod rust {
 
     // Columns
     for c in 0..txfm_size_col {
-      // SAFETY: We write to the array below before reading from it.
-      let mut col_coeffs_backing: Aligned<[i32; 64]> =
+      let mut col_coeffs_backing: Aligned<[MaybeUninit<i32>; 64]> =
         unsafe { Aligned::uninitialized() };
       let col_coeffs = &mut col_coeffs_backing.data[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
         for r in 0..txfm_size_row {
-          col_coeffs[r] = (input[(txfm_size_row - r - 1) * stride + c]).into();
+          col_coeffs[r]
+            .write((input[(txfm_size_row - r - 1) * stride + c]).into());
         }
       } else {
         for r in 0..txfm_size_row {
-          col_coeffs[r] = (input[r * stride + c]).into();
+          col_coeffs[r].write((input[r * stride + c]).into());
         }
       }
+      // SAFETY: The loops above have initialized all txfm_size_row elements
+      let col_coeffs = unsafe { slice_assume_init_mut(col_coeffs) };
 
       av1_round_shift_array(col_coeffs, txfm_size_row, -cfg.shift[0]);
       txfm_func_col(col_coeffs);
@@ -145,18 +149,20 @@ pub mod rust {
       if cfg.lr_flip {
         for r in 0..txfm_size_row {
           // flip from left to right
-          buf[r * txfm_size_col + (txfm_size_col - c - 1)] = col_coeffs[r];
+          buf[r * txfm_size_col + (txfm_size_col - c - 1)]
+            .write(col_coeffs[r]);
         }
       } else {
         for r in 0..txfm_size_row {
-          buf[r * txfm_size_col + c] = col_coeffs[r];
+          buf[r * txfm_size_col + c].write(col_coeffs[r]);
         }
       }
     }
+    // SAFETY: The loops above have initialized the entire buf
+    let buf = unsafe { slice_assume_init_mut(buf) };
 
     // Rows
-    for r in 0..txfm_size_row {
-      let row_coeffs = &mut buf[r * txfm_size_col..];
+    for (r, row_coeffs) in buf.chunks_exact_mut(txfm_size_col).enumerate() {
       txfm_func_row(row_coeffs);
       av1_round_shift_array(row_coeffs, txfm_size_col, -cfg.shift[2]);
 
@@ -181,8 +187,8 @@ pub mod rust {
         let output = &mut output[txfm_size_row * cg..];
 
         for c in 0..txfm_size_col.min(32) {
-          output[c * output_stride + (r & 31)] =
-            T::cast_from(row_coeffs[c + cg]);
+          output[c * output_stride + (r & 31)]
+            .write(T::cast_from(row_coeffs[c + cg]));
         }
       }
     }

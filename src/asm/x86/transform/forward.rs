@@ -333,8 +333,8 @@ fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
 #[allow(clippy::identity_op, clippy::erasing_op)]
 #[target_feature(enable = "avx2")]
 unsafe fn forward_transform_avx2<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bd: usize,
+  input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
+  tx_size: TxSize, tx_type: TxType, bd: usize,
 ) {
   // Note when assigning txfm_size_col, we use the txfm_size from the
   // row configuration and vice versa. This is intentionally done to
@@ -508,8 +508,8 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
 ///
 /// - If called with an invalid combination of `tx_size` and `tx_type`
 pub fn forward_transform<T: Coefficient>(
-  input: &[i16], output: &mut [T], stride: usize, tx_size: TxSize,
-  tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
+  input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
+  tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
   assert!(valid_av1_transform(tx_size, tx_type));
   if cpu >= CpuFeatureLevel::AVX2 {
@@ -526,7 +526,9 @@ pub fn forward_transform<T: Coefficient>(
 mod test {
   use crate::cpu_features::*;
   use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
+  use crate::util::assume_slice_init_mut;
   use rand::Rng;
+  use std::mem::MaybeUninit;
 
   // Ensure that the simd results match the rust code
   #[test]
@@ -558,8 +560,8 @@ mod test {
         (0..area).map(|_| rng.gen_range(-255..256)).collect();
 
       for &tx_type in get_valid_txfm_types(tx_size) {
-        let mut output_ref = vec![0i16; area];
-        let mut output_simd = vec![0i16; area];
+        let mut output_ref = vec![MaybeUninit::new(0i16); area];
+        let mut output_simd = vec![MaybeUninit::new(0i16); area];
 
         println!("Testing combination {:?}, {:?}", tx_size, tx_type);
         forward_transform(
@@ -571,6 +573,7 @@ mod test {
           8,
           CpuFeatureLevel::RUST,
         );
+        let output_ref = unsafe { assume_slice_init_mut(&mut output_ref[..]) };
         forward_transform(
           &input[..],
           &mut output_simd[..],
@@ -580,6 +583,8 @@ mod test {
           8,
           cpu,
         );
+        let output_simd =
+          unsafe { assume_slice_init_mut(&mut output_simd[..]) };
         assert_eq!(output_ref, output_simd)
       }
     }
