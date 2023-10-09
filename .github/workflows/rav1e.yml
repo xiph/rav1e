@@ -140,13 +140,15 @@ jobs:
           LINK: http://ports.ubuntu.com/ubuntu-ports/pool
         run: |
           rustup target add aarch64-unknown-linux-gnu
+          sudo apt update
+          sudo apt install qemu-user gcc-aarch64-linux-gnu
           { echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu lunar main universe'
             echo 'deb [arch=amd64] http://azure.archive.ubuntu.com/ubuntu lunar-updates main universe'
             echo 'deb [arch=arm64] http://azure.ports.ubuntu.com/ lunar main universe'
           } | sudo tee /etc/apt/sources.list
           sudo dpkg --add-architecture arm64
           sudo apt update
-          sudo apt install qemu-user gcc-aarch64-linux-gnu libdav1d-dev:arm64
+          sudo apt install libdav1d-dev:arm64
       - name: Generate Cargo.version for cache key
         run: |
           cargo --version > Cargo.version
