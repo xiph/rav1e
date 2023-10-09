@@ -145,7 +145,7 @@ pub mod test {
     for sub_h in 0..sub_h_iterations {
       let mut src_storage = [T::zero(); 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
-      let mut dst = Plane::from_slice(&vec![T::zero(); 64 * 64], 64);
+      let mut dst = Plane::from_slice(&[T::zero(); 64 * 64], 64);
       // SAFETY: We write to the array below before reading from it.
       let mut res_storage: Aligned<[i16; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
