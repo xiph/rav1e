@@ -278,7 +278,7 @@ fn send_test_frame<T: Pixel>(ctx: &mut Context<T>, content_value: T) {
 fn get_frame_invariants<T: Pixel>(
   ctx: Context<T>,
 ) -> impl Iterator<Item = Option<FrameInvariants<T>>> {
-  ctx.inner.frame_data.into_iter().map(|(_, v)| v.map(|v| v.fi))
+  ctx.inner.frame_data.into_values().map(|v| v.map(|v| v.fi))
 }
 
 #[interpolate_test(0, 0)]

@@ -9,7 +9,7 @@ mod binary {
   use std::path::{Path, PathBuf};
 
   fn get_y4m_input() -> Vec<u8> {
-    let mut input = File::open(&format!(
+    let mut input = File::open(format!(
       "{}/tests/small_input.y4m",
       env!("CARGO_MANIFEST_DIR")
     ))
@@ -45,7 +45,7 @@ mod binary {
 
   fn get_common_cmd(outfile: &Path) -> Command {
     let mut cmd = get_rav1e_command();
-    cmd.args(&["--bitrate", "1000"]).arg("-o").arg(outfile).arg("-y");
+    cmd.args(["--bitrate", "1000"]).arg("-o").arg(outfile).arg("-y");
     cmd
   }
 
@@ -54,7 +54,7 @@ mod binary {
     let outfile = get_tempfile_path("ivf");
 
     get_rav1e_command()
-      .args(&["--quantizer", "100"])
+      .args(["--quantizer", "100"])
       .arg("-o")
       .arg(&outfile)
       .arg("-")
@@ -101,7 +101,7 @@ mod binary {
     let passfile = get_tempfile_path("pass");
 
     get_common_cmd(&outfile)
-      .args(&["--reservoir-frame-delay", "14"])
+      .args(["--reservoir-frame-delay", "14"])
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -110,7 +110,7 @@ mod binary {
       .success();
 
     get_common_cmd(&outfile)
-      .args(&["--reservoir-frame-delay", "14"])
+      .args(["--reservoir-frame-delay", "14"])
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
