@@ -1624,9 +1624,10 @@ pub(crate) mod rust {
   use simd_helpers::cold_for_target_arch;
   use std::cmp;
 
+  #[cold_for_target_arch("x86_64", "aarch64")]
   pub fn inverse_transform_add_lossless<T: Pixel>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
-    _cpu: CpuFeatureLevel,
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
+    _bd: usize, _cpu: CpuFeatureLevel,
   ) {
     // <https://aomediacodec.github.io/av1-spec/#2d-inverse-transform-process>
     let input: &[T::Coeff] = &input[..4 * 4];

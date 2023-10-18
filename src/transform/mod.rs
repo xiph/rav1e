@@ -511,7 +511,7 @@ mod test {
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform_lossless(res, freq, 4, cpu);
-    inverse_transform_add_lossless(freq, &mut dst.as_region_mut(), cpu);
+    inverse_transform_add_lossless(freq, &mut dst.as_region_mut(), 15, 8, cpu);
 
     assert_eq!(&src[..], &dst.data[..]);
   }
