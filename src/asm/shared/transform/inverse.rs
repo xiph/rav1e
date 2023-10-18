@@ -15,7 +15,7 @@ pub type InvTxfmFunc =
   unsafe extern fn(*mut u8, libc::ptrdiff_t, *mut i16, i32);
 
 pub type InvTxfmHBDFunc =
-  unsafe extern fn(*mut u16, libc::ptrdiff_t, *mut i16, i32);
+  unsafe extern fn(*mut u16, libc::ptrdiff_t, *mut i16, i32, i32);
 
 pub fn call_inverse_func<T: Pixel>(
   func: InvTxfmFunc, input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
@@ -51,7 +51,7 @@ pub fn call_inverse_func<T: Pixel>(
 pub fn call_inverse_hbd_func<T: Pixel>(
   func: InvTxfmHBDFunc, input: &[T::Coeff],
   output: &mut PlaneRegionMut<'_, T>, eob: usize, width: usize, height: usize,
-  _bd: usize,
+  bd: usize,
 ) {
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
@@ -74,6 +74,7 @@ pub fn call_inverse_hbd_func<T: Pixel>(
       T::to_asm_stride(output.plane_cfg.stride),
       copied.data.as_mut_ptr() as *mut _,
       eob as i32 - 1,
+      (1 << bd) - 1,
     );
   }
 }

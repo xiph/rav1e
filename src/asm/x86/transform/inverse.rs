@@ -16,6 +16,7 @@ use crate::{Pixel, PixelType};
 use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
+#[inline]
 pub fn inverse_transform_add_lossless<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
   bd: usize, cpu: CpuFeatureLevel,
@@ -97,12 +98,24 @@ extern {
   fn rav1e_inv_txfm_add_wht_wht_4x4_8bpc_sse2(
     dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
   );
+  fn rav1e_inv_txfm_add_wht_wht_4x4_16bpc_avx2(
+    dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+    bitdepth_max: i32,
+  );
+  fn rav1e_inv_txfm_add_wht_wht_4x4_16bpc_sse2(
+    dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+    bitdepth_max: i32,
+  );
 }
 
 const INV_TXFM_WHT_FN_AVX2: Option<InvTxfmFunc> =
   Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_avx2 as _);
 const INV_TXFM_WHT_FN_SSE2: Option<InvTxfmFunc> =
   Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_sse2 as _);
+const INV_TXFM_WHT_HBD_FN_AVX2: Option<InvTxfmHBDFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_16bpc_avx2 as _);
+const INV_TXFM_WHT_HBD_FN_SSE2: Option<InvTxfmHBDFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_16bpc_sse2 as _);
 
 cpu_function_lookup_table!(
   INV_TXFM_WHT_FN: [Option<InvTxfmFunc>],
@@ -113,7 +126,7 @@ cpu_function_lookup_table!(
 cpu_function_lookup_table!(
   INV_TXFM_WHT_HBD_FN: [Option<InvTxfmHBDFunc>],
   default: None,
-  []
+  [SSE2, AVX2]
 );
 
 macro_rules! decl_itx_fns {
@@ -159,7 +172,7 @@ macro_rules! decl_itx_hbd_fns {
             // Note: type1 and type2 are flipped
             fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _ $BPC bpc_$OPT_LOWER>](
               dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
-              eob: i32,
+              eob: i32, bitdepth_max: i32,
             );
           }
         )*
