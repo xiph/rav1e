@@ -16,7 +16,24 @@ use crate::{Pixel, PixelType};
 use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
-pub use crate::transform::inverse::rust::inverse_transform_add_lossless;
+pub fn inverse_transform_add_lossless<T: Pixel>(
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
+  bd: usize, cpu: CpuFeatureLevel,
+) {
+  match T::type_enum() {
+    PixelType::U8 => {
+      if let Some(func) = INV_TXFM_WHT_FN[cpu.as_index()] {
+        return call_inverse_func(func, input, output, eob, 4, 4, bd);
+      }
+    }
+    PixelType::U16 => {
+      if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
+        return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
+      }
+    }
+  }
+  rust::inverse_transform_add_lossless(input, output, eob, bd, cpu);
+}
 
 pub fn inverse_transform_add<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
@@ -72,6 +89,32 @@ pub fn inverse_transform_add<T: Pixel>(
 
   rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
 }
+
+extern {
+  fn rav1e_inv_txfm_add_wht_wht_4x4_8bpc_avx2(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+  );
+  fn rav1e_inv_txfm_add_wht_wht_4x4_8bpc_sse2(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+  );
+}
+
+const INV_TXFM_WHT_FN_AVX2: Option<InvTxfmFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_avx2 as _);
+const INV_TXFM_WHT_FN_SSE2: Option<InvTxfmFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_sse2 as _);
+
+cpu_function_lookup_table!(
+  INV_TXFM_WHT_FN: [Option<InvTxfmFunc>],
+  default: None,
+  [SSE2, AVX2]
+);
+
+cpu_function_lookup_table!(
+  INV_TXFM_WHT_HBD_FN: [Option<InvTxfmHBDFunc>],
+  default: None,
+  []
+);
 
 macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
