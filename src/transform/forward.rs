@@ -94,6 +94,36 @@ pub mod rust {
     }
   }
 
+  pub fn forward_transform_lossless<T: Coefficient>(
+    input: &[i16], output: &mut [T], stride: usize, _cpu: CpuFeatureLevel,
+  ) {
+    let mut tmp = [0i32; 4 * 4];
+    let buf = &mut tmp[..];
+    let mut col_coeffs_backing = [0i32; 4];
+    let col_coeffs = &mut col_coeffs_backing[..];
+
+    // Columns
+    for c in 0..4 {
+      for r in 0..4 {
+        col_coeffs[r] = (input[r * stride + c]).into();
+      }
+      fwht4(col_coeffs);
+      for r in 0..4 {
+        buf[r * 4 + c] = col_coeffs[r];
+      }
+    }
+
+    // Rows
+    for r in 0..4 {
+      let row_coeffs = &mut buf[r * 4..];
+      fwht4(row_coeffs);
+      av1_round_shift_array(row_coeffs, 4, -2);
+      for c in 0..4 {
+        output[c * 4 + r] = T::cast_from(row_coeffs[c]);
+      }
+    }
+  }
+
   /// # Panics
   ///
   /// - If called with an invalid combination of `tx_size` and `tx_type`
