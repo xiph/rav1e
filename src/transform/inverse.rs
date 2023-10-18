@@ -48,9 +48,9 @@ pub fn av1_iwht4(input: &[i32], output: &mut [i32]) {
   let s3 = s4 - x3;
   let s1 = s4 - x1;
   output[0] = s0 - s3;
-  output[1] = s1;
-  output[2] = s2 + s1;
-  output[3] = s3;
+  output[1] = s3;
+  output[2] = s1;
+  output[3] = s2 + s1;
 }
 
 static COSPI_INV: [i32; 64] = [
