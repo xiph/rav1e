@@ -1741,15 +1741,12 @@ $($s)* fn fwht4<T: TxOperations>(coeffs: &mut [T]) {
   let s1 = x3.sub(x2);
   let s2 = s0.sub_avg(s1);
 
-  let q3 = s2.sub(x2);
-  let q0 = s0.sub(q3);
-  let q2 = s2.sub(x1);
-  let q1 = s1.add(q2);
+  let q1 = s2.sub(x2);
+  let q0 = s0.sub(q1);
+  let q3 = s2.sub(x1);
+  let q2 = s1.add(q3);
 
-  coeffs[0] = q0;
-  coeffs[1] = q1;
-  coeffs[2] = q2;
-  coeffs[3] = q3;
+  store_coeffs!(coeffs, q0, q1, q2, q3);
 }
 
 }
