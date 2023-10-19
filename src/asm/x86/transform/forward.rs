@@ -21,8 +21,6 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
-pub use crate::transform::forward::rust::forward_transform_lossless;
-
 type TxfmFuncI32X8 = unsafe fn(&mut [I32X8]);
 
 #[inline]
@@ -41,6 +39,7 @@ fn get_func_i32x8(t: TxfmType) -> TxfmFuncI32X8 {
     Identity8 => fidentity,
     Identity16 => fidentity,
     Identity32 => fidentity,
+    WHT4 => fwht4,
   }
 }
 
@@ -509,6 +508,7 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
 /// # Panics
 ///
 /// - If called with an invalid combination of `tx_size` and `tx_type`
+#[inline]
 pub fn forward_transform<T: Coefficient>(
   input: &[i16], output: &mut [MaybeUninit<T>], stride: usize,
   tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
