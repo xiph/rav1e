@@ -145,7 +145,7 @@ impl Txfm2DFlipCfg {
     use self::TxType::*;
     match tx_type {
       DCT_DCT | ADST_DCT | DCT_ADST | ADST_ADST | IDTX | V_DCT | H_DCT
-      | V_ADST | H_ADST => (false, false),
+      | V_ADST | H_ADST | WHT_WHT => (false, false),
       FLIPADST_DCT | FLIPADST_ADST | V_FLIPADST => (true, false),
       DCT_FLIPADST | ADST_FLIPADST | H_FLIPADST => (false, true),
       FLIPADST_FLIPADST => (true, true),
