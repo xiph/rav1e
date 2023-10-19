@@ -16,31 +16,26 @@ use crate::{Pixel, PixelType};
 use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
-#[inline]
-pub fn inverse_transform_add_lossless<T: Pixel>(
-  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
-  bd: usize, cpu: CpuFeatureLevel,
-) {
-  match T::type_enum() {
-    PixelType::U8 => {
-      if let Some(func) = INV_TXFM_WHT_FN[cpu.as_index()] {
-        return call_inverse_func(func, input, output, eob, 4, 4, bd);
-      }
-    }
-    PixelType::U16 if bd == 10 => {
-      if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
-        return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
-      }
-    }
-    PixelType::U16 => {}
-  }
-  rust::inverse_transform_add_lossless(input, output, eob, bd, cpu);
-}
-
 pub fn inverse_transform_add<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
   tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
+  if tx_type == TxType::WHT_WHT {
+    debug_assert!(tx_size == TxSize::TX_4X4);
+    match T::type_enum() {
+      PixelType::U8 => {
+        if let Some(func) = INV_TXFM_WHT_FN[cpu.as_index()] {
+          return call_inverse_func(func, input, output, eob, 4, 4, bd);
+        }
+      }
+      PixelType::U16 if bd == 10 => {
+        if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
+          return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
+        }
+      }
+      PixelType::U16 => {}
+    }
+  }
   match T::type_enum() {
     PixelType::U8 => {
       if let Some(func) = INV_TXFM_FNS[cpu.as_index()]

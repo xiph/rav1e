@@ -16,7 +16,6 @@ pub mod forward_shared;
 pub use self::forward::forward_transform;
 pub use self::forward::forward_transform_lossless;
 pub use self::inverse::inverse_transform_add;
-pub use self::inverse::inverse_transform_add_lossless;
 
 use crate::context::MI_SIZE_LOG2;
 use crate::partition::{BlockSize, BlockSize::*};
@@ -52,6 +51,7 @@ pub mod consts {
 }
 
 pub const TX_TYPES: usize = 16;
+pub const TX_TYPES_PLUS_LL: usize = 17;
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord)]
 pub enum TxType {
@@ -71,6 +71,7 @@ pub enum TxType {
   H_ADST = 13,
   V_FLIPADST = 14,
   H_FLIPADST = 15,
+  WHT_WHT = 16,
 }
 
 impl TxType {
@@ -337,6 +338,7 @@ enum TxType1D {
   ADST,
   FLIPADST,
   IDTX,
+  WHT,
 }
 
 const fn get_1d_tx_types(tx_type: TxType) -> (TxType1D, TxType1D) {
@@ -357,10 +359,11 @@ const fn get_1d_tx_types(tx_type: TxType) -> (TxType1D, TxType1D) {
     TxType::H_ADST => (TxType1D::IDTX, TxType1D::ADST),
     TxType::V_FLIPADST => (TxType1D::FLIPADST, TxType1D::IDTX),
     TxType::H_FLIPADST => (TxType1D::IDTX, TxType1D::FLIPADST),
+    TxType::WHT_WHT => (TxType1D::WHT, TxType1D::WHT),
   }
 }
 
-const VTX_TAB: [TxType1D; TX_TYPES] = [
+const VTX_TAB: [TxType1D; TX_TYPES_PLUS_LL] = [
   TxType1D::DCT,
   TxType1D::ADST,
   TxType1D::DCT,
@@ -377,9 +380,10 @@ const VTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::IDTX,
   TxType1D::FLIPADST,
   TxType1D::IDTX,
+  TxType1D::WHT,
 ];
 
-const HTX_TAB: [TxType1D; TX_TYPES] = [
+const HTX_TAB: [TxType1D; TX_TYPES_PLUS_LL] = [
   TxType1D::DCT,
   TxType1D::DCT,
   TxType1D::ADST,
@@ -396,6 +400,7 @@ const HTX_TAB: [TxType1D; TX_TYPES] = [
   TxType1D::ADST,
   TxType1D::IDTX,
   TxType1D::FLIPADST,
+  TxType1D::WHT,
 ];
 
 #[inline]
@@ -514,7 +519,15 @@ mod test {
       *r = i16::cast_from(*s) - i16::cast_from(*d);
     }
     forward_transform_lossless(res, freq, 4, cpu);
-    inverse_transform_add_lossless(freq, &mut dst.as_region_mut(), 15, 8, cpu);
+    inverse_transform_add(
+      freq,
+      &mut dst.as_region_mut(),
+      15,
+      TX_4X4,
+      WHT_WHT,
+      8,
+      cpu,
+    );
 
     assert_eq!(&src[..], &dst.data[..]);
   }

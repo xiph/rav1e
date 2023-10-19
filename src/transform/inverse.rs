@@ -33,7 +33,7 @@ use super::TxType;
 /// # Panics
 ///
 /// - If `input` or `output` have fewer than 4 items.
-pub fn av1_iwht4(input: &[i32], output: &mut [i32]) {
+pub fn av1_iwht4(input: &[i32], output: &mut [i32], _range: usize) {
   assert!(input.len() >= 4);
   assert!(output.len() >= 4);
 
@@ -1591,7 +1591,7 @@ fn av1_idct64(input: &[i32], output: &mut [i32], range: usize) {
 
 type InvTxfmFn = fn(input: &[i32], output: &mut [i32], range: usize);
 
-static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
+static INV_TXFM_FNS: [[InvTxfmFn; 5]; 5] = [
   [av1_idct4, av1_idct8, av1_idct16, av1_idct32, av1_idct64],
   [
     av1_iadst4,
@@ -1614,6 +1614,13 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 4] = [
     av1_iidentity32,
     |_, _, _| unimplemented!(),
   ],
+  [
+    av1_iwht4,
+    |_, _, _| unimplemented!(),
+    |_, _, _| unimplemented!(),
+    |_, _, _| unimplemented!(),
+    |_, _, _| unimplemented!(),
+  ],
 ];
 
 pub(crate) mod rust {
@@ -1623,52 +1630,6 @@ pub(crate) mod rust {
 
   use simd_helpers::cold_for_target_arch;
   use std::cmp;
-
-  #[cold_for_target_arch("x86_64", "aarch64")]
-  pub fn inverse_transform_add_lossless<T: Pixel>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
-    _bd: usize, _cpu: CpuFeatureLevel,
-  ) {
-    // <https://aomediacodec.github.io/av1-spec/#2d-inverse-transform-process>
-    let input: &[T::Coeff] = &input[..4 * 4];
-    let mut buffer = [0i32; 4 * 4];
-
-    // perform inv txfm on every row
-    for (r, buffer_slice) in buffer.chunks_exact_mut(4).enumerate() {
-      let mut temp_in: [i32; 4] = [0; 4];
-      for (val, transposed) in input[r..]
-        .iter()
-        .map(|a| i32::cast_from(*a))
-        .step_by(4)
-        .zip(temp_in.iter_mut())
-      {
-        *transposed = val >> 2;
-      }
-      av1_iwht4(&temp_in, buffer_slice);
-    }
-
-    // perform inv txfm on every col
-    for c in 0..4 {
-      let mut temp_in: [i32; 4] = [0; 4];
-      let mut temp_out: [i32; 4] = [0; 4];
-      for (val, transposed) in buffer[c..]
-        .iter()
-        .map(|a| i32::cast_from(*a))
-        .step_by(4)
-        .zip(temp_in.iter_mut())
-      {
-        *transposed = val;
-      }
-      av1_iwht4(&temp_in, &mut temp_out);
-      for (temp, out) in temp_out
-        .iter()
-        .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(4))
-      {
-        let v = i32::cast_from(*out) + *temp;
-        *out = T::cast_from(v);
-      }
-    }
-  }
 
   #[cold_for_target_arch("x86_64", "aarch64")]
   pub fn inverse_transform_add<T: Pixel>(
@@ -1686,6 +1647,7 @@ pub(crate) mod rust {
     let mut buffer = vec![0i32; width * height].into_boxed_slice();
     let rect_type = get_rect_tx_log_ratio(width, height);
     let tx_types_1d = get_1d_tx_types(tx_type);
+    let lossless = tx_type == TxType::WHT_WHT;
 
     // perform inv txfm on every row
     let range = bd + 8;
@@ -1705,6 +1667,8 @@ pub(crate) mod rust {
       {
         let val = if rect_type.abs() == 1 {
           round_shift(raw * INV_SQRT2, SQRT2_BITS)
+        } else if lossless {
+          raw >> 2
         } else {
           raw
         };
@@ -1733,7 +1697,8 @@ pub(crate) mod rust {
         .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(height))
       {
         let v: i32 = (*out).as_();
-        let v = clamp(v + round_shift(*temp, 4), 0, (1 << bd) - 1);
+        let r = if lossless { *temp } else { round_shift(*temp, 4) };
+        let v = clamp(v + r, 0, (1 << bd) - 1);
         *out = T::cast_from(v);
       }
     }
