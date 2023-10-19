@@ -14,7 +14,6 @@
 pub mod forward_shared;
 
 pub use self::forward::forward_transform;
-pub use self::forward::forward_transform_lossless;
 pub use self::inverse::inverse_transform_add;
 
 use crate::context::MI_SIZE_LOG2;
@@ -426,6 +425,26 @@ pub fn get_valid_txfm_types(tx_size: TxSize) -> &'static [TxType] {
     &[DCT_DCT]
   } else if size_sq == TxSize::TX_32X32 {
     &[DCT_DCT, IDTX]
+  } else if size_sq == TxSize::TX_4X4 {
+    &[
+      DCT_DCT,
+      ADST_DCT,
+      DCT_ADST,
+      ADST_ADST,
+      FLIPADST_DCT,
+      DCT_FLIPADST,
+      FLIPADST_FLIPADST,
+      ADST_FLIPADST,
+      FLIPADST_ADST,
+      IDTX,
+      V_DCT,
+      H_DCT,
+      V_ADST,
+      H_ADST,
+      V_FLIPADST,
+      H_FLIPADST,
+      WHT_WHT,
+    ]
   } else {
     &[
       DCT_DCT,
@@ -500,38 +519,6 @@ mod test {
     }
   }
 
-  fn test_lossless_roundtrip<T: Pixel>() {
-    let cpu = CpuFeatureLevel::default();
-
-    let mut src_storage = [T::cast_from(0); 4 * 4];
-    let src = &mut src_storage[..];
-    // dynamic allocation: test
-    let mut dst = Plane::from_slice(&vec![T::cast_from(0); 4 * 4], 4);
-    let mut res_storage = [0i16; 4 * 4];
-    let res = &mut res_storage[..];
-    let mut freq_storage = [T::Coeff::cast_from(0); 4 * 4];
-    let freq = &mut freq_storage[..4 * 4];
-    for ((r, s), d) in
-      res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
-    {
-      *s = T::cast_from(random::<u8>());
-      *d = T::cast_from(random::<u8>());
-      *r = i16::cast_from(*s) - i16::cast_from(*d);
-    }
-    forward_transform_lossless(res, freq, 4, cpu);
-    inverse_transform_add(
-      freq,
-      &mut dst.as_region_mut(),
-      15,
-      TX_4X4,
-      WHT_WHT,
-      8,
-      cpu,
-    );
-
-    assert_eq!(&src[..], &dst.data[..]);
-  }
-
   #[test]
   fn log_tx_ratios() {
     let combinations = [
@@ -570,6 +557,7 @@ mod test {
 
   fn roundtrips<T: Pixel>() {
     let combinations = [
+      (TX_4X4, WHT_WHT, 0),
       (TX_4X4, DCT_DCT, 0),
       (TX_4X4, ADST_DCT, 0),
       (TX_4X4, DCT_ADST, 0),
@@ -617,8 +605,6 @@ mod test {
       (TX_16X32, DCT_DCT, 2),
       (TX_32X16, DCT_DCT, 2),
     ];
-    println!("Testing combination TX_4X4, WHT_WHT");
-    test_lossless_roundtrip::<T>();
     for &(tx_size, tx_type, tolerance) in combinations.iter() {
       println!("Testing combination {:?}, {:?}", tx_size, tx_type);
       test_roundtrip::<T>(tx_size, tx_type, tolerance);

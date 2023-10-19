@@ -39,6 +39,8 @@ const FWD_SHIFT_32X8: TxfmShifts = [[4, -1, 0], [2, 0, 1], [0, 0, 3]];
 const FWD_SHIFT_16X64: TxfmShifts = [[4, -2, 0], [2, 0, 0], [0, 0, 2]];
 const FWD_SHIFT_64X16: TxfmShifts = [[4, -2, 0], [2, 0, 0], [0, 0, 2]];
 
+const FWD_SHIFT_4X4_WHT: TxfmShift = [0, 0, 2];
+
 pub const FWD_TXFM_SHIFT_LS: [TxfmShifts; TxSize::TX_SIZES_ALL] = [
   FWD_SHIFT_4X4,
   FWD_SHIFT_8X8,
@@ -75,31 +77,35 @@ pub enum TxfmType {
   Identity8,
   Identity16,
   Identity32,
+  WHT4,
 }
 
 impl TxfmType {
-  const TX_TYPES_1D: usize = 4;
+  const TX_TYPES_1D: usize = 5;
   const AV1_TXFM_TYPE_LS: [[Option<TxfmType>; Self::TX_TYPES_1D]; 5] = [
     [
       Some(TxfmType::DCT4),
       Some(TxfmType::ADST4),
       Some(TxfmType::ADST4),
       Some(TxfmType::Identity4),
+      Some(TxfmType::WHT4),
     ],
     [
       Some(TxfmType::DCT8),
       Some(TxfmType::ADST8),
       Some(TxfmType::ADST8),
       Some(TxfmType::Identity8),
+      None,
     ],
     [
       Some(TxfmType::DCT16),
       Some(TxfmType::ADST16),
       Some(TxfmType::ADST16),
       Some(TxfmType::Identity16),
+      None,
     ],
-    [Some(TxfmType::DCT32), None, None, Some(TxfmType::Identity32)],
-    [Some(TxfmType::DCT64), None, None, None],
+    [Some(TxfmType::DCT32), None, None, Some(TxfmType::Identity32), None],
+    [Some(TxfmType::DCT64), None, None, None, None],
   ];
 }
 
@@ -129,12 +135,17 @@ impl Txfm2DFlipCfg {
     let txfm_type_row =
       TxfmType::AV1_TXFM_TYPE_LS[txw_idx][tx_type_1d_row as usize].unwrap();
     let (ud_flip, lr_flip) = Self::get_flip_cfg(tx_type);
+    let shift = if tx_type == TxType::WHT_WHT {
+      FWD_SHIFT_4X4_WHT
+    } else {
+      FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2]
+    };
 
     Txfm2DFlipCfg {
       tx_size,
       ud_flip,
       lr_flip,
-      shift: FWD_TXFM_SHIFT_LS[tx_size as usize][(bd - 8) / 2],
+      shift,
       txfm_type_col,
       txfm_type_row,
     }
@@ -1728,7 +1739,6 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
 #[$m]
 $($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
 
-#[allow(unused)]
 #[$m]
 $($s)* fn fwht4<T: TxOperations>(coeffs: &mut [T]) {
   assert!(coeffs.len() >= 4);
