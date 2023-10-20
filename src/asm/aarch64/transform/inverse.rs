@@ -19,22 +19,6 @@ pub fn inverse_transform_add<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: u16,
   tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
-  if tx_type == TxType::WHT_WHT {
-    debug_assert!(tx_size == TxSize::TX_4X4);
-    match T::type_enum() {
-      PixelType::U8 => {
-        if let Some(func) = INV_TXFM_WHT_FN[cpu.as_index()] {
-          return call_inverse_func(func, input, output, eob, 4, 4, bd);
-        }
-      }
-      PixelType::U16 if bd == 10 => {
-        if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
-          return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
-        }
-      }
-      PixelType::U16 => {}
-    }
-  }
   match T::type_enum() {
     PixelType::U8 => {
       if let Some(func) = INV_TXFM_FNS[cpu.as_index()][tx_size][tx_type] {
@@ -67,32 +51,6 @@ pub fn inverse_transform_add<T: Pixel>(
 
   rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
 }
-
-extern {
-  fn rav1e_inv_txfm_add_wht_wht_4x4_8bpc_neon(
-    dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
-  );
-  fn rav1e_inv_txfm_add_wht_wht_4x4_16bpc_neon(
-    dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
-    bitdepth_max: i32,
-  );
-}
-const INV_TXFM_WHT_FN_NEON: Option<InvTxfmFunc> =
-  Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_neon as _);
-const INV_TXFM_WHT_HBD_FN_NEON: Option<InvTxfmHBDFunc> =
-  Some(rav1e_inv_txfm_add_wht_wht_4x4_16bpc_neon as _);
-
-cpu_function_lookup_table!(
-  INV_TXFM_WHT_FN: [Option<InvTxfmFunc>],
-  default: None,
-  [NEON]
-);
-
-cpu_function_lookup_table!(
-  INV_TXFM_WHT_HBD_FN: [Option<InvTxfmHBDFunc>],
-  default: None,
-  [NEON]
-);
 
 macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
@@ -223,7 +181,7 @@ macro_rules! impl_itx_fns {
   };
 
   ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-   $TYPES84:tt, $DIMS84:tt, $OPT:tt) => {
+   $TYPES84:tt, $DIMS84:tt, $TYPES4:tt, $DIMS4:tt, $OPT:tt) => {
     // Make 2d list of tx types for each set of dimensions. Each set of
     //   dimensions uses a superset of the previous set of tx types.
     impl_itx_fns!([$TYPES64], $DIMS64, $OPT);
@@ -232,11 +190,14 @@ macro_rules! impl_itx_fns {
     impl_itx_fns!(
       [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
     );
+    impl_itx_fns!(
+      [$TYPES64, $TYPES32, $TYPES16, $TYPES84, $TYPES4], $DIMS4, $OPT
+    );
 
     // Pool all of the dimensions together to create a table for each cpu
     // feature level.
     create_wxh_tables!(
-      [$DIMS64, $DIMS32, $DIMS16, $DIMS84], $OPT
+      [$DIMS64, $DIMS32, $DIMS16, $DIMS84, $DIMS4], $OPT
     );
   };
 }
@@ -262,14 +223,17 @@ impl_itx_fns!(
     (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
   ],
   [(16, 16)],
-  // 8x, 4x and 16x (minus 16x16)
+  // 8x, 4x and 16x (minus 16x16 and 4x4)
   [
     (TxType::V_ADST, adst, identity),
     (TxType::H_ADST, identity, adst),
     (TxType::V_FLIPADST, flipadst, identity),
     (TxType::H_FLIPADST, identity, flipadst)
   ],
-  [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+  [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8)],
+  // 4x4
+  [(TxType::WHT_WHT, wht, wht)],
+  [(4, 4)],
   [(neon, NEON)]
 );
 
@@ -295,7 +259,7 @@ macro_rules! impl_itx_hbd_fns {
   };
 
   ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-   $TYPES84:tt, $DIMS84:tt, $OPT:tt) => {
+   $TYPES84:tt, $DIMS84:tt, $TYPES4:tt, $DIMS4:tt, $OPT:tt) => {
     // Make 2d list of tx types for each set of dimensions. Each set of
     //   dimensions uses a superset of the previous set of tx types.
     impl_itx_hbd_fns!([$TYPES64], $DIMS64, $OPT);
@@ -304,11 +268,14 @@ macro_rules! impl_itx_hbd_fns {
     impl_itx_hbd_fns!(
       [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84, $OPT
     );
+    impl_itx_hbd_fns!(
+      [$TYPES64, $TYPES32, $TYPES16, $TYPES84, $TYPES4], $DIMS4, $OPT
+    );
 
     // Pool all of the dimensions together to create a table for each cpu
     // feature level.
     create_wxh_hbd_tables!(
-      [$DIMS64, $DIMS32, $DIMS16, $DIMS84], $OPT
+      [$DIMS64, $DIMS32, $DIMS16, $DIMS84, $DIMS4], $OPT
     );
   };
 }
@@ -334,14 +301,17 @@ impl_itx_hbd_fns!(
     (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
   ],
   [(16, 16)],
-  // 8x, 4x and 16x (minus 16x16)
+  // 8x, 4x and 16x (minus 16x16 and 4x4)
   [
     (TxType::V_ADST, adst, identity),
     (TxType::H_ADST, identity, adst),
     (TxType::V_FLIPADST, flipadst, identity),
     (TxType::H_FLIPADST, identity, flipadst)
   ],
-  [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)],
+  [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8)],
+  // 4x4
+  [(TxType::WHT_WHT, wht, wht)],
+  [(4, 4)],
   [(neon, NEON)]
 );
 
