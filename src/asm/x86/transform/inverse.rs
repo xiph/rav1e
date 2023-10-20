@@ -14,7 +14,6 @@ use crate::transform::*;
 use crate::{Pixel, PixelType};
 
 use crate::asm::shared::transform::inverse::*;
-use crate::asm::shared::transform::*;
 
 pub fn inverse_transform_add<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: u16,
@@ -37,9 +36,7 @@ pub fn inverse_transform_add<T: Pixel>(
   }
   match T::type_enum() {
     PixelType::U8 => {
-      if let Some(func) = INV_TXFM_FNS[cpu.as_index()]
-        [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
-      {
+      if let Some(func) = INV_TXFM_FNS[cpu.as_index()][tx_size][tx_type] {
         return call_inverse_func(
           func,
           input,
@@ -52,8 +49,7 @@ pub fn inverse_transform_add<T: Pixel>(
       }
     }
     PixelType::U16 if bd == 10 => {
-      if let Some(func) = INV_TXFM_HBD_FNS_10[cpu.as_index()]
-        [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
+      if let Some(func) = INV_TXFM_HBD_FNS_10[cpu.as_index()][tx_size][tx_type]
       {
         return call_inverse_hbd_func(
           func,
@@ -67,8 +63,7 @@ pub fn inverse_transform_add<T: Pixel>(
       }
     }
     PixelType::U16 => {
-      if let Some(func) = INV_TXFM_HBD_FNS_12[cpu.as_index()]
-        [get_tx_size_idx(tx_size)][get_tx_type_idx(tx_type)]
+      if let Some(func) = INV_TXFM_HBD_FNS_12[cpu.as_index()][tx_size][tx_type]
       {
         return call_inverse_hbd_func(
           func,
@@ -142,11 +137,11 @@ macro_rules! decl_itx_fns {
         )*
       )*
       // Create a lookup table for the tx types declared above
-      const [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>]: [Option<InvTxfmFunc>; TX_TYPES] = {
-        let mut out: [Option<InvTxfmFunc>; 16] = [None; 16];
+      const [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>]: [Option<InvTxfmFunc>; TX_TYPES_PLUS_LL] = {
+        let mut out: [Option<InvTxfmFunc>; TX_TYPES_PLUS_LL] = [None; TX_TYPES_PLUS_LL];
         $(
           $(
-            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _8bpc_$OPT_LOWER>]);
+            out[$ENUM as usize] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _8bpc_$OPT_LOWER>]);
           )*
         )*
         out
@@ -173,12 +168,12 @@ macro_rules! decl_itx_hbd_fns {
         )*
       )*
       // Create a lookup table for the tx types declared above
-      const [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>]: [Option<InvTxfmHBDFunc>; TX_TYPES] = {
+      const [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>]: [Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL] = {
         #[allow(unused_mut)]
-        let mut out: [Option<InvTxfmHBDFunc>; 16] = [None; 16];
+        let mut out: [Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL] = [None; TX_TYPES_PLUS_LL];
         $(
           $(
-            out[get_tx_type_idx($ENUM)] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _ $BPC bpc_$OPT_LOWER>]);
+            out[$ENUM as usize] = Some([<rav1e_inv_txfm_add_$TYPE2 _$TYPE1 _$W x $H _ $BPC bpc_$OPT_LOWER>]);
           )*
         )*
         out
@@ -191,12 +186,13 @@ macro_rules! create_wxh_tables {
   // Create a lookup table for each cpu feature
   ([$([$(($W:expr, $H:expr)),*]),*], $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
-      const [<INV_TXFM_FNS_$OPT_UPPER>]: [[Option<InvTxfmFunc>; TX_TYPES]; 32] = {
-        let mut out: [[Option<InvTxfmFunc>; TX_TYPES]; 32] = [[None; TX_TYPES]; 32];
+      const [<INV_TXFM_FNS_$OPT_UPPER>]: [[Option<InvTxfmFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL] = {
+        let mut out: [[Option<InvTxfmFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL] =
+          [[None; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL];
         // For each dimension, add an entry to the table
         $(
           $(
-            out[get_tx_size_idx(TxSize::[<TX_ $W X $H>])] = [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>];
+            out[TxSize::[<TX_ $W X $H>] as usize] = [<INV_TXFM_FNS_$W _$H _$OPT_UPPER>];
           )*
         )*
         out
@@ -216,12 +212,13 @@ macro_rules! create_wxh_hbd_tables {
   // Create a lookup table for each cpu feature
   ([$([$(($W:expr, $H:expr)),*]),*], $EXT:ident, $BPC:expr, $OPT_LOWER:ident, $OPT_UPPER:ident) => {
     paste::item! {
-      const [<INV_TXFM_HBD_FNS $EXT _$OPT_UPPER>]: [[Option<InvTxfmHBDFunc>; TX_TYPES]; 32] = {
-        let mut out: [[Option<InvTxfmHBDFunc>; TX_TYPES]; 32] = [[None; TX_TYPES]; 32];
+      const [<INV_TXFM_HBD_FNS $EXT _$OPT_UPPER>]: [[Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL] = {
+        let mut out: [[Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL] =
+          [[None; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL];
         // For each dimension, add an entry to the table
         $(
           $(
-            out[get_tx_size_idx(TxSize::[<TX_ $W X $H>])] = [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>];
+            out[TxSize::[<TX_ $W X $H>] as usize] = [<INV_TXFM_HBD_FNS_$W _$H _$BPC _$OPT_UPPER>];
           )*
         )*
         out
@@ -303,8 +300,8 @@ impl_itx_fns!(
 );
 
 cpu_function_lookup_table!(
-  INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES]; 32]],
-  default: [[None; TX_TYPES]; 32],
+  INV_TXFM_FNS: [[[Option<InvTxfmFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL]],
+  default: [[None; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL],
   [SSSE3, AVX2, AVX512ICL]
 );
 
@@ -442,8 +439,8 @@ impl_itx_hbd_fns!(
 );
 
 cpu_function_lookup_table!(
-  INV_TXFM_HBD_FNS_10: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
-  default: [[None; TX_TYPES]; 32],
+  INV_TXFM_HBD_FNS_10: [[[Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL]],
+  default: [[None; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL],
   [SSE4_1, AVX2, AVX512ICL]
 );
 
@@ -480,7 +477,7 @@ impl_itx_hbd_fns!(
 );
 
 cpu_function_lookup_table!(
-  INV_TXFM_HBD_FNS_12: [[[Option<InvTxfmHBDFunc>; TX_TYPES]; 32]],
-  default: [[None; TX_TYPES]; 32],
+  INV_TXFM_HBD_FNS_12: [[[Option<InvTxfmHBDFunc>; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL]],
+  default: [[None; TX_TYPES_PLUS_LL]; TxSize::TX_SIZES_ALL],
   [AVX2]
 );

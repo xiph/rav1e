@@ -108,8 +108,7 @@ pub mod test {
     let mut eob = 0u16;
     let mut exit = 0;
 
-    // Wrap WHT_WHT (16) to DCT_DCT (0) scan table
-    let scan = av1_scan_orders[tx_size as usize][(tx_type as usize) & 15].scan;
+    let scan = av1_scan_orders[tx_size][tx_type].scan;
 
     for (i, &pos) in scan.iter().enumerate() {
       exit = i as u16;
