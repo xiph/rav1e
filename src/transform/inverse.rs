@@ -30,6 +30,29 @@ use super::half_btf;
 use super::TxSize;
 use super::TxType;
 
+/// # Panics
+///
+/// - If `input` or `output` have fewer than 4 items.
+pub fn av1_iwht4(input: &[i32], output: &mut [i32]) {
+  assert!(input.len() >= 4);
+  assert!(output.len() >= 4);
+
+  // <https://aomediacodec.github.io/av1-spec/#inverse-walsh-hadamard-transform-process>
+  let x0 = input[0];
+  let x1 = input[1];
+  let x2 = input[2];
+  let x3 = input[3];
+  let s0 = x0 + x1;
+  let s2 = x2 - x3;
+  let s4 = (s0 - s2) >> 1;
+  let s3 = s4 - x3;
+  let s1 = s4 - x1;
+  output[0] = s0 - s3;
+  output[1] = s3;
+  output[2] = s1;
+  output[3] = s2 + s1;
+}
+
 static COSPI_INV: [i32; 64] = [
   4096, 4095, 4091, 4085, 4076, 4065, 4052, 4036, 4017, 3996, 3973, 3948,
   3920, 3889, 3857, 3822, 3784, 3745, 3703, 3659, 3612, 3564, 3513, 3461,
@@ -1600,6 +1623,52 @@ pub(crate) mod rust {
 
   use simd_helpers::cold_for_target_arch;
   use std::cmp;
+
+  #[cold_for_target_arch("x86_64", "aarch64")]
+  pub fn inverse_transform_add_lossless<T: Pixel>(
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
+    _bd: usize, _cpu: CpuFeatureLevel,
+  ) {
+    // <https://aomediacodec.github.io/av1-spec/#2d-inverse-transform-process>
+    let input: &[T::Coeff] = &input[..4 * 4];
+    let mut buffer = [0i32; 4 * 4];
+
+    // perform inv txfm on every row
+    for (r, buffer_slice) in buffer.chunks_exact_mut(4).enumerate() {
+      let mut temp_in: [i32; 4] = [0; 4];
+      for (val, transposed) in input[r..]
+        .iter()
+        .map(|a| i32::cast_from(*a))
+        .step_by(4)
+        .zip(temp_in.iter_mut())
+      {
+        *transposed = val >> 2;
+      }
+      av1_iwht4(&temp_in, buffer_slice);
+    }
+
+    // perform inv txfm on every col
+    for c in 0..4 {
+      let mut temp_in: [i32; 4] = [0; 4];
+      let mut temp_out: [i32; 4] = [0; 4];
+      for (val, transposed) in buffer[c..]
+        .iter()
+        .map(|a| i32::cast_from(*a))
+        .step_by(4)
+        .zip(temp_in.iter_mut())
+      {
+        *transposed = val;
+      }
+      av1_iwht4(&temp_in, &mut temp_out);
+      for (temp, out) in temp_out
+        .iter()
+        .zip(output.rows_iter_mut().map(|row| &mut row[c]).take(4))
+      {
+        let v = i32::cast_from(*out) + *temp;
+        *out = T::cast_from(v);
+      }
+    }
+  }
 
   #[cold_for_target_arch("x86_64", "aarch64")]
   pub fn inverse_transform_add<T: Pixel>(

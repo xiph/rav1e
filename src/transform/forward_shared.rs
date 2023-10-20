@@ -1728,6 +1728,27 @@ $($s)* fn daala_fdct64<T: TxOperations>(coeffs: &mut [T]) {
 #[$m]
 $($s)* fn fidentity<T: TxOperations>(_coeffs: &mut [T]) {}
 
+#[allow(unused)]
+#[$m]
+$($s)* fn fwht4<T: TxOperations>(coeffs: &mut [T]) {
+  assert!(coeffs.len() >= 4);
+  let x0 = coeffs[0];
+  let x1 = coeffs[1];
+  let x2 = coeffs[2];
+  let x3 = coeffs[3];
+
+  let s0 = x0.add(x1);
+  let s1 = x3.sub(x2);
+  let s2 = s0.sub_avg(s1);
+
+  let q1 = s2.sub(x2);
+  let q0 = s0.sub(q1);
+  let q3 = s2.sub(x1);
+  let q2 = s1.add(q3);
+
+  store_coeffs!(coeffs, q0, q1, q2, q3);
+}
+
 }
 
 }

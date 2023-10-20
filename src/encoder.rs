@@ -2253,7 +2253,11 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   let bw = bsize.width_mi() / tx_size.width_mi();
   let bh = bsize.height_mi() / tx_size.height_mi();
   let qidx = get_qidx(fi, ts, cw, tile_bo);
-  assert_ne!(qidx, 0); // lossless is not yet supported
+
+  // TODO: Lossless is not yet supported.
+  if !skip {
+    assert_ne!(qidx, 0);
+  }
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   // SAFETY: We write to the array below before reading from it.

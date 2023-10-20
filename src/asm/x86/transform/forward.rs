@@ -21,6 +21,8 @@ use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
 
+pub use crate::transform::forward::rust::forward_transform_lossless;
+
 type TxfmFuncI32X8 = unsafe fn(&mut [I32X8]);
 
 #[inline]

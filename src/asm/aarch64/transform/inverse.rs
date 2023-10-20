@@ -16,6 +16,26 @@ use crate::{Pixel, PixelType};
 use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
+#[inline]
+pub fn inverse_transform_add_lossless<T: Pixel>(
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
+  bd: usize, cpu: CpuFeatureLevel,
+) {
+  match T::type_enum() {
+    PixelType::U8 => {
+      if let Some(func) = INV_TXFM_WHT_FN[cpu.as_index()] {
+        return call_inverse_func(func, input, output, eob, 4, 4, bd);
+      }
+    }
+    PixelType::U16 => {
+      if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
+        return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
+      }
+    }
+  }
+  rust::inverse_transform_add_lossless(input, output, eob, bd, cpu);
+}
+
 pub fn inverse_transform_add<T: Pixel>(
   input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
   tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
@@ -56,6 +76,32 @@ pub fn inverse_transform_add<T: Pixel>(
 
   rust::inverse_transform_add(input, output, eob, tx_size, tx_type, bd, cpu);
 }
+
+extern {
+  fn rav1e_inv_txfm_add_wht_wht_4x4_8bpc_neon(
+    dst: *mut u8, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+  );
+  fn rav1e_inv_txfm_add_wht_wht_4x4_16bpc_neon(
+    dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16, eob: i32,
+    bitdepth_max: i32,
+  );
+}
+const INV_TXFM_WHT_FN_NEON: Option<InvTxfmFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_8bpc_neon as _);
+const INV_TXFM_WHT_HBD_FN_NEON: Option<InvTxfmHBDFunc> =
+  Some(rav1e_inv_txfm_add_wht_wht_4x4_16bpc_neon as _);
+
+cpu_function_lookup_table!(
+  INV_TXFM_WHT_FN: [Option<InvTxfmFunc>],
+  default: None,
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  INV_TXFM_WHT_HBD_FN: [Option<InvTxfmHBDFunc>],
+  default: None,
+  [NEON]
+);
 
 macro_rules! decl_itx_fns {
   // Takes a 2d list of tx types for W and H
@@ -100,7 +146,7 @@ macro_rules! decl_itx_hbd_fns {
             // Note: type1 and type2 are flipped
             fn [<rav1e_inv_txfm_add_ $TYPE2 _$TYPE1 _$W x $H _16bpc_$OPT_LOWER>](
               dst: *mut u16, dst_stride: libc::ptrdiff_t, coeff: *mut i16,
-              eob: i32,
+              eob: i32, bitdepth_max: i32,
             );
           }
         )*

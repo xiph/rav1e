@@ -14,7 +14,9 @@
 pub mod forward_shared;
 
 pub use self::forward::forward_transform;
+pub use self::forward::forward_transform_lossless;
 pub use self::inverse::inverse_transform_add;
+pub use self::inverse::inverse_transform_add_lossless;
 
 use crate::context::MI_SIZE_LOG2;
 use crate::partition::{BlockSize, BlockSize::*};
@@ -493,6 +495,30 @@ mod test {
     }
   }
 
+  fn test_lossless_roundtrip<T: Pixel>() {
+    let cpu = CpuFeatureLevel::default();
+
+    let mut src_storage = [T::cast_from(0); 4 * 4];
+    let src = &mut src_storage[..];
+    // dynamic allocation: test
+    let mut dst = Plane::from_slice(&vec![T::cast_from(0); 4 * 4], 4);
+    let mut res_storage = [0i16; 4 * 4];
+    let res = &mut res_storage[..];
+    let mut freq_storage = [T::Coeff::cast_from(0); 4 * 4];
+    let freq = &mut freq_storage[..4 * 4];
+    for ((r, s), d) in
+      res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
+    {
+      *s = T::cast_from(random::<u8>());
+      *d = T::cast_from(random::<u8>());
+      *r = i16::cast_from(*s) - i16::cast_from(*d);
+    }
+    forward_transform_lossless(res, freq, 4, cpu);
+    inverse_transform_add_lossless(freq, &mut dst.as_region_mut(), 15, 8, cpu);
+
+    assert_eq!(&src[..], &dst.data[..]);
+  }
+
   #[test]
   fn log_tx_ratios() {
     let combinations = [
@@ -578,6 +604,8 @@ mod test {
       (TX_16X32, DCT_DCT, 2),
       (TX_32X16, DCT_DCT, 2),
     ];
+    println!("Testing combination TX_4X4, WHT_WHT");
+    test_lossless_roundtrip::<T>();
     for &(tx_size, tx_type, tolerance) in combinations.iter() {
       println!("Testing combination {:?}, {:?}", tx_size, tx_type);
       test_roundtrip::<T>(tx_size, tx_type, tolerance);
