@@ -237,6 +237,12 @@ impl BlockSize {
     1 << self.width_log2()
   }
 
+  /// width * height
+  #[inline]
+  pub const fn area(self) -> usize {
+    self.width() * self.height()
+  }
+
   #[inline]
   pub const fn width_log2(self) -> usize {
     match self {

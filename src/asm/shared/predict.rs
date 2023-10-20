@@ -11,6 +11,7 @@
 mod test {
   use interpolate_name::interpolate_test;
   use rand::random;
+  use std::mem::MaybeUninit;
 
   use crate::context::MAX_TX_SIZE;
   use crate::cpu_features::CpuFeatureLevel;
@@ -23,7 +24,7 @@ mod test {
     IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
   };
   use crate::transform::TxSize;
-  use crate::util::Aligned;
+  use crate::util::{slice_assume_init_mut, Aligned};
   use crate::Pixel;
 
   #[test]
@@ -188,27 +189,34 @@ mod test {
     }
     let luma = &plane.as_region();
 
-    let mut ac_ref = Aligned::new([0i16; 32 * 32]);
+    let mut ac_ref = Aligned::new([MaybeUninit::new(0x3333i16); 32 * 32]);
+    let ac_ref = &mut ac_ref.data[..plane_bsize.area()];
 
     let cpu = CpuFeatureLevel::RUST;
     (match (xdec, ydec) {
       (0, 0) => rust::pred_cfl_ac::<T, 0, 0>,
       (1, 0) => rust::pred_cfl_ac::<T, 1, 0>,
       (_, _) => rust::pred_cfl_ac::<T, 1, 1>,
-    })(&mut ac_ref.data, luma, plane_bsize, w_pad, h_pad, cpu);
+    })(ac_ref, luma, plane_bsize, w_pad, h_pad, cpu);
 
     for &cpu in
       &CpuFeatureLevel::all()[..=CpuFeatureLevel::default().as_index()]
     {
-      let mut ac = Aligned::new([0i16; 32 * 32]);
+      let mut ac = Aligned::new([MaybeUninit::new(0x7FFFi16); 32 * 32]);
+      let ac = &mut ac.data[..plane_bsize.area()];
 
       (match (xdec, ydec) {
         (0, 0) => pred_cfl_ac::<T, 0, 0>,
         (1, 0) => pred_cfl_ac::<T, 1, 0>,
         (_, _) => pred_cfl_ac::<T, 1, 1>,
-      })(&mut ac.data, luma, plane_bsize, w_pad, h_pad, cpu);
+      })(ac, luma, plane_bsize, w_pad, h_pad, cpu);
 
-      assert_eq!(&ac_ref.data[..], &ac.data[..])
+      unsafe {
+        let ac_ref = slice_assume_init_mut(ac_ref);
+        let ac = slice_assume_init_mut(ac);
+
+        assert_eq!(&ac_ref, &ac);
+      }
     }
   }
 }

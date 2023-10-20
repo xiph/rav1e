@@ -30,7 +30,7 @@ macro_rules! decl_cfl_ac_fn {
     extern {
       $(
         fn $f(
-          ac: *mut i16, src: *const u8, stride: libc::ptrdiff_t,
+          ac: *mut MaybeUninit<i16>, src: *const u8, stride: libc::ptrdiff_t,
           w_pad: libc::c_int, h_pad: libc::c_int,
           width: libc::c_int, height: libc::c_int,
         );
@@ -50,7 +50,7 @@ macro_rules! decl_cfl_ac_hbd_fn {
     extern {
       $(
         fn $f(
-          ac: *mut i16, src: *const u16, stride: libc::ptrdiff_t,
+          ac: *mut MaybeUninit<i16>, src: *const u16, stride: libc::ptrdiff_t,
           w_pad: libc::c_int, h_pad: libc::c_int,
           width: libc::c_int, height: libc::c_int,
         );
@@ -659,11 +659,14 @@ pub fn dispatch_predict_intra<T: Pixel>(
   }
 }
 
+/// It MUST initialize all `ac` elements.
 #[inline(always)]
 pub(crate) fn pred_cfl_ac<T: Pixel, const XDEC: usize, const YDEC: usize>(
-  ac: &mut [i16], luma: &PlaneRegion<'_, T>, bsize: BlockSize, w_pad: usize,
-  h_pad: usize, cpu: CpuFeatureLevel,
+  ac: &mut [MaybeUninit<i16>], luma: &PlaneRegion<'_, T>, bsize: BlockSize,
+  w_pad: usize, h_pad: usize, cpu: CpuFeatureLevel,
 ) {
+  debug_assert_eq!(ac.len(), bsize.area());
+
   if cpu < CpuFeatureLevel::NEON {
     return rust::pred_cfl_ac::<T, XDEC, YDEC>(
       ac, luma, bsize, w_pad, h_pad, cpu,

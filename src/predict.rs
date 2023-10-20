@@ -11,6 +11,8 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+use std::mem::MaybeUninit;
+
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
     pub use crate::asm::x86::predict::*;
@@ -630,17 +632,27 @@ const fn get_scaled_luma_q0(alpha_q3: i16, ac_pred_q3: i16) -> i32 {
   }
 }
 
+/// # Returns
+///
+/// Initialized luma AC coefficients
+///
 /// # Panics
 ///
 /// - If the block size is invalid for subsampling
-pub fn luma_ac<T: Pixel>(
-  ac: &mut [i16], ts: &mut TileStateMut<'_, T>, tile_bo: TileBlockOffset,
-  bsize: BlockSize, tx_size: TxSize, fi: &FrameInvariants<T>,
-) {
+///
+pub fn luma_ac<'ac, T: Pixel>(
+  ac: &'ac mut [MaybeUninit<i16>], ts: &mut TileStateMut<'_, T>,
+  tile_bo: TileBlockOffset, bsize: BlockSize, tx_size: TxSize,
+  fi: &FrameInvariants<T>,
+) -> &'ac mut [i16] {
   use crate::context::MI_SIZE_LOG2;
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let plane_bsize = bsize.subsampled_size(xdec, ydec).unwrap();
+
+  // ensure ac has the right length, so there aren't any uninitialized elements at the end
+  let ac = &mut ac[..plane_bsize.area()];
+
   let bo = if bsize.is_sub8x8(xdec, ydec) {
     let offset = bsize.sub8x8_offset(xdec, ydec);
     tile_bo.with_offset(offset.0, offset.1)
@@ -679,6 +691,9 @@ pub fn luma_ac<T: Pixel>(
     (1, 0) => pred_cfl_ac::<T, 1, 0>,
     (_, _) => pred_cfl_ac::<T, 1, 1>,
   })(ac, luma, plane_bsize, w_pad, h_pad, cpu);
+
+  // SAFETY: it relies on individual pred_cfl_ac implementations to initialize the ac
+  unsafe { slice_assume_init_mut(ac) }
 }
 
 pub(crate) mod rust {
@@ -1008,16 +1023,21 @@ pub(crate) mod rust {
   }
 
   pub(crate) fn pred_cfl_ac<T: Pixel, const XDEC: usize, const YDEC: usize>(
-    ac: &mut [i16], luma: &PlaneRegion<'_, T>, plane_bsize: BlockSize,
-    w_pad: usize, h_pad: usize, _cpu: CpuFeatureLevel,
+    ac: &mut [MaybeUninit<i16>], luma: &PlaneRegion<'_, T>,
+    plane_bsize: BlockSize, w_pad: usize, h_pad: usize, _cpu: CpuFeatureLevel,
   ) {
     let max_luma_w = (plane_bsize.width() - w_pad * 4) << XDEC;
     let max_luma_h = (plane_bsize.height() - h_pad * 4) << YDEC;
     let max_luma_x: usize = max_luma_w.max(8) - (1 << XDEC);
     let max_luma_y: usize = max_luma_h.max(8) - (1 << YDEC);
     let mut sum: i32 = 0;
-    for sub_y in 0..plane_bsize.height() {
-      for sub_x in 0..plane_bsize.width() {
+
+    let ac = &mut ac[..plane_bsize.area()];
+
+    for (sub_y, ac_rows) in
+      ac.chunks_exact_mut(plane_bsize.width()).enumerate()
+    {
+      for (sub_x, ac_item) in ac_rows.iter_mut().enumerate() {
         // Refer to https://aomediacodec.github.io/av1-spec/#predict-chroma-from-luma-process
         let luma_y = sub_y << YDEC;
         let luma_x = sub_x << XDEC;
@@ -1033,14 +1053,16 @@ pub(crate) mod rust {
             + i16::cast_from(luma[y + 1][x + 1]);
         }
         sample <<= 3 - XDEC - YDEC;
-        ac[sub_y * plane_bsize.width() + sub_x] = sample;
+        ac_item.write(sample);
         sum += sample as i32;
       }
     }
+    // SAFETY: the loop above has initialized all items
+    let ac = unsafe { assume_slice_init_mut(ac) };
     let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
     let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
 
-    for val in &mut ac[..(plane_bsize.height() * plane_bsize.width())] {
+    for val in ac {
       *val -= average;
     }
   }
@@ -1052,8 +1074,7 @@ pub(crate) mod rust {
     if alpha == 0 {
       return;
     }
-    assert!(32 >= width);
-    assert!(ac.len() >= 32 * (height - 1) + width);
+    debug_assert!(ac.len() >= width * height);
     assert!(output.plane_cfg.stride >= width);
     assert!(output.rows_iter().len() >= height);
 
@@ -1061,7 +1082,7 @@ pub(crate) mod rust {
     let avg: i32 = output[0][0].into();
 
     for (line, luma) in
-      output.rows_iter_mut().zip(ac.chunks(width)).take(height)
+      output.rows_iter_mut().zip(ac.chunks_exact(width)).take(height)
     {
       for (v, &l) in line[..width].iter_mut().zip(luma[..width].iter()) {
         *v = T::cast_from(
