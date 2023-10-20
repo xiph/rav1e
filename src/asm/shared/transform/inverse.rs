@@ -108,7 +108,8 @@ pub mod test {
     let mut eob = 0;
     let mut exit = 0;
 
-    let scan = av1_scan_orders[tx_size as usize][tx_type as usize].scan;
+    // Wrap WHT_WHT (16) to DCT_DCT (0) scan table
+    let scan = av1_scan_orders[tx_size as usize][(tx_type as usize) & 15].scan;
 
     for (i, &pos) in scan.iter().enumerate() {
       exit = i;
@@ -229,12 +230,15 @@ pub mod test {
     };
 
     ($TYPES64:tt, $DIMS64:tt, $TYPES32:tt, $DIMS32:tt, $TYPES16:tt, $DIMS16:tt,
-     $TYPES84:tt, $DIMS84:tt) => {
+     $TYPES84:tt, $DIMS84:tt, $TYPES4:tt, $DIMS4:tt) => {
       test_itx_fns!([$TYPES64], $DIMS64);
       test_itx_fns!([$TYPES64, $TYPES32], $DIMS32);
       test_itx_fns!([$TYPES64, $TYPES32, $TYPES16], $DIMS16);
       test_itx_fns!(
         [$TYPES64, $TYPES32, $TYPES16, $TYPES84], $DIMS84
+      );
+      test_itx_fns!(
+        [$TYPES64, $TYPES32, $TYPES16, $TYPES84, $TYPES4], $DIMS4
       );
     };
   }
@@ -260,13 +264,16 @@ pub mod test {
       (TxType::FLIPADST_FLIPADST, flipadst, flipadst)
     ],
     [(16, 16)],
-    // 8x, 4x and 16x (minus 16x16)
+    // 8x, 4x and 16x (minus 16x16 and 4x4)
     [
       (TxType::V_ADST, adst, identity),
       (TxType::H_ADST, identity, adst),
       (TxType::V_FLIPADST, flipadst, identity),
       (TxType::H_FLIPADST, identity, flipadst)
     ],
-    [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8), (4, 4)]
+    [(16, 8), (8, 16), (16, 4), (4, 16), (8, 8), (8, 4), (4, 8)],
+    // 4x4
+    [(TxType::WHT_WHT, wht, wht)],
+    [(4, 4)]
   );
 }
