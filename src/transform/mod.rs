@@ -506,7 +506,7 @@ mod test {
     inverse_transform_add(
       freq,
       &mut dst.as_region_mut(),
-      coeff_area,
+      coeff_area.try_into().unwrap(),
       tx_size,
       tx_type,
       8,

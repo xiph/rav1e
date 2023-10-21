@@ -804,11 +804,11 @@ impl<'a> ContextWriter<'a> {
   ///
   /// - If `eob` is prior to the start of the group
   #[inline]
-  pub fn get_eob_pos_token(eob: usize) -> (u32, u32) {
+  pub fn get_eob_pos_token(eob: u16) -> (u32, u32) {
     let t = if eob < 33 {
-      eob_to_pos_small[eob] as u32
+      eob_to_pos_small[usize::from(eob)] as u32
     } else {
-      let e = cmp::min((eob - 1) >> 5, 16);
+      let e = usize::from(cmp::min((eob - 1) >> 5, 16));
       eob_to_pos_large[e] as u32
     };
     assert!(eob as i32 >= k_eob_group_start[t as usize] as i32);

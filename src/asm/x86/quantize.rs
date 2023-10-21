@@ -22,7 +22,7 @@ use std::mem::MaybeUninit;
 type DequantizeFn = unsafe fn(
   qindex: u8,
   coeffs_ptr: *const i16,
-  _eob: usize,
+  _eob: u16,
   rcoeffs_ptr: *mut i16,
   tx_size: TxSize,
   bit_depth: usize,
@@ -38,7 +38,7 @@ cpu_function_lookup_table!(
 
 #[inline(always)]
 pub fn dequantize<T: Coefficient>(
-  qindex: u8, coeffs: &[T], eob: usize, rcoeffs: &mut [MaybeUninit<T>],
+  qindex: u8, coeffs: &[T], eob: u16, rcoeffs: &mut [MaybeUninit<T>],
   tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
   cpu: CpuFeatureLevel,
 ) {
@@ -91,7 +91,7 @@ pub fn dequantize<T: Coefficient>(
 
 #[target_feature(enable = "avx2")]
 unsafe fn dequantize_avx2(
-  qindex: u8, coeffs_ptr: *const i16, _eob: usize, rcoeffs_ptr: *mut i16,
+  qindex: u8, coeffs_ptr: *const i16, _eob: u16, rcoeffs_ptr: *mut i16,
   tx_size: TxSize, bit_depth: usize, dc_delta_q: i8, ac_delta_q: i8,
 ) {
   let log_tx_scale = _mm256_set1_epi32(get_log_tx_scale(tx_size) as i32);
@@ -182,7 +182,7 @@ mod test {
 
       // Test the min, max, and random eobs
       let eobs = {
-        let mut out = [0usize; 16];
+        let mut out = [0u16; 16];
         let area: usize = av1_get_coded_tx_size(tx_size).area();
         out[0] = 0;
         out[1] = area;

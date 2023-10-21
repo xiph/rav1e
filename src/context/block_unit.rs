@@ -1781,7 +1781,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_coeffs_lv_map<T: Coefficient, W: Writer>(
     &mut self, w: &mut W, plane: usize, bo: TileBlockOffset, coeffs_in: &[T],
-    eob: usize, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
+    eob: u16, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
     plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool, frame_clipped_txw: usize,
     frame_clipped_txh: usize,
@@ -1792,8 +1792,8 @@ impl<'a> ContextWriter<'a> {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
 
     // Note: Both intra and inter mode uses inter scan order. Surprised?
-    let scan: &[u16] =
-      &av1_scan_orders[tx_size as usize][tx_type as usize].scan[..eob];
+    let scan: &[u16] = &av1_scan_orders[tx_size as usize][tx_type as usize]
+      .scan[..usize::from(eob)];
     let height = av1_get_coded_tx_size(tx_size).height();
 
     // Create a slice with coeffs in scan order
@@ -1858,7 +1858,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn encode_eob<W: Writer>(
-    &mut self, eob: usize, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
+    &mut self, eob: u16, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
     plane_type: usize, w: &mut W,
   ) {
     let (eob_pt, eob_extra) = Self::get_eob_pos_token(eob);
@@ -1913,7 +1913,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn encode_coeffs<T: Coefficient, W: Writer>(
-    &mut self, coeffs: &[T], levels: &mut [u8], scan: &[u16], eob: usize,
+    &mut self, coeffs: &[T], levels: &mut [u8], scan: &[u16], eob: u16,
     tx_size: TxSize, tx_class: TxClass, txs_ctx: usize, plane_type: usize,
     w: &mut W,
   ) {
@@ -1924,7 +1924,7 @@ impl<'a> ContextWriter<'a> {
     self.get_nz_map_contexts(
       levels,
       scan,
-      eob as u16,
+      eob,
       tx_size,
       tx_class,
       &mut coeff_contexts.data,
@@ -1937,7 +1937,7 @@ impl<'a> ContextWriter<'a> {
       let coeff_ctx = coeff_contexts.data[pos];
       let level = v.abs();
 
-      if c == eob - 1 {
+      if c == usize::from(eob) - 1 {
         symbol_with_update!(
           self,
           w,

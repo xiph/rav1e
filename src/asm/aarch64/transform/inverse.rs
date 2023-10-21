@@ -17,7 +17,7 @@ use crate::asm::shared::transform::inverse::*;
 use crate::asm::shared::transform::*;
 
 pub fn inverse_transform_add<T: Pixel>(
-  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: usize,
+  input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, eob: u16,
   tx_size: TxSize, tx_type: TxType, bd: usize, cpu: CpuFeatureLevel,
 ) {
   if tx_type == TxType::WHT_WHT {
