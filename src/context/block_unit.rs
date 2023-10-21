@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::mem::MaybeUninit;
+
 use super::*;
 
 use crate::predict::PredictionMode;
@@ -1918,10 +1920,11 @@ impl<'a> ContextWriter<'a> {
     w: &mut W,
   ) {
     // SAFETY: We write to the array below before reading from it.
-    let mut coeff_contexts: Aligned<[i8; MAX_CODED_TX_SQUARE]> =
+    let mut coeff_contexts: Aligned<[MaybeUninit<i8>; MAX_CODED_TX_SQUARE]> =
       unsafe { Aligned::uninitialized() };
 
-    self.get_nz_map_contexts(
+    // get_nz_map_contexts sets coeff_contexts contiguously as a parallel array for scan, not in scan order
+    let coeff_contexts = self.get_nz_map_contexts(
       levels,
       scan,
       eob,
@@ -1932,9 +1935,13 @@ impl<'a> ContextWriter<'a> {
 
     let bhl = Self::get_txb_bhl(tx_size);
 
-    for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).enumerate().rev() {
+    let scan_with_ctx =
+      scan.iter().copied().zip(coeff_contexts.iter().copied());
+    for (c, ((pos, coeff_ctx), v)) in
+      scan_with_ctx.zip(coeffs.iter().copied()).enumerate().rev()
+    {
       let pos = pos as usize;
-      let coeff_ctx = coeff_contexts.data[pos];
+      let coeff_ctx = coeff_ctx as usize;
       let level = v.abs();
 
       if c == usize::from(eob) - 1 {
@@ -1942,14 +1949,14 @@ impl<'a> ContextWriter<'a> {
           self,
           w,
           cmp::min(u32::cast_from(level), 3) - 1,
-          &self.fc.coeff_base_eob_cdf[txs_ctx][plane_type][coeff_ctx as usize]
+          &self.fc.coeff_base_eob_cdf[txs_ctx][plane_type][coeff_ctx]
         );
       } else {
         symbol_with_update!(
           self,
           w,
           cmp::min(u32::cast_from(level), 3),
-          &self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
+          &self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx]
         );
       }
 

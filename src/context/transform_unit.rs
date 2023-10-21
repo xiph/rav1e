@@ -11,6 +11,7 @@ use super::*;
 use crate::predict::PredictionMode;
 use crate::predict::PredictionMode::*;
 use crate::transform::TxType::*;
+use std::mem::MaybeUninit;
 
 pub const MAX_TX_SIZE: usize = 64;
 
@@ -905,25 +906,33 @@ impl<'a> ContextWriter<'a> {
     Self::get_nz_map_ctx_from_stats(stats, coeff_idx, bhl, tx_size, tx_class)
   }
 
-  pub fn get_nz_map_contexts(
+  /// `coeff_contexts_no_scan` is not in the scan order.
+  /// Value for `pos = scan[i]` is at `coeff[i]`, not at `coeff[pos]`.
+  pub fn get_nz_map_contexts<'c>(
     &self, levels: &mut [u8], scan: &[u16], eob: u16, tx_size: TxSize,
-    tx_class: TxClass, coeff_contexts: &mut [i8],
-  ) {
+    tx_class: TxClass, coeff_contexts_no_scan: &'c mut [MaybeUninit<i8>],
+  ) -> &'c mut [i8] {
     let bhl = Self::get_txb_bhl(tx_size);
     let area = av1_get_coded_tx_size(tx_size).area();
-    for i in 0..eob {
-      let pos = scan[i as usize];
-      coeff_contexts[pos as usize] = Self::get_nz_map_ctx(
+
+    let scan = &scan[..usize::from(eob)];
+    let coeffs = &mut coeff_contexts_no_scan[..usize::from(eob)];
+    for (i, (coeff, pos)) in
+      coeffs.iter_mut().zip(scan.iter().copied()).enumerate()
+    {
+      coeff.write(Self::get_nz_map_ctx(
         levels,
         pos as usize,
         bhl,
         area,
-        i as usize,
-        i == eob - 1,
+        i,
+        i == usize::from(eob) - 1,
         tx_size,
         tx_class,
-      ) as i8;
+      ) as i8);
     }
+    // SAFETY: every element has been initialized
+    unsafe { slice_assume_init_mut(coeffs) }
   }
 
   pub fn get_br_ctx(
