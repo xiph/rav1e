@@ -299,7 +299,7 @@ impl QuantizationContext {
         .unwrap_or(0);
       // We skip the DC coefficient since it has its own quantizer index.
       if eob_minus_one > 0 {
-        eob_minus_one as u16 + 1
+        eob_minus_one + 1
       } else {
         u16::from(qcoeffs[0] != T::cast_from(0))
       }

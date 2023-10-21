@@ -185,9 +185,9 @@ mod test {
         let mut out = [0u16; 16];
         let area: usize = av1_get_coded_tx_size(tx_size).area();
         out[0] = 0;
-        out[1] = area;
+        out[1] = area as u16;
         for eob in out.iter_mut().skip(2) {
-          *eob = rng.gen_range(0..area);
+          *eob = rng.gen_range(0..area as u16);
         }
         out
       };
@@ -198,7 +198,9 @@ mod test {
 
         // Generate quantized coefficients up to the eob
         let between = Uniform::from(-i16::MAX..=i16::MAX);
-        for (i, qcoeff) in qcoeffs.data.iter_mut().enumerate().take(eob) {
+        for (i, qcoeff) in
+          qcoeffs.data.iter_mut().enumerate().take(eob as usize)
+        {
           *qcoeff = between.sample(&mut rng)
             / if i == 0 { dc_quant } else { ac_quant };
         }

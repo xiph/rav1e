@@ -1641,7 +1641,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
           &mut rec_region,
           uv_tx_size,
           fi.sequence.bit_depth,
-          &ac,
+          ac,
           IntraParam::Alpha(alpha),
           None,
           &edge_buf,
