@@ -149,7 +149,10 @@ pub mod test {
     for sub_h in 0..sub_h_iterations {
       let mut src_storage = [T::zero(); 64 * 64];
       let src = &mut src_storage[..tx_size.area()];
-      let mut dst = Plane::from_slice(&[T::zero(); 64 * 64], 64);
+      let mut dst = Plane::from_slice(
+        &[T::zero(); 64 * 64][..tx_size.area()],
+        tx_size.width(),
+      );
       let mut res_storage: Aligned<[MaybeUninit<i16>; 64 * 64]> =
         unsafe { Aligned::uninitialized() };
       let res = &mut res_storage.data[..tx_size.area()];
