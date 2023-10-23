@@ -27,11 +27,12 @@ pub fn inverse_transform_add_lossless<T: Pixel>(
         return call_inverse_func(func, input, output, eob, 4, 4, bd);
       }
     }
-    PixelType::U16 => {
+    PixelType::U16 if bd == 10 => {
       if let Some(func) = INV_TXFM_WHT_HBD_FN[cpu.as_index()] {
         return call_inverse_hbd_func(func, input, output, eob, 4, 4, bd);
       }
     }
+    PixelType::U16 => {}
   }
   rust::inverse_transform_add_lossless(input, output, eob, bd, cpu);
 }
