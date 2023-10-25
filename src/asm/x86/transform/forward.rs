@@ -55,13 +55,13 @@ impl TxOperations for I32X8 {
 
   #[target_feature(enable = "avx2")]
   #[inline]
-  unsafe fn tx_mul(self, mul: (i32, i32)) -> Self {
+  unsafe fn tx_mul<const SHIFT: i32>(self, mul: i32) -> Self {
     I32X8::new(_mm256_srav_epi32(
       _mm256_add_epi32(
-        _mm256_mullo_epi32(self.vec(), _mm256_set1_epi32(mul.0)),
-        _mm256_set1_epi32(1 << mul.1 >> 1),
+        _mm256_mullo_epi32(self.vec(), _mm256_set1_epi32(mul)),
+        _mm256_set1_epi32(1 << SHIFT >> 1),
       ),
-      _mm256_set1_epi32(mul.1),
+      _mm256_set1_epi32(SHIFT),
     ))
   }
 

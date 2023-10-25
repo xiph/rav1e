@@ -39,8 +39,8 @@ pub mod rust {
       0
     }
 
-    fn tx_mul(self, mul: (i32, i32)) -> Self {
-      ((self * mul.0) + (1 << mul.1 >> 1)) >> mul.1
+    fn tx_mul<const SHIFT: i32>(self, mul: i32) -> Self {
+      ((self * mul) + (1 << SHIFT >> 1)) >> SHIFT
     }
 
     fn rshift1(self) -> Self {
