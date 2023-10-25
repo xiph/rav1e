@@ -20,7 +20,7 @@ pub type InvTxfmHBDFunc =
 
 pub fn call_inverse_func<T: Pixel>(
   func: InvTxfmFunc, input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>,
-  eob: usize, width: usize, height: usize, bd: usize,
+  eob: u16, width: usize, height: usize, bd: usize,
 ) {
   debug_assert!(bd == 8);
 
@@ -51,7 +51,7 @@ pub fn call_inverse_func<T: Pixel>(
 
 pub fn call_inverse_hbd_func<T: Pixel>(
   func: InvTxfmHBDFunc, input: &[T::Coeff],
-  output: &mut PlaneRegionMut<'_, T>, eob: usize, width: usize, height: usize,
+  output: &mut PlaneRegionMut<'_, T>, eob: u16, width: usize, height: usize,
   bd: usize,
 ) {
   // Only use at most 32 columns and 32 rows of input coefficients.
@@ -94,7 +94,7 @@ pub mod test {
 
   pub fn pick_eob<T: Coefficient>(
     coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,
-  ) -> usize {
+  ) -> u16 {
     /* From dav1d
      * copy the topleft coefficients such that the return value (being the
      * coefficient scantable index for the eob token) guarantees that only
@@ -105,14 +105,14 @@ pub mod test {
     let coeff_h = av1_get_coded_tx_size(tx_size).height();
     let sub_high: usize = if sub_h > 0 { sub_h * 8 - 1 } else { 0 };
     let sub_low: usize = if sub_h > 1 { sub_high - 8 } else { 0 };
-    let mut eob = 0;
+    let mut eob = 0u16;
     let mut exit = 0;
 
     // Wrap WHT_WHT (16) to DCT_DCT (0) scan table
     let scan = av1_scan_orders[tx_size as usize][(tx_type as usize) & 15].scan;
 
     for (i, &pos) in scan.iter().enumerate() {
-      exit = i;
+      exit = i as u16;
 
       let rc = pos as usize;
       let rcx = rc % coeff_h;
@@ -121,14 +121,14 @@ pub mod test {
       if rcx > sub_high || rcy > sub_high {
         break;
       } else if eob == 0 && (rcx > sub_low || rcy > sub_low) {
-        eob = i;
+        eob = i as u16;
       }
     }
 
     if eob != 0 {
       eob += thread_rng().gen_range(0..(exit - eob).min(1));
     }
-    for &pos in scan.iter().skip(eob) {
+    for &pos in scan.iter().skip(usize::from(eob)) {
       coeffs[pos as usize] = T::cast_from(0);
     }
 
@@ -181,7 +181,7 @@ pub mod test {
       // SAFETY: forward_transform initialized freq
       let freq = unsafe { slice_assume_init_mut(freq) };
 
-      let eob: usize = pick_eob(freq, tx_size, tx_type, sub_h);
+      let eob: u16 = pick_eob(freq, tx_size, tx_type, sub_h);
       let mut rust_dst = dst.clone();
 
       inverse_transform_add(

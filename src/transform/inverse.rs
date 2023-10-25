@@ -1633,7 +1633,7 @@ pub(crate) mod rust {
 
   #[cold_for_target_arch("x86_64", "aarch64")]
   pub fn inverse_transform_add<T: Pixel>(
-    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: usize,
+    input: &[T::Coeff], output: &mut PlaneRegionMut<'_, T>, _eob: u16,
     tx_size: TxSize, tx_type: TxType, bd: usize, _cpu: CpuFeatureLevel,
   ) {
     let width: usize = tx_size.width();

@@ -2261,7 +2261,8 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   // SAFETY: We write to the array below before reading from it.
-  let mut ac: Aligned<[i16; 32 * 32]> = unsafe { Aligned::uninitialized() };
+  let mut ac: Aligned<[MaybeUninit<i16>; 32 * 32]> =
+    unsafe { Aligned::uninitialized() };
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
   let do_chroma =
@@ -2341,10 +2342,9 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   bh_uv /= uv_tx_size.height_mi();
 
   let ac_data = if chroma_mode.is_cfl() {
-    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi);
-    &ac.data[..]
+    luma_ac(&mut ac.data, ts, tile_bo, bsize, tx_size, fi)
   } else {
-    &[]
+    [].as_slice()
   };
 
   let uv_tx_type = if uv_tx_size.width() >= 32 || uv_tx_size.height() >= 32 {

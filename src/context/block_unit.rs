@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::mem::MaybeUninit;
+
 use super::*;
 
 use crate::predict::PredictionMode;
@@ -1781,7 +1783,7 @@ impl<'a> ContextWriter<'a> {
 
   pub fn write_coeffs_lv_map<T: Coefficient, W: Writer>(
     &mut self, w: &mut W, plane: usize, bo: TileBlockOffset, coeffs_in: &[T],
-    eob: usize, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
+    eob: u16, pred_mode: PredictionMode, tx_size: TxSize, tx_type: TxType,
     plane_bsize: BlockSize, xdec: usize, ydec: usize,
     use_reduced_tx_set: bool, frame_clipped_txw: usize,
     frame_clipped_txh: usize,
@@ -1792,8 +1794,8 @@ impl<'a> ContextWriter<'a> {
     let is_inter = pred_mode >= PredictionMode::NEARESTMV;
 
     // Note: Both intra and inter mode uses inter scan order. Surprised?
-    let scan: &[u16] =
-      &av1_scan_orders[tx_size as usize][tx_type as usize].scan[..eob];
+    let scan: &[u16] = &av1_scan_orders[tx_size as usize][tx_type as usize]
+      .scan[..usize::from(eob)];
     let height = av1_get_coded_tx_size(tx_size).height();
 
     // Create a slice with coeffs in scan order
@@ -1858,7 +1860,7 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn encode_eob<W: Writer>(
-    &mut self, eob: usize, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
+    &mut self, eob: u16, tx_size: TxSize, tx_class: TxClass, txs_ctx: usize,
     plane_type: usize, w: &mut W,
   ) {
     let (eob_pt, eob_extra) = Self::get_eob_pos_token(eob);
@@ -1913,18 +1915,19 @@ impl<'a> ContextWriter<'a> {
   }
 
   fn encode_coeffs<T: Coefficient, W: Writer>(
-    &mut self, coeffs: &[T], levels: &mut [u8], scan: &[u16], eob: usize,
+    &mut self, coeffs: &[T], levels: &mut [u8], scan: &[u16], eob: u16,
     tx_size: TxSize, tx_class: TxClass, txs_ctx: usize, plane_type: usize,
     w: &mut W,
   ) {
     // SAFETY: We write to the array below before reading from it.
-    let mut coeff_contexts: Aligned<[i8; MAX_CODED_TX_SQUARE]> =
+    let mut coeff_contexts: Aligned<[MaybeUninit<i8>; MAX_CODED_TX_SQUARE]> =
       unsafe { Aligned::uninitialized() };
 
-    self.get_nz_map_contexts(
+    // get_nz_map_contexts sets coeff_contexts contiguously as a parallel array for scan, not in scan order
+    let coeff_contexts = self.get_nz_map_contexts(
       levels,
       scan,
-      eob as u16,
+      eob,
       tx_size,
       tx_class,
       &mut coeff_contexts.data,
@@ -1932,24 +1935,28 @@ impl<'a> ContextWriter<'a> {
 
     let bhl = Self::get_txb_bhl(tx_size);
 
-    for (c, (&pos, &v)) in scan.iter().zip(coeffs.iter()).enumerate().rev() {
+    let scan_with_ctx =
+      scan.iter().copied().zip(coeff_contexts.iter().copied());
+    for (c, ((pos, coeff_ctx), v)) in
+      scan_with_ctx.zip(coeffs.iter().copied()).enumerate().rev()
+    {
       let pos = pos as usize;
-      let coeff_ctx = coeff_contexts.data[pos];
+      let coeff_ctx = coeff_ctx as usize;
       let level = v.abs();
 
-      if c == eob - 1 {
+      if c == usize::from(eob) - 1 {
         symbol_with_update!(
           self,
           w,
           cmp::min(u32::cast_from(level), 3) - 1,
-          &self.fc.coeff_base_eob_cdf[txs_ctx][plane_type][coeff_ctx as usize]
+          &self.fc.coeff_base_eob_cdf[txs_ctx][plane_type][coeff_ctx]
         );
       } else {
         symbol_with_update!(
           self,
           w,
           cmp::min(u32::cast_from(level), 3),
-          &self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx as usize]
+          &self.fc.coeff_base_cdf[txs_ctx][plane_type][coeff_ctx]
         );
       }
 
