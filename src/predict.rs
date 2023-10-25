@@ -1516,12 +1516,8 @@ mod test {
 
   #[test]
   fn pred_matches_u8() {
-    // SAFETY: We write to the array below before reading from it.
-    let mut edge_buf: Aligned<[u8; 2 * MAX_TX_SIZE + 1]> =
-      unsafe { Aligned::uninitialized() };
-    for i in 0..edge_buf.data.len() {
-      edge_buf.data[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
-    }
+    let edge_buf: Aligned<[u8; 2 * MAX_TX_SIZE + 1]> =
+      Aligned::from_fn(|i| (i + 32).saturating_sub(MAX_TX_SIZE).as_());
     let left = &edge_buf.data[MAX_TX_SIZE - 4..MAX_TX_SIZE];
     let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
     let top_left = edge_buf.data[MAX_TX_SIZE];
