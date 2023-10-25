@@ -182,7 +182,42 @@ macro_rules! impl_1d_tx {
 };
 
 ($m:meta, $($s:ident),*) => {
-trait RotateKernelPi4<T: TxOperations> {
+  pub trait TxOperations: Copy {
+    $($s)* fn zero() -> Self;
+
+    $($s)* fn tx_mul(self, _: (i32, i32)) -> Self;
+    $($s)* fn rshift1(self) -> Self;
+    $($s)* fn add(self, b: Self) -> Self;
+    $($s)* fn sub(self, b: Self) -> Self;
+    $($s)* fn add_avg(self, b: Self) -> Self;
+    $($s)* fn sub_avg(self, b: Self) -> Self;
+
+    $($s)* fn copy_fn(self) -> Self {
+      self
+    }
+  }
+
+  #[inline]
+  fn get_func(t: TxfmType) -> TxfmFunc {
+    use self::TxfmType::*;
+    match t {
+      DCT4 => daala_fdct4,
+      DCT8 => daala_fdct8,
+      DCT16 => daala_fdct16,
+      DCT32 => daala_fdct32,
+      DCT64 => daala_fdct64,
+      ADST4 => daala_fdst_vii_4,
+      ADST8 => daala_fdst8,
+      ADST16 => daala_fdst16,
+      Identity4 => fidentity,
+      Identity8 => fidentity,
+      Identity16 => fidentity,
+      Identity32 => fidentity,
+      WHT4 => fwht4,
+    }
+  }
+
+  trait RotateKernelPi4<T: TxOperations> {
   const ADD: $($s)* fn(T, T) -> T;
   const SUB: $($s)* fn(T, T) -> T;
 

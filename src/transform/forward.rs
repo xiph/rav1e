@@ -28,20 +28,9 @@ pub mod rust {
   use crate::transform::{av1_round_shift_array, valid_av1_transform, TxSize};
   use simd_helpers::cold_for_target_arch;
 
-  pub trait TxOperations: Copy {
-    fn zero() -> Self;
+  type TxfmFunc = fn(&mut [i32]);
 
-    fn tx_mul(self, _: (i32, i32)) -> Self;
-    fn rshift1(self) -> Self;
-    fn add(self, b: Self) -> Self;
-    fn sub(self, b: Self) -> Self;
-    fn add_avg(self, b: Self) -> Self;
-    fn sub_avg(self, b: Self) -> Self;
-
-    fn copy_fn(self) -> Self {
-      self
-    }
-  }
+  impl_1d_tx!();
 
   impl TxOperations for i32 {
     fn zero() -> Self {
@@ -70,29 +59,6 @@ pub mod rust {
 
     fn sub_avg(self, b: Self) -> Self {
       (self - b) >> 1
-    }
-  }
-
-  impl_1d_tx!();
-
-  type TxfmFunc = fn(&mut [i32]);
-
-  fn get_func(t: TxfmType) -> TxfmFunc {
-    use self::TxfmType::*;
-    match t {
-      DCT4 => daala_fdct4,
-      DCT8 => daala_fdct8,
-      DCT16 => daala_fdct16,
-      DCT32 => daala_fdct32,
-      DCT64 => daala_fdct64,
-      ADST4 => daala_fdst_vii_4,
-      ADST8 => daala_fdst8,
-      ADST16 => daala_fdst16,
-      Identity4 => fidentity,
-      Identity8 => fidentity,
-      Identity16 => fidentity,
-      Identity32 => fidentity,
-      WHT4 => fwht4,
     }
   }
 

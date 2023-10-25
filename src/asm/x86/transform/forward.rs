@@ -7,6 +7,7 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use crate::asm::shared::transform::forward::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::transform::forward::rust;
 use crate::transform::forward_shared::*;
@@ -20,43 +21,6 @@ use debug_unreachable::debug_unreachable;
 use std::arch::x86::*;
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::*;
-
-type TxfmFuncI32X8 = unsafe fn(&mut [I32X8]);
-
-#[inline]
-fn get_func_i32x8(t: TxfmType) -> TxfmFuncI32X8 {
-  use self::TxfmType::*;
-  match t {
-    DCT4 => daala_fdct4,
-    DCT8 => daala_fdct8,
-    DCT16 => daala_fdct16,
-    DCT32 => daala_fdct32,
-    DCT64 => daala_fdct64,
-    ADST4 => daala_fdst_vii_4,
-    ADST8 => daala_fdst8,
-    ADST16 => daala_fdst16,
-    Identity4 => fidentity,
-    Identity8 => fidentity,
-    Identity16 => fidentity,
-    Identity32 => fidentity,
-    WHT4 => fwht4,
-  }
-}
-
-pub trait TxOperations: Copy {
-  unsafe fn zero() -> Self;
-
-  unsafe fn tx_mul(self, _: (i32, i32)) -> Self;
-  unsafe fn rshift1(self) -> Self;
-  unsafe fn add(self, b: Self) -> Self;
-  unsafe fn sub(self, b: Self) -> Self;
-  unsafe fn add_avg(self, b: Self) -> Self;
-  unsafe fn sub_avg(self, b: Self) -> Self;
-
-  unsafe fn copy_fn(self) -> Self {
-    self
-  }
-}
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[derive(Copy, Clone)]
@@ -77,6 +41,10 @@ impl I32X8 {
     I32X8 { data: a }
   }
 }
+
+type TxfmFunc = unsafe fn(&mut [I32X8]);
+
+impl_1d_tx!(target_feature(enable = "avx2"), unsafe);
 
 impl TxOperations for I32X8 {
   #[target_feature(enable = "avx2")]
@@ -133,8 +101,6 @@ impl TxOperations for I32X8 {
     I32X8::new(_mm256_srai_epi32(_mm256_sub_epi32(self.vec(), b.vec()), 1))
   }
 }
-
-impl_1d_tx!(target_feature(enable = "avx2"), unsafe);
 
 #[target_feature(enable = "avx2")]
 unsafe fn transpose_8x8_avx2(input: &[I32X8; 8], into: &mut [I32X8; 8]) {
@@ -297,40 +263,6 @@ unsafe fn round_shift_array_avx2(arr: &mut [I32X8], bit: i8) {
   }
 }
 
-/// For classifying the number of rows and columns in a transform. Used to
-/// select the operations to perform for different vector lengths.
-#[derive(Debug, Clone, Copy)]
-enum SizeClass1D {
-  X4,
-  X8UP,
-}
-
-impl SizeClass1D {
-  #[inline]
-  fn from_length(len: usize) -> Self {
-    assert!(len.is_power_of_two());
-    use SizeClass1D::*;
-    match len {
-      4 => X4,
-      _ => X8UP,
-    }
-  }
-}
-
-fn cast<const N: usize, T>(x: &[T]) -> &[T; N] {
-  // SAFETY: we perform a bounds check with [..N],
-  // so casting to *const [T; N] is valid because the bounds
-  // check guarantees that x has N elements
-  unsafe { &*(&x[..N] as *const [T] as *const [T; N]) }
-}
-
-fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
-  // SAFETY: we perform a bounds check with [..N],
-  // so casting to *mut [T; N] is valid because the bounds
-  // check guarantees that x has N elements
-  unsafe { &mut *(&mut x[..N] as *mut [T] as *mut [T; N]) }
-}
-
 #[allow(clippy::identity_op, clippy::erasing_op)]
 #[target_feature(enable = "avx2")]
 unsafe fn forward_transform_avx2<T: Coefficient>(
@@ -353,8 +285,8 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
   let buf = &mut tmp.data[..txfm_size_col * (txfm_size_row / 8).max(1)];
   let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
-  let txfm_func_col = get_func_i32x8(cfg.txfm_type_col);
-  let txfm_func_row = get_func_i32x8(cfg.txfm_type_row);
+  let txfm_func_col = get_func(cfg.txfm_type_col);
+  let txfm_func_row = get_func(cfg.txfm_type_row);
 
   // Columns
   for cg in (0..txfm_size_col).step_by(8) {
@@ -521,74 +453,5 @@ pub fn forward_transform<T: Coefficient>(
     }
   } else {
     rust::forward_transform(input, output, stride, tx_size, tx_type, bd, cpu);
-  }
-}
-
-#[cfg(test)]
-mod test {
-  use crate::cpu_features::*;
-  use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
-  use crate::util::assume_slice_init_mut;
-  use rand::Rng;
-  use std::mem::MaybeUninit;
-
-  // Ensure that the simd results match the rust code
-  #[test]
-  fn test_forward_transform_avx2() {
-    test_forward_transform_simd(CpuFeatureLevel::AVX2);
-  }
-
-  fn test_forward_transform_simd(cpu: CpuFeatureLevel) {
-    if CpuFeatureLevel::default() < cpu {
-      eprintln!("Ignoring {:?} test, not supported on this machine!", cpu);
-      return;
-    }
-
-    let mut rng = rand::thread_rng();
-
-    let tx_sizes = {
-      use TxSize::*;
-      [
-        TX_4X4, TX_8X8, TX_16X16, TX_32X32, TX_64X64, TX_4X8, TX_8X4, TX_8X16,
-        TX_16X8, TX_16X32, TX_32X16, TX_32X64, TX_64X32, TX_4X16, TX_16X4,
-        TX_8X32, TX_32X8, TX_16X64, TX_64X16,
-      ]
-    };
-
-    for &tx_size in &tx_sizes {
-      let area = tx_size.area();
-
-      let input: Vec<i16> =
-        (0..area).map(|_| rng.gen_range(-255..256)).collect();
-
-      for &tx_type in get_valid_txfm_types(tx_size) {
-        let mut output_ref = vec![MaybeUninit::new(0i16); area];
-        let mut output_simd = vec![MaybeUninit::new(0i16); area];
-
-        println!("Testing combination {:?}, {:?}", tx_size, tx_type);
-        forward_transform(
-          &input[..],
-          &mut output_ref[..],
-          tx_size.width(),
-          tx_size,
-          tx_type,
-          8,
-          CpuFeatureLevel::RUST,
-        );
-        let output_ref = unsafe { assume_slice_init_mut(&mut output_ref[..]) };
-        forward_transform(
-          &input[..],
-          &mut output_simd[..],
-          tx_size.width(),
-          tx_size,
-          tx_type,
-          8,
-          cpu,
-        );
-        let output_simd =
-          unsafe { assume_slice_init_mut(&mut output_simd[..]) };
-        assert_eq!(output_ref, output_simd)
-      }
-    }
   }
 }
