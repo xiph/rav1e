@@ -1,6 +1,6 @@
 use crate::api::internal::InterConfig;
 use crate::config::EncoderConfig;
-use crate::context::{BlockOffset, FrameBlocks, TileBlockOffset};
+use crate::context::{BlockOffset, FrameBlocks, TileBlockOffset, MAX_TX_SIZE};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::{
@@ -12,6 +12,7 @@ use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
+use crate::util::Aligned;
 use crate::Pixel;
 use rayon::iter::*;
 use rust_hawktracer::*;
@@ -44,6 +45,8 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
   let w_in_imp_b = plane.cfg.width / IMPORTANCE_BLOCK_SIZE;
   let mut intra_costs = Vec::with_capacity(h_in_imp_b * w_in_imp_b);
 
+  let mut edge_buf = Aligned::new([T::zero(); 4 * MAX_TX_SIZE + 1]);
+
   for y in 0..h_in_imp_b {
     for x in 0..w_in_imp_b {
       let plane_org = plane.region(Area::Rect {
@@ -54,7 +57,8 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       });
 
       // TODO: other intra prediction modes.
-      let edge_buf = get_intra_edges(
+      get_intra_edges(
+        &mut edge_buf,
         &plane.as_region(),
         TileBlockOffset(BlockOffset { x, y }),
         0,

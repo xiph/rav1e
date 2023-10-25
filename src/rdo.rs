@@ -1433,24 +1433,26 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     let satds = {
       // FIXME: If tx partition is used, this whole sads block should be fixed
       let tx_size = bsize.tx_size();
-      let edge_buf = {
-        let rec = &ts.rec.planes[0].as_const();
-        let po = tile_bo.plane_offset(rec.plane_cfg);
-        // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
-        get_intra_edges(
-          rec,
-          tile_bo,
-          0,
-          0,
-          bsize,
-          po,
-          tx_size,
-          fi.sequence.bit_depth,
-          None,
-          fi.sequence.enable_intra_edge_filter,
-          IntraParam::None,
-        )
-      };
+      let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
+        Aligned::from_fn(|_| T::zero());
+
+      let rec = &ts.rec.planes[0].as_const();
+      let po = tile_bo.plane_offset(rec.plane_cfg);
+      // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
+      get_intra_edges(
+        &mut edge_buf,
+        rec,
+        tile_bo,
+        0,
+        0,
+        bsize,
+        po,
+        tx_size,
+        fi.sequence.bit_depth,
+        None,
+        fi.sequence.enable_intra_edge_filter,
+        IntraParam::None,
+      );
 
       let ief_params = if fi.sequence.enable_intra_edge_filter {
         let above_block_info = ts.above_block_info(tile_bo, 0, 0);
@@ -1613,6 +1615,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   let mut ac: Aligned<[MaybeUninit<i16>; 32 * 32]> =
     unsafe { Aligned::uninitialized() };
   let ac = luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
+  let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
+    Aligned::from_fn(|_| T::zero());
+
   let best_alpha: ArrayVec<i16, 2> = (1..3)
     .map(|p| {
       let &PlaneConfig { xdec, ydec, .. } = ts.rec.planes[p].plane_cfg;
@@ -1620,7 +1625,8 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let rec = &mut ts.rec.planes[p];
       let input = &ts.input_tile.planes[p];
       let po = tile_bo.plane_offset(rec.plane_cfg);
-      let edge_buf = get_intra_edges(
+      get_intra_edges(
+        &mut edge_buf,
         &rec.as_const(),
         tile_bo,
         0,

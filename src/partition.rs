@@ -600,6 +600,7 @@ fn supersample_chroma_bsize(
 }
 
 pub fn get_intra_edges<T: Pixel>(
+  edge_buf: &mut Aligned<[T; 4 * MAX_TX_SIZE + 1]>,
   dst: &PlaneRegion<'_, T>,
   partition_bo: TileBlockOffset, // partition bo, BlockOffset
   bx: usize,
@@ -611,13 +612,8 @@ pub fn get_intra_edges<T: Pixel>(
   opt_mode: Option<PredictionMode>,
   enable_intra_edge_filter: bool,
   intra_param: IntraParam,
-) -> Aligned<[T; 4 * MAX_TX_SIZE + 1]> {
+) {
   let plane_cfg = &dst.plane_cfg;
-
-  // SAFETY: We write to the array below before reading from it.
-  let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
-    unsafe { Aligned::uninitialized() };
-  //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
   let base = 128u16 << (bit_depth - 8);
 
   {
@@ -833,7 +829,6 @@ pub fn get_intra_edges<T: Pixel>(
       }
     }
   }
-  edge_buf
 }
 
 pub fn has_tr(bo: TileBlockOffset, bsize: BlockSize) -> bool {
