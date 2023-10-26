@@ -12,25 +12,19 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use rav1e::bench::cpu_features::CpuFeatureLevel;
 use rav1e::bench::frame::*;
-use rav1e::bench::partition::BlockSize;
+use rav1e::bench::partition::{BlockSize, IntraEdge};
 use rav1e::bench::predict::*;
 use rav1e::bench::transform::TxSize;
 use rav1e::bench::util::*;
 
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
-pub fn generate_block<T: Pixel>(
-  rng: &mut ChaChaRng, edge_buf: &mut Aligned<[T; 257]>,
-) -> (Plane<T>, Vec<i16>) {
+pub fn generate_block<T: Pixel>(rng: &mut ChaChaRng) -> (Plane<T>, Vec<i16>) {
   let block = Plane::from_slice(
     &vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
   );
   let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
-  for v in edge_buf.data.iter_mut() {
-    *v = T::cast_from(rng.gen::<u8>());
-  }
-
   (block, ac)
 }
 
@@ -132,8 +126,9 @@ pub fn intra_bench<T: Pixel>(
   b: &mut Bencher, mode: PredictionMode, variant: PredictionVariant,
 ) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let mut edge_buf = unsafe { Aligned::uninitialized() };
-  let (mut block, ac) = generate_block::<T>(&mut rng, &mut edge_buf);
+  let edge_buf = Aligned::from_fn(|_| T::cast_from(rng.gen::<u8>()));
+  let edge_buf = IntraEdge::mock(&edge_buf);
+  let (mut block, ac) = generate_block::<T>(&mut rng);
   let cpu = CpuFeatureLevel::default();
   let bitdepth = match T::type_enum() {
     PixelType::U8 => 8,

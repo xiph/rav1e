@@ -12,6 +12,7 @@ use crate::partition::{get_intra_edges, BlockSize};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
+use crate::util::Aligned;
 use crate::Pixel;
 use rayon::iter::*;
 use rust_hawktracer::*;
@@ -54,7 +55,9 @@ pub(crate) fn estimate_intra_costs<T: Pixel>(
       });
 
       // TODO: other intra prediction modes.
+      let mut edge_buf = Aligned::uninit_array();
       let edge_buf = get_intra_edges(
+        &mut edge_buf,
         &plane.as_region(),
         TileBlockOffset(BlockOffset { x, y }),
         0,

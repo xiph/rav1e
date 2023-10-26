@@ -9,7 +9,7 @@
 
 use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
-use crate::partition::BlockSize;
+use crate::partition::{BlockSize, IntraEdge};
 use crate::predict::rust::{
   dr_intra_derivative, select_ief_strength, select_ief_upsample,
 };
@@ -18,7 +18,6 @@ use crate::predict::{
 };
 use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::transform::TxSize;
-use crate::util::Aligned;
 use crate::{Pixel, PixelType};
 use libc;
 use libc::{c_int, ptrdiff_t};
@@ -487,7 +486,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
   dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
   ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
-  edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
+  edge_buf: &IntraEdge<T>, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
     rust::dispatch_predict_intra(
@@ -504,10 +503,8 @@ pub fn dispatch_predict_intra<T: Pixel>(
     let dst_ptr = dst.data_ptr_mut() as *mut _;
     let dst_u16 = dst.data_ptr_mut() as *mut u16;
     let stride = T::to_asm_stride(dst.plane_cfg.stride) as libc::ptrdiff_t;
-    let edge_ptr =
-      edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
-    let edge_u16 =
-      edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const u16;
+    let edge_ptr = edge_buf.top_left_ptr() as *const _;
+    let edge_u16 = edge_buf.top_left_ptr() as *const u16;
     let w = tx_size.width() as libc::c_int;
     let h = tx_size.height() as libc::c_int;
     let angle = angle as libc::c_int;
@@ -600,7 +597,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
             return ipred_z2(
               dst.data_ptr_mut(),
               stride,
-              edge_buf.data.as_ptr().add(2 * MAX_TX_SIZE),
+              edge_buf.top_left_ptr(),
               angle as isize,
               w,
               h,
@@ -614,7 +611,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
           (if angle < 90 { ipred_z1 } else { ipred_z3 })(
             dst.data_ptr_mut(),
             stride,
-            edge_buf.data.as_ptr().add(2 * MAX_TX_SIZE),
+            edge_buf.top_left_ptr(),
             angle as isize,
             w,
             h,

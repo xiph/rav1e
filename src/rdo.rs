@@ -1433,11 +1433,13 @@ fn intra_frame_rdo_mode_decision<T: Pixel>(
     let satds = {
       // FIXME: If tx partition is used, this whole sads block should be fixed
       let tx_size = bsize.tx_size();
+      let mut edge_buf = Aligned::uninit_array();
       let edge_buf = {
         let rec = &ts.rec.planes[0].as_const();
         let po = tile_bo.plane_offset(rec.plane_cfg);
         // FIXME: If tx partition is used, get_intra_edges() should be called for each tx block
         get_intra_edges(
+          &mut edge_buf,
           rec,
           tile_bo,
           0,
@@ -1618,7 +1620,9 @@ pub fn rdo_cfl_alpha<T: Pixel>(
       let rec = &mut ts.rec.planes[p];
       let input = &ts.input_tile.planes[p];
       let po = tile_bo.plane_offset(rec.plane_cfg);
+      let mut edge_buf = Aligned::uninit_array();
       let edge_buf = get_intra_edges(
+        &mut edge_buf,
         &rec.as_const(),
         tile_bo,
         0,

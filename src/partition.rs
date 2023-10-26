@@ -22,6 +22,9 @@ use crate::transform::TxSize;
 use crate::util::*;
 use thiserror::Error;
 
+use std::mem::transmute;
+use std::mem::MaybeUninit;
+
 // LAST_FRAME through ALTREF_FRAME correspond to slots 0-6.
 #[derive(PartialEq, Eq, PartialOrd, Copy, Clone, Debug)]
 pub enum RefType {
@@ -599,7 +602,47 @@ fn supersample_chroma_bsize(
   }
 }
 
-pub fn get_intra_edges<T: Pixel>(
+type IntraEdgeBuffer<T> = Aligned<[MaybeUninit<T>; 4 * MAX_TX_SIZE + 1]>;
+
+#[cfg(any(test, feature = "bench"))]
+type IntraEdgeMock<T> = Aligned<[T; 4 * MAX_TX_SIZE + 1]>;
+
+pub struct IntraEdge<'a, T: Pixel>(&'a [T], &'a [T], &'a [T]);
+
+impl<'a, T: Pixel> IntraEdge<'a, T> {
+  fn new(
+    edge_buf: &'a mut IntraEdgeBuffer<T>, init_left: usize, init_above: usize,
+  ) -> Self {
+    // SAFETY: Initialized in `get_intra_edges`.
+    let left = unsafe {
+      let begin_left = 2 * MAX_TX_SIZE - init_left;
+      let end_above = 2 * MAX_TX_SIZE + 1 + init_above;
+      assume_slice_init_mut(&mut edge_buf.data[begin_left..end_above])
+    };
+    let (left, top_left) = left.split_at(init_left);
+    let (top_left, above) = top_left.split_at(1);
+    Self(left, top_left, above)
+  }
+
+  pub const fn as_slices(&self) -> (&'a [T], &'a [T], &'a [T]) {
+    (self.0, self.1, self.2)
+  }
+
+  pub const fn top_left_ptr(&self) -> *const T {
+    self.1.as_ptr()
+  }
+
+  #[cfg(any(test, feature = "bench"))]
+  pub fn mock(edge_buf: &'a IntraEdgeMock<T>) -> Self {
+    let left = &edge_buf.data[..];
+    let (left, top_left) = left.split_at(2 * MAX_TX_SIZE);
+    let (top_left, above) = top_left.split_at(1);
+    Self(left, top_left, above)
+  }
+}
+
+pub fn get_intra_edges<'a, T: Pixel>(
+  edge_buf: &'a mut IntraEdgeBuffer<T>,
   dst: &PlaneRegion<'_, T>,
   partition_bo: TileBlockOffset, // partition bo, BlockOffset
   bx: usize,
@@ -611,13 +654,12 @@ pub fn get_intra_edges<T: Pixel>(
   opt_mode: Option<PredictionMode>,
   enable_intra_edge_filter: bool,
   intra_param: IntraParam,
-) -> Aligned<[T; 4 * MAX_TX_SIZE + 1]> {
+) -> IntraEdge<'a, T> {
+  let mut init_left: usize = 0;
+  let mut init_above: usize = 0;
+
   let plane_cfg = &dst.plane_cfg;
 
-  // SAFETY: We write to the array below before reading from it.
-  let mut edge_buf: Aligned<[T; 4 * MAX_TX_SIZE + 1]> =
-    unsafe { Aligned::uninitialized() };
-  //Aligned::new([T::cast_from(0); 4 * MAX_TX_SIZE + 1]);
   let base = 128u16 << (bit_depth - 8);
 
   {
@@ -680,20 +722,21 @@ pub fn get_intra_edges<T: Pixel>(
       if x != 0 {
         for i in 0..txh {
           debug_assert!(y + i < rect_h);
-          left[2 * MAX_TX_SIZE - 1 - i] = dst[y + i][x - 1];
+          left[2 * MAX_TX_SIZE - 1 - i].write(dst[y + i][x - 1]);
         }
         if txh < tx_size.height() {
           let val = dst[y + txh - 1][x - 1];
           for i in txh..tx_size.height() {
-            left[2 * MAX_TX_SIZE - 1 - i] = val;
+            left[2 * MAX_TX_SIZE - 1 - i].write(val);
           }
         }
       } else {
         let val = if y != 0 { dst[y - 1][0] } else { T::cast_from(base + 1) };
         for v in left[2 * MAX_TX_SIZE - tx_size.height()..].iter_mut() {
-          *v = val
+          v.write(val);
         }
       }
+      init_left += tx_size.height();
     }
 
     // Needs top
@@ -704,38 +747,25 @@ pub fn get_intra_edges<T: Pixel>(
         tx_size.width()
       };
       if y != 0 {
-        above[..txw].copy_from_slice(&dst[y - 1][x..x + txw]);
+        above[..txw].copy_from_slice(
+          // SAFETY: &[T] and &[MaybeUninit<T>] have the same layout
+          unsafe {
+            transmute::<&[T], &[MaybeUninit<T>]>(&dst[y - 1][x..x + txw])
+          },
+        );
         if txw < tx_size.width() {
           let val = dst[y - 1][x + txw - 1];
           for i in txw..tx_size.width() {
-            above[i] = val;
+            above[i].write(val);
           }
         }
       } else {
         let val = if x != 0 { dst[0][x - 1] } else { T::cast_from(base - 1) };
         for v in above[..tx_size.width()].iter_mut() {
-          *v = val;
+          v.write(val);
         }
       }
-    }
-
-    // Needs top-left
-    if needs_topleft {
-      top_left[0] = match (x, y) {
-        (0, 0) => T::cast_from(base),
-        (_, 0) => dst[0][x - 1],
-        (0, _) => dst[y - 1][0],
-        _ => dst[y - 1][x - 1],
-      };
-
-      let (w, h) = (tx_size.width(), tx_size.height());
-      if needs_topleft_filter && w + h >= 24 {
-        let (l, a, tl): (u32, u32, u32) =
-          (left[left.len() - 1].into(), above[0].into(), top_left[0].into());
-        let s = l * 5 + tl * 6 + a * 5;
-
-        top_left[0] = T::cast_from((s + (1 << 3)) >> 4);
-      }
+      init_above += tx_size.width();
     }
 
     let bx4 = bx * (tx_size.width() >> MI_SIZE_LOG2); // bx,by are in tx block indices
@@ -781,8 +811,13 @@ pub fn get_intra_edges<T: Pixel>(
         0
       };
       if num_avail > 0 {
-        above[tx_size.width()..tx_size.width() + num_avail].copy_from_slice(
-          &dst[y - 1][x + tx_size.width()..x + tx_size.width() + num_avail],
+        above[tx_size.width()..][..num_avail].copy_from_slice(
+          // SAFETY: &[T] and &[MaybeUninit<T>] have the same layout
+          unsafe {
+            transmute::<&[T], &[MaybeUninit<T>]>(
+              &dst[y - 1][x + tx_size.width()..][..num_avail],
+            )
+          },
         );
       }
       if num_avail < tx_size.height() {
@@ -794,7 +829,11 @@ pub fn get_intra_edges<T: Pixel>(
           *v = val;
         }
       }
+      init_above += tx_size.height();
     }
+
+    // SAFETY: The blocks above have initialized the first `init_above` items.
+    let above = unsafe { assume_slice_init_mut(&mut above[..init_above]) };
 
     // Needs bottom left
     if needs_bottomleft {
@@ -818,8 +857,8 @@ pub fn get_intra_edges<T: Pixel>(
       };
       if num_avail > 0 {
         for i in 0..num_avail {
-          left[2 * MAX_TX_SIZE - tx_size.height() - 1 - i] =
-            dst[y + tx_size.height() + i][x - 1];
+          left[2 * MAX_TX_SIZE - tx_size.height() - 1 - i]
+            .write(dst[y + tx_size.height() + i][x - 1]);
         }
       }
       if num_avail < tx_size.width() {
@@ -831,9 +870,36 @@ pub fn get_intra_edges<T: Pixel>(
           *v = val;
         }
       }
+      init_left += tx_size.width();
+    }
+
+    // SAFETY: The blocks above have initialized last `init_left` items.
+    let left = unsafe {
+      assume_slice_init_mut(&mut left[2 * MAX_TX_SIZE - init_left..])
+    };
+
+    // Needs top-left
+    if needs_topleft {
+      let top_left = top_left[0].write(match (x, y) {
+        (0, 0) => T::cast_from(base),
+        (_, 0) => dst[0][x - 1],
+        (0, _) => dst[y - 1][0],
+        _ => dst[y - 1][x - 1],
+      });
+
+      let (w, h) = (tx_size.width(), tx_size.height());
+      if needs_topleft_filter && w + h >= 24 {
+        let (l, a, tl): (u32, u32, u32) =
+          (left[left.len() - 1].into(), above[0].into(), (*top_left).into());
+        let s = l * 5 + tl * 6 + a * 5;
+
+        *top_left = T::cast_from((s + (1 << 3)) >> 4);
+      }
+    } else {
+      top_left[0].write(T::cast_from(base));
     }
   }
-  edge_buf
+  IntraEdge::new(edge_buf, init_left, init_above)
 }
 
 pub fn has_tr(bo: TileBlockOffset, bsize: BlockSize) -> bool {

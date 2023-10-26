@@ -1475,7 +1475,9 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
 
   if mode.is_intra() {
     let bit_depth = fi.sequence.bit_depth;
+    let mut edge_buf = Aligned::uninit_array();
     let edge_buf = get_intra_edges(
+      &mut edge_buf,
       &rec.as_const(),
       tile_partition_bo,
       bx,

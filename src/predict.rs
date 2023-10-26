@@ -204,8 +204,8 @@ impl PredictionMode {
   pub fn predict_intra<T: Pixel>(
     self, tile_rect: TileRect, dst: &mut PlaneRegionMut<'_, T>,
     tx_size: TxSize, bit_depth: usize, ac: &[i16], intra_param: IntraParam,
-    ief_params: Option<IntraEdgeFilterParameters>,
-    edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
+    ief_params: Option<IntraEdgeFilterParameters>, edge_buf: &IntraEdge<T>,
+    cpu: CpuFeatureLevel,
   ) {
     assert!(self.is_intra());
     let &Rect { x: frame_x, y: frame_y, .. } = dst.rect();
@@ -702,7 +702,7 @@ pub(crate) mod rust {
   use crate::cpu_features::CpuFeatureLevel;
   use crate::tiling::PlaneRegionMut;
   use crate::transform::TxSize;
-  use crate::util::{round_shift, Aligned};
+  use crate::util::round_shift;
   use crate::Pixel;
   use std::mem::{size_of, MaybeUninit};
 
@@ -711,18 +711,18 @@ pub(crate) mod rust {
     mode: PredictionMode, variant: PredictionVariant,
     dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
     ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
-    edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, _cpu: CpuFeatureLevel,
+    edge_buf: &IntraEdge<T>, _cpu: CpuFeatureLevel,
   ) {
     let width = tx_size.width();
     let height = tx_size.height();
 
     // left pixels are ordered from bottom to top and right-aligned
-    let (left, not_left) = edge_buf.data.split_at(2 * MAX_TX_SIZE);
-    let (top_left, above) = not_left.split_at(1);
+    let (left, top_left, above) = edge_buf.as_slices();
 
-    let above_slice = &above[..width + height];
-    let left_slice = &left[2 * MAX_TX_SIZE - height..];
-    let left_and_left_below_slice = &left[2 * MAX_TX_SIZE - height - width..];
+    let above_slice = above;
+    let left_slice = &left[left.len().saturating_sub(height)..];
+    let left_and_left_below_slice =
+      &left[left.len().saturating_sub(width + height)..];
 
     match mode {
       PredictionMode::DC_PRED => {
@@ -1336,8 +1336,10 @@ pub(crate) mod rust {
     );
 
     if enable_edge_filter {
-      above_filtered[1..=above.len()].clone_from_slice(above);
-      for i in 1..=left.len() {
+      let above_len = above.len().min(above_filtered.len() - 1);
+      let left_len = left.len().min(left_filtered.len() - 1);
+      above_filtered[1..=above_len].clone_from_slice(&above[..above_len]);
+      for i in 1..=left_len {
         left_filtered[i] = left[left.len() - i];
       }
 
@@ -1512,19 +1514,15 @@ pub(crate) mod rust {
 mod test {
   use super::*;
   use crate::predict::rust::*;
+  use crate::util::Aligned;
   use num_traits::*;
 
   #[test]
   fn pred_matches_u8() {
-    // SAFETY: We write to the array below before reading from it.
-    let mut edge_buf: Aligned<[u8; 2 * MAX_TX_SIZE + 1]> =
-      unsafe { Aligned::uninitialized() };
-    for i in 0..edge_buf.data.len() {
-      edge_buf.data[i] = (i + 32).saturating_sub(MAX_TX_SIZE).as_();
-    }
-    let left = &edge_buf.data[MAX_TX_SIZE - 4..MAX_TX_SIZE];
-    let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 5];
-    let top_left = edge_buf.data[MAX_TX_SIZE];
+    let edge_buf =
+      Aligned::from_fn(|i| (i + 32).saturating_sub(MAX_TX_SIZE * 2).as_());
+    let (all_left, top_left, above) = IntraEdge::mock(&edge_buf).as_slices();
+    let left = &all_left[all_left.len() - 4..];
 
     let mut output = Plane::from_slice(&[0u8; 4 * 4], 4);
 
@@ -1552,7 +1550,7 @@ mod test {
       [31, 31, 31, 31, 30, 30, 30, 30, 29, 29, 29, 29, 28, 28, 28, 28]
     );
 
-    pred_paeth(&mut output.as_region_mut(), above, left, top_left, 4, 4);
+    pred_paeth(&mut output.as_region_mut(), above, left, top_left[0], 4, 4);
     assert_eq!(
       &output.data[..],
       [32, 34, 35, 36, 30, 32, 32, 36, 29, 32, 32, 32, 28, 28, 32, 32]
@@ -1576,9 +1574,7 @@ mod test {
       [33, 34, 35, 36, 31, 31, 32, 33, 30, 30, 30, 31, 29, 30, 30, 30]
     );
 
-    let left = &edge_buf.data[MAX_TX_SIZE - 8..MAX_TX_SIZE];
-    let above = &edge_buf.data[MAX_TX_SIZE + 1..MAX_TX_SIZE + 9];
-    let top_left = &edge_buf.data[MAX_TX_SIZE..=MAX_TX_SIZE];
+    let left = &all_left[all_left.len() - 8..];
     let angles = [
       3, 6, 9, 14, 17, 20, 23, 26, 29, 32, 36, 39, 42, 45, 48, 51, 54, 58, 61,
       64, 67, 70, 73, 76, 81, 84, 87,

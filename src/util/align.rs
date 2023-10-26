@@ -29,6 +29,7 @@ pub struct Aligned<T> {
   pub data: T,
 }
 
+#[cfg(any(test, feature = "bench"))]
 impl<const N: usize, T> Aligned<[T; N]> {
   #[inline(always)]
   pub fn from_fn<F>(cb: F) -> Self

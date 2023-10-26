@@ -7,15 +7,13 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::context::MAX_TX_SIZE;
 use crate::cpu_features::CpuFeatureLevel;
-use crate::partition::BlockSize;
+use crate::partition::{BlockSize, IntraEdge};
 use crate::predict::{
   rust, IntraEdgeFilterParameters, PredictionMode, PredictionVariant,
 };
 use crate::tiling::{PlaneRegion, PlaneRegionMut};
 use crate::transform::TxSize;
-use crate::util::Aligned;
 use crate::Pixel;
 use std::mem::MaybeUninit;
 use v_frame::pixel::PixelType;
@@ -242,7 +240,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
   mode: PredictionMode, variant: PredictionVariant,
   dst: &mut PlaneRegionMut<'_, T>, tx_size: TxSize, bit_depth: usize,
   ac: &[i16], angle: isize, ief_params: Option<IntraEdgeFilterParameters>,
-  edge_buf: &Aligned<[T; 4 * MAX_TX_SIZE + 1]>, cpu: CpuFeatureLevel,
+  edge_buf: &IntraEdge<T>, cpu: CpuFeatureLevel,
 ) {
   let call_rust = |dst: &mut PlaneRegionMut<'_, T>| {
     rust::dispatch_predict_intra(
@@ -261,8 +259,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
     match T::type_enum() {
       PixelType::U8 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
-        let edge_ptr =
-          edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
+        let edge_ptr = edge_buf.top_left_ptr() as *const _;
         if cpu >= CpuFeatureLevel::AVX512ICL {
           match mode {
             PredictionMode::DC_PRED => {
@@ -555,8 +552,7 @@ pub fn dispatch_predict_intra<T: Pixel>(
       }
       PixelType::U16 => {
         let dst_ptr = dst.data_ptr_mut() as *mut _;
-        let edge_ptr =
-          edge_buf.data.as_ptr().offset(2 * MAX_TX_SIZE as isize) as *const _;
+        let edge_ptr = edge_buf.top_left_ptr() as *const _;
         let bd_max = (1 << bit_depth) - 1;
         if cpu >= CpuFeatureLevel::AVX512ICL {
           match mode {
