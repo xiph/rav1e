@@ -1919,9 +1919,8 @@ impl<'a> ContextWriter<'a> {
     tx_size: TxSize, tx_class: TxClass, txs_ctx: usize, plane_type: usize,
     w: &mut W,
   ) {
-    // SAFETY: We write to the array below before reading from it.
-    let mut coeff_contexts: Aligned<[MaybeUninit<i8>; MAX_CODED_TX_SQUARE]> =
-      unsafe { Aligned::uninitialized() };
+    let mut coeff_contexts =
+      Aligned::<[MaybeUninit<i8>; MAX_CODED_TX_SQUARE]>::uninit_array();
 
     // get_nz_map_contexts sets coeff_contexts contiguously as a parallel array for scan, not in scan order
     let coeff_contexts = self.get_nz_map_contexts(

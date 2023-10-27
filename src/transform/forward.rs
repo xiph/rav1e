@@ -83,10 +83,8 @@ pub mod rust {
     let txfm_size_col = tx_size.width();
     let txfm_size_row = tx_size.height();
 
-    // SAFETY: We write to the array below before reading from it.
-    let mut tmp: Aligned<[MaybeUninit<i32>; 64 * 64]> =
-      unsafe { Aligned::uninitialized() };
-    let buf = &mut tmp.data[..txfm_size_col * txfm_size_row];
+    let mut buf = Aligned::<[MaybeUninit<i32>; 64 * 64]>::uninit_array();
+    let buf = &mut buf.data[..txfm_size_col * txfm_size_row];
 
     let cfg = Txfm2DFlipCfg::fwd(tx_type, tx_size, bd);
 
@@ -95,9 +93,8 @@ pub mod rust {
 
     // Columns
     for c in 0..txfm_size_col {
-      let mut col_coeffs_backing: Aligned<[MaybeUninit<i32>; 64]> =
-        unsafe { Aligned::uninitialized() };
-      let col_coeffs = &mut col_coeffs_backing.data[..txfm_size_row];
+      let mut col_coeffs = Aligned::<[MaybeUninit<i32>; 64]>::uninit_array();
+      let col_coeffs = &mut col_coeffs.data[..txfm_size_row];
       if cfg.ud_flip {
         // flip upside down
         for r in 0..txfm_size_row {

@@ -1507,21 +1507,19 @@ pub fn encode_tx_block<T: Pixel, W: Writer>(
   }
 
   let coded_tx_area = av1_get_coded_tx_size(tx_size).area();
-  let mut residual_storage: Aligned<[MaybeUninit<i16>; 64 * 64]> =
-    unsafe { Aligned::uninitialized() };
-  let mut coeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 64 * 64]> =
-    unsafe { Aligned::uninitialized() };
-  let mut qcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
-  let mut rcoeffs_storage: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
-  let residual = &mut residual_storage.data[..tx_size.area()];
-  let coeffs = &mut coeffs_storage.data[..tx_size.area()];
+  let mut residual = Aligned::<[MaybeUninit<i16>; 64 * 64]>::uninit_array();
+  let mut coeffs = Aligned::<[MaybeUninit<T::Coeff>; 64 * 64]>::uninit_array();
+  let mut qcoeffs =
+    Aligned::<[MaybeUninit<T::Coeff>; 32 * 32]>::uninit_array();
+  let mut rcoeffs =
+    Aligned::<[MaybeUninit<T::Coeff>; 32 * 32]>::uninit_array();
+  let residual = &mut residual.data[..tx_size.area()];
+  let coeffs = &mut coeffs.data[..tx_size.area()];
   let qcoeffs = init_slice_repeat_mut(
-    &mut qcoeffs_storage.data[..coded_tx_area],
+    &mut qcoeffs.data[..coded_tx_area],
     T::Coeff::cast_from(0),
   );
-  let rcoeffs = &mut rcoeffs_storage.data[..coded_tx_area];
+  let rcoeffs = &mut rcoeffs.data[..coded_tx_area];
 
   let (visible_tx_w, visible_tx_h) = clip_visible_bsize(
     (fi.width + xdec) >> xdec,
@@ -2260,9 +2258,7 @@ pub fn write_tx_blocks<T: Pixel, W: Writer>(
   }
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
-  // SAFETY: We write to the array below before reading from it.
-  let mut ac: Aligned<[MaybeUninit<i16>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
+  let mut ac = Aligned::<[MaybeUninit<i16>; 32 * 32]>::uninit_array();
   let mut partition_has_coeff: bool = false;
   let mut tx_dist = ScaledDistortion::zero();
   let do_chroma =

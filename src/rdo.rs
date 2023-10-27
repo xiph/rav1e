@@ -1609,9 +1609,7 @@ pub fn rdo_cfl_alpha<T: Pixel>(
   if visible_tx_w == 0 || visible_tx_h == 0 {
     return None;
   };
-  // SAFETY: We write to the array below before reading from it.
-  let mut ac: Aligned<[MaybeUninit<i16>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
+  let mut ac = Aligned::<[MaybeUninit<i16>; 32 * 32]>::uninit_array();
   let ac = luma_ac(&mut ac.data, ts, tile_bo, bsize, luma_tx_size, fi);
   let best_alpha: ArrayVec<i16, 2> = (1..3)
     .map(|p| {

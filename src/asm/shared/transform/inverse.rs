@@ -27,9 +27,7 @@ pub fn call_inverse_func<T: Pixel>(
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
-  // SAFETY: We write to the array below before reading from it.
-  let mut copied: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
+  let mut copied = Aligned::<[MaybeUninit<T::Coeff>; 32 * 32]>::uninit_array();
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
@@ -57,9 +55,7 @@ pub fn call_inverse_hbd_func<T: Pixel>(
   // Only use at most 32 columns and 32 rows of input coefficients.
   let input: &[T::Coeff] = &input[..width.min(32) * height.min(32)];
 
-  // SAFETY: We write to the array below before reading from it.
-  let mut copied: Aligned<[MaybeUninit<T::Coeff>; 32 * 32]> =
-    unsafe { Aligned::uninitialized() };
+  let mut copied = Aligned::<[MaybeUninit<T::Coeff>; 32 * 32]>::uninit_array();
 
   // Convert input to 16-bits.
   // TODO: Remove by changing inverse assembly to not overwrite its input
@@ -152,13 +148,11 @@ pub mod test {
         &[T::zero(); 64 * 64][..tx_size.area()],
         tx_size.width(),
       );
-      let mut res_storage: Aligned<[MaybeUninit<i16>; 64 * 64]> =
-        unsafe { Aligned::uninitialized() };
-      let res = &mut res_storage.data[..tx_size.area()];
-      // SAFETY: We write to the array below before reading from it.
-      let mut freq_storage: Aligned<[MaybeUninit<T::Coeff>; 64 * 64]> =
-        unsafe { Aligned::uninitialized() };
-      let freq = &mut freq_storage.data[..tx_size.area()];
+      let mut res = Aligned::<[MaybeUninit<i16>; 64 * 64]>::uninit_array();
+      let res = &mut res.data[..tx_size.area()];
+      let mut freq =
+        Aligned::<[MaybeUninit<T::Coeff>; 64 * 64]>::uninit_array();
+      let freq = &mut freq.data[..tx_size.area()];
       for ((r, s), d) in
         res.iter_mut().zip(src.iter_mut()).zip(dst.data.iter_mut())
       {

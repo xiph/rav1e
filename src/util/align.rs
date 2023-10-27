@@ -39,6 +39,17 @@ impl<const N: usize, T> Aligned<[T; N]> {
   }
 }
 
+impl<const N: usize, T> Aligned<[MaybeUninit<T>; N]> {
+  #[inline(always)]
+  pub const fn uninit_array() -> Self {
+    Aligned {
+      _alignment: [],
+      // SAFETY: Uninitialized [MaybeUninit<T>; N] is valid.
+      data: unsafe { MaybeUninit::uninit().assume_init() },
+    }
+  }
+}
+
 impl<T> Aligned<T> {
   pub const fn new(data: T) -> Self {
     Aligned { _alignment: [], data }
