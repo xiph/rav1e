@@ -1,4 +1,3 @@
-use crate::api::internal::InterConfig;
 use crate::config::EncoderConfig;
 use crate::context::{BlockOffset, FrameBlocks, TileBlockOffset};
 use crate::cpu_features::CpuFeatureLevel;
@@ -8,7 +7,7 @@ use crate::encoder::{
 };
 use crate::frame::{AsRegion, PlaneOffset};
 use crate::me::{estimate_tile_motion, RefMEStats};
-use crate::partition::{get_intra_edges, BlockSize};
+use crate::partition::{get_intra_edges, BlockSize, RefType};
 use crate::predict::{IntraParam, PredictionMode};
 use crate::tiling::{Area, PlaneRegion, TileRect};
 use crate::transform::TxSize;
@@ -16,10 +15,13 @@ use crate::util::Aligned;
 use crate::Pixel;
 use rayon::iter::*;
 use rust_hawktracer::*;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use v_frame::frame::Frame;
 use v_frame::pixel::CastFromPrimitive;
 use v_frame::plane::Plane;
+
+use super::MiniGopConfig;
 
 pub(crate) const IMP_BLOCK_MV_UNITS_PER_PIXEL: i64 = 8;
 pub(crate) const IMP_BLOCK_SIZE_IN_MV_UNITS: i64 =
@@ -186,7 +188,6 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
 ) -> f64 {
   config.low_latency = true;
   config.speed_settings.multiref = false;
-  let inter_cfg = InterConfig::new(&config);
   let last_fi = FrameInvariants::new_key_frame(
     Arc::new(config),
     sequence,
@@ -195,12 +196,18 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
   );
   let mut fi = FrameInvariants::new_inter_frame(
     &last_fi,
-    &inter_cfg,
+    1,
     0,
     1,
-    2,
+    0,
+    1,
+    1,
+    true,
     false,
+    &BTreeMap::new(),
+    &config,
     Box::new([]),
+    &MiniGopConfig { group_input_len: 1, pyramid_depth: 1 },
   )
   .unwrap();
 
@@ -270,7 +277,8 @@ pub(crate) fn estimate_inter_costs<T: Pixel>(
 
 #[hawktracer(compute_motion_vectors)]
 pub(crate) fn compute_motion_vectors<T: Pixel>(
-  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
+  fi: &mut FrameInvariants<T>, fs: &mut FrameState<T>,
+  allowed_ref_frames: &[RefType],
 ) {
   let mut blocks = FrameBlocks::new(fi.w_in_b, fi.h_in_b);
   fi.sequence
@@ -280,6 +288,6 @@ pub(crate) fn compute_motion_vectors<T: Pixel>(
     .into_par_iter()
     .for_each(|mut ctx| {
       let ts = &mut ctx.ts;
-      estimate_tile_motion(fi, ts, inter_cfg);
+      estimate_tile_motion(fi, ts, allowed_ref_frames);
     });
 }

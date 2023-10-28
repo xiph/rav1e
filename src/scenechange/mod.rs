@@ -92,9 +92,12 @@ pub struct SceneChangeDetector<T: Pixel> {
   cpu_feature_level: CpuFeatureLevel,
   encoder_config: EncoderConfig,
   sequence: Arc<Sequence>,
-  /// Calculated intra costs for each input frame.
+  /// Calculated block-level intra costs for each input frame.
   /// These are cached for reuse later in rav1e.
   pub(crate) intra_costs: BTreeMap<u64, Box<[u32]>>,
+  /// Calculated frame-level inter costs for each input frames compared to its previous frame.
+  /// These are cached for reuse later in rav1e.
+  pub(crate) inter_costs: BTreeMap<u64, f64>,
   /// Temporary buffer used by estimate_intra_costs.
   pub(crate) temp_plane: Option<Plane<T>>,
 }
@@ -149,6 +152,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
       encoder_config,
       sequence,
       intra_costs: BTreeMap::new(),
+      inter_costs: BTreeMap::new(),
       temp_plane: None,
     }
   }
@@ -163,7 +167,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// This will gracefully handle the first frame in the video as well.
   #[hawktracer(analyze_next_frame)]
   pub fn analyze_next_frame(
-    &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
+    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
     previous_keyframe: u64,
   ) -> bool {
     // Use score deque for adaptive threshold for scene cut
@@ -251,7 +255,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
 
   // Initially fill score deque with frame scores
   fn initialize_score_deque(
-    &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
+    &mut self, frame_set: &[Arc<Frame<T>>], input_frameno: u64,
     init_len: usize,
   ) {
     for x in 0..init_len {

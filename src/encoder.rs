@@ -44,6 +44,7 @@ use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use rayon::iter::*;
 use rust_hawktracer::*;
 
+use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::io::Write;
 use std::mem::MaybeUninit;
@@ -663,7 +664,7 @@ pub struct FrameInvariants<T: Pixel> {
   pub use_tx_domain_distortion: bool,
   pub use_tx_domain_rate: bool,
   pub idx_in_group_output: u64,
-  pub pyramid_level: u64,
+  pub pyramid_level: u8,
   pub enable_early_exit: bool,
   pub tx_mode_select: bool,
   pub enable_inter_txfm_split: bool,
@@ -816,17 +817,6 @@ pub enum Scales {
   SpatiotemporalScales,
 }
 
-pub(crate) const fn pos_to_lvl(pos: u64, pyramid_depth: u64) -> u64 {
-  // Derive level within pyramid for a frame with a given coding order position
-  // For example, with a pyramid of depth 2, the 2 least significant bits of the
-  // position determine the level:
-  // 00 -> 0
-  // 01 -> 2
-  // 10 -> 1
-  // 11 -> 2
-  pyramid_depth - (pos | (1 << pyramid_depth)).trailing_zeros() as u64
-}
-
 impl<T: Pixel> FrameInvariants<T> {
   #[allow(clippy::erasing_op, clippy::identity_op)]
   /// # Panics
@@ -964,48 +954,42 @@ impl<T: Pixel> FrameInvariants<T> {
   /// Returns the created `FrameInvariants`, or `None` if this should be
   /// a placeholder frame.
   pub(crate) fn new_inter_frame(
-    previous_coded_fi: &Self, inter_cfg: &InterConfig,
+    previous_coded_fi: &Self, input_frameno: u64,
     gop_input_frameno_start: u64, output_frameno_in_gop: u64,
-    next_keyframe_input_frameno: u64, error_resilient: bool,
-    t35_metadata: Box<[T35]>,
+    minigop_input_frameno_start: u64, output_frameno_in_minigop: u64,
+    next_golden_frame_input_frameno: u64, show_frame: bool,
+    show_existing_frame: bool, frame_depths: &BTreeMap<u64, FrameDepth>,
+    config: &EncoderConfig, t35_metadata: Box<[T35]>,
+    minigop_config: &MiniGopConfig,
   ) -> Option<Self> {
-    let input_frameno = inter_cfg
-      .get_input_frameno(output_frameno_in_gop, gop_input_frameno_start);
-    if input_frameno >= next_keyframe_input_frameno {
-      // This is an invalid frame. We set it as a placeholder in the FI list.
-      return None;
-    }
-
     // We have this special thin clone method to avoid cloning the
-    // quite large lookahead data for SEFs, when it is not needed.
+    // quite large lookahead data for SEFs when it is not needed.
     let mut fi = previous_coded_fi.clone_without_coded_data();
     fi.intra_only = false;
     fi.force_integer_mv = 0; // note: should be 1 if fi.intra_only is true
-    fi.idx_in_group_output =
-      inter_cfg.get_idx_in_group_output(output_frameno_in_gop);
+    fi.idx_in_group_output = output_frameno_in_minigop;
     fi.tx_mode_select = fi.enable_inter_txfm_split;
-
-    let show_existing_frame =
-      inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
     if !show_existing_frame {
       fi.coded_frame_data = previous_coded_fi.coded_frame_data.clone();
     }
 
-    fi.order_hint =
-      inter_cfg.get_order_hint(output_frameno_in_gop, fi.idx_in_group_output);
+    fi.order_hint = output_frameno_in_gop as u32;
 
-    fi.pyramid_level = inter_cfg.get_level(fi.idx_in_group_output);
+    fi.pyramid_level = frame_depths[&input_frameno].depth();
 
-    fi.frame_type = if (inter_cfg.switch_frame_interval > 0)
-      && (output_frameno_in_gop % inter_cfg.switch_frame_interval == 0)
-      && (fi.pyramid_level == 0)
+    fi.frame_type = if config.switch_frame_interval > 0
+      && output_frameno_in_gop % config.switch_frame_interval == 0
+      && fi.pyramid_level == 0
     {
       FrameType::SWITCH
     } else {
       FrameType::INTER
     };
-    fi.error_resilient =
-      if fi.frame_type == FrameType::SWITCH { true } else { error_resilient };
+    fi.error_resilient = if fi.frame_type == FrameType::SWITCH {
+      true
+    } else {
+      config.error_resilient
+    };
 
     fi.frame_size_override_flag = if fi.frame_type == FrameType::SWITCH {
       true
@@ -1023,8 +1007,8 @@ impl<T: Pixel> FrameInvariants<T> {
     };
 
     // this is the slot that the current frame is going to be saved into
-    let slot_idx = inter_cfg.get_slot_idx(fi.pyramid_level, fi.order_hint);
-    fi.show_frame = inter_cfg.get_show_frame(fi.idx_in_group_output);
+    let slot_idx = output_frameno_in_minigop as u32;
+    fi.show_frame = show_frame;
     fi.t35_metadata = if fi.show_frame { t35_metadata } else { Box::new([]) };
     fi.frame_to_show_map_idx = slot_idx;
     fi.refresh_frame_flags = if fi.frame_type == FrameType::SWITCH {
@@ -1040,15 +1024,16 @@ impl<T: Pixel> FrameInvariants<T> {
     let ref_in_previous_group = LAST3_FRAME;
 
     // reuse probability estimates from previous frames only in top level frames
-    fi.primary_ref_frame = if fi.error_resilient || (fi.pyramid_level > 2) {
-      PRIMARY_REF_NONE
-    } else {
-      (ref_in_previous_group.to_index()) as u32
+    if fi.error_resilient {
+      fi.primary_ref_frame = PRIMARY_REF_NONE;
     };
 
-    if fi.pyramid_level == 0 {
-      // level 0 has no forward references
+    if fi.idx_in_group_output == 0 {
+      // frame 0 has no forward references
       // default to last P frame
+      if !fi.error_resilient {
+        fi.primary_ref_frame = LAST_FRAME as u32;
+      }
       fi.ref_frames = [
         // calculations done relative to the slot_idx for this frame.
         // the last four frames can be found by subtracting from the current slot_idx
@@ -1057,22 +1042,41 @@ impl<T: Pixel> FrameInvariants<T> {
         // this is the previous P frame
         (slot_idx + 4 - 1) as u8 % 4
           ; INTER_REFS_PER_FRAME];
-      if inter_cfg.multiref {
+      if config.multiref() {
         // use the second-previous p frame as a second reference frame
-        fi.ref_frames[second_ref_frame.to_index()] =
-          (slot_idx + 4 - 2) as u8 % 4;
+        fi.ref_frames[LAST2_FRAME as usize] = (slot_idx + 4 - 2) as u8 % 4;
+      }
+    } else if fi.pyramid_level == 0 {
+      if !fi.error_resilient {
+        fi.primary_ref_frame = GOLDEN_FRAME as u32;
+      }
+      fi.ref_frames = [
+        // calculations done relative to the slot_idx for this frame.
+        // the last four frames can be found by subtracting from the current slot_idx
+        // add 4 to prevent underflow
+        // TODO: maybe use order_hint here like in get_slot_idx?
+        // this is the previous P frame
+        (slot_idx + 4 - 1) as u8 % 4
+          ; INTER_REFS_PER_FRAME];
+      if config.multiref() {
+        // use the previous p frame as a second reference frame
+        fi.ref_frames[LAST_FRAME as usize] = (slot_idx + 4 - 2) as u8 % 4;
       }
     } else {
-      debug_assert!(inter_cfg.multiref);
+      debug_assert!(config.multiref());
+
+      if !fi.error_resilient {
+        fi.primary_ref_frame = LAST_FRAME as u32;
+      }
 
       // fill in defaults
       // default to backwards reference in lower level
       fi.ref_frames = [{
         let oh = fi.order_hint
-          - (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
-        let lvl1 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+          - (minigop_config.group_input_len as u32 >> fi.pyramid_level);
+        let lvl1 = pos_to_lvl(oh as u64, minigop_config.pyramid_depth);
         if lvl1 == 0 {
-          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+          ((oh >> minigop_config.pyramid_depth) % 4) as u8
         } else {
           3 + lvl1 as u8
         }
@@ -1080,10 +1084,10 @@ impl<T: Pixel> FrameInvariants<T> {
       // use forward reference in lower level as a second reference frame
       fi.ref_frames[second_ref_frame.to_index()] = {
         let oh = fi.order_hint
-          + (inter_cfg.group_input_len as u32 >> fi.pyramid_level);
-        let lvl2 = pos_to_lvl(oh as u64, inter_cfg.pyramid_depth);
+          + (minigop_config.group_input_len as u32 >> fi.pyramid_level);
+        let lvl2 = pos_to_lvl(oh as u64, minigop_config.pyramid_depth);
         if lvl2 == 0 {
-          ((oh >> inter_cfg.pyramid_depth) % 4) as u8
+          ((oh >> minigop_config.pyramid_depth) % 4) as u8
         } else {
           3 + lvl2 as u8
         }
@@ -1095,13 +1099,14 @@ impl<T: Pixel> FrameInvariants<T> {
 
     fi.set_ref_frame_sign_bias();
 
-    fi.reference_mode = if inter_cfg.multiref && fi.idx_in_group_output != 0 {
+    fi.reference_mode = if config.multiref() && fi.idx_in_group_output != 0 {
       ReferenceMode::SELECT
     } else {
       ReferenceMode::SINGLE
     };
     fi.input_frameno = input_frameno;
-    fi.me_range_scale = (inter_cfg.group_input_len >> fi.pyramid_level) as u8;
+    fi.me_range_scale =
+      (minigop_config.group_input_len >> fi.pyramid_level) as u8;
 
     if fi.show_frame || fi.showable_frame {
       let cur_frame_time = fi.frame_timestamp();
@@ -3693,7 +3698,7 @@ fn write_tile_group_header(tile_start_and_end_present_flag: bool) -> Vec<u8> {
 /// - If the frame packets cannot be written
 #[hawktracer(encode_show_existing_frame)]
 pub fn encode_show_existing_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
 ) -> Vec<u8> {
   debug_assert!(fi.is_show_existing_frame());
   let obu_extension = 0;
@@ -3716,7 +3721,7 @@ pub fn encode_show_existing_frame<T: Pixel>(
   let mut buf2 = Vec::new();
   {
     let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs, inter_cfg).unwrap();
+    bw2.write_frame_header_obu(fi, fs).unwrap();
   }
 
   {
@@ -3768,7 +3773,7 @@ fn get_initial_segmentation<T: Pixel>(
 /// - If the frame packets cannot be written
 #[hawktracer(encode_frame)]
 pub fn encode_frame<T: Pixel>(
-  fi: &FrameInvariants<T>, fs: &mut FrameState<T>, inter_cfg: &InterConfig,
+  fi: &FrameInvariants<T>, fs: &mut FrameState<T>,
 ) -> Vec<u8> {
   debug_assert!(!fi.is_show_existing_frame());
   let obu_extension = 0;
@@ -3779,7 +3784,7 @@ pub fn encode_frame<T: Pixel>(
     fs.segmentation = get_initial_segmentation(fi);
     segmentation_optimize(fi, fs);
   }
-  let tile_group = encode_tile_group(fi, fs, inter_cfg);
+  let tile_group = encode_tile_group(fi, fs);
 
   if fi.frame_type == FrameType::KEY {
     write_key_frame_obus(&mut packet, fi, obu_extension).unwrap();
@@ -3797,7 +3802,7 @@ pub fn encode_frame<T: Pixel>(
   let mut buf2 = Vec::new();
   {
     let mut bw2 = BitWriter::endian(&mut buf2, BigEndian);
-    bw2.write_frame_header_obu(fi, fs, inter_cfg).unwrap();
+    bw2.write_frame_header_obu(fi, fs).unwrap();
   }
 
   {

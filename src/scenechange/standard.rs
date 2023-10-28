@@ -75,6 +75,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
           self.sequence.clone(),
           buffer,
         );
+        self.inter_costs.insert(input_frameno, mv_inter_cost);
       });
       s.spawn(|_| {
         imp_block_cost =

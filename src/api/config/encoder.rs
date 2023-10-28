@@ -228,6 +228,14 @@ impl EncoderConfig {
     !self.speed_settings.transform.tx_domain_distortion
   }
 
+  pub const fn reorder(&self) -> bool {
+    !self.low_latency
+  }
+
+  pub const fn multiref(&self) -> bool {
+    self.reorder() || self.speed_settings.multiref
+  }
+
   /// Describes whether the output is targeted as HDR
   pub fn is_hdr(&self) -> bool {
     self

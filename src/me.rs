@@ -25,6 +25,8 @@ use crate::FrameInvariants;
 
 use arrayvec::*;
 use rust_hawktracer::*;
+
+use crate::util::ILog;
 use std::ops::{Index, IndexMut};
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
@@ -153,7 +155,7 @@ pub enum MVSamplingMode {
 
 pub fn estimate_tile_motion<T: Pixel>(
   fi: &FrameInvariants<T>, ts: &mut TileStateMut<'_, T>,
-  inter_cfg: &InterConfig,
+  allowed_ref_frames: &[RefType],
 ) {
   let init_size = MIB_SIZE_LOG2;
 
@@ -179,7 +181,7 @@ pub fn estimate_tile_motion<T: Pixel>(
     for sby in 0..ts.sb_height {
       for sbx in 0..ts.sb_width {
         let mut tested_frames_flags = 0;
-        for &ref_frame in inter_cfg.allowed_ref_frames() {
+        for &ref_frame in allowed_ref_frames {
           let frame_flag = 1 << fi.ref_frames[ref_frame.to_index()];
           if tested_frames_flags & frame_flag == frame_flag {
             continue;
