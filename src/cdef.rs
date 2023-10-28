@@ -13,10 +13,16 @@ use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
+use rayon::iter::ParallelIterator;
+use rayon::prelude::*;
 use rust_hawktracer::*;
 
 use crate::cpu_features::CpuFeatureLevel;
-use std::cmp;
+use std::{
+  cmp,
+  ops::DerefMut,
+  sync::{Arc, Mutex},
+};
 
 cfg_if::cfg_if! {
   if #[cfg(nasm_x86_64)] {
@@ -607,20 +613,46 @@ pub fn cdef_filter_tile<T: Pixel>(
   let fb_width = (output.planes[0].rect().width + 63) / 64;
   let fb_height = (output.planes[0].rect().height + 63) / 64;
 
-  // should parallelize this
+  let mut queue: Vec<(usize, usize, Arc<Mutex<&mut TileMut<'_, T>>>)> =
+    Vec::new();
+  let shared_output = Arc::new(Mutex::new(output));
+
   for fby in 0..fb_height {
     for fbx in 0..fb_width {
-      // tile_sbo is treated as an offset into the Tiles' plane
-      // regions, not as an absolute offset in the visible frame.  The
-      // Tile's own offset is added to this in order to address into
-      // the input Frame.
-      let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
-      let cdef_index = tb.get_cdef(tile_sbo);
-      let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
-
-      cdef_filter_superblock(
-        fi, input, output, tb, tile_sbo, cdef_index, &cdef_dirs,
-      );
+      queue.push((fbx, fby, shared_output.clone()));
     }
   }
+
+  queue.into_par_iter().for_each(|tpl| filter_tile(tpl, fi, input, tb));
+}
+
+#[hawktracer(filter_tile)]
+pub fn filter_tile<T: Pixel>(
+  tpl: (usize, usize, Arc<Mutex<&mut TileMut<'_, T>>>),
+  fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
+) {
+  // tile_sbo is treated as an offset into the Tiles' plane
+  // regions, not as an absolute offset in the visible frame.  The
+  // Tile's own offset is added to this in order to address into
+  // the input Frame.
+  let (fbx, fby, shared_output) = tpl;
+  let tile_sbo = TileSuperBlockOffset(SuperBlockOffset { x: fbx, y: fby });
+  let cdef_index = tb.get_cdef(tile_sbo);
+  let cdef_dirs = cdef_analyze_superblock(fi, input, tb, tile_sbo);
+  loop {
+    if shared_output.try_lock().is_ok() {
+      break;
+    }
+  }
+  let mut output = shared_output.lock().unwrap();
+
+  cdef_filter_superblock(
+    fi,
+    input,
+    output.deref_mut(),
+    tb,
+    tile_sbo,
+    cdef_index,
+    &cdef_dirs,
+  );
 }
