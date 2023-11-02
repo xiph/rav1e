@@ -108,8 +108,59 @@ pub fn get_sad<T: Pixel>(
   dist
 }
 
-#[no_mangle]
-unsafe extern fn rav1e_satd8x8_neon(
+macro_rules! impl_satd_fn {
+  ($(($name: ident, $T: ident, $LOG_W:expr, $log_h:expr)),+) => (
+    $(
+      #[no_mangle]
+      unsafe extern fn $name (
+        src: *const $T, src_stride: isize, dst: *const $T, dst_stride: isize
+      ) -> u32 {
+        rav1e_satd8wx8h_neon::<$LOG_W>(src, src_stride, dst, dst_stride, $log_h)
+      }
+    )+
+  )
+}
+
+impl_satd_fn![
+  (rav1e_satd8x8_neon, u8, 0, 0),
+  (rav1e_satd8x16_neon, u8, 0, 1),
+  (rav1e_satd8x32_neon, u8, 0, 2),
+  (rav1e_satd16x8_neon, u8, 1, 0),
+  (rav1e_satd16x16_neon, u8, 1, 1),
+  (rav1e_satd16x32_neon, u8, 1, 2),
+  (rav1e_satd16x64_neon, u8, 1, 3),
+  (rav1e_satd32x8_neon, u8, 2, 0),
+  (rav1e_satd32x16_neon, u8, 2, 1),
+  (rav1e_satd32x32_neon, u8, 2, 2),
+  (rav1e_satd32x64_neon, u8, 2, 3),
+  (rav1e_satd64x16_neon, u8, 3, 1),
+  (rav1e_satd64x32_neon, u8, 3, 2),
+  (rav1e_satd64x64_neon, u8, 3, 3),
+  (rav1e_satd64x128_neon, u8, 3, 4),
+  (rav1e_satd128x64_neon, u8, 4, 3),
+  (rav1e_satd128x128_neon, u8, 4, 4)
+];
+
+unsafe fn rav1e_satd8wx8h_neon<const LOG_W: usize>(
+  mut src: *const u8, src_stride: isize, mut dst: *const u8,
+  dst_stride: isize, log_h: usize,
+) -> u32 {
+  let mut sum = 0;
+  for _ in 0..(1 << log_h) {
+    let (mut src_off, mut dst_off) = (src, dst);
+    for _ in 0..(1 << LOG_W) {
+      sum +=
+        rav1e_satd8x8_internal_neon(src_off, src_stride, dst_off, dst_stride);
+      src_off = src_off.add(8);
+      dst_off = dst_off.add(8);
+    }
+    src = src.offset(src_stride << 3);
+    dst = dst.offset(dst_stride << 3);
+  }
+  (sum + 4) >> 3
+}
+
+unsafe fn rav1e_satd8x8_internal_neon(
   src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
 ) -> u32 {
   use core::arch::aarch64::*;
@@ -200,7 +251,7 @@ unsafe extern fn rav1e_satd8x8_neon(
   let (t0, t1) = (vaddw_s16(t0, vget_low_s16(r6)), vaddw_high_s16(t1, r6));
   let (t0, t1) = (vaddw_s16(t0, vget_low_s16(r7)), vaddw_high_s16(t1, r7));
 
-  (vaddvq_s32(vaddq_s32(t0, t1)) as u32 + 4) >> 3
+  vaddvq_s32(vaddq_s32(t0, t1)) as u32
 }
 
 #[inline(always)]
@@ -289,6 +340,22 @@ static SATD_FNS_NEON: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   out[BLOCK_16X4 as usize] = Some(rav1e_satd16x4_neon);
 
   out[BLOCK_8X8 as usize] = Some(rav1e_satd8x8_neon);
+  out[BLOCK_8X16 as usize] = Some(rav1e_satd8x16_neon);
+  out[BLOCK_8X32 as usize] = Some(rav1e_satd8x32_neon);
+  out[BLOCK_16X8 as usize] = Some(rav1e_satd16x8_neon);
+  out[BLOCK_16X16 as usize] = Some(rav1e_satd16x16_neon);
+  out[BLOCK_16X32 as usize] = Some(rav1e_satd16x32_neon);
+  out[BLOCK_16X64 as usize] = Some(rav1e_satd16x64_neon);
+  out[BLOCK_32X8 as usize] = Some(rav1e_satd32x8_neon);
+  out[BLOCK_32X16 as usize] = Some(rav1e_satd32x16_neon);
+  out[BLOCK_32X32 as usize] = Some(rav1e_satd32x32_neon);
+  out[BLOCK_32X64 as usize] = Some(rav1e_satd32x64_neon);
+  out[BLOCK_64X16 as usize] = Some(rav1e_satd64x16_neon);
+  out[BLOCK_64X32 as usize] = Some(rav1e_satd64x32_neon);
+  out[BLOCK_64X64 as usize] = Some(rav1e_satd64x64_neon);
+  out[BLOCK_64X128 as usize] = Some(rav1e_satd64x128_neon);
+  out[BLOCK_128X64 as usize] = Some(rav1e_satd128x64_neon);
+  out[BLOCK_128X128 as usize] = Some(rav1e_satd128x128_neon);
 
   out
 };
@@ -386,7 +453,23 @@ mod test {
     (4, 16),
     (8, 4),
     (8, 8),
+    (8, 16),
+    (8, 32),
     (16, 4),
+    (16, 8),
+    (16, 16),
+    (16, 32),
+    (16, 64),
+    (32, 8),
+    (32, 16),
+    (32, 32),
+    (32, 64),
+    (64, 16),
+    (64, 32),
+    (64, 64),
+    (64, 128),
+    (128, 64),
+    (128, 128),
     satd,
     8,
     neon,
