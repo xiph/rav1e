@@ -60,6 +60,7 @@ declare_asm_dist_fn![
   (rav1e_satd4x8_neon, u8),
   (rav1e_satd4x16_neon, u8),
   (rav1e_satd8x4_neon, u8),
+  (rav1e_satd8x8_neon, u8),
   (rav1e_satd16x4_neon, u8)
 ];
 
@@ -122,7 +123,6 @@ macro_rules! impl_satd_fn {
 }
 
 impl_satd_fn![
-  (rav1e_satd8x8_neon, u8, 0, 0),
   (rav1e_satd8x16_neon, u8, 0, 1),
   (rav1e_satd8x32_neon, u8, 0, 2),
   (rav1e_satd16x8_neon, u8, 1, 0),

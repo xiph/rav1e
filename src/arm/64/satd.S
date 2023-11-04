@@ -26,9 +26,19 @@
     zip2 \r1\().4s, \r2\().4s, \r3\().4s
 .endm
 
+.macro interleave_quads r0, r1, r2, r3
+    zip1 \r0\().2d, \r2\().2d, \r3\().2d
+    zip2 \r1\().2d, \r2\().2d, \r3\().2d
+.endm
+
 .macro normalize_4
     add     w0, w0, 2
     lsr     w0, w0, 2
+.endm
+
+.macro normalize_8
+    add     w0, w0, 4
+    lsr     w0, w0, 3
 .endm
 
 // x0: src: *const u8,
@@ -571,6 +581,151 @@ function satd4x16_neon, export=1
     addv    h0, v0.8h
     fmov    w0, s0
     normalize_4
+    ret
+
+    #undef src
+    #undef src_stride
+    #undef dst
+    #undef dst_stride
+endfunc
+
+.macro load_rows n0, n1, n2, src, dst, src_stride, dst_stride, should_add=1
+    ldr     d\n0, [\src]
+    ldr     d\n1, [\dst]
+    usubl   v\n0\().8h, v\n0\().8b, v\n1\().8b
+
+    ldr     d\n1, [\src, \src_stride]
+    ldr     d\n2, [\dst, \dst_stride]
+    usubl   v\n1\().8h, v\n1\().8b, v\n2\().8b
+
+.if \should_add != 0
+    add     \src, \src, \src_stride, lsl 1
+    add     \dst, \dst, \dst_stride, lsl 1
+.endif
+.endm
+
+.macro HADAMARD_8X8 \
+       a0 a1 a2 a3 a4 a5 a6 a7 \
+       b0 b1 b2 b3 b4 b5 b6 b7
+
+    // Horizontal transform
+
+    butterfly v\b0, v\b1, v\a0, v\a1
+    butterfly v\b2, v\b3, v\a2, v\a3
+    butterfly v\b4, v\b5, v\a4, v\a5
+    butterfly v\b6, v\b7, v\a6, v\a7
+
+    interleave v\a0, v\a1, v\b0, v\b1
+    interleave v\a2, v\a3, v\b2, v\b3
+    interleave v\a4, v\a5, v\b4, v\b5
+    interleave v\a6, v\a7, v\b6, v\b7
+
+    butterfly v\b0, v\b2, v\a0, v\a2
+    butterfly v\b1, v\b3, v\a1, v\a3
+    butterfly v\b4, v\b6, v\a4, v\a6
+    butterfly v\b5, v\b7, v\a5, v\a7
+
+    interleave_pairs v\a0, v\a2, v\b0, v\b2
+    interleave_pairs v\a1, v\a3, v\b1, v\b3
+    interleave_pairs v\a4, v\a6, v\b4, v\b6
+    interleave_pairs v\a5, v\a7, v\b5, v\b7
+
+    butterfly v\b0, v\b4, v\a0, v\a4
+    butterfly v\b1, v\b5, v\a1, v\a5
+    butterfly v\b2, v\b6, v\a2, v\a6
+    butterfly v\b3, v\b7, v\a3, v\a7
+
+    interleave_quads v\a0, v\a4, v\b0, v\b4
+    interleave_quads v\a1, v\a5, v\b1, v\b5
+    interleave_quads v\a2, v\a6, v\b2, v\b6
+    interleave_quads v\a3, v\a7, v\b3, v\b7
+
+    // Vertical transform
+
+    butterfly v\b0, v\b1, v\a0, v\a1
+    butterfly v\b2, v\b3, v\a2, v\a3
+    butterfly v\b4, v\b5, v\a4, v\a5
+    butterfly v\b6, v\b7, v\a6, v\a7
+
+    butterfly v\a0, v\a2, v\b0, v\b2
+    butterfly v\a1, v\a3, v\b1, v\b3
+    butterfly v\a4, v\a6, v\b4, v\b6
+    butterfly v\a5, v\a7, v\b5, v\b7
+
+    butterfly v\b0, v\b4, v\a0, v\a4
+    butterfly v\b1, v\b5, v\a1, v\a5
+    butterfly v\b2, v\b6, v\a2, v\a6
+    butterfly v\b3, v\b7, v\a3, v\a7
+.endm
+
+.macro SUM_HADAMARD_8X8 \
+       a0 a1 a2 a3 a4 a5 a6 a7 \
+       b0 b1 b2 b3 b4 b5 b6 b7
+
+    // absolute value of transform coefficients
+    abs  v\b0\().8h, v\b0\().8h
+    abs  v\b1\().8h, v\b1\().8h
+    abs  v\b2\().8h, v\b2\().8h
+    abs  v\b3\().8h, v\b3\().8h
+    abs  v\b4\().8h, v\b4\().8h
+    abs  v\b5\().8h, v\b5\().8h
+    abs  v\b6\().8h, v\b6\().8h
+    abs  v\b7\().8h, v\b7\().8h
+
+    // stage 1 sum
+    sxtl v\a0\().4s, v\b0\().4h
+    sxtl v\a1\().4s, v\b1\().4h
+    sxtl v\a2\().4s, v\b2\().4h
+    sxtl v\a3\().4s, v\b3\().4h
+    saddw2  v\a0\().4s, v\a0\().4s, v\b0\().8h
+    saddw2  v\a1\().4s, v\a1\().4s, v\b1\().8h
+    saddw2  v\a2\().4s, v\a2\().4s, v\b2\().8h
+    saddw2  v\a3\().4s, v\a3\().4s, v\b3\().8h
+    saddw   v\a0\().4s, v\a0\().4s, v\b4\().4h
+    saddw2  v\a1\().4s, v\a1\().4s, v\b4\().8h
+    saddw   v\a2\().4s, v\a2\().4s, v\b5\().4h
+    saddw2  v\a3\().4s, v\a3\().4s, v\b5\().8h
+    saddw   v\a0\().4s, v\a0\().4s, v\b6\().4h
+    saddw2  v\a1\().4s, v\a1\().4s, v\b6\().8h
+    saddw   v\a2\().4s, v\a2\().4s, v\b7\().4h
+    saddw2  v\a3\().4s, v\a3\().4s, v\b7\().8h
+
+    // stage 2 sum
+    add  v\a0\().4s, v\a0\().4s, v\a1\().4s
+    add  v\a2\().4s, v\a2\().4s, v\a3\().4s
+
+    // stage 3 sum
+    add  v0.4s, v\a0\().4s, v\a2\().4s
+    addv s0, v0.4s
+
+    fmov w0, s0
+    normalize_8
+.endm
+
+function satd8x8_neon, export=1
+    #define src         x0
+    #define src_stride  x1
+    #define dst         x2
+    #define dst_stride  x3
+
+    //  0,  1;   2,  3
+    //  4,  5;   6,  7
+    // 16, 17;  20, 21
+    // 18, 19;  22, 23
+
+    load_rows 0, 1, 2, src, dst, src_stride, dst_stride
+    load_rows 4, 5, 6, src, dst, src_stride, dst_stride
+    load_rows 16, 17, 20, src, dst, src_stride, dst_stride
+    load_rows 18, 19, 22, src, dst, src_stride, dst_stride, 0
+
+    HADAMARD_8X8 \
+    0, 1, 4, 5, 16, 17, 18, 19, \
+    2, 3, 6, 7, 20, 21, 22, 23
+
+    SUM_HADAMARD_8X8 \
+    0, 1, 4, 5, 16, 17, 18, 19, \
+    2, 3, 6, 7, 20, 21, 22, 23
+
     ret
 
     #undef src
