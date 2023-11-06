@@ -18,6 +18,8 @@ use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
 use rav1e::config::CpuFeatureLevel;
+
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -195,6 +197,14 @@ pub struct CliOptions {
     help_heading = "ENCODE SETTINGS"
   )]
   pub film_grain_table: Option<PathBuf>,
+  /// Uses a HDR10+ metadata JSON file to add as T.35 metadata to the encode.
+  #[clap(
+    long,
+    alias = "dhdr10-info",
+    value_parser,
+    help_heading = "ENCODE SETTINGS"
+  )]
+  pub hdr10plus_json: Option<PathBuf>,
 
   /// Pixel range
   #[clap(long, value_parser, help_heading = "VIDEO METADATA")]
@@ -681,6 +691,39 @@ fn parse_config(matches: &CliOptions) -> Result<EncoderConfig, CliError> {
       .expect("Failed to parse film grain table");
     if !table.is_empty() {
       cfg.film_grain_params = Some(table);
+    }
+  }
+
+  if let Some(json_file) = matches.hdr10plus_json.as_ref() {
+    let contents = std::fs::read_to_string(json_file)
+      .expect("Failed to read HDR10+ metadata file");
+    let metadata_root =
+      hdr10plus::metadata_json::MetadataJsonRoot::parse(&contents)
+        .expect("Failed to parse HDR10+ metadata");
+
+    let hdr10plus_enc_opts = hdr10plus::metadata::Hdr10PlusMetadataEncOpts {
+      with_country_code: false,
+      ..Default::default()
+    };
+    let payloads: BTreeMap<u64, T35> = metadata_root
+      .scene_info
+      .iter()
+      .filter_map(|meta| {
+        hdr10plus::metadata::Hdr10PlusMetadata::try_from(meta)
+          .and_then(|meta| meta.encode_with_opts(&hdr10plus_enc_opts))
+          .map(|payload| T35 {
+            country_code: 0xB5,
+            country_code_extension_byte: 0x00,
+            data: payload.into_boxed_slice(),
+          })
+          .ok()
+      })
+      .zip(0u64..)
+      .map(|(payload, frame_no)| (frame_no, payload))
+      .collect();
+
+    if !payloads.is_empty() {
+      cfg.hdr10plus_payloads = Some(payloads);
     }
   }
 

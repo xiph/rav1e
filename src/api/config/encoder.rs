@@ -9,12 +9,13 @@
 
 use itertools::*;
 
-use crate::api::color::*;
 use crate::api::config::GrainTableSegment;
+use crate::api::{color::*, T35};
 use crate::api::{Rational, SpeedSettings};
 use crate::encoder::Tune;
 use crate::serialize::{Deserialize, Serialize};
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 // We add 1 to rdo_lookahead_frames in a bunch of places.
@@ -91,6 +92,11 @@ pub struct EncoderConfig {
   pub tune: Tune,
   /// Parameters for grain synthesis.
   pub film_grain_params: Option<Vec<GrainTableSegment>>,
+  /// HDR10+, ST2094-40 T.35 metadata payload map, by input frame index.
+  ///
+  /// The T.35 metadata is expected to follow the specification
+  /// defined at https://aomediacodec.github.io/av1-hdr10plus.
+  pub hdr10plus_payloads: Option<BTreeMap<u64, T35>>,
   /// Number of tiles horizontally. Must be a power of two.
   ///
   /// Overridden by [`tiles`], if present.
@@ -167,6 +173,7 @@ impl EncoderConfig {
       bitrate: 0,
       tune: Tune::default(),
       film_grain_params: None,
+      hdr10plus_payloads: None,
       tile_cols: 0,
       tile_rows: 0,
       tiles: 0,

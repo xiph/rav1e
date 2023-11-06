@@ -1284,6 +1284,19 @@ impl<T: Pixel> FrameInvariants<T> {
     self.input_frameno * TIMESTAMP_BASE_UNIT * self.sequence.time_base.num
       / self.sequence.time_base.den
   }
+
+  /// HDR10+ Metadata as T.35 metadata from [`EncoderConfig`]
+  pub fn hdr10plus_metadata(&self) -> Option<&T35> {
+    if !(self.show_frame || self.is_show_existing_frame()) {
+      return None;
+    }
+
+    self
+      .config
+      .hdr10plus_payloads
+      .as_ref()
+      .and_then(|payloads| payloads.get(&self.input_frameno))
+  }
 }
 
 impl<T: Pixel> fmt::Display for FrameInvariants<T> {
@@ -3705,11 +3718,14 @@ pub fn encode_show_existing_frame<T: Pixel>(
   }
 
   for t35 in fi.t35_metadata.iter() {
-    let mut t35_buf = Vec::new();
-    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
-    t35_bw.write_t35_metadata_obu(t35).unwrap();
-    packet.write_all(&t35_buf).unwrap();
-    t35_buf.clear();
+    write_t35_metadata_packet(&mut packet, t35);
+  }
+
+  // HDR10+ Metadata OBU from config
+  if let Some(t35) = fi.hdr10plus_metadata() {
+    if !fi.t35_metadata.iter().any(|t35| t35.is_hdr10plus_metadata()) {
+      write_t35_metadata_packet(&mut packet, t35);
+    }
   }
 
   let mut buf1 = Vec::new();
@@ -3786,11 +3802,14 @@ pub fn encode_frame<T: Pixel>(
   }
 
   for t35 in fi.t35_metadata.iter() {
-    let mut t35_buf = Vec::new();
-    let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
-    t35_bw.write_t35_metadata_obu(t35).unwrap();
-    packet.write_all(&t35_buf).unwrap();
-    t35_buf.clear();
+    write_t35_metadata_packet(&mut packet, t35);
+  }
+
+  // HDR10+ Metadata OBU from config
+  if let Some(t35) = fi.hdr10plus_metadata() {
+    if !fi.t35_metadata.iter().any(|t35| t35.is_hdr10plus_metadata()) {
+      write_t35_metadata_packet(&mut packet, t35);
+    }
   }
 
   let mut buf1 = Vec::new();
@@ -3844,6 +3863,14 @@ pub fn update_rec_buffer<T: Pixel>(
       fi.rec_buffer.deblock[i] = fs.deblock;
     }
   }
+}
+
+fn write_t35_metadata_packet(packet: &mut Vec<u8>, t35: &T35) {
+  let mut t35_buf = Vec::new();
+  let mut t35_bw = BitWriter::endian(&mut t35_buf, BigEndian);
+  t35_bw.write_t35_metadata_obu(t35).unwrap();
+  packet.write_all(&t35_buf).unwrap();
+  t35_buf.clear();
 }
 
 #[cfg(test)]
