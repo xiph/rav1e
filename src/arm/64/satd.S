@@ -589,7 +589,7 @@ function satd4x16_neon, export=1
     #undef dst_stride
 endfunc
 
-.macro load_rows n0, n1, n2, src, dst, src_stride, dst_stride, should_add=1
+.macro load_rows n0, n1, n2, src, dst, src_stride, dst_stride
     ldr     d\n0, [\src]
     ldr     d\n1, [\dst]
     usubl   v\n0\().8h, v\n0\().8b, v\n1\().8b
@@ -598,10 +598,8 @@ endfunc
     ldr     d\n2, [\dst, \dst_stride]
     usubl   v\n1\().8h, v\n1\().8b, v\n2\().8b
 
-.if \should_add != 0
     add     \src, \src, \src_stride, lsl 1
     add     \dst, \dst, \dst_stride, lsl 1
-.endif
 .endm
 
 .macro HADAMARD_8X8 \
@@ -697,9 +695,6 @@ endfunc
     // stage 3 sum
     add  v0.4s, v\a0\().4s, v\a2\().4s
     addv s0, v0.4s
-
-    fmov w0, s0
-    normalize_8
 .endm
 
 function satd8x8_neon, export=1
@@ -708,15 +703,28 @@ function satd8x8_neon, export=1
     #define dst         x2
     #define dst_stride  x3
 
+    #define subtotal    w9
+    #define total       w10
+    #define w_ext       x11
+    #define w_bak       w11
+    #define width       w12
+    #define height      w13
+
+    mov  height, 8
+    mov  width, 8
+    sxtw w_ext, width
+    mov  total, wzr
+
     //  0,  1;   2,  3
     //  4,  5;   6,  7
     // 16, 17;  20, 21
     // 18, 19;  22, 23
 
+L(satd_8x8):
     load_rows 0, 1, 2, src, dst, src_stride, dst_stride
     load_rows 4, 5, 6, src, dst, src_stride, dst_stride
     load_rows 16, 17, 20, src, dst, src_stride, dst_stride
-    load_rows 18, 19, 22, src, dst, src_stride, dst_stride, 0
+    load_rows 18, 19, 22, src, dst, src_stride, dst_stride
 
     HADAMARD_8X8 \
     0, 1, 4, 5, 16, 17, 18, 19, \
@@ -726,10 +734,64 @@ function satd8x8_neon, export=1
     0, 1, 4, 5, 16, 17, 18, 19, \
     2, 3, 6, 7, 20, 21, 22, 23
 
+    fmov subtotal, s0
+    add  total, subtotal, total
+
+    sub  src, src, src_stride, lsl 3
+    sub  dst, dst, dst_stride, lsl 3
+    add  src, src, #8
+    add  dst, dst, #8
+    subs width, width, #8
+    bne  L(satd_8x8)
+
+    sub  src, src, w_ext
+    sub  dst, dst, w_ext
+    add  src, src, src_stride, lsl 3
+    add  dst, dst, dst_stride, lsl 3
+    subs height, height, #8
+    mov  width, w_bak
+    bne  L(satd_8x8)
+
+    mov  w0, total
+    normalize_8
     ret
 
     #undef src
     #undef src_stride
     #undef dst
     #undef dst_stride
+
+    #undef w_ext
+    #undef w_bak
+    #undef subtotal
+    #undef total
+    #undef height
+    #undef width
 endfunc
+
+.macro satd_x8up width, height
+function satd\width\()x\height\()_neon, export=1
+    mov  w13, \height
+    mov  w12, \width
+    sxtw x11, w12
+    mov  w10, wzr
+    b    L(satd_8x8)
+endfunc
+.endm
+
+satd_x8up 8, 16
+satd_x8up 8, 32
+satd_x8up 16, 8
+satd_x8up 16, 16
+satd_x8up 16, 32
+satd_x8up 16, 64
+satd_x8up 32, 8
+satd_x8up 32, 16
+satd_x8up 32, 32
+satd_x8up 32, 64
+satd_x8up 64, 16
+satd_x8up 64, 32
+satd_x8up 64, 64
+satd_x8up 64, 128
+satd_x8up 128, 64
+satd_x8up 128, 128
