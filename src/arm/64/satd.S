@@ -717,14 +717,9 @@ function satd8x8_neon, export=1
 
     #define subtotal    w9
     #define total       w10
-    #define w_ext       x11
-    #define w_bak       w11
-    #define width       w12
     #define height      w13
 
     mov  height, 8
-    mov  width, 8
-    sxtw w_ext, width
     mov  total, wzr
 
     //  0,  1;   2,  3
@@ -732,7 +727,7 @@ function satd8x8_neon, export=1
     // 16, 17;  20, 21
     // 18, 19;  22, 23
 
-L(satd_8x8):
+L(satd_w8):
     load_rows 0, 1, 2, src, dst, src_stride, dst_stride
     load_rows 4, 5, 6, src, dst, src_stride, dst_stride
     load_rows 16, 17, 20, src, dst, src_stride, dst_stride
@@ -749,20 +744,8 @@ L(satd_8x8):
     fmov subtotal, s0
     add  total, subtotal, total
 
-    sub  src, src, src_stride, lsl 3
-    sub  dst, dst, dst_stride, lsl 3
-    add  src, src, #8
-    add  dst, dst, #8
-    subs width, width, #8
-    bne  L(satd_8x8)
-
-    sub  src, src, w_ext
-    sub  dst, dst, w_ext
-    add  src, src, src_stride, lsl 3
-    add  dst, dst, dst_stride, lsl 3
     subs height, height, #8
-    mov  width, w_bak
-    bne  L(satd_8x8)
+    bne  L(satd_w8)
 
     mov  w0, total
     normalize_8
@@ -773,12 +756,9 @@ L(satd_8x8):
     #undef dst
     #undef dst_stride
 
-    #undef w_ext
-    #undef w_bak
     #undef subtotal
     #undef total
     #undef height
-    #undef width
 endfunc
 
 .macro DOUBLE_HADAMARD_8X8 \
@@ -942,8 +922,6 @@ endfunc
     // stage 4 sum
     add  v0.4s, v\b0\().4s, v\b4\().4s
     addv s0, v0.4s
-    fmov w0, s0
-    normalize_8
 .endm
 
 function satd16x8_neon, export=1
@@ -952,11 +930,24 @@ function satd16x8_neon, export=1
     #define dst         x2
     #define dst_stride  x3
 
+    #define subtotal    w9
+    #define total       w10
+    #define w_ext       x11
+    #define w_bak       w11
+    #define width       w12
+    #define height      w13
+
+    mov  height, 8
+    mov  width, 16
+    sxtw w_ext, width
+    mov  total, wzr
+
     //  0,  1;   2,  3;  24, 25
     //  4,  5;   6,  7;  26, 27
     // 16, 17;  20, 21;  28, 29
     // 18, 19;  22, 23;  30, 31
 
+L(satd_w16up):
     load_rows 0, 1, 2, src, dst, src_stride, dst_stride, 24, 25
     load_rows 4, 5, 6, src, dst, src_stride, dst_stride, 26, 27
     load_rows 16, 17, 20, src, dst, src_stride, dst_stride, 28, 29
@@ -972,21 +963,53 @@ function satd16x8_neon, export=1
      2,  3,  6,  7, 20, 21, 22, 23, \
     24, 25, 26, 27, 28, 29, 30, 31
 
+    fmov subtotal, s0
+    add  total, subtotal, total
+
+    sub  src, src, src_stride, lsl 3
+    sub  dst, dst, dst_stride, lsl 3
+    add  src, src, #16
+    add  dst, dst, #16
+    subs width, width, #16
+    bne  L(satd_w16up)
+
+    sub  src, src, w_ext
+    sub  dst, dst, w_ext
+    add  src, src, src_stride, lsl 3
+    add  dst, dst, dst_stride, lsl 3
+    subs height, height, #8
+    mov  width, w_bak
+    bne  L(satd_w16up)
+
+    mov  w0, total
+    normalize_8
     ret
 
     #undef src
     #undef src_stride
     #undef dst
     #undef dst_stride
+
+    #undef w_ext
+    #undef w_bak
+    #undef subtotal
+    #undef total
+    #undef height
+    #undef width
 endfunc
 
 .macro satd_x8up width, height
 function satd\width\()x\height\()_neon, export=1
     mov  w13, \height
+.if \width == 8
+    mov  w10, wzr
+    b    L(satd_w8)
+.else
     mov  w12, \width
     sxtw x11, w12
     mov  w10, wzr
-    b    L(satd_8x8)
+    b    L(satd_w16up)
+.endif
 endfunc
 .endm
 
