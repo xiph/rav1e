@@ -589,13 +589,25 @@ function satd4x16_neon, export=1
     #undef dst_stride
 endfunc
 
-.macro load_rows n0, n1, n2, src, dst, src_stride, dst_stride
+.macro load_rows n0, n1, n2, src, dst, src_stride, dst_stride, n3=0, n4=0
+.if \n3 == 0
     ldr     d\n0, [\src]
     ldr     d\n1, [\dst]
+.else
+    ldr     q\n0, [\src]
+    ldr     q\n1, [\dst]
+    usubl2  v\n3\().8h, v\n0\().16b, v\n1\().16b
+.endif
     usubl   v\n0\().8h, v\n0\().8b, v\n1\().8b
 
+.if \n4 == 0
     ldr     d\n1, [\src, \src_stride]
     ldr     d\n2, [\dst, \dst_stride]
+.else
+    ldr     q\n1, [\src, \src_stride]
+    ldr     q\n2, [\dst, \dst_stride]
+    usubl2  v\n4\().8h, v\n1\().16b, v\n2\().16b
+.endif
     usubl   v\n1\().8h, v\n1\().8b, v\n2\().8b
 
     add     \src, \src, \src_stride, lsl 1
@@ -769,6 +781,205 @@ L(satd_8x8):
     #undef width
 endfunc
 
+.macro DOUBLE_HADAMARD_8X8 \
+       a0 a1 a2 a3 a4 a5 a6 a7 \
+       b0 b1 b2 b3 b4 b5 b6 b7 \
+       c0 c1 c2 c3 c4 c5 c6 c7
+
+    // Horizontal transform
+
+    butterfly v\b0, v\b1, v\a0, v\a1
+    butterfly v\b2, v\b3, v\a2, v\a3
+    butterfly v\b4, v\b5, v\a4, v\a5
+    butterfly v\b6, v\b7, v\a6, v\a7
+    butterfly v\a0, v\a1, v\c0, v\c1
+    butterfly v\a2, v\a3, v\c2, v\c3
+    butterfly v\a4, v\a5, v\c4, v\c5
+    butterfly v\a6, v\a7, v\c6, v\c7
+
+    interleave v\c0, v\c1, v\b0, v\b1
+    interleave v\c2, v\c3, v\b2, v\b3
+    interleave v\c4, v\c5, v\b4, v\b5
+    interleave v\c6, v\c7, v\b6, v\b7
+    interleave v\b0, v\b1, v\a0, v\a1
+    interleave v\b2, v\b3, v\a2, v\a3
+    interleave v\b4, v\b5, v\a4, v\a5
+    interleave v\b6, v\b7, v\a6, v\a7
+
+    butterfly v\a0, v\a2, v\c0, v\c2
+    butterfly v\a1, v\a3, v\c1, v\c3
+    butterfly v\a4, v\a6, v\c4, v\c6
+    butterfly v\a5, v\a7, v\c5, v\c7
+    butterfly v\c0, v\c2, v\b0, v\b2
+    butterfly v\c1, v\c3, v\b1, v\b3
+    butterfly v\c4, v\c6, v\b4, v\b6
+    butterfly v\c5, v\c7, v\b5, v\b7
+
+    interleave_pairs v\b0, v\b2, v\a0, v\a2
+    interleave_pairs v\b1, v\b3, v\a1, v\a3
+    interleave_pairs v\b4, v\b6, v\a4, v\a6
+    interleave_pairs v\b5, v\b7, v\a5, v\a7
+    interleave_pairs v\a0, v\a2, v\c0, v\c2
+    interleave_pairs v\a1, v\a3, v\c1, v\c3
+    interleave_pairs v\a4, v\a6, v\c4, v\c6
+    interleave_pairs v\a5, v\a7, v\c5, v\c7
+
+    butterfly v\c0, v\c4, v\b0, v\b4
+    butterfly v\c1, v\c5, v\b1, v\b5
+    butterfly v\c2, v\c6, v\b2, v\b6
+    butterfly v\c3, v\c7, v\b3, v\b7
+    butterfly v\b0, v\b4, v\a0, v\a4
+    butterfly v\b1, v\b5, v\a1, v\a5
+    butterfly v\b2, v\b6, v\a2, v\a6
+    butterfly v\b3, v\b7, v\a3, v\a7
+
+    interleave_quads v\a0, v\a4, v\c0, v\c4
+    interleave_quads v\a1, v\a5, v\c1, v\c5
+    interleave_quads v\a2, v\a6, v\c2, v\c6
+    interleave_quads v\a3, v\a7, v\c3, v\c7
+    interleave_quads v\c0, v\c4, v\b0, v\b4
+    interleave_quads v\c1, v\c5, v\b1, v\b5
+    interleave_quads v\c2, v\c6, v\b2, v\b6
+    interleave_quads v\c3, v\c7, v\b3, v\b7
+
+    // Vertical transform
+
+    butterfly v\b0, v\b1, v\a0, v\a1
+    butterfly v\b2, v\b3, v\a2, v\a3
+    butterfly v\b4, v\b5, v\a4, v\a5
+    butterfly v\b6, v\b7, v\a6, v\a7
+    butterfly v\a0, v\a1, v\c0, v\c1
+    butterfly v\a2, v\a3, v\c2, v\c3
+    butterfly v\a4, v\a5, v\c4, v\c5
+    butterfly v\a6, v\a7, v\c6, v\c7
+
+    butterfly v\c0, v\c2, v\b0, v\b2
+    butterfly v\c1, v\c3, v\b1, v\b3
+    butterfly v\c4, v\c6, v\b4, v\b6
+    butterfly v\c5, v\c7, v\b5, v\b7
+    butterfly v\b0, v\b2, v\a0, v\a2
+    butterfly v\b1, v\b3, v\a1, v\a3
+    butterfly v\b4, v\b6, v\a4, v\a6
+    butterfly v\b5, v\b7, v\a5, v\a7
+
+    butterfly v\a0, v\a4, v\c0, v\c4
+    butterfly v\a1, v\a5, v\c1, v\c5
+    butterfly v\a2, v\a6, v\c2, v\c6
+    butterfly v\a3, v\a7, v\c3, v\c7
+    butterfly v\c0, v\c4, v\b0, v\b4
+    butterfly v\c1, v\c5, v\b1, v\b5
+    butterfly v\c2, v\c6, v\b2, v\b6
+    butterfly v\c3, v\c7, v\b3, v\b7
+.endm
+
+.macro SUM_DOUBLE_HADAMARD_8X8 \
+       a0 a1 a2 a3 a4 a5 a6 a7 \
+       b0 b1 b2 b3 b4 b5 b6 b7 \
+       c0 c1 c2 c3 c4 c5 c6 c7
+
+    // absolute value of transform coefficients
+    abs  v\a0\().8h, v\a0\().8h
+    abs  v\a1\().8h, v\a1\().8h
+    abs  v\a2\().8h, v\a2\().8h
+    abs  v\a3\().8h, v\a3\().8h
+    abs  v\a4\().8h, v\a4\().8h
+    abs  v\a5\().8h, v\a5\().8h
+    abs  v\a6\().8h, v\a6\().8h
+    abs  v\a7\().8h, v\a7\().8h
+    abs  v\c0\().8h, v\c0\().8h
+    abs  v\c1\().8h, v\c1\().8h
+    abs  v\c2\().8h, v\c2\().8h
+    abs  v\c3\().8h, v\c3\().8h
+    abs  v\c4\().8h, v\c4\().8h
+    abs  v\c5\().8h, v\c5\().8h
+    abs  v\c6\().8h, v\c6\().8h
+    abs  v\c7\().8h, v\c7\().8h
+
+    // stage 1 sum
+    sxtl v\b0\().4s, v\a0\().4h
+    sxtl v\b1\().4s, v\a1\().4h
+    sxtl v\b2\().4s, v\a2\().4h
+    sxtl v\b3\().4s, v\a3\().4h
+    sxtl v\b4\().4s, v\a4\().4h
+    sxtl v\b5\().4s, v\a5\().4h
+    sxtl v\b6\().4s, v\a6\().4h
+    sxtl v\b7\().4s, v\a7\().4h
+    saddw2  v\b0\().4s, v\b0\().4s, v\a0\().8h
+    saddw2  v\b1\().4s, v\b1\().4s, v\a1\().8h
+    saddw2  v\b2\().4s, v\b2\().4s, v\a2\().8h
+    saddw2  v\b3\().4s, v\b3\().4s, v\a3\().8h
+    saddw2  v\b4\().4s, v\b4\().4s, v\a4\().8h
+    saddw2  v\b5\().4s, v\b5\().4s, v\a5\().8h
+    saddw2  v\b6\().4s, v\b6\().4s, v\a6\().8h
+    saddw2  v\b7\().4s, v\b7\().4s, v\a7\().8h
+    saddw   v\b0\().4s, v\b0\().4s, v\c0\().4h
+    saddw2  v\b1\().4s, v\b1\().4s, v\c0\().8h
+    saddw   v\b2\().4s, v\b2\().4s, v\c1\().4h
+    saddw2  v\b3\().4s, v\b3\().4s, v\c1\().8h
+    saddw   v\b4\().4s, v\b4\().4s, v\c2\().4h
+    saddw2  v\b5\().4s, v\b5\().4s, v\c2\().8h
+    saddw   v\b6\().4s, v\b6\().4s, v\c3\().4h
+    saddw2  v\b7\().4s, v\b7\().4s, v\c3\().8h
+    saddw   v\b0\().4s, v\b0\().4s, v\c4\().4h
+    saddw2  v\b1\().4s, v\b1\().4s, v\c4\().8h
+    saddw   v\b2\().4s, v\b2\().4s, v\c5\().4h
+    saddw2  v\b3\().4s, v\b3\().4s, v\c5\().8h
+    saddw   v\b4\().4s, v\b4\().4s, v\c6\().4h
+    saddw2  v\b5\().4s, v\b5\().4s, v\c6\().8h
+    saddw   v\b6\().4s, v\b6\().4s, v\c7\().4h
+    saddw2  v\b7\().4s, v\b7\().4s, v\c7\().8h
+
+    // stage 2 sum
+    add  v\b0\().4s, v\b0\().4s, v\b1\().4s
+    add  v\b2\().4s, v\b2\().4s, v\b3\().4s
+    add  v\b4\().4s, v\b4\().4s, v\b5\().4s
+    add  v\b6\().4s, v\b6\().4s, v\b7\().4s
+
+    // stage 3 sum
+    add  v\b0\().4s, v\b0\().4s, v\b2\().4s
+    add  v\b4\().4s, v\b4\().4s, v\b6\().4s
+
+    // stage 4 sum
+    add  v0.4s, v\b0\().4s, v\b4\().4s
+    addv s0, v0.4s
+    fmov w0, s0
+    normalize_8
+.endm
+
+function satd16x8_neon, export=1
+    #define src         x0
+    #define src_stride  x1
+    #define dst         x2
+    #define dst_stride  x3
+
+    //  0,  1;   2,  3;  24, 25
+    //  4,  5;   6,  7;  26, 27
+    // 16, 17;  20, 21;  28, 29
+    // 18, 19;  22, 23;  30, 31
+
+    load_rows 0, 1, 2, src, dst, src_stride, dst_stride, 24, 25
+    load_rows 4, 5, 6, src, dst, src_stride, dst_stride, 26, 27
+    load_rows 16, 17, 20, src, dst, src_stride, dst_stride, 28, 29
+    load_rows 18, 19, 22, src, dst, src_stride, dst_stride, 30, 31
+
+    DOUBLE_HADAMARD_8X8 \
+     0,  1,  4,  5, 16, 17, 18, 19, \
+     2,  3,  6,  7, 20, 21, 22, 23, \
+    24, 25, 26, 27, 28, 29, 30, 31
+
+    SUM_DOUBLE_HADAMARD_8X8 \
+     0,  1,  4,  5, 16, 17, 18, 19, \
+     2,  3,  6,  7, 20, 21, 22, 23, \
+    24, 25, 26, 27, 28, 29, 30, 31
+
+    ret
+
+    #undef src
+    #undef src_stride
+    #undef dst
+    #undef dst_stride
+endfunc
+
 .macro satd_x8up width, height
 function satd\width\()x\height\()_neon, export=1
     mov  w13, \height
@@ -781,7 +992,6 @@ endfunc
 
 satd_x8up 8, 16
 satd_x8up 8, 32
-satd_x8up 16, 8
 satd_x8up 16, 16
 satd_x8up 16, 32
 satd_x8up 16, 64
