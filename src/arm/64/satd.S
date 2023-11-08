@@ -305,27 +305,27 @@ function satd16x4_neon, export=1
     #define TMP3 v6
     #define TMP4 v7
 
-    #define ROW5 v8
-    #define ROW6 v9
-    #define TMP5 v12
-    #define TMP6 v13
+    #define ROW5 v16
+    #define ROW6 v17
+    #define TMP5 v20
+    #define TMP6 v21
 
-    #define ROW7 v10
-    #define ROW8 v11
-    #define TMP7 v14
-    #define TMP8 v15
+    #define ROW7 v18
+    #define ROW8 v19
+    #define TMP7 v22
+    #define TMP8 v23
 
     // load 16 pixel row
     ldr     q0, [src]
     ldr     q1, [dst]
 
-    usubl2  v8.8h, v0.16b, v1.16b
+    usubl2  v16.8h, v0.16b, v1.16b
     usubl   v0.8h, v0.8b, v1.8b
 
     ldr     q1, [src, src_stride]
     ldr     q2, [dst, dst_stride]
 
-    usubl2  v9.8h, v1.16b, v2.16b
+    usubl2  v17.8h, v1.16b, v2.16b
     usubl   v1.8h, v1.8b, v2.8b
 
     lsl     x8, src_stride, 1
@@ -354,23 +354,23 @@ function satd16x4_neon, export=1
     mov   v0.d[1], v2.d[0]
     mov   v1.d[1], v3.d[0]
 
-    ext v10.16b, v8.16b, v8.16b, 8
-    ext v11.16b, v9.16b, v9.16b, 8
+    ext v18.16b, v16.16b, v16.16b, 8
+    ext v19.16b, v17.16b, v17.16b, 8
 
-    mov   v8.d[1], v6.d[0]
-    mov   v9.d[1], v7.d[0]
+    mov   v16.d[1], v6.d[0]
+    mov   v17.d[1], v7.d[0]
     // 2-3 free
 
     mov   v4.d[1], v2.d[1]
     mov   v5.d[1], v3.d[1]
     // 6-7 free
-    mov   v10.d[1], v6.d[1]
-    mov   v11.d[1], v7.d[1]
+    mov   v18.d[1], v6.d[1]
+    mov   v19.d[1], v7.d[1]
 
     // 0,1       2,3
     // 4,5       6,7
-    // 8,9       12,13
-    // 10,11     14,15
+    // 16,17     20,21
+    // 18,19     22,23
 
     // quadruple 4x4 hadamard
 
@@ -480,27 +480,27 @@ function satd4x16_neon, export=1
     add         dst, dst, dst_stride, lsl 1
 
     load_row    6, 7, src, dst, src_stride, dst_stride, 0
-    load_row2   7, 8, src, dst, src_stride, dst_stride
+    load_row2   7, 16, src, dst, src_stride, dst_stride
     add         src, src, src_stride, lsl 1
     add         dst, dst, dst_stride, lsl 1
 
-    load_row    8, 9, src, dst, src_stride, dst_stride, 0
-    load_row2   9, 10, src, dst, src_stride, dst_stride
+    load_row    16, 17, src, dst, src_stride, dst_stride, 0
+    load_row2   17, 18, src, dst, src_stride, dst_stride
     add         src, src, src_stride, lsl 1
     add         dst, dst, dst_stride, lsl 1
 
-    load_row    10, 11, src, dst, src_stride, dst_stride, 0
-    load_row2   11, 12, src, dst, src_stride, dst_stride
+    load_row    18, 19, src, dst, src_stride, dst_stride, 0
+    load_row2   19, 20, src, dst, src_stride, dst_stride
     add         src, src, src_stride, lsl 1
     add         dst, dst, dst_stride, lsl 1
 
-    load_row    12, 13, src, dst, src_stride, dst_stride, 0
-    load_row2   13, 14, src, dst, src_stride, dst_stride
+    load_row    20, 21, src, dst, src_stride, dst_stride, 0
+    load_row2   21, 22, src, dst, src_stride, dst_stride
     add         src, src, src_stride, lsl 1
     add         dst, dst, dst_stride, lsl 1
 
-    load_row    14, 15, src, dst, src_stride, dst_stride, 0
-    load_row2   15, 16, src, dst, src_stride, dst_stride
+    load_row    22, 23, src, dst, src_stride, dst_stride, 0
+    load_row2   23, 24, src, dst, src_stride, dst_stride
 
     // pack rows
     mov   v0.d[1], v2.d[0]
@@ -509,64 +509,64 @@ function satd4x16_neon, export=1
     mov   v4.d[1], v6.d[0]
     mov   v5.d[1], v7.d[0]
 
-    mov   v8.d[1], v10.d[0]
-    mov   v9.d[1], v11.d[0]
+    mov   v16.d[1], v18.d[0]
+    mov   v17.d[1], v19.d[0]
 
-    mov   v12.d[1], v14.d[0]
-    mov   v13.d[1], v15.d[0]
+    mov   v20.d[1], v22.d[0]
+    mov   v21.d[1], v23.d[0]
 
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
-    butterfly v10, v11, v8, v9
-    butterfly v14, v15, v12, v13
+    butterfly v18, v19, v16, v17
+    butterfly v22, v23, v20, v21
 
     interleave v0, v1, v2, v3
     interleave v4, v5, v6, v7
-    interleave v8, v9, v10, v11
-    interleave v12, v13, v14, v15
+    interleave v16, v17, v18, v19
+    interleave v20, v21, v22, v23
 
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
-    butterfly v10, v11, v8, v9
-    butterfly v14, v15, v12, v13
+    butterfly v18, v19, v16, v17
+    butterfly v22, v23, v20, v21
 
     interleave_pairs v0, v1, v2, v3
     interleave_pairs v4, v5, v6, v7
-    interleave_pairs v8, v9, v10, v11
-    interleave_pairs v12, v13, v14, v15
+    interleave_pairs v16, v17, v18, v19
+    interleave_pairs v20, v21, v22, v23
 
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
-    butterfly v10, v11, v8, v9
-    butterfly v14, v15, v12, v13
+    butterfly v18, v19, v16, v17
+    butterfly v22, v23, v20, v21
 
     interleave v0, v1, v2, v3
     interleave v4, v5, v6, v7
-    interleave v8, v9, v10, v11
-    interleave v12, v13, v14, v15
+    interleave v16, v17, v18, v19
+    interleave v20, v21, v22, v23
 
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
-    butterfly v10, v11, v8, v9
-    butterfly v14, v15, v12, v13
+    butterfly v18, v19, v16, v17
+    butterfly v22, v23, v20, v21
 
     abs  v2.8h, v2.8h
     abs  v3.8h, v3.8h
     abs  v6.8h, v6.8h
     abs  v7.8h, v7.8h
-    abs  v10.8h, v10.8h
-    abs  v11.8h, v11.8h
-    abs  v14.8h, v14.8h
-    abs  v15.8h, v15.8h
+    abs  v18.8h, v18.8h
+    abs  v19.8h, v19.8h
+    abs  v22.8h, v22.8h
+    abs  v23.8h, v23.8h
 
     add v2.8h, v2.8h, v3.8h
     add v6.8h, v6.8h, v7.8h
-    add v10.8h, v10.8h, v11.8h
-    add v14.8h, v14.8h, v15.8h
+    add v18.8h, v18.8h, v19.8h
+    add v22.8h, v22.8h, v23.8h
 
     add v2.8h, v2.8h, v6.8h
-    add v10.8h, v10.8h, v14.8h
-    add v0.8h, v2.8h, v10.8h
+    add v18.8h, v18.8h, v22.8h
+    add v0.8h, v2.8h, v18.8h
 
     addv    h0, v0.8h
     fmov    w0, s0
