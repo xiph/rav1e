@@ -22,6 +22,13 @@ type SadFn = unsafe extern fn(
 
 type SatdFn = SadFn;
 
+type SatdHbdFn = unsafe extern fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+) -> u32;
+
 macro_rules! declare_asm_dist_fn {
   ($(($name: ident, $T: ident)),+) => (
     $(
@@ -77,7 +84,25 @@ declare_asm_dist_fn![
   (rav1e_satd64x64_neon, u8),
   (rav1e_satd64x128_neon, u8),
   (rav1e_satd128x64_neon, u8),
-  (rav1e_satd128x128_neon, u8)
+  (rav1e_satd128x128_neon, u8),
+  /* SATD HBD */
+  (rav1e_satd8x8_hbd_neon, u16),
+  (rav1e_satd8x16_hbd_neon, u16),
+  (rav1e_satd8x32_hbd_neon, u16),
+  (rav1e_satd16x8_hbd_neon, u16),
+  (rav1e_satd16x16_hbd_neon, u16),
+  (rav1e_satd16x32_hbd_neon, u16),
+  (rav1e_satd16x64_hbd_neon, u16),
+  (rav1e_satd32x8_hbd_neon, u16),
+  (rav1e_satd32x16_hbd_neon, u16),
+  (rav1e_satd32x32_hbd_neon, u16),
+  (rav1e_satd32x64_hbd_neon, u16),
+  (rav1e_satd64x16_hbd_neon, u16),
+  (rav1e_satd64x32_hbd_neon, u16),
+  (rav1e_satd64x64_hbd_neon, u16),
+  (rav1e_satd64x128_hbd_neon, u16),
+  (rav1e_satd128x64_hbd_neon, u16),
+  (rav1e_satd128x128_hbd_neon, u16)
 ];
 
 // BlockSize::BLOCK_SIZES.next_power_of_two();
@@ -154,7 +179,20 @@ pub fn get_satd<T: Pixel>(
         None => call_rust(),
       }
     }
-    _ => call_rust(),
+    (Ok(bsize), PixelType::U16) => {
+      match SATD_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
+        Some(func) => unsafe {
+          (func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+          )
+        },
+        None => call_rust(),
+      }
+    }
   };
 
   #[cfg(feature = "check_asm")]
@@ -231,6 +269,32 @@ static SATD_FNS_NEON: [Option<SatdFn>; DIST_FNS_LENGTH] = {
   out
 };
 
+static SATD_HBD_FNS_NEON: [Option<SatdHbdFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<SatdHbdFn>; DIST_FNS_LENGTH] = [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+
+  out[BLOCK_8X8 as usize] = Some(rav1e_satd8x8_hbd_neon);
+  out[BLOCK_8X16 as usize] = Some(rav1e_satd8x16_hbd_neon);
+  out[BLOCK_8X32 as usize] = Some(rav1e_satd8x32_hbd_neon);
+  out[BLOCK_16X8 as usize] = Some(rav1e_satd16x8_hbd_neon);
+  out[BLOCK_16X16 as usize] = Some(rav1e_satd16x16_hbd_neon);
+  out[BLOCK_16X32 as usize] = Some(rav1e_satd16x32_hbd_neon);
+  out[BLOCK_16X64 as usize] = Some(rav1e_satd16x64_hbd_neon);
+  out[BLOCK_32X8 as usize] = Some(rav1e_satd32x8_hbd_neon);
+  out[BLOCK_32X16 as usize] = Some(rav1e_satd32x16_hbd_neon);
+  out[BLOCK_32X32 as usize] = Some(rav1e_satd32x32_hbd_neon);
+  out[BLOCK_32X64 as usize] = Some(rav1e_satd32x64_hbd_neon);
+  out[BLOCK_64X16 as usize] = Some(rav1e_satd64x16_hbd_neon);
+  out[BLOCK_64X32 as usize] = Some(rav1e_satd64x32_hbd_neon);
+  out[BLOCK_64X64 as usize] = Some(rav1e_satd64x64_hbd_neon);
+  out[BLOCK_64X128 as usize] = Some(rav1e_satd64x128_hbd_neon);
+  out[BLOCK_128X64 as usize] = Some(rav1e_satd128x64_hbd_neon);
+  out[BLOCK_128X128 as usize] = Some(rav1e_satd128x128_hbd_neon);
+
+  out
+};
+
 cpu_function_lookup_table!(
   SAD_FNS: [[Option<SadFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
@@ -239,6 +303,12 @@ cpu_function_lookup_table!(
 
 cpu_function_lookup_table!(
   SATD_FNS: [[Option<SatdFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  SATD_HBD_FNS: [[Option<SatdHbdFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
   [NEON]
 );
@@ -343,6 +413,54 @@ mod test {
     (128, 128),
     satd,
     8,
+    neon,
+    "neon"
+  );
+
+  test_dist_fns!(
+    (8, 8),
+    (8, 16),
+    (8, 32),
+    (16, 8),
+    (16, 16),
+    (16, 32),
+    (16, 64),
+    (32, 8),
+    (32, 16),
+    (32, 32),
+    (32, 64),
+    (64, 16),
+    (64, 32),
+    (64, 64),
+    (64, 128),
+    (128, 64),
+    (128, 128),
+    satd,
+    10,
+    neon,
+    "neon"
+  );
+
+  test_dist_fns!(
+    (8, 8),
+    (8, 16),
+    (8, 32),
+    (16, 8),
+    (16, 16),
+    (16, 32),
+    (16, 64),
+    (32, 8),
+    (32, 16),
+    (32, 32),
+    (32, 64),
+    (64, 16),
+    (64, 32),
+    (64, 64),
+    (64, 128),
+    (128, 64),
+    (128, 128),
+    satd,
+    12,
     neon,
     "neon"
   );
