@@ -125,7 +125,7 @@ jobs:
           tar xj -C $HOME/.cargo/bin
       - name: Install Intel SDE
         if: matrix.conf == 'grcov-codecov'
-        uses: petarpetrovt/setup-sde@v2.1
+        uses: petarpetrovt/setup-sde@v2.2
       - name: Install ${{ matrix.toolchain }}
         uses: dtolnay/rust-toolchain@master
         with:
