@@ -86,6 +86,9 @@ declare_asm_dist_fn![
   (rav1e_satd128x64_neon, u8),
   (rav1e_satd128x128_neon, u8),
   /* SATD HBD */
+  (rav1e_satd4x4_hbd_neon, u16),
+  (rav1e_satd4x8_hbd_neon, u16),
+  (rav1e_satd4x16_hbd_neon, u16),
   (rav1e_satd8x8_hbd_neon, u16),
   (rav1e_satd8x16_hbd_neon, u16),
   (rav1e_satd8x32_hbd_neon, u16),
@@ -274,6 +277,10 @@ static SATD_HBD_FNS_NEON: [Option<SatdHbdFn>; DIST_FNS_LENGTH] = {
 
   use BlockSize::*;
 
+  out[BLOCK_4X4 as usize] = Some(rav1e_satd4x4_hbd_neon);
+  out[BLOCK_4X8 as usize] = Some(rav1e_satd4x8_hbd_neon);
+  out[BLOCK_4X16 as usize] = Some(rav1e_satd4x16_hbd_neon);
+
   out[BLOCK_8X8 as usize] = Some(rav1e_satd8x8_hbd_neon);
   out[BLOCK_8X16 as usize] = Some(rav1e_satd8x16_hbd_neon);
   out[BLOCK_8X32 as usize] = Some(rav1e_satd8x32_hbd_neon);
@@ -418,6 +425,9 @@ mod test {
   );
 
   test_dist_fns!(
+    (4, 4),
+    (4, 8),
+    (4, 16),
     (8, 8),
     (8, 16),
     (8, 32),
@@ -442,6 +452,9 @@ mod test {
   );
 
   test_dist_fns!(
+    (4, 4),
+    (4, 8),
+    (4, 16),
     (8, 8),
     (8, 16),
     (8, 32),
