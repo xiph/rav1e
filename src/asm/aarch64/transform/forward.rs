@@ -64,11 +64,11 @@ impl TxOperations for I32X8 {
     I32X8::new(
       vhsubq_s32(
         self.vec().0,
-        vreinterpretq_s32_u32(vcltzq_s32(self.vec().0).into()),
+        vreinterpretq_s32_u32(vcltzq_s32(self.vec().0)),
       ),
       vhsubq_s32(
         self.vec().1,
-        vreinterpretq_s32_u32(vcltzq_s32(self.vec().1).into()),
+        vreinterpretq_s32_u32(vcltzq_s32(self.vec().1)),
       ),
     )
   }
