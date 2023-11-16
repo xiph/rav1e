@@ -14,7 +14,6 @@ use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{
   bexp64, bexp_q24, blog64, clamp, q24_to_q57, q57, q57_to_q24, Pixel,
 };
-use rust_hawktracer::*;
 use std::cmp;
 
 // The number of frame sub-types for which we track distinct parameters.
@@ -720,7 +719,7 @@ impl RCState {
   }
 
   // TODO: Separate quantizers for Cb and Cr.
-  #[hawktracer(select_qi)]
+  #[profiling::function]
   pub(crate) fn select_qi<T: Pixel>(
     &self, ctx: &ContextInner<T>, output_frameno: u64, fti: usize,
     maybe_prev_log_base_q: Option<i64>, log_isqrt_mean_scale: i64,
@@ -1069,7 +1068,7 @@ impl RCState {
     (log_base_q, log_q)
   }
 
-  #[hawktracer(RCState_update_state)]
+  #[profiling::function]
   pub fn update_state(
     &mut self, bits: i64, fti: usize, show_frame: bool, log_target_q: i64,
     trial: bool, droppable: bool,

@@ -12,7 +12,6 @@ use std::mem::MaybeUninit;
 use super::*;
 
 use crate::predict::PredictionMode;
-use rust_hawktracer::*;
 
 pub const MAX_PLANES: usize = 3;
 
@@ -1124,7 +1123,7 @@ impl<'a> ContextWriter<'a> {
     }
   }
 
-  #[hawktracer(setup_mvref_list)]
+  #[profiling::function]
   fn setup_mvref_list<T: Pixel>(
     &self, bo: TileBlockOffset, ref_frames: [RefType; 2],
     mv_stack: &mut ArrayVec<CandidateMV, 9>, bsize: BlockSize,

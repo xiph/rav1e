@@ -13,7 +13,6 @@ use crate::encoder::FrameInvariants;
 use crate::frame::*;
 use crate::tiling::*;
 use crate::util::{clamp, msb, CastFromPrimitive, Pixel};
-use rust_hawktracer::*;
 
 use crate::cpu_features::CpuFeatureLevel;
 use std::cmp;
@@ -322,7 +321,7 @@ fn adjust_strength(strength: i32, var: i32) -> i32 {
   }
 }
 
-#[hawktracer(cdef_analyze_superblock_range)]
+#[profiling::function]
 pub fn cdef_analyze_superblock_range<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sb_w: usize, sb_h: usize,
@@ -337,7 +336,7 @@ pub fn cdef_analyze_superblock_range<T: Pixel>(
   ret
 }
 
-#[hawktracer(cdef_analyze_superblock)]
+#[profiling::function]
 pub fn cdef_analyze_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, in_frame: &Frame<T>, blocks: &TileBlocks<'_>,
   sbo: TileSuperBlockOffset,
@@ -398,7 +397,7 @@ pub fn cdef_analyze_superblock<T: Pixel>(
 /// # Panics
 ///
 /// - If called with invalid parameters
-#[hawktracer(cdef_filter_superblock)]
+#[profiling::function]
 pub fn cdef_filter_superblock<T: Pixel>(
   fi: &FrameInvariants<T>, input: &Frame<T>, output: &mut TileMut<'_, T>,
   blocks: &TileBlocks<'_>, tile_sbo: TileSuperBlockOffset, cdef_index: u8,
@@ -594,7 +593,7 @@ pub fn cdef_filter_superblock<T: Pixel>(
 //   tile boundary), the filtering process ignores input pixels that
 //   don't exist.
 
-#[hawktracer(cdef_filter_tile)]
+#[profiling::function]
 pub fn cdef_filter_tile<T: Pixel>(
   fi: &FrameInvariants<T>, input: &Frame<T>, tb: &TileBlocks,
   output: &mut TileMut<'_, T>,

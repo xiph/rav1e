@@ -97,7 +97,6 @@ use crate::error::*;
 use crate::stats::*;
 use rav1e::config::CpuFeatureLevel;
 use rav1e::prelude::*;
-use rust_hawktracer::*;
 
 use crate::decoder::{Decoder, FrameBuilder, VideoDetails};
 use crate::muxer::*;
@@ -148,7 +147,7 @@ impl<D: Decoder> Source<D> {
     }
   }
 
-  #[hawktracer(Source_read_frame)]
+  #[profiling::function]
   fn read_frame<T: Pixel>(
     &mut self, ctx: &mut Context<T>, video_info: VideoDetails,
   ) -> Result<(), CliError> {
@@ -184,7 +183,7 @@ impl<D: Decoder> Source<D> {
 
 // Encode and write a frame.
 // Returns frame information in a `Result`.
-#[hawktracer(process_frame)]
+#[profiling::function]
 fn process_frame<T: Pixel, D: Decoder>(
   ctx: &mut Context<T>, output_file: &mut dyn Muxer, source: &mut Source<D>,
   pass1file: Option<&mut File>, pass2file: Option<&mut File>,
@@ -352,12 +351,17 @@ fn main() {
   init_logger();
 
   #[cfg(feature = "tracing")]
-  let instance = HawktracerInstance::new();
+  let (chrome_layer, _guard) =
+    tracing_chrome::ChromeLayerBuilder::new().build();
+
   #[cfg(feature = "tracing")]
-  let _listener = instance.create_listener(HawktracerListenerType::ToFile {
-    file_path: "trace.bin".into(),
-    buffer_size: 4096,
-  });
+  {
+    use tracing_subscriber::layer::subscriberext;
+    tracing::subscriber::set_global_default(
+      tracing_subscriber::registry().with(chrome_layer),
+    )
+    .unwrap();
+  }
 
   run().unwrap_or_else(|e| {
     error::print_error(&e);

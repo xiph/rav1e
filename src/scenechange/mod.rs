@@ -16,7 +16,6 @@ use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::me::RefMEStats;
 use crate::util::Pixel;
-use rust_hawktracer::*;
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
@@ -161,7 +160,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
   /// to the second frame in `frame_set`.
   ///
   /// This will gracefully handle the first frame in the video as well.
-  #[hawktracer(analyze_next_frame)]
+  #[profiling::function]
   pub fn analyze_next_frame(
     &mut self, frame_set: &[&Arc<Frame<T>>], input_frameno: u64,
     previous_keyframe: u64,

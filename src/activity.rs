@@ -12,7 +12,6 @@ use crate::rdo::DistortionScale;
 use crate::tiling::*;
 use crate::util::*;
 use itertools::izip;
-use rust_hawktracer::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct ActivityMask {
@@ -20,7 +19,7 @@ pub struct ActivityMask {
 }
 
 impl ActivityMask {
-  #[hawktracer(ActivityMask_from_plane)]
+  #[profiling::function]
   pub fn from_plane<T: Pixel>(luma_plane: &Plane<T>) -> ActivityMask {
     let PlaneConfig { width, height, .. } = luma_plane.cfg;
 
@@ -55,7 +54,7 @@ impl ActivityMask {
     ActivityMask { variances: variances.into_boxed_slice() }
   }
 
-  #[hawktracer(ActivityMask_fill_scales)]
+  #[profiling::function]
   pub fn fill_scales(
     &self, bit_depth: usize, activity_scales: &mut Box<[DistortionScale]>,
   ) {

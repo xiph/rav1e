@@ -12,7 +12,6 @@ use rav1e::data::EncoderStats;
 use rav1e::prelude::Rational;
 use rav1e::prelude::*;
 use rav1e::{Packet, Pixel};
-use rust_hawktracer::*;
 use std::fmt;
 use std::time::Instant;
 
@@ -30,7 +29,7 @@ pub struct FrameSummary {
   pub enc_stats: EncoderStats,
 }
 
-#[hawktracer(build_frame_summary)]
+#[profiling::function]
 pub fn build_frame_summary<T: Pixel>(
   packets: Packet<T>, bit_depth: usize, chroma_sampling: ChromaSampling,
   metrics_cli: MetricsEnabled,

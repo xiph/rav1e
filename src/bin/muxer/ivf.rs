@@ -12,7 +12,6 @@ use super::Muxer;
 use crate::error::*;
 use ivf::*;
 use rav1e::prelude::*;
-use rust_hawktracer::*;
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -37,7 +36,7 @@ impl Muxer for IvfMuxer {
     );
   }
 
-  #[hawktracer(write_frame)]
+  #[profiling::function]
   fn write_frame(&mut self, pts: u64, data: &[u8], _frame_type: FrameType) {
     write_ivf_frame(&mut self.output, pts, data);
   }

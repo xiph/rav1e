@@ -18,7 +18,6 @@ use crate::tiling::*;
 use crate::util::{clamp, ILog, Pixel};
 use crate::DeblockState;
 use rayon::iter::*;
-use rust_hawktracer::*;
 use std::cmp;
 
 fn deblock_adjusted_level(
@@ -1291,7 +1290,7 @@ fn sse_h_edge<T: Pixel>(
 }
 
 // Deblocks all edges, vertical and horizontal, in a single plane
-#[hawktracer(deblock_plane)]
+#[profiling::function]
 pub fn deblock_plane<T: Pixel>(
   deblock: &DeblockState, p: &mut PlaneRegionMut<T>, pli: usize,
   blocks: &TileBlocks, crop_w: usize, crop_h: usize, bd: usize,
@@ -1541,7 +1540,7 @@ fn sse_plane<T: Pixel>(
 }
 
 // Deblocks all edges in all planes of a frame
-#[hawktracer(deblock_filter_frame)]
+#[profiling::function]
 pub fn deblock_filter_frame<T: Pixel>(
   deblock: &DeblockState, tile: &mut TileMut<T>, blocks: &TileBlocks,
   crop_w: usize, crop_h: usize, bd: usize, planes: usize,
@@ -1617,7 +1616,7 @@ fn sse_optimize<T: Pixel>(
   level
 }
 
-#[hawktracer(deblock_filter_optimize)]
+#[profiling::function]
 pub fn deblock_filter_optimize<T: Pixel, U: Pixel>(
   fi: &FrameInvariants<T>, rec: &Tile<U>, input: &Tile<U>,
   blocks: &TileBlocks, crop_w: usize, crop_h: usize,
