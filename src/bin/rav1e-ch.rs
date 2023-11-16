@@ -358,16 +358,20 @@ fn do_encode<T: Pixel, D: Decoder>(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   #[cfg(feature = "tracing")]
-  use rust_hawktracer::*;
   init_logger();
 
   #[cfg(feature = "tracing")]
-  let instance = HawktracerInstance::new();
+  let (chrome_layer, _guard) =
+    tracing_chrome::ChromeLayerBuilder::new().build();
+
   #[cfg(feature = "tracing")]
-  let _listener = instance.create_listener(HawktracerListenerType::ToFile {
-    file_path: "trace.bin".into(),
-    buffer_size: 4096,
-  });
+  {
+    use tracing_subscriber::layer::subscriberext;
+    tracing::subscriber::set_global_default(
+      tracing_subscriber::registry().with(chrome_layer),
+    )
+    .unwrap();
+  }
 
   run().map_err(|e| {
     error::print_error(&e);

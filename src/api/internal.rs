@@ -28,7 +28,6 @@ use crate::stats::EncoderStats;
 use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
-use rust_hawktracer::*;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -316,7 +315,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  #[hawktracer(send_frame)]
+  #[profiling::function]
   pub fn send_frame(
     &mut self, mut frame: Option<Arc<Frame<T>>>,
     params: Option<FrameParameters>,
@@ -648,7 +647,7 @@ impl<T: Pixel> ContextInner<T> {
   /// `rec_buffer` and `lookahead_rec_buffer` on the `FrameInvariants`. This
   /// function must be called after every new `FrameInvariants` is initially
   /// computed.
-  #[hawktracer(compute_lookahead_motion_vectors)]
+  #[profiling::function]
   fn compute_lookahead_motion_vectors(&mut self, output_frameno: u64) {
     let frame_data = self.frame_data.get(&output_frameno).unwrap();
 
@@ -861,7 +860,7 @@ impl<T: Pixel> ContextInner<T> {
       });
   }
 
-  #[hawktracer(compute_keyframe_placement)]
+  #[profiling::function]
   pub fn compute_keyframe_placement(
     lookahead_frames: &[&Arc<Frame<T>>], keyframes_forced: &BTreeSet<u64>,
     keyframe_detector: &mut SceneChangeDetector<T>,
@@ -880,7 +879,7 @@ impl<T: Pixel> ContextInner<T> {
     *next_lookahead_frame += 1;
   }
 
-  #[hawktracer(compute_frame_invariants)]
+  #[profiling::function]
   pub fn compute_frame_invariants(&mut self) {
     while self.set_frame_properties(self.next_lookahead_output_frameno).is_ok()
     {
@@ -893,7 +892,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  #[hawktracer(update_block_importances)]
+  #[profiling::function]
   fn update_block_importances(
     fi: &FrameInvariants<T>, me_stats: &crate::me::FrameMEStats,
     frame: &Frame<T>, reference_frame: &Frame<T>, bit_depth: usize,
@@ -1056,7 +1055,7 @@ impl<T: Pixel> ContextInner<T> {
   }
 
   /// Computes the block importances for the current output frame.
-  #[hawktracer(compute_block_importances)]
+  #[profiling::function]
   fn compute_block_importances(&mut self) {
     // SEF don't need block importances.
     if self.frame_data[&self.output_frameno]
@@ -1280,7 +1279,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  #[hawktracer(encode_show_existing_packet)]
+  #[profiling::function]
   pub fn encode_show_existing_packet(
     &mut self, cur_output_frameno: u64,
   ) -> Result<Packet<T>, EncoderStatus> {
@@ -1316,7 +1315,7 @@ impl<T: Pixel> ContextInner<T> {
     self.finalize_packet(rec, source, input_frameno, frame_type, qp, enc_stats)
   }
 
-  #[hawktracer(encode_normal_packet)]
+  #[profiling::function]
   pub fn encode_normal_packet(
     &mut self, cur_output_frameno: u64,
   ) -> Result<Packet<T>, EncoderStatus> {
@@ -1479,7 +1478,7 @@ impl<T: Pixel> ContextInner<T> {
     }
   }
 
-  #[hawktracer(receive_packet)]
+  #[profiling::function]
   pub fn receive_packet(&mut self) -> Result<Packet<T>, EncoderStatus> {
     if self.done_processing() {
       return Err(EncoderStatus::LimitReached);
@@ -1545,7 +1544,7 @@ impl<T: Pixel> ContextInner<T> {
     })
   }
 
-  #[hawktracer(garbage_collect)]
+  #[profiling::function]
   fn garbage_collect(&mut self, cur_input_frameno: u64) {
     if cur_input_frameno == 0 {
       return;

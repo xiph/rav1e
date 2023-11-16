@@ -8,9 +8,9 @@
   - [Instruments](#instruments)
 - [Generic profiling](#generic-profiling)
   - [Perf](#perf)
+- [Instrumented profiling](#instrumented-profiling)
   - [uftrace](#uftrace)
-- [Tracing](#tracing)
-  - [Hawktracer](#hawktracer)
+  - [tracing](#tracing)
 - [Codegen Inspection](#codegen-inspection)
   - [Assembly](#assembly)
 </details>
@@ -54,6 +54,8 @@ $ perf record --call-graph dwarf target/release/rav1e ~/sample.y4m -o /dev/null
 $ perf report
 ```
 
+## Instrumented profiling
+
 ### uftrace
 
 [uftrace](https://github.com/namhyung/uftrace) is an ELF-specific tracer.
@@ -65,17 +67,11 @@ $ uftrace record --no-libcall -D 5 target/release/rav1e ~/sample.y4m -o /dev/nul
 $ uftrace report
 ```
 
-## Tracing
+### tracing
 
-### Hawktracer
-
-We use [rust\_hawktracer](https://github.com/AlexEne/rust_hawktracer) to
-measure specific codepath timings. Building `--features=tracing` enables it.
-Use the standard [hawktrace-convert](https://hawktracer.org) to produce graphs.
-
-Currently there are issues where rust_hawktracer fails to build, as a result
-we have set it to use the system hawktracer library. On Arch Linux this may
-be installed from the AUR package hawktracer-git.
+We use [profiling](https://crates.io/crates/profiling) to measure specific
+codepath timings. Building `--features=tracing` enables it using the
+[tracing](https://crates.io/crates/tracing) backend.
 
 ## Codegen Inspection
 
