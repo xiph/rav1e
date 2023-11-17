@@ -140,7 +140,7 @@ function satd4x4_neon, export=1
     #undef dst_stride
 endfunc
 
-.macro DOUBLE_HADAMARD_4X4
+.macro DOUBLE_HADAMARD_4X4 hbd=0
     // Horizontal transform
 
     butterfly v2, v3, v0, v1
@@ -163,8 +163,13 @@ endfunc
     interleave v0, v1, v2, v3
     interleave v4, v5, v6, v7
 
+.if \hbd == 0
     butterfly v2, v3, v0, v1
     butterfly v6, v7, v4, v5
+.else
+    butterflyw v2, v3, v16, v17, v0, v1
+    butterflyw v6, v7, v18, v19, v4, v5
+.endif
 .endm
 
 .macro SUM_DOUBLE_HADAMARD_4X4
@@ -1363,4 +1368,106 @@ function satd4x16_hbd_neon, export=1
     mov  w13, 16
     mov  w10, wzr
     b    L(satd_w4_hbd)
+endfunc
+
+.macro SUM_DOUBLE_HADAMARD_4X4_HBD \
+       a0 a1 a2 a3 c0 c1 c2 c3
+
+    // absolute value of transform coefficients
+    abs  v\a0\().4s, v\a0\().4s
+    abs  v\a1\().4s, v\a1\().4s
+    abs  v\a2\().4s, v\a2\().4s
+    abs  v\a3\().4s, v\a3\().4s
+    abs  v\c0\().4s, v\c0\().4s
+    abs  v\c1\().4s, v\c1\().4s
+    abs  v\c2\().4s, v\c2\().4s
+    abs  v\c3\().4s, v\c3\().4s
+
+    // stage 1 sum
+    add  v\a0\().4s, v\a0\().4s, v\a1\().4s
+    add  v\a2\().4s, v\a2\().4s, v\a3\().4s
+    add  v\c0\().4s, v\c0\().4s, v\c1\().4s
+    add  v\c2\().4s, v\c2\().4s, v\c3\().4s
+
+    // stage 2 sum
+    add  v\a0\().4s, v\a0\().4s, v\a2\().4s
+    add  v\c0\().4s, v\c0\().4s, v\c2\().4s
+
+    // stage 3 sum
+    add  v0.4s, v\a0\().4s, v\c0\().4s
+    addv s0, v0.4s
+.endm
+
+function satd8x4_hbd_neon, export=1
+    #define src         x0
+    #define src_stride  x1
+    #define dst         x2
+    #define dst_stride  x3
+
+    #define subtotal    w9
+    #define total       w10
+    #define width       w12
+
+    mov  width, 8
+    mov  total, wzr
+
+L(satd_h4_hbd):
+    ldr  q0, [src]
+    ldr  q1, [dst]
+    sub  v0.8h, v0.8h, v1.8h
+
+    ldr  q1, [src, src_stride]
+    ldr  q2, [dst, dst_stride]
+    sub  v1.8h, v1.8h, v2.8h
+
+    lsl  x8, src_stride, 1
+    lsl  x9, dst_stride, 1
+
+    ldr  q2, [src, x8]
+    ldr  q3, [dst, x9]
+    sub  v2.8h, v2.8h, v3.8h
+
+    add  x8, src_stride, src_stride, lsl 1
+    add  x9, dst_stride, dst_stride, lsl 1
+
+    ldr  q3, [src, x8]
+    ldr  q4, [dst, x9]
+    sub  v3.8h, v3.8h, v4.8h
+
+    ext  v4.16b, v0.16b, v0.16b, 8
+    ext  v5.16b, v1.16b, v1.16b, 8
+    mov  v0.d[1], v2.d[0]
+    mov  v1.d[1], v3.d[0]
+    mov  v4.d[1], v2.d[1]
+    mov  v5.d[1], v3.d[1]
+
+    DOUBLE_HADAMARD_4X4 hbd=1
+    SUM_DOUBLE_HADAMARD_4X4_HBD 2, 3, 16, 17, 6, 7, 18, 19
+
+    fmov subtotal, s0
+    add  total, subtotal, total
+
+    add  src, src, #16
+    add  dst, dst, #16
+    subs width, width, #8
+    bne  L(satd_h4_hbd)
+
+    mov  w0, total
+    normalize_4
+    ret
+
+    #undef src
+    #undef src_stride
+    #undef dst
+    #undef dst_stride
+
+    #undef subtotal
+    #undef total
+    #undef width
+endfunc
+
+function satd16x4_hbd_neon, export=1
+    mov  w12, 16
+    mov  w10, wzr
+    b    L(satd_h4_hbd)
 endfunc
