@@ -107,6 +107,7 @@ jobs:
         if: matrix.conf != 'dav1d-tests-arm64'
         run: |
           sudo sed -i 's/jammy/lunar/g' /etc/apt/sources.list
+          sudo rm /etc/apt/sources.list.d/*.list
           sudo apt update
           sudo apt install nasm libaom-dev meson ninja-build nasm
       - name: Install cargo-c
