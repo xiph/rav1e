@@ -252,9 +252,9 @@ jobs:
         # "cargo build" command to "cargo cinstall"
         CROSS_BUILD_DOCKERFILE: ./cross/Dockerfile.libs
         CARGO_TARGET_I686_UNKNOWN_LINUX_MUSL_RUSTFLAGS:
-          "-C target-feature=-crt-static"
+          "-C target-feature=+crt-static"
         CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUSTFLAGS:
-          "-C target-feature=-crt-static"
+          "-C target-feature=+crt-static"
       run: |
         cp ~/.cargo/bin/cargo-c* $(dirname $(rustup which cargo))
         cross build --target ${{ matrix.target }} --profile release-strip
@@ -269,7 +269,7 @@ jobs:
       if: matrix.build == 'sdk' && matrix.target == 'x86_64-unknown-linux-musl'
       env:
         RUSTFLAGS:
-          "-C target-feature=-crt-static -C target-cpu=${{ matrix.target_cpu }}"
+          "-C target-feature=+crt-static -C target-cpu=${{ matrix.target_cpu }}"
       run: |
         cargo cinstall --target ${{ matrix.target }} \
           --prefix dist \
