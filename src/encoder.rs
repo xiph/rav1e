@@ -459,7 +459,7 @@ impl<T: Pixel> FrameState<T> {
       cdfs: CDFContext::new(0),
       context_update_tile_id: 0,
       max_tile_size_bytes: 0,
-      deblock: Default::default(),
+      deblock: DeblockState::new(&fi.config, fi.frame_type),
       segmentation: Default::default(),
       restoration: rs,
       frame_me_stats: me_stats,
@@ -490,7 +490,7 @@ impl<T: Pixel> FrameState<T> {
       cdfs: CDFContext::new(0),
       context_update_tile_id: 0,
       max_tile_size_bytes: 0,
-      deblock: Default::default(),
+      deblock: DeblockState::new(&fi.config, fi.frame_type),
       segmentation: Default::default(),
       restoration: rs,
       frame_me_stats: FrameMEStats::new_arc_array(fi.w_in_b, fi.h_in_b),
@@ -530,6 +530,22 @@ pub struct DeblockState {
   pub block_deltas_enabled: bool,
   pub block_delta_shift: u8,
   pub block_delta_multi: bool,
+}
+
+impl DeblockState {
+  pub fn new(config: &EncoderConfig, frame_type: FrameType) -> Self {
+    let mut state = DeblockState { ..Default::default() };
+    if frame_type == FrameType::INTER {
+      // Apply deblock strength only to inter frames
+      for level in &mut state.levels {
+        *level = ((*level as f32) * config.advanced_flags.deblock_strength)
+          .min(MAX_LOOP_FILTER as f32)
+          .round() as u8;
+      }
+    }
+    state.sharpness = config.advanced_flags.deblock_sharpness;
+    state
+  }
 }
 
 impl Default for DeblockState {
