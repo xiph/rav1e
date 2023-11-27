@@ -205,6 +205,7 @@ fn build_asm_files() {
   let asm_files = &[
     "src/arm/64/cdef.S",
     "src/arm/64/cdef16.S",
+    "src/arm/64/cdef_dist.S",
     "src/arm/64/mc.S",
     "src/arm/64/mc16.S",
     "src/arm/64/itx.S",
