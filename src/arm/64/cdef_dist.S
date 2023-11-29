@@ -59,8 +59,8 @@
 .endm
 
 .macro LOAD_ROW
-    ldr     q1, [x0]
-    ldr     q2, [x2]
+    ldr     d1, [x0]
+    ldr     d2, [x2]
     add     x0, x0, x1
     add     x2, x2, x3
 .endm
