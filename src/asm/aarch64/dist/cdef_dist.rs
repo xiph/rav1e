@@ -22,6 +22,14 @@ type CdefDistKernelFn = unsafe extern fn(
   ret_ptr: *mut u32,
 );
 
+type CdefDistKernelHBDFn = unsafe extern fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+  ret_ptr: *mut u32,
+);
+
 extern {
   fn rav1e_cdef_dist_kernel_4x4_neon(
     src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
@@ -37,6 +45,22 @@ extern {
   );
   fn rav1e_cdef_dist_kernel_8x8_neon(
     src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize,
+    ret_ptr: *mut u32,
+  );
+  fn rav1e_cdef_dist_kernel_4x4_hbd_neon(
+    src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+    ret_ptr: *mut u32,
+  );
+  fn rav1e_cdef_dist_kernel_4x8_hbd_neon(
+    src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+    ret_ptr: *mut u32,
+  );
+  fn rav1e_cdef_dist_kernel_8x4_hbd_neon(
+    src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
+    ret_ptr: *mut u32,
+  );
+  fn rav1e_cdef_dist_kernel_8x8_hbd_neon(
+    src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
     ret_ptr: *mut u32,
   );
 }
@@ -86,7 +110,25 @@ pub fn cdef_dist_kernel<T: Pixel>(
       }
     }
     PixelType::U16 => {
-      return call_rust();
+      if let Some(func) =
+        CDEF_DIST_KERNEL_HBD_FNS[cpu.as_index()][kernel_fn_index(w, h)]
+      {
+        let mut ret_buf = [0u32; 3];
+        // SAFETY: Calls Assembly code.
+        unsafe {
+          func(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            ret_buf.as_mut_ptr(),
+          )
+        }
+
+        (ret_buf[0], ret_buf[1], ret_buf[2])
+      } else {
+        return call_rust();
+      }
     }
   };
 
@@ -124,6 +166,26 @@ static CDEF_DIST_KERNEL_FNS_NEON: [Option<CdefDistKernelFn>;
 cpu_function_lookup_table!(
   CDEF_DIST_KERNEL_FNS:
     [[Option<CdefDistKernelFn>; CDEF_DIST_KERNEL_FNS_LENGTH]],
+  default: [None; CDEF_DIST_KERNEL_FNS_LENGTH],
+  [NEON]
+);
+
+static CDEF_DIST_KERNEL_HBD_FNS_NEON: [Option<CdefDistKernelHBDFn>;
+  CDEF_DIST_KERNEL_FNS_LENGTH] = {
+  let mut out: [Option<CdefDistKernelHBDFn>; CDEF_DIST_KERNEL_FNS_LENGTH] =
+    [None; CDEF_DIST_KERNEL_FNS_LENGTH];
+
+  out[kernel_fn_index(4, 4)] = Some(rav1e_cdef_dist_kernel_4x4_hbd_neon);
+  out[kernel_fn_index(4, 8)] = Some(rav1e_cdef_dist_kernel_4x8_hbd_neon);
+  out[kernel_fn_index(8, 4)] = Some(rav1e_cdef_dist_kernel_8x4_hbd_neon);
+  out[kernel_fn_index(8, 8)] = Some(rav1e_cdef_dist_kernel_8x8_hbd_neon);
+
+  out
+};
+
+cpu_function_lookup_table!(
+  CDEF_DIST_KERNEL_HBD_FNS:
+    [[Option<CdefDistKernelHBDFn>; CDEF_DIST_KERNEL_FNS_LENGTH]],
   default: [None; CDEF_DIST_KERNEL_FNS_LENGTH],
   [NEON]
 );
