@@ -1,0 +1,23 @@
+FROM mcr.microsoft.com/devcontainers/rust:dev-1-bookworm
+RUN dpkg --add-architecture amd64 \
+ && apt-get update && export DEBIAN_FRONTEND=noninteractive \
+ && apt-get install -y --no-install-recommends \
+ libaom-dev libdav1d-dev libaom-dev:amd64 libdav1d-dev:amd64 \
+ libclang-dev libgit2-dev libcurl4-openssl-dev libfuzzer-14-dev \
+ gcc-x86-64-linux-gnu libc6-dev-amd64-cross nasm dav1d qemu-user \
+ meson ninja-build \
+ && rm -rf /var/lib/apt/lists/*
+RUN rustup target add x86_64-unknown-linux-gnu
+RUN export CARGO_PROFILE_RELEASE_STRIP=true \
+ && cargo install -q cargo-c --version "0.9.27+cargo-0.74.0" \
+ && cargo install -q cargo-criterion --version "1.1.0" \
+ && cargo install -q cargo-fuzz --version "0.11.2" \
+ && rm -rf /usr/local/cargo/registry
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=qemu-x86_64
+ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-Clinker=x86_64-linux-gnu-gcc
+ENV PKG_CONFIG_ALLOW_CROSS_x86_64_unknown_linux_gnu=1
+ENV PKG_CONFIG_PATH_x86_64_unknown_linux_gnu=/usr/lib/x64_64-linux-gnu/pkgconfig
+ENV PKG_CONFIG_SYSROOT_DIR_x86_64_unknown_linux_gnu=/
+ENV CUSTOM_LIBFUZZER_PATH=/usr/lib/llvm-14/lib/libFuzzer.a
+LABEL dev.containers.source=https://github.com/xiph/rav1e
+LABEL dev.containers.id=rav1e

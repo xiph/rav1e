@@ -1,6 +1,6 @@
 {
 	"name": "rav1e-devcontainer",
 	"build": {
-		"dockerfile": "Dockerfile"
+		"dockerfile": "Dockerfile.arm64"
 	}
 }
