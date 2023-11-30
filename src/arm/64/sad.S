@@ -214,3 +214,286 @@ endfunc
 sad_rect 8, 4
 sad_rect 8, 16
 sad_rect 8, 32
+
+.macro sad_hbd_rect width, height
+function sad\width\()x\height\()_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  \height
+.if \width >= 8
+        mov             v1.16b,  v0.16b
+.endif
+.if \width >= 64 && \height >= 64
+        b               L(sad_hbd_large_w\width\())
+.else
+        b               L(sad_hbd_w\width\())
+.endif
+endfunc
+.endm
+
+function sad4x4_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #4
+L(sad_hbd_w4):
+        ldr             d2,  [x0]
+        ldr             d3,  [x2]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabal           v0.4s,   v2.4h,   v3.4h
+        bne             L(sad_hbd_w4)
+        addv            s0,   v0.4s
+        fmov            w0,  s0
+        ret
+endfunc
+
+sad_hbd_rect 4, 8
+sad_hbd_rect 4, 16
+
+.macro horizontal_add_32x4
+        uaddlp          v0.2d,   v0.4s
+        ext             v1.16b,  v0.16b,  v0.16b,  #8
+        add             v0.2s,   v1.2s,   v0.2s
+        fmov            w0,  s0
+        ret
+.endm
+
+function sad64x32_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #32
+        mov             v1.16b,  v0.16b
+L(sad_hbd_w64):
+        ldp             q2,  q4,  [x0]
+        ldp             q3,  q5,  [x2]
+        ldp             q6,  q16, [x0, #32]
+        ldp             q7,  q17, [x2, #32]
+        ldp             q18, q20, [x0, #64]
+        ldp             q19, q21, [x2, #64]
+        ldp             q22, q24, [x0, #96]
+        ldp             q23, q25, [x2, #96]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabal           v0.4s,   v2.4h,   v3.4h
+        uabal2          v1.4s,   v2.8h,   v3.8h
+        uabal           v0.4s,   v4.4h,   v5.4h
+        uabal2          v1.4s,   v4.8h,   v5.8h
+        uabal           v0.4s,   v6.4h,   v7.4h
+        uabal2          v1.4s,   v6.8h,   v7.8h
+        uabal           v0.4s,   v16.4h,  v17.4h
+        uabal2          v1.4s,   v16.8h,  v17.8h
+        uabal           v0.4s,   v18.4h,  v19.4h
+        uabal2          v1.4s,   v18.8h,  v19.8h
+        uabal           v0.4s,   v20.4h,  v21.4h
+        uabal2          v1.4s,   v20.8h,  v21.8h
+        uabal           v0.4s,   v22.4h,  v23.4h
+        uabal2          v1.4s,   v22.8h,  v23.8h
+        uabal           v0.4s,   v24.4h,  v25.4h
+        uabal2          v1.4s,   v24.8h,  v25.8h
+        bne             L(sad_hbd_w64)
+        horizontal_long_add_16x8
+endfunc
+
+function sad64x64_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #64
+        mov             v1.16b,  v0.16b
+L(sad_hbd_large_w64):
+        ldp             q2,  q4,  [x0]
+        ldp             q3,  q5,  [x2]
+        ldp             q6,  q16, [x0, #32]
+        ldp             q7,  q17, [x2, #32]
+        ldp             q18, q20, [x0, #64]
+        ldp             q19, q21, [x2, #64]
+        ldp             q22, q24, [x0, #96]
+        ldp             q23, q25, [x2, #96]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabdl           v26.4s,   v2.4h,   v3.4h
+        uabal2          v26.4s,   v2.8h,   v3.8h
+        uabal           v26.4s,   v4.4h,   v5.4h
+        uabal2          v26.4s,   v4.8h,   v5.8h
+        uabal           v26.4s,   v6.4h,   v7.4h
+        uabal2          v26.4s,   v6.8h,   v7.8h
+        uabal           v26.4s,   v16.4h,  v17.4h
+        uabal2          v26.4s,   v16.8h,  v17.8h
+        uabal           v26.4s,   v18.4h,  v19.4h
+        uabal2          v26.4s,   v18.8h,  v19.8h
+        uabal           v26.4s,   v20.4h,  v21.4h
+        uabal2          v26.4s,   v20.8h,  v21.8h
+        uabal           v26.4s,   v22.4h,  v23.4h
+        uabal2          v26.4s,   v22.8h,  v23.8h
+        uabal           v26.4s,   v24.4h,  v25.4h
+        uabal2          v26.4s,   v24.8h,  v25.8h
+        uaddw           v1.2d,    v1.2d,   v26.2s
+        uaddw2          v0.2d,    v0.2d,   v26.4s
+        bne             L(sad_hbd_large_w64)
+        add             v0.2d,   v0.2d,   v1.2d
+        dup             d3,  v0.d[1]
+        add             v0.2d,   v0.2d,   v3.2d
+        umov            x0,  v0.d[0]
+        ret
+endfunc
+
+sad_hbd_rect 64, 16
+sad_hbd_rect 64, 128
+
+function sad128x128_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #128
+        mov             v1.16b,  v0.16b
+L(sad_hbd_large_w128):
+        ldp             q2,  q4,  [x0]
+        ldp             q3,  q5,  [x2]
+        ldp             q6,  q16, [x0, #32]
+        ldp             q7,  q17, [x2, #32]
+        ldp             q18, q20, [x0, #64]
+        ldp             q19, q21, [x2, #64]
+        ldp             q22, q24, [x0, #96]
+        ldp             q23, q25, [x2, #96]
+        uabdl           v26.4s,   v2.4h,   v3.4h
+        uabal2          v26.4s,   v2.8h,   v3.8h
+        uabal           v26.4s,   v4.4h,   v5.4h
+        uabal2          v26.4s,   v4.8h,   v5.8h
+        uabal           v26.4s,   v6.4h,   v7.4h
+        uabal2          v26.4s,   v6.8h,   v7.8h
+        uabal           v26.4s,   v16.4h,  v17.4h
+        uabal2          v26.4s,   v16.8h,  v17.8h
+        uabal           v26.4s,   v18.4h,  v19.4h
+        uabal2          v26.4s,   v18.8h,  v19.8h
+        uabal           v26.4s,   v20.4h,  v21.4h
+        uabal2          v26.4s,   v20.8h,  v21.8h
+        uabal           v26.4s,   v22.4h,  v23.4h
+        uabal2          v26.4s,   v22.8h,  v23.8h
+        uabal           v26.4s,   v24.4h,  v25.4h
+        uabal2          v26.4s,   v24.8h,  v25.8h
+        uaddw           v1.2d,    v1.2d,   v26.2s
+        uaddw2          v0.2d,    v0.2d,   v26.4s
+        ldp             q2,  q4,  [x0, #128]
+        ldp             q3,  q5,  [x2, #128]
+        ldp             q6,  q16, [x0, #160]
+        ldp             q7,  q17, [x2, #160]
+        ldp             q18, q20, [x0, #192]
+        ldp             q19, q21, [x2, #192]
+        ldp             q22, q24, [x0, #224]
+        ldp             q23, q25, [x2, #224]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabdl           v26.4s,   v2.4h,   v3.4h
+        uabal2          v26.4s,   v2.8h,   v3.8h
+        uabal           v26.4s,   v4.4h,   v5.4h
+        uabal2          v26.4s,   v4.8h,   v5.8h
+        uabal           v26.4s,   v6.4h,   v7.4h
+        uabal2          v26.4s,   v6.8h,   v7.8h
+        uabal           v26.4s,   v16.4h,  v17.4h
+        uabal2          v26.4s,   v16.8h,  v17.8h
+        uabal           v26.4s,   v18.4h,  v19.4h
+        uabal2          v26.4s,   v18.8h,  v19.8h
+        uabal           v26.4s,   v20.4h,  v21.4h
+        uabal2          v26.4s,   v20.8h,  v21.8h
+        uabal           v26.4s,   v22.4h,  v23.4h
+        uabal2          v26.4s,   v22.8h,  v23.8h
+        uabal           v26.4s,   v24.4h,  v25.4h
+        uabal2          v26.4s,   v24.8h,  v25.8h
+        uaddw           v1.2d,    v1.2d,   v26.2s
+        uaddw2          v0.2d,    v0.2d,   v26.4s
+        bne             L(sad_hbd_large_w128)
+        add             v0.2d,   v0.2d,   v1.2d
+        dup             d3,  v0.d[1]
+        add             v0.2d,   v0.2d,   v3.2d
+        umov            x0,  v0.d[0]
+        ret
+endfunc
+
+sad_hbd_rect 128, 64
+
+function sad32x32_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #32
+        mov             v1.16b,  v0.16b
+L(sad_hbd_w32):
+        ldp             q2,  q4,  [x0]
+        ldp             q3,  q5,  [x2]
+        ldp             q6,  q16, [x0, #32]
+        ldp             q7,  q17, [x2, #32]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabal           v0.4s,   v2.4h,   v3.4h
+        uabal2          v1.4s,   v2.8h,   v3.8h
+        uabal           v0.4s,   v4.4h,   v5.4h
+        uabal2          v1.4s,   v4.8h,   v5.8h
+        uabal           v0.4s,   v6.4h,   v7.4h
+        uabal2          v1.4s,   v6.8h,   v7.8h
+        uabal           v0.4s,   v16.4h,  v17.4h
+        uabal2          v1.4s,   v16.8h,  v17.8h
+        bne             L(sad_hbd_w32)
+        add             v0.4s,   v0.4s,   v1.4s
+        horizontal_add_32x4
+endfunc
+
+sad_hbd_rect 32, 8
+sad_hbd_rect 32, 16
+sad_hbd_rect 32, 64
+
+function sad16x16_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #16
+        mov             v1.16b,  v0.16b
+L(sad_hbd_w16):
+        ldp             q2,  q4,  [x0]
+        ldp             q3,  q5,  [x2]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabal           v0.4s,   v2.4h,   v3.4h
+        uabal2          v1.4s,   v2.8h,   v3.8h
+        uabal           v0.4s,   v4.4h,   v5.4h
+        uabal2          v1.4s,   v4.8h,   v5.8h
+        bne             L(sad_hbd_w16)
+        add             v0.4s,   v0.4s,   v1.4s
+        horizontal_add_32x4
+endfunc
+
+sad_hbd_rect 16, 4
+sad_hbd_rect 16, 8
+sad_hbd_rect 16, 32
+sad_hbd_rect 16, 64
+
+function sad8x8_hbd_neon, export=1
+        movi            v0.4s,   #0
+        sxtw            x1,  w1
+        sxtw            x3,  w3
+        mov             w4,  #8
+        mov             v1.16b,  v0.16b
+L(sad_hbd_w8):
+        ldr             q2,  [x0]
+        ldr             q3,  [x2]
+        add             x0,  x0,  x1
+        add             x2,  x2,  x3
+        subs            w4,  w4,  #1
+        uabal           v0.4s,   v2.4h,   v3.4h
+        uabal2          v1.4s,   v2.8h,   v3.8h
+        bne             L(sad_hbd_w8)
+        add             v0.4s,   v0.4s,   v1.4s
+        horizontal_add_32x4
+endfunc
+
+sad_hbd_rect 8, 4
+sad_hbd_rect 8, 16
+sad_hbd_rect 8, 32
