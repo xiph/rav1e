@@ -20,6 +20,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install devcontainer-cli
         run: npm install -g @devcontainers/cli
+      - name: Register qemu binfmt-misc entries for Docker
+        run: docker run --privileged --rm tonistiigi/binfmt --install aarch64
       - name: Authenticate with ghcr.io
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
       - name: Build devcontainer image
@@ -28,5 +30,11 @@ jobs:
           IMAGE_ID=ghcr.io/${{ github.repository_owner }}/$IMAGE_NAME
           VERSION=latest
           IMAGE_TAG=${IMAGE_ID,,}:$VERSION
-          devcontainer build --image-name $IMAGE_TAG --push \
-            --workspace-folder $PWD --config .devcontainer/build.json
+          devcontainer build --image-name $IMAGE_TAG-amd64 --platform linux/amd64 --push \
+            --workspace-folder $PWD --config .devcontainer/build-amd64.json
+          devcontainer build --image-name $IMAGE_TAG-arm64 --platform linux/arm64 --push \
+            --workspace-folder $PWD --config .devcontainer/build-arm64.json
+          docker manifest create $IMAGE_TAG \
+            --amend $IMAGE_TAG-amd64 \
+            --amend $IMAGE_TAG-arm64
+          docker manifest push $IMAGE_TAG
