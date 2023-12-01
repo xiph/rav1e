@@ -1,3 +1,23 @@
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/devcontainers/rust:dev-1-bookworm AS cargo-applets
+ARG CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu
+ARG CARGO_INSTALL_ROOT=/opt/cargo
+ARG CARGO_PROFILE_RELEASE_STRIP=true
+ARG CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-Clinker=aarch64-linux-gnu-gcc
+ARG PKG_CONFIG_ALLOW_CROSS_aarch64_unknown_linux_gnu=1
+ARG PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ARG PKG_CONFIG_SYSROOT_DIR_aarch64_unknown_linux_gnu=/
+RUN rustup target add aarch64-unknown-linux-gnu
+RUN dpkg --add-architecture arm64 \
+ && apt-get update && export DEBIAN_FRONTEND=noninteractive \
+ && apt-get install -y --no-install-recommends \
+ gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+ libcurl4-openssl-dev:arm64 libssl-dev:arm64 zlib1g-dev:arm64 \
+ && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-c --version "0.9.27+cargo-0.74.0" \
+ && cargo install cargo-criterion --version "1.1.0" \
+ && cargo install cargo-fuzz --version "0.11.2" \
+ && rm -rf /usr/local/cargo/registry
+
 FROM mcr.microsoft.com/devcontainers/rust:dev-1-bookworm
 RUN dpkg --add-architecture amd64 \
  && apt-get update && export DEBIAN_FRONTEND=noninteractive \
@@ -8,11 +28,7 @@ RUN dpkg --add-architecture amd64 \
  meson ninja-build \
  && rm -rf /var/lib/apt/lists/*
 RUN rustup target add x86_64-unknown-linux-gnu
-RUN export CARGO_PROFILE_RELEASE_STRIP=true \
- && cargo install -q cargo-c --version "0.9.27+cargo-0.74.0" \
- && cargo install -q cargo-criterion --version "1.1.0" \
- && cargo install -q cargo-fuzz --version "0.11.2" \
- && rm -rf /usr/local/cargo/registry
+COPY --from=cargo-applets /opt/cargo /usr/local/cargo
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=qemu-x86_64
 ENV CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS=-Clinker=x86_64-linux-gnu-gcc
 ENV PKG_CONFIG_ALLOW_CROSS_x86_64_unknown_linux_gnu=1
