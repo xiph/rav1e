@@ -74,7 +74,7 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3.4"
 bitstream-io = "1"
 cfg-if = "1.0"
-clap = { version = "4.4.9", optional = true, default-features = false, features = [
+clap = { version = "4.4.10", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
