@@ -22,7 +22,11 @@ use rayon::ThreadPool;
 use std::sync::Arc;
 
 mod data;
-pub use data::*;
+pub use data::{
+  FrameInput, FrameSender, PacketReceiver, PassDataChannel, RcDataReceiver,
+  RcDataSender, RecvError, SendError, TryRecvError, TrySendError,
+  VideoDataChannel,
+};
 
 mod by_gop;
 pub use by_gop::*;
