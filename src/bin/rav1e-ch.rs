@@ -357,7 +357,6 @@ fn do_encode<T: Pixel, D: Decoder>(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  #[cfg(feature = "tracing")]
   init_logger();
 
   #[cfg(feature = "tracing")]
