@@ -371,7 +371,7 @@ unsafe fn ipred_z1<T: Pixel>(
 
 unsafe fn ipred_z2<T: Pixel>(
   dst: *mut T, stride: ptrdiff_t, src: *const T, angle: isize, w: c_int,
-  h: c_int, max_h: c_int, max_w: c_int, bd_max: c_int, edge_filter: bool,
+  h: c_int, max_w: c_int, max_h: c_int, bd_max: c_int, edge_filter: bool,
   smooth_filter: bool,
 ) {
   assert!(angle > 90 && angle < 180);
