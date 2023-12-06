@@ -8,6 +8,7 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 pub use self::cdef_dist::*;
+pub use self::sse::*;
 use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::*;
 use crate::partition::BlockSize;
@@ -15,6 +16,7 @@ use crate::tiling::*;
 use crate::util::*;
 
 mod cdef_dist;
+mod sse;
 
 type SadFn = unsafe extern fn(
   src: *const u8,
