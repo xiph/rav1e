@@ -43,7 +43,12 @@ declare_asm_sse_fn![
   rav1e_weighted_sse_8x4_neon,
   rav1e_weighted_sse_8x8_neon,
   rav1e_weighted_sse_8x16_neon,
-  rav1e_weighted_sse_8x32_neon
+  rav1e_weighted_sse_8x32_neon,
+  rav1e_weighted_sse_16x4_neon,
+  rav1e_weighted_sse_16x8_neon,
+  rav1e_weighted_sse_16x16_neon,
+  rav1e_weighted_sse_16x32_neon,
+  rav1e_weighted_sse_16x64_neon
 ];
 
 /// # Panics
@@ -114,6 +119,11 @@ static SSE_FNS_NEON: [Option<WeightedSseFn>; DIST_FNS_LENGTH] = {
   out[BLOCK_8X8 as usize] = Some(rav1e_weighted_sse_8x8_neon);
   out[BLOCK_8X16 as usize] = Some(rav1e_weighted_sse_8x16_neon);
   out[BLOCK_8X32 as usize] = Some(rav1e_weighted_sse_8x32_neon);
+  out[BLOCK_16X4 as usize] = Some(rav1e_weighted_sse_16x4_neon);
+  out[BLOCK_16X8 as usize] = Some(rav1e_weighted_sse_16x8_neon);
+  out[BLOCK_16X16 as usize] = Some(rav1e_weighted_sse_16x16_neon);
+  out[BLOCK_16X32 as usize] = Some(rav1e_weighted_sse_16x32_neon);
+  out[BLOCK_16X64 as usize] = Some(rav1e_weighted_sse_16x64_neon);
 
   out
 };
