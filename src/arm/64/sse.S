@@ -36,10 +36,12 @@
 .endm
 
 .macro INIT width, height
+.if \width <= 16
     add     x11, x1, x1
     add     x12, x3, x3
     add     x8, x1, x1, lsl 1
     add     x9, x3, x3, lsl 1
+.endif
     movi    v17.4s,  #0
     mov     w10, #(\height)
 .endm
@@ -147,6 +149,102 @@ L(wsse_w16):
     RET_SUM
 endfunc
 
+.macro LOAD_32X4
+    ldp     q0, q22, [x0]
+    ldp     q4, q26, [x2]
+    add     x0, x0, x1
+    add     x2, x2, x3
+    ldp     q1, q23, [x0]
+    ldp     q5, q27, [x2]
+    add     x0, x0, x1
+    add     x2, x2, x3
+    ldp     q2, q24, [x0]
+    ldp     q6, q28, [x2]
+    add     x0, x0, x1
+    add     x2, x2, x3
+    ldp     q3, q25, [x0]
+    ldp     q7, q29, [x2]
+    add     x0, x0, x1
+    add     x2, x2, x3
+    ldp     q16, q19, [x4]
+    add     x4, x4, x5
+    subs    w10, w10, #4
+    mov     v18.d[0], v16.d[1]
+    mov     v20.d[0], v19.d[1]
+.endm
+
+.macro WEIGHTED_SSE_32X4
+    uabd    v0.16b, v0.16b, v4.16b     // diff pixel values
+    uabd    v1.16b, v1.16b, v5.16b
+    uabd    v2.16b, v2.16b, v6.16b
+    uabd    v3.16b, v3.16b, v7.16b
+    uabd    v22.16b, v22.16b, v26.16b
+    uabd    v23.16b, v23.16b, v27.16b
+    uabd    v24.16b, v24.16b, v28.16b
+    uabd    v25.16b, v25.16b, v29.16b
+    umull2  v4.8h, v0.16b, v0.16b      // square
+    umull2  v5.8h, v1.16b, v1.16b
+    umull2  v6.8h, v2.16b, v2.16b
+    umull2  v7.8h, v3.16b, v3.16b
+    umull2  v26.8h, v22.16b, v22.16b
+    umull2  v27.8h, v23.16b, v23.16b
+    umull2  v28.8h, v24.16b, v24.16b
+    umull2  v29.8h, v25.16b, v25.16b
+    umull   v0.8h, v0.8b, v0.8b
+    umull   v1.8h, v1.8b, v1.8b
+    umull   v2.8h, v2.8b, v2.8b
+    umull   v3.8h, v3.8b, v3.8b
+    umull   v22.8h, v22.8b, v22.8b
+    umull   v23.8h, v23.8b, v23.8b
+    umull   v24.8h, v24.8b, v24.8b
+    umull   v25.8h, v25.8b, v25.8b
+    uaddlp  v4.4s, v4.8h               // accumulate
+    uadalp  v4.4s, v5.8h
+    uadalp  v4.4s, v6.8h
+    uadalp  v4.4s, v7.8h
+    uaddlp  v26.4s, v26.8h
+    uadalp  v26.4s, v27.8h
+    uadalp  v26.4s, v28.8h
+    uadalp  v26.4s, v29.8h
+    uaddlp  v0.4s, v0.8h
+    uadalp  v0.4s, v1.8h
+    uadalp  v0.4s, v2.8h
+    uadalp  v0.4s, v3.8h
+    uaddlp  v22.4s, v22.8h
+    uadalp  v22.4s, v23.8h
+    uadalp  v22.4s, v24.8h
+    uadalp  v22.4s, v25.8h
+    uaddlp  v4.2d, v4.4s
+    uaddlp  v26.2d, v26.4s
+    uaddlp  v0.2d, v0.4s
+    uaddlp  v22.2d, v22.4s
+    xtn     v4.2s, v4.2d
+    xtn     v26.2s, v26.2d
+    xtn     v0.2s, v0.2d
+    xtn     v22.2s, v22.2d
+    umull   v4.2d, v4.2s, v18.2s       // apply scale
+    umull   v26.2d, v26.2s, v20.2s
+    umull   v0.2d, v0.2s, v16.2s
+    umull   v22.2d, v22.2s, v19.2s
+    urshr   v4.2d, v4.2d, #8
+    urshr   v26.2d, v26.2d, #8
+    urshr   v0.2d, v0.2d, #8
+    urshr   v22.2d, v22.2d, #8
+    add     v4.2d, v4.2d, v26.2d
+    add     v0.2d, v0.2d, v22.2d
+    add     v17.2d, v17.2d, v4.2d
+    add     v17.2d, v17.2d, v0.2d
+.endm
+
+function weighted_sse_32x32_neon, export=1
+    INIT 32, 32
+L(wsse_w32):
+    LOAD_32X4
+    WEIGHTED_SSE_32X4
+    bne     L(wsse_w32)
+    RET_SUM
+endfunc
+
 .macro weighted_sse width, height
 function weighted_sse_\width\()x\height\()_neon, export=1
     INIT \width, \height
@@ -163,3 +261,6 @@ weighted_sse 16, 4
 weighted_sse 16, 8
 weighted_sse 16, 32
 weighted_sse 16, 64
+weighted_sse 32, 8
+weighted_sse 32, 16
+weighted_sse 32, 64
