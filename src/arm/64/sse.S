@@ -69,6 +69,39 @@ L(wsse_w4):
     ret
 endfunc
 
+.macro RET_SUM
+    mov     v0.d[0], v17.d[1]
+    add     d0, d0, d17
+    fmov    x0, d0
+    ret
+.endm
+
+function weighted_sse_8x8_neon, export=1
+    INIT 8, 8
+L(wsse_w8):
+    LOAD_X4 t=d
+    uabd    v0.16b, v0.16b, v4.16b  // diff pixel values
+    uabd    v1.16b, v2.16b, v6.16b
+    umull2  v2.8h, v0.16b, v0.16b   // square
+    umull2  v3.8h, v1.16b, v1.16b
+    umull   v0.8h, v0.8b, v0.8b
+    umull   v1.8h, v1.8b, v1.8b
+    uaddlp  v2.4s, v2.8h            // accumulate
+    uaddlp  v3.4s, v3.8h
+    uaddlp  v0.4s, v0.8h
+    uaddlp  v1.4s, v1.8h
+    uaddlp  v2.2d, v2.4s
+    uadalp  v2.2d, v3.4s
+    uadalp  v2.2d, v0.4s
+    uadalp  v2.2d, v1.4s
+    xtn     v0.2s, v2.2d
+    umull   v0.2d, v0.2s, v16.2s    // apply scale
+    urshr   v0.2d, v0.2d, #8
+    add     v17.2d, v17.2d, v0.2d
+    bne     L(wsse_w8)
+    RET_SUM
+endfunc
+
 .macro weighted_sse width, height
 function weighted_sse_\width\()x\height\()_neon, export=1
     INIT \width, \height
@@ -78,3 +111,6 @@ endfunc
 
 weighted_sse 4, 8
 weighted_sse 4, 16
+weighted_sse 8, 4
+weighted_sse 8, 16
+weighted_sse 8, 32
