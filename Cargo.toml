@@ -72,7 +72,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-bitstream-io = "1"
+bitstream-io = "2"
 cfg-if = "1.0"
 clap = { version = "4.4.10", optional = true, default-features = false, features = [
   "color",
