@@ -8,4 +8,4 @@ license = "BSD-2-Clause"
 homepage = "https://github.com/xiph/rav1e"
 
 [dependencies]
-bitstream-io = "1"
+bitstream-io = "2"
