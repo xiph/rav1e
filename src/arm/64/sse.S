@@ -342,6 +342,9 @@ weighted_sse 128, 128
     add     x12, x3, x3
     add     x8, x1, x1, lsl 1
     add     x9, x3, x3, lsl 1
+.elseif \width >= 32
+    mov     w8, #(\width)
+    sxtw    x9, w8
 .endif
     movi    v17.4s,  #0
     mov     w10, #(\height)
@@ -469,10 +472,33 @@ L(wsse_hbd_w16):
     RET_SUM
 endfunc
 
+function weighted_sse_32x32_hbd_neon, export=1
+    INIT_HBD 32, 32
+L(wsse_hbd_w32up):
+    LOAD_32X4 vert=0, hbd=1
+    WEIGHTED_SSE_16X4_HBD
+    subs    w8, w8, #16
+    bne     L(wsse_hbd_w32up)
+    mov     w8, w9
+    sub     x0, x0, x9, lsl 1
+    sub     x2, x2, x9, lsl 1
+    add     x0, x0, x1, lsl 2
+    add     x2, x2, x3, lsl 2
+    sub     x4, x4, x9
+    add     x4, x4, x5
+    subs    w10, w10, #4
+    bne     L(wsse_hbd_w32up)
+    RET_SUM
+endfunc
+
 .macro weighted_sse_hbd width, height
 function weighted_sse_\width\()x\height\()_hbd_neon, export=1
     INIT_HBD \width, \height
+.if \width <= 16
     b       L(wsse_hbd_w\width)
+.else
+    b       L(wsse_hbd_w32up)
+.endif
 endfunc
 .endm
 
@@ -485,3 +511,12 @@ weighted_sse_hbd 16, 4
 weighted_sse_hbd 16, 8
 weighted_sse_hbd 16, 32
 weighted_sse_hbd 16, 64
+weighted_sse_hbd 32, 8
+weighted_sse_hbd 32, 16
+weighted_sse_hbd 32, 64
+weighted_sse_hbd 64, 16
+weighted_sse_hbd 64, 32
+weighted_sse_hbd 64, 64
+weighted_sse_hbd 64, 128
+weighted_sse_hbd 128, 64
+weighted_sse_hbd 128, 128
