@@ -26,11 +26,30 @@ type WeightedSseFn = unsafe extern fn(
   scale_stride: isize,
 ) -> u64;
 
+type WeightedSseHBDFn = unsafe extern fn(
+  src: *const u16,
+  src_stride: isize,
+  dst: *const u16,
+  dst_stride: isize,
+  scale: *const u32,
+  scale_stride: isize,
+) -> u64;
+
 macro_rules! declare_asm_sse_fn {
   ($($name: ident),+) => (
     $(
       extern { fn $name (
         src: *const u8, src_stride: isize, dst: *const u8, dst_stride: isize, scale: *const u32, scale_stride: isize
+      ) -> u64; }
+    )+
+  )
+}
+
+macro_rules! declare_asm_hbd_sse_fn {
+  ($($name: ident),+) => (
+    $(
+      extern { fn $name (
+        src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize, scale: *const u32, scale_stride: isize
       ) -> u64; }
     )+
   )
@@ -59,6 +78,12 @@ declare_asm_sse_fn![
   rav1e_weighted_sse_64x128_neon,
   rav1e_weighted_sse_128x64_neon,
   rav1e_weighted_sse_128x128_neon
+];
+
+declare_asm_hbd_sse_fn![
+  rav1e_weighted_sse_4x4_hbd_neon,
+  rav1e_weighted_sse_4x8_hbd_neon,
+  rav1e_weighted_sse_4x16_hbd_neon
 ];
 
 /// # Panics
@@ -104,7 +129,23 @@ pub fn get_weighted_sse<T: Pixel>(
         None => call_rust(),
       }
     }
-    (Ok(_bsize), PixelType::U16) => call_rust(),
+    (Ok(bsize), PixelType::U16) => {
+      match SSE_HBD_FNS[cpu.as_index()][to_index(bsize)] {
+        // SAFETY: Calls Assembly code.
+        Some(func) => unsafe {
+          ((func)(
+            src.data_ptr() as *const _,
+            T::to_asm_stride(src.plane_cfg.stride),
+            dst.data_ptr() as *const _,
+            T::to_asm_stride(dst.plane_cfg.stride),
+            scale.as_ptr(),
+            (scale_stride * std::mem::size_of::<u32>()) as isize,
+          ) + (den >> 1))
+            / den
+        },
+        None => call_rust(),
+      }
+    }
   };
 
   #[cfg(feature = "check_asm")]
@@ -148,8 +189,26 @@ static SSE_FNS_NEON: [Option<WeightedSseFn>; DIST_FNS_LENGTH] = {
   out
 };
 
+static SSE_HBD_FNS_NEON: [Option<WeightedSseHBDFn>; DIST_FNS_LENGTH] = {
+  let mut out: [Option<WeightedSseHBDFn>; DIST_FNS_LENGTH] =
+    [None; DIST_FNS_LENGTH];
+
+  use BlockSize::*;
+  out[BLOCK_4X4 as usize] = Some(rav1e_weighted_sse_4x4_hbd_neon);
+  out[BLOCK_4X8 as usize] = Some(rav1e_weighted_sse_4x8_hbd_neon);
+  out[BLOCK_4X16 as usize] = Some(rav1e_weighted_sse_4x16_hbd_neon);
+
+  out
+};
+
 cpu_function_lookup_table!(
   SSE_FNS: [[Option<WeightedSseFn>; DIST_FNS_LENGTH]],
+  default: [None; DIST_FNS_LENGTH],
+  [NEON]
+);
+
+cpu_function_lookup_table!(
+  SSE_HBD_FNS: [[Option<WeightedSseHBDFn>; DIST_FNS_LENGTH]],
   default: [None; DIST_FNS_LENGTH],
   [NEON]
 );
