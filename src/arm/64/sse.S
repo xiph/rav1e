@@ -364,6 +364,38 @@ L(wsse_hbd_w4):
     ret
 endfunc
 
+function weighted_sse_8x8_hbd_neon, export=1
+    INIT_HBD 8, 8
+L(wsse_hbd_w8):
+    LOAD_X4_HBD
+    uabd    v4.8h, v0.8h, v4.8h  // diff pixel values
+    uabd    v5.8h, v1.8h, v5.8h
+    uabd    v6.8h, v2.8h, v6.8h
+    uabd    v7.8h, v3.8h, v7.8h
+    umull   v0.4s, v4.4h, v4.4h   // square
+    umull   v1.4s, v5.4h, v5.4h
+    umull   v2.4s, v6.4h, v6.4h
+    umull   v3.4s, v7.4h, v7.4h
+    umull2  v4.4s, v4.8h, v4.8h
+    umull2  v5.4s, v5.8h, v5.8h
+    umull2  v6.4s, v6.8h, v6.8h
+    umull2  v7.4s, v7.8h, v7.8h
+    add     v0.4s, v0.4s, v1.4s  // accumulate
+    add     v2.4s, v2.4s, v3.4s
+    add     v4.4s, v4.4s, v5.4s
+    add     v6.4s, v6.4s, v7.4s
+    add     v0.4s, v0.4s, v2.4s
+    add     v4.4s, v4.4s, v6.4s
+    addv    s0, v0.4s
+    addv    s4, v4.4s
+    mov     v0.s[1], v4.s[0]
+    umull   v0.2d, v0.2s, v16.2s    // apply scale
+    urshr   v0.2d, v0.2d, #8
+    add     v17.2d, v17.2d, v0.2d
+    bne     L(wsse_hbd_w8)
+    RET_SUM
+endfunc
+
 .macro weighted_sse_hbd width, height
 function weighted_sse_\width\()x\height\()_hbd_neon, export=1
     INIT_HBD \width, \height
@@ -373,3 +405,6 @@ endfunc
 
 weighted_sse_hbd 4, 8
 weighted_sse_hbd 4, 16
+weighted_sse_hbd 8, 4
+weighted_sse_hbd 8, 16
+weighted_sse_hbd 8, 32
