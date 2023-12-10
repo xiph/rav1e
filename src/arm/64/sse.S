@@ -304,3 +304,72 @@ weighted_sse 64, 32
 weighted_sse 64, 128
 weighted_sse 128, 64
 weighted_sse 128, 128
+
+.macro LOAD_X4_HBD t=q
+    ldr     \t\()0, [x0]
+    ldr     \t\()4, [x2]
+    ldr     \t\()1, [x0, x1]
+    ldr     \t\()5, [x2, x3]
+    ldr     \t\()2, [x0, x11]
+    ldr     \t\()6, [x2, x12]
+    ldr     \t\()3, [x0, x8]
+    ldr     \t\()7, [x2, x9]
+.ifc \t,q
+    ldr     d16, [x4]
+.else
+    ldr     s16, [x4]
+.endif
+    add     x0, x0, x1, lsl 2
+    add     x2, x2, x3, lsl 2
+    add     x4, x4, x5
+    subs    w10, w10, #4
+.endm
+
+.macro INIT_HBD width, height
+    add     x11, x1, x1
+    add     x12, x3, x3
+    add     x8, x1, x1, lsl 1
+    add     x9, x3, x3, lsl 1
+    movi    v17.4s,  #0
+    mov     w10, #(\height)
+.endm
+
+// x0: src: *const u16,
+// x1: src_stride: isize,
+// x2: dst: *const u16,
+// x3: dst_stride: isize,
+// x4: scale: *const u32,
+// x5: scale_stride: isize,
+function weighted_sse_4x4_hbd_neon, export=1
+    INIT_HBD 4, 4
+L(wsse_hbd_w4):
+    LOAD_X4_HBD t=d
+    uabd    v0.8h, v0.8h, v4.8h  // diff pixel values
+    uabd    v1.8h, v1.8h, v5.8h
+    uabd    v2.8h, v2.8h, v6.8h
+    uabd    v3.8h, v3.8h, v7.8h
+    umull   v0.4s, v0.4h, v0.4h  // square
+    umull   v1.4s, v1.4h, v1.4h
+    umull   v2.4s, v2.4h, v2.4h
+    umull   v3.4s, v3.4h, v3.4h
+    add     v0.4s, v0.4s, v1.4s  // accumulate
+    add     v2.4s, v2.4s, v3.4s
+    add     v0.4s, v0.4s, v2.4s
+    addv    s0, v0.4s
+    umull   v0.2d, v0.2s, v16.2s // apply scale
+    urshr   d0, d0, #8
+    add     v17.2d, v17.2d, v0.2d
+    bne     L(wsse_hbd_w4)
+    fmov    x0, d17
+    ret
+endfunc
+
+.macro weighted_sse_hbd width, height
+function weighted_sse_\width\()x\height\()_hbd_neon, export=1
+    INIT_HBD \width, \height
+    b       L(wsse_hbd_w\width)
+endfunc
+.endm
+
+weighted_sse_hbd 4, 8
+weighted_sse_hbd 4, 16
