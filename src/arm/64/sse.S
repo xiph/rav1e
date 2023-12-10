@@ -152,7 +152,7 @@ L(wsse_w16):
     RET_SUM
 endfunc
 
-.macro LOAD_32X4 vert=1
+.macro LOAD_32X4 vert=1, hbd=0
     ldp     q0, q22, [x0]
     ldp     q4, q26, [x2]
     add     x0, x0, x1
@@ -170,7 +170,11 @@ endfunc
     add     x0, x0, x1
     add     x2, x2, x3
 .if \vert == 1
+.if \hbd == 0
     ldp     q16, q19, [x4]
+.else
+    ldr     q16, [x4]
+.endif
     add     x4, x4, x5
     subs    w10, w10, #4
 .else
@@ -178,11 +182,18 @@ endfunc
     sub     x2, x2, x3, lsl 2
     add     x0, x0, #32
     add     x2, x2, #32
+.if \hbd == 0
     ldp     q16, q19, [x4]
     add     x4, x4, #32
+.else
+    ldr     q16, [x4]
+    add     x4, x4, #16
+.endif
 .endif
     mov     v18.d[0], v16.d[1]
+.if \hbd == 0
     mov     v20.d[0], v19.d[1]
+.endif
 .endm
 
 .macro WEIGHTED_SSE_32X4
@@ -326,10 +337,12 @@ weighted_sse 128, 128
 .endm
 
 .macro INIT_HBD width, height
+.if \width <= 8
     add     x11, x1, x1
     add     x12, x3, x3
     add     x8, x1, x1, lsl 1
     add     x9, x3, x3, lsl 1
+.endif
     movi    v17.4s,  #0
     mov     w10, #(\height)
 .endm
@@ -396,6 +409,66 @@ L(wsse_hbd_w8):
     RET_SUM
 endfunc
 
+.macro WEIGHTED_SSE_16X4_HBD
+    uabd    v0.8h, v0.8h, v4.8h     // diff pixel values
+    uabd    v1.8h, v1.8h, v5.8h
+    uabd    v2.8h, v2.8h, v6.8h
+    uabd    v3.8h, v3.8h, v7.8h
+    uabd    v22.8h, v22.8h, v26.8h
+    uabd    v23.8h, v23.8h, v27.8h
+    uabd    v24.8h, v24.8h, v28.8h
+    uabd    v25.8h, v25.8h, v29.8h
+    umull2  v4.4s, v0.8h, v0.8h      // square
+    umull2  v5.4s, v1.8h, v1.8h
+    umull2  v6.4s, v2.8h, v2.8h
+    umull2  v7.4s, v3.8h, v3.8h
+    umull2  v26.4s, v22.8h, v22.8h
+    umull2  v27.4s, v23.8h, v23.8h
+    umull2  v28.4s, v24.8h, v24.8h
+    umull2  v29.4s, v25.8h, v25.8h
+    umull   v0.4s, v0.4h, v0.4h
+    umull   v1.4s, v1.4h, v1.4h
+    umull   v2.4s, v2.4h, v2.4h
+    umull   v3.4s, v3.4h, v3.4h
+    umull   v22.4s, v22.4h, v22.4h
+    umull   v23.4s, v23.4h, v23.4h
+    umull   v24.4s, v24.4h, v24.4h
+    umull   v25.4s, v25.4h, v25.4h
+    add     v0.4s, v0.4s, v1.4s      // accumulate
+    add     v2.4s, v2.4s, v3.4s
+    add     v4.4s, v4.4s, v5.4s
+    add     v6.4s, v6.4s, v7.4s
+    add     v22.4s, v22.4s, v23.4s
+    add     v24.4s, v24.4s, v25.4s
+    add     v26.4s, v26.4s, v27.4s
+    add     v28.4s, v28.4s, v29.4s
+    add     v0.4s, v0.4s, v2.4s
+    add     v4.4s, v4.4s, v6.4s
+    add     v22.4s, v22.4s, v24.4s
+    add     v26.4s, v26.4s, v28.4s
+    addv    s0, v0.4s
+    addv    s4, v4.4s
+    addv    s22, v22.4s
+    addv    s26, v26.4s
+    mov     v0.s[1], v4.s[0]
+    mov     v22.s[1], v26.s[0]
+    umull   v0.2d, v0.2s, v16.2s     // apply scale
+    umull   v22.2d, v22.2s, v18.2s
+    urshr   v0.2d, v0.2d, #8
+    urshr   v22.2d, v22.2d, #8
+    add     v0.2d, v0.2d, v22.2d
+    add     v17.2d, v17.2d, v0.2d
+.endm
+
+function weighted_sse_16x16_hbd_neon, export=1
+    INIT_HBD 16, 16
+L(wsse_hbd_w16):
+    LOAD_32X4 vert=1, hbd=1
+    WEIGHTED_SSE_16X4_HBD
+    bne     L(wsse_hbd_w16)
+    RET_SUM
+endfunc
+
 .macro weighted_sse_hbd width, height
 function weighted_sse_\width\()x\height\()_hbd_neon, export=1
     INIT_HBD \width, \height
@@ -408,3 +481,7 @@ weighted_sse_hbd 4, 16
 weighted_sse_hbd 8, 4
 weighted_sse_hbd 8, 16
 weighted_sse_hbd 8, 32
+weighted_sse_hbd 16, 4
+weighted_sse_hbd 16, 8
+weighted_sse_hbd 16, 32
+weighted_sse_hbd 16, 64
