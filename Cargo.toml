@@ -74,7 +74,7 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3.4"
 bitstream-io = "2"
 cfg-if = "1.0"
-clap = { version = "4.4.10", optional = true, default-features = false, features = [
+clap = { version = "4.4.11", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
@@ -109,7 +109,7 @@ simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.89", optional = true }
 nom = { version = "7.1.3", optional = true }
 new_debug_unreachable = "1.0.4"
-once_cell = "1.18.0"
+once_cell = "1.19.0"
 av1-grain = { version = "0.2.2", features = ["serialize"] }
 serde-big-array = { version = "0.5.1", optional = true }
 profiling = { version = "1" }
