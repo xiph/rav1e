@@ -95,14 +95,23 @@ jobs:
       with:
         toolchain: ${{ matrix.toolchain }}
 
+    - name: Install mingw-w64-x86_64-binutils and mingw-w64-x86_64-gcc
+      run: |
+        C:\msys64\usr\bin\pacman.exe --noconfirm --needed -S mingw-w64-x86_64-binutils mingw-w64-x86_64-gcc
+      if: contains(matrix.toolchain, 'windows-gnu')
+
     - name: Build rav1e
       env:
         RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-gcc.exe"
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_AR: "C:\\msys64\\mingw64\\bin\\ar.exe"
       run: cargo build --profile ${{ matrix.profile }}
 
     - name: Run cargo-c
       env:
         RUSTFLAGS: "-C target-cpu=${{ matrix.target_cpu }}"
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: "C:\\msys64\\mingw64\\bin\\x86_64-w64-mingw32-gcc.exe"
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_AR: "C:\\msys64\\mingw64\\bin\\ar.exe"
       run: |
         cargo fetch
         cargo cinstall --profile ${{ matrix.profile }} --destdir="C:\" --offline
