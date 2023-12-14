@@ -72,8 +72,8 @@ jobs:
            target_cpu: x86-64-v2
          - conf: gnu
            name: gnu-avx2
-           toolchain: stable
-           profile: release-strip
+           toolchain: stable-x86_64-pc-windows-gnu
+           profile: release-no-lto
            target_cpu: x86-64-v3
 
     if: github.repository_owner == 'xiph'
