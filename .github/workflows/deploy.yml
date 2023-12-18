@@ -156,7 +156,7 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
       uses: actions/upload-artifact@v4
       with:
-        name: rav1e (Windows-${{ matrix.name }})
+        name: librav1e (Windows-${{ matrix.name }})
         path: rav1e-windows-${{ matrix.name }}.zip
 
     - name: Upload release binaries
@@ -495,12 +495,12 @@ jobs:
           librav1e (linux-aarch64)/librav1e-linux-aarch64.tar.gz
           librav1e (macos)/librav1e-macos.tar.gz
           librav1e (macos-aarch64)/librav1e-macos-aarch64.tar.gz
-          rav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
-          rav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
-          rav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
-          rav1e (Windows-gnu-generic)/rav1e-windows-gnu-generic.zip
-          rav1e (Windows-gnu-sse4)/rav1e-windows-gnu-sse4.zip
-          rav1e (Windows-gnu-avx2)/rav1e-windows-gnu-avx2.zip
+          librav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
+          librav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
+          librav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
+          librav1e (Windows-gnu-generic)/rav1e-windows-gnu-generic.zip
+          librav1e (Windows-gnu-sse4)/rav1e-windows-gnu-sse4.zip
+          librav1e (Windows-gnu-avx2)/rav1e-windows-gnu-avx2.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
