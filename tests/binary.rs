@@ -1,6 +1,7 @@
 #[cfg(feature = "binaries")]
 mod binary {
   use assert_cmd::Command;
+  use interpolate_name::interpolate_test;
   use rand::distributions::Alphanumeric;
   use rand::{thread_rng, Rng};
   use std::env::temp_dir;
@@ -31,29 +32,37 @@ mod binary {
   }
 
   #[cfg(not(windows))]
-  fn get_rav1e_command() -> Command {
+  fn get_rav1e_command(high_bitdepth: bool) -> Command {
     let mut cmd = Command::cargo_bin("rav1e").unwrap();
+    if high_bitdepth {
+      cmd.arg("--high-bitdepth");
+    }
     cmd.env_clear();
     cmd
   }
 
   #[cfg(windows)]
   // `env_clear` doesn't work on Windows: https://github.com/rust-lang/rust/issues/31259
-  fn get_rav1e_command() -> Command {
-    Command::cargo_bin("rav1e").unwrap()
+  fn get_rav1e_command(high_bitdepth: bool) -> Command {
+    let mut cmd = Command::cargo_bin("rav1e").unwrap();
+    if high_bitdepth {
+      cmd.arg("--high-bitdepth");
+    }
+    cmd
   }
 
-  fn get_common_cmd(outfile: &Path) -> Command {
-    let mut cmd = get_rav1e_command();
+  fn get_common_cmd(outfile: &Path, high_bitdepth: bool) -> Command {
+    let mut cmd = get_rav1e_command(high_bitdepth);
     cmd.args(["--bitrate", "1000"]).arg("-o").arg(outfile).arg("-y");
     cmd
   }
 
-  #[test]
-  fn one_pass_qp_based() {
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
+  fn one_pass_qp_based(high_bitdepth: bool) {
     let outfile = get_tempfile_path("ivf");
 
-    get_rav1e_command()
+    get_rav1e_command(high_bitdepth)
       .args(["--quantizer", "100"])
       .arg("-o")
       .arg(&outfile)
@@ -63,23 +72,25 @@ mod binary {
       .success();
   }
 
-  #[test]
-  fn one_pass_bitrate_based() {
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
+  fn one_pass_bitrate_based(high_bitdepth: bool) {
     let outfile = get_tempfile_path("ivf");
 
-    get_common_cmd(&outfile)
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("-")
       .write_stdin(get_y4m_input())
       .assert()
       .success();
   }
 
-  #[test]
-  fn two_pass_bitrate_based() {
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
+  fn two_pass_bitrate_based(high_bitdepth: bool) {
     let outfile = get_tempfile_path("ivf");
     let passfile = get_tempfile_path("pass");
 
-    get_common_cmd(&outfile)
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("--first-pass")
       .arg(&passfile)
       .arg("-")
@@ -87,30 +98,7 @@ mod binary {
       .assert()
       .success();
 
-    get_common_cmd(&outfile)
-      .arg("--second-pass")
-      .arg(&passfile)
-      .arg("-")
-      .write_stdin(get_y4m_input())
-      .assert()
-      .success();
-  }
-  #[test]
-  fn two_pass_bitrate_based_constrained() {
-    let outfile = get_tempfile_path("ivf");
-    let passfile = get_tempfile_path("pass");
-
-    get_common_cmd(&outfile)
-      .args(["--reservoir-frame-delay", "14"])
-      .arg("--first-pass")
-      .arg(&passfile)
-      .arg("-")
-      .write_stdin(get_y4m_input())
-      .assert()
-      .success();
-
-    get_common_cmd(&outfile)
-      .args(["--reservoir-frame-delay", "14"])
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("--second-pass")
       .arg(&passfile)
       .arg("-")
@@ -119,13 +107,40 @@ mod binary {
       .success();
   }
 
-  #[test]
-  fn three_pass_bitrate_based() {
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
+  fn two_pass_bitrate_based_constrained(high_bitdepth: bool) {
+    let outfile = get_tempfile_path("ivf");
+    let passfile = get_tempfile_path("pass");
+
+    get_common_cmd(&outfile, high_bitdepth)
+      .args(["--reservoir-frame-delay", "14"])
+      .arg("--first-pass")
+      .arg(&passfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+
+    get_common_cmd(&outfile, high_bitdepth)
+      .args(["--reservoir-frame-delay", "14"])
+      .arg("--second-pass")
+      .arg(&passfile)
+      .arg("-")
+      .write_stdin(get_y4m_input())
+      .assert()
+      .success();
+  }
+
+  #[interpolate_test(low_bitdepth, false)]
+  #[interpolate_test(high_bitdepth, true)]
+
+  fn three_pass_bitrate_based(high_bitdepth: bool) {
     let outfile = get_tempfile_path("ivf");
     let pass1file = get_tempfile_path("pass1");
     let pass2file = get_tempfile_path("pass2");
 
-    get_common_cmd(&outfile)
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("--first-pass")
       .arg(&pass1file)
       .arg("-")
@@ -133,7 +148,7 @@ mod binary {
       .assert()
       .success();
 
-    get_common_cmd(&outfile)
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("--second-pass")
       .arg(&pass1file)
       .arg("--first-pass")
@@ -143,7 +158,7 @@ mod binary {
       .assert()
       .success();
 
-    get_common_cmd(&outfile)
+    get_common_cmd(&outfile, high_bitdepth)
       .arg("--second-pass")
       .arg(&pass2file)
       .arg("-")
