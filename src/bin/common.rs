@@ -195,6 +195,10 @@ pub struct CliOptions {
     help_heading = "ENCODE SETTINGS"
   )]
   pub film_grain_table: Option<PathBuf>,
+  /// Force the high bitdepth codepath even for 8bit content.
+  /// Mainly for debugging purposes.
+  #[clap(long, help_heading = "ENCODE SETTINGS")]
+  pub high_bitdepth: bool,
 
   /// Pixel range
   #[clap(long, value_parser, help_heading = "VIDEO METADATA")]
@@ -339,6 +343,7 @@ pub struct ParsedCliOptions {
   pub photon_noise: u8,
   #[cfg(feature = "unstable")]
   pub slots: usize,
+  pub force_highbitdepth: bool,
 }
 
 #[cfg(feature = "serialize")]
@@ -484,6 +489,7 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     pass2file_name: matches.second_pass.clone(),
     save_config: save_config_path,
     photon_noise: matches.photon_noise,
+    force_highbitdepth: matches.high_bitdepth,
     #[cfg(feature = "unstable")]
     slots,
   })
