@@ -80,7 +80,7 @@ clap = { version = "4.4.11", optional = true, default-features = false, features
   "wrap_help",
   "derive",
 ] }
-clap_complete = { version = "4.4.4", optional = true }
+clap_complete = { version = "4.4.5", optional = true }
 libc = "0.2"
 y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
@@ -90,10 +90,10 @@ paste = "1.0"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.6.0", package = "libdav1d-sys", optional = true }
-aom-sys = { version = "0.3.2", optional = true }
+aom-sys = { version = "0.3.3", optional = true }
 scan_fmt = { version = "0.2.6", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
-v_frame = "0.3.6"
+v_frame = "0.3.7"
 av-metrics = { version = "0.9.1", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
 crossbeam = { version = "0.8", optional = true }
