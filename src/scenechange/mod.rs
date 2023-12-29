@@ -64,12 +64,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   /// Downscaling function for fast scene detection
   scale_func: Option<ScaleFunction<T>>,
   /// Frame buffer for scaled frames
-  downscaled_frame_buffer: Option<(
-    [Plane<T>; 2],
-    // `true` if the data is valid and initialized, or `false`
-    // if it should be assumed that the data is uninitialized.
-    bool,
-  )>,
+  downscaled_frame_buffer: Option<[Plane<T>; 2]>,
   /// Buffer for FrameMEStats for cost scenecut
   frame_me_stats_buffer: Option<RefMEStats>,
   /// Deque offset for current

@@ -24,40 +24,23 @@ impl<T: Pixel> SceneChangeDetector<T> {
   ) -> ScenecutResult {
     if let Some(scale_func) = &self.scale_func {
       // downscale both frames for faster comparison
-      if let Some((frame_buffer, is_initialized)) =
-        &mut self.downscaled_frame_buffer
+      if let Some(frame_buffer) = &mut self.downscaled_frame_buffer
       {
-        let frame_buffer = &mut *frame_buffer;
-        if *is_initialized {
-          frame_buffer.swap(0, 1);
-          (scale_func.downscale_in_place)(
-            &frame2.planes[0],
-            &mut frame_buffer[1],
-          );
-        } else {
-          // both frames are in an irrelevant and invalid state, so we have to reinitialize
-          // them, but we can reuse their allocations
-          (scale_func.downscale_in_place)(
-            &frame1.planes[0],
-            &mut frame_buffer[0],
-          );
-          (scale_func.downscale_in_place)(
-            &frame2.planes[0],
-            &mut frame_buffer[1],
-          );
-          *is_initialized = true;
-        }
+        frame_buffer.swap(0, 1);
+        (scale_func.downscale_in_place)(
+          &frame2.planes[0],
+          &mut frame_buffer[1],
+        );
       } else {
-        self.downscaled_frame_buffer = Some((
+        self.downscaled_frame_buffer = Some(
           [
             (scale_func.downscale)(&frame1.planes[0]),
             (scale_func.downscale)(&frame2.planes[0]),
-          ],
-          true, // the frame buffer is initialized and in a valid state
-        ));
+          ]
+        );
       }
 
-      if let Some((frame_buffer, _)) = &self.downscaled_frame_buffer {
+      if let Some(frame_buffer) = &self.downscaled_frame_buffer {
         let &[first, second] = &frame_buffer;
         let delta = self.delta_in_planes(first, second);
 
