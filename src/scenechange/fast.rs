@@ -24,20 +24,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
   ) -> ScenecutResult {
     if let Some(scale_func) = &self.scale_func {
       // downscale both frames for faster comparison
-      if let Some(frame_buffer) = &mut self.downscaled_frame_buffer
-      {
+      if let Some(frame_buffer) = &mut self.downscaled_frame_buffer {
         frame_buffer.swap(0, 1);
         (scale_func.downscale_in_place)(
           &frame2.planes[0],
           &mut frame_buffer[1],
         );
       } else {
-        self.downscaled_frame_buffer = Some(
-          [
-            (scale_func.downscale)(&frame1.planes[0]),
-            (scale_func.downscale)(&frame2.planes[0]),
-          ]
-        );
+        self.downscaled_frame_buffer = Some([
+          (scale_func.downscale)(&frame1.planes[0]),
+          (scale_func.downscale)(&frame2.planes[0]),
+        ]);
       }
 
       if let Some(frame_buffer) = &self.downscaled_frame_buffer {
@@ -57,10 +54,7 @@ impl<T: Pixel> SceneChangeDetector<T> {
         unsafe { debug_unreachable!() }
       }
     } else {
-      let delta = self.delta_in_planes(
-        &frame1.planes[0],
-        &frame2.planes[0],
-      );
+      let delta = self.delta_in_planes(&frame1.planes[0], &frame2.planes[0]);
 
       ScenecutResult {
         threshold: self.threshold,
