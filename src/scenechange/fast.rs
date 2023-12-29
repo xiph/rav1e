@@ -24,40 +24,20 @@ impl<T: Pixel> SceneChangeDetector<T> {
   ) -> ScenecutResult {
     if let Some(scale_func) = &self.scale_func {
       // downscale both frames for faster comparison
-      if let Some((frame_buffer, is_initialized)) =
-        &mut self.downscaled_frame_buffer
-      {
-        let frame_buffer = &mut *frame_buffer;
-        if *is_initialized {
-          frame_buffer.swap(0, 1);
-          (scale_func.downscale_in_place)(
-            &frame2.planes[0],
-            &mut frame_buffer[1],
-          );
-        } else {
-          // both frames are in an irrelevant and invalid state, so we have to reinitialize
-          // them, but we can reuse their allocations
-          (scale_func.downscale_in_place)(
-            &frame1.planes[0],
-            &mut frame_buffer[0],
-          );
-          (scale_func.downscale_in_place)(
-            &frame2.planes[0],
-            &mut frame_buffer[1],
-          );
-          *is_initialized = true;
-        }
+      if let Some(frame_buffer) = &mut self.downscaled_frame_buffer {
+        frame_buffer.swap(0, 1);
+        (scale_func.downscale_in_place)(
+          &frame2.planes[0],
+          &mut frame_buffer[1],
+        );
       } else {
-        self.downscaled_frame_buffer = Some((
-          [
-            (scale_func.downscale)(&frame1.planes[0]),
-            (scale_func.downscale)(&frame2.planes[0]),
-          ],
-          true, // the frame buffer is initialized and in a valid state
-        ));
+        self.downscaled_frame_buffer = Some([
+          (scale_func.downscale)(&frame1.planes[0]),
+          (scale_func.downscale)(&frame2.planes[0]),
+        ]);
       }
 
-      if let Some((frame_buffer, _)) = &self.downscaled_frame_buffer {
+      if let Some(frame_buffer) = &self.downscaled_frame_buffer {
         let &[first, second] = &frame_buffer;
         let delta = self.delta_in_planes(first, second);
 
@@ -74,30 +54,14 @@ impl<T: Pixel> SceneChangeDetector<T> {
         unsafe { debug_unreachable!() }
       }
     } else {
-      if let Some(frame_buffer) = &mut self.frame_ref_buffer {
-        frame_buffer.swap(0, 1);
-        frame_buffer[1] = frame2;
-      } else {
-        self.frame_ref_buffer = Some([frame1, frame2]);
-      }
+      let delta = self.delta_in_planes(&frame1.planes[0], &frame2.planes[0]);
 
-      if let Some(frame_buffer) = &self.frame_ref_buffer {
-        let delta = self.delta_in_planes(
-          &frame_buffer[0].planes[0],
-          &frame_buffer[1].planes[0],
-        );
-
-        ScenecutResult {
-          threshold: self.threshold,
-          inter_cost: delta,
-          imp_block_cost: delta,
-          backward_adjusted_cost: delta,
-          forward_adjusted_cost: delta,
-        }
-      } else {
-        // SAFETY: `frame_ref_buffer` is always initialized to `Some(..)` at the start
-        // of this code block if it was `None`.
-        unsafe { debug_unreachable!() }
+      ScenecutResult {
+        threshold: self.threshold,
+        inter_cost: delta,
+        imp_block_cost: delta,
+        backward_adjusted_cost: delta,
+        forward_adjusted_cost: delta,
       }
     }
   }
