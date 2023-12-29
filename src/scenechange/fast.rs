@@ -74,30 +74,17 @@ impl<T: Pixel> SceneChangeDetector<T> {
         unsafe { debug_unreachable!() }
       }
     } else {
-      if let Some(frame_buffer) = &mut self.frame_ref_buffer {
-        frame_buffer.swap(0, 1);
-        frame_buffer[1] = frame2;
-      } else {
-        self.frame_ref_buffer = Some([frame1, frame2]);
-      }
+      let delta = self.delta_in_planes(
+        &frame1.planes[0],
+        &frame2.planes[0],
+      );
 
-      if let Some(frame_buffer) = &self.frame_ref_buffer {
-        let delta = self.delta_in_planes(
-          &frame_buffer[0].planes[0],
-          &frame_buffer[1].planes[0],
-        );
-
-        ScenecutResult {
-          threshold: self.threshold,
-          inter_cost: delta,
-          imp_block_cost: delta,
-          backward_adjusted_cost: delta,
-          forward_adjusted_cost: delta,
-        }
-      } else {
-        // SAFETY: `frame_ref_buffer` is always initialized to `Some(..)` at the start
-        // of this code block if it was `None`.
-        unsafe { debug_unreachable!() }
+      ScenecutResult {
+        threshold: self.threshold,
+        inter_cost: delta,
+        imp_block_cost: delta,
+        backward_adjusted_cost: delta,
+        forward_adjusted_cost: delta,
       }
     }
   }
