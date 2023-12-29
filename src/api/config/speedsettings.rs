@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2022, The rav1e contributors. All rights reserved
+// Copyright (c) 2020-2023, The rav1e contributors. All rights reserved
 //
 // This source code is subject to the terms of the BSD 2 Clause License and
 // the Alliance for Open Media Patent License 1.0. If the BSD 2 Clause License
@@ -79,7 +79,7 @@ impl Default for SpeedSettings {
       lrf: true,
       lru_on_skip: true,
       sgr_complexity: SGRComplexityLevel::Full,
-      segmentation: SegmentationLevel::Full,
+      segmentation: SegmentationLevel::Complex,
       partition: PartitionSpeedSettings {
         encode_bottomup: true,
         non_square_partition_max_threshold: BlockSize::BLOCK_64X64,
@@ -434,6 +434,8 @@ pub enum SegmentationLevel {
   Disabled,
   /// Segmentation index is derived from source statistics.
   Simple,
+  /// Segmentation index range is derived from source statistics.
+  Complex,
   /// Search all segmentation indices.
   Full,
 }
@@ -446,6 +448,7 @@ impl fmt::Display for SegmentationLevel {
       match self {
         SegmentationLevel::Disabled => "Disabled",
         SegmentationLevel::Simple => "Simple",
+        SegmentationLevel::Complex => "Complex",
         SegmentationLevel::Full => "Full",
       }
     )
