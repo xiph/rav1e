@@ -2990,16 +2990,16 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   match partition {
     PartitionType::PARTITION_NONE => {
       let rdo_decision;
-      let part_decision = if let Some(part_mode) = rdo_output.part_modes.get(0)
-      {
-        // The optimal prediction mode is known from a previous iteration
-        part_mode
-      } else {
-        // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
-        rdo_decision =
-          rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
-        &rdo_decision
-      };
+      let part_decision =
+        if let Some(part_mode) = rdo_output.part_modes.first() {
+          // The optimal prediction mode is known from a previous iteration
+          part_mode
+        } else {
+          // Make a prediction mode decision for blocks encoded with no rdo_partition_decision call (e.g. edges)
+          rdo_decision =
+            rdo_mode_decision(fi, ts, cw, bsize, tile_bo, inter_cfg);
+          &rdo_decision
+        };
 
       let mut mode_luma = part_decision.pred_mode_luma;
       let mut mode_chroma = part_decision.pred_mode_chroma;
