@@ -323,7 +323,7 @@ unsafe fn forward_transform_neon<T: Coefficient>(
       }
     }
 
-    let col_coeffs = assume_slice_init_mut(col_coeffs);
+    let col_coeffs = slice_assume_init_mut(col_coeffs);
 
     txfm_func_col(col_coeffs);
     round_shift_array_neon(col_coeffs, -cfg.shift[1]);
@@ -364,7 +364,7 @@ unsafe fn forward_transform_neon<T: Coefficient>(
     }
   }
 
-  let buf = assume_slice_init_mut(buf);
+  let buf = slice_assume_init_mut(buf);
 
   // Rows
   for rg in (0..txfm_size_row).step_by(8) {

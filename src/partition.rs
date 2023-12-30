@@ -617,7 +617,7 @@ impl<'a, T: Pixel> IntraEdge<'a, T> {
     let left = unsafe {
       let begin_left = 2 * MAX_TX_SIZE - init_left;
       let end_above = 2 * MAX_TX_SIZE + 1 + init_above;
-      assume_slice_init_mut(&mut edge_buf.data[begin_left..end_above])
+      slice_assume_init_mut(&mut edge_buf.data[begin_left..end_above])
     };
     let (left, top_left) = left.split_at(init_left);
     let (top_left, above) = top_left.split_at(1);
@@ -833,7 +833,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
     }
 
     // SAFETY: The blocks above have initialized the first `init_above` items.
-    let above = unsafe { assume_slice_init_mut(&mut above[..init_above]) };
+    let above = unsafe { slice_assume_init_mut(&mut above[..init_above]) };
 
     // Needs bottom left
     if needs_bottomleft {
@@ -875,7 +875,7 @@ pub fn get_intra_edges<'a, T: Pixel>(
 
     // SAFETY: The blocks above have initialized last `init_left` items.
     let left = unsafe {
-      assume_slice_init_mut(&mut left[2 * MAX_TX_SIZE - init_left..])
+      slice_assume_init_mut(&mut left[2 * MAX_TX_SIZE - init_left..])
     };
 
     // Needs top-left

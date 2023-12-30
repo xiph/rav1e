@@ -83,8 +83,8 @@ pub fn dequantize<T: Coefficient>(
   #[cfg(any(feature = "check_asm", test))]
   {
     let area = av1_get_coded_tx_size(tx_size).area();
-    let rcoeffs = unsafe { assume_slice_init_mut(&mut rcoeffs[..area]) };
-    let ref_rcoeffs = unsafe { assume_slice_init_mut(&mut ref_rcoeffs[..]) };
+    let rcoeffs = unsafe { slice_assume_init_mut(&mut rcoeffs[..area]) };
+    let ref_rcoeffs = unsafe { slice_assume_init_mut(&mut ref_rcoeffs[..]) };
     assert_eq!(rcoeffs, ref_rcoeffs);
   }
 }
