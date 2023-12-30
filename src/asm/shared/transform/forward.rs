@@ -45,7 +45,7 @@ pub fn cast_mut<const N: usize, T>(x: &mut [T]) -> &mut [T; N] {
 mod test {
   use crate::cpu_features::*;
   use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
-  use crate::util::assume_slice_init_mut;
+  use crate::util::slice_assume_init_mut;
   use rand::Rng;
   use std::mem::MaybeUninit;
 
@@ -92,7 +92,7 @@ mod test {
           8,
           CpuFeatureLevel::RUST,
         );
-        let output_ref = unsafe { assume_slice_init_mut(&mut output_ref[..]) };
+        let output_ref = unsafe { slice_assume_init_mut(&mut output_ref[..]) };
         forward_transform(
           &input[..],
           &mut output_simd[..],
@@ -103,7 +103,7 @@ mod test {
           cpu,
         );
         let output_simd =
-          unsafe { assume_slice_init_mut(&mut output_simd[..]) };
+          unsafe { slice_assume_init_mut(&mut output_simd[..]) };
         assert_eq!(output_ref, output_simd)
       }
     }
