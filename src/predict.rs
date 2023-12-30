@@ -1058,7 +1058,7 @@ pub(crate) mod rust {
       }
     }
     // SAFETY: the loop above has initialized all items
-    let ac = unsafe { assume_slice_init_mut(ac) };
+    let ac = unsafe { slice_assume_init_mut(ac) };
     let shift = plane_bsize.width_log2() + plane_bsize.height_log2();
     let average = ((sum + (1 << (shift - 1))) >> shift) as i16;
 

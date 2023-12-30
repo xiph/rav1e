@@ -321,7 +321,7 @@ unsafe fn forward_transform_avx2<T: Coefficient>(
       }
     }
 
-    let col_coeffs = assume_slice_init_mut(tx_in);
+    let col_coeffs = slice_assume_init_mut(tx_in);
 
     txfm_func_col(col_coeffs);
     round_shift_array_avx2(col_coeffs, -cfg.shift[1]);

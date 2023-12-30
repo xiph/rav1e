@@ -18,12 +18,13 @@ pub fn init_slice_repeat_mut<T: Copy>(
   }
 
   // SAFETY: Defined behavior, since all elements of slice are initialized
-  unsafe { assume_slice_init_mut(slice) }
+  unsafe { slice_assume_init_mut(slice) }
 }
 
-/// Assume all the elements are initialized
-pub unsafe fn assume_slice_init_mut<T: Copy>(
+/// Assume all the elements are initialized.
+#[inline(always)]
+pub unsafe fn slice_assume_init_mut<T: Copy>(
   slice: &'_ mut [MaybeUninit<T>],
 ) -> &'_ mut [T] {
-  &mut *(slice as *mut [std::mem::MaybeUninit<T>] as *mut [T])
+  &mut *(slice as *mut [MaybeUninit<T>] as *mut [T])
 }
