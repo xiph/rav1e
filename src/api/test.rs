@@ -1400,7 +1400,7 @@ fn test_t35_parameter() {
   }
   ctx.flush();
 
-  while let Ok(_) = ctx.receive_packet() {}
+  while ctx.receive_packet().is_ok() {}
 }
 
 #[interpolate_test(0, 0)]

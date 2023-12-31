@@ -128,52 +128,6 @@ impl CFLParams {
   }
 }
 
-#[cfg(test)]
-mod test {
-  #[test]
-  fn cdf_map() {
-    use super::*;
-
-    let cdf = CDFContext::new(8);
-    let cdf_map = FieldMap { map: cdf.build_map() };
-    let f = &cdf.partition_cdf[2];
-    cdf_map.lookup(f.as_ptr() as usize);
-  }
-
-  use super::CFLSign;
-  use super::CFLSign::*;
-
-  static cfl_alpha_signs: [[CFLSign; 2]; 8] = [
-    [CFL_SIGN_ZERO, CFL_SIGN_NEG],
-    [CFL_SIGN_ZERO, CFL_SIGN_POS],
-    [CFL_SIGN_NEG, CFL_SIGN_ZERO],
-    [CFL_SIGN_NEG, CFL_SIGN_NEG],
-    [CFL_SIGN_NEG, CFL_SIGN_POS],
-    [CFL_SIGN_POS, CFL_SIGN_ZERO],
-    [CFL_SIGN_POS, CFL_SIGN_NEG],
-    [CFL_SIGN_POS, CFL_SIGN_POS],
-  ];
-
-  static cfl_context: [[usize; 8]; 2] =
-    [[0, 0, 0, 1, 2, 3, 4, 5], [0, 3, 0, 1, 4, 0, 2, 5]];
-
-  #[test]
-  fn cfl_joint_sign() {
-    use super::*;
-
-    let mut cfl = CFLParams::default();
-    for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
-      cfl.sign = signs;
-      assert!(cfl.joint_sign() as usize == joint_sign);
-      for uv in 0..2 {
-        if signs[uv] != CFL_SIGN_ZERO {
-          assert!(cfl.context(uv) == cfl_context[uv][joint_sign]);
-        }
-      }
-    }
-  }
-}
-
 impl<'a> ContextWriter<'a> {
   fn partition_gather_horz_alike(
     out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize,
@@ -546,6 +500,52 @@ impl<'a> BlockContext<'a> {
 
     for left in &mut left_ctx[..bh >> 1] {
       *left = partition_context_lookup[subsize as usize][1];
+    }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  #[test]
+  fn cdf_map() {
+    use super::*;
+
+    let cdf = CDFContext::new(8);
+    let cdf_map = FieldMap { map: cdf.build_map() };
+    let f = &cdf.partition_cdf[2];
+    cdf_map.lookup(f.as_ptr() as usize);
+  }
+
+  use super::CFLSign;
+  use super::CFLSign::*;
+
+  static cfl_alpha_signs: [[CFLSign; 2]; 8] = [
+    [CFL_SIGN_ZERO, CFL_SIGN_NEG],
+    [CFL_SIGN_ZERO, CFL_SIGN_POS],
+    [CFL_SIGN_NEG, CFL_SIGN_ZERO],
+    [CFL_SIGN_NEG, CFL_SIGN_NEG],
+    [CFL_SIGN_NEG, CFL_SIGN_POS],
+    [CFL_SIGN_POS, CFL_SIGN_ZERO],
+    [CFL_SIGN_POS, CFL_SIGN_NEG],
+    [CFL_SIGN_POS, CFL_SIGN_POS],
+  ];
+
+  static cfl_context: [[usize; 8]; 2] =
+    [[0, 0, 0, 1, 2, 3, 4, 5], [0, 3, 0, 1, 4, 0, 2, 5]];
+
+  #[test]
+  fn cfl_joint_sign() {
+    use super::*;
+
+    let mut cfl = CFLParams::default();
+    for (joint_sign, &signs) in cfl_alpha_signs.iter().enumerate() {
+      cfl.sign = signs;
+      assert!(cfl.joint_sign() as usize == joint_sign);
+      for uv in 0..2 {
+        if signs[uv] != CFL_SIGN_ZERO {
+          assert!(cfl.context(uv) == cfl_context[uv][joint_sign]);
+        }
+      }
     }
   }
 }

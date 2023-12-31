@@ -363,8 +363,8 @@ pub mod test {
     width: usize, height: usize,
   ) -> (FrameInvariants<u16>, FrameState<u16>, FrameBlocks, f64) {
     // FrameInvariants aligns to the next multiple of 8, so using other values could make tests confusing
-    assert!(width & 7 == 0);
-    assert!(height & 7 == 0);
+    assert!(width.trailing_zeros() >= 3);
+    assert!(height.trailing_zeros() >= 3);
     // We test only for 420 for now
     let chroma_sampling = ChromaSampling::Cs420;
     let config = Arc::new(EncoderConfig {
