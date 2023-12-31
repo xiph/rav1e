@@ -354,8 +354,10 @@ impl fmt::Display for SceneDetectionSpeed {
   Serialize,
   Deserialize,
 )]
+#[cfg_attr(test, derive(Default))]
 pub enum PredictionModesSetting {
   /// Only simple prediction modes.
+  #[cfg_attr(test, default)]
   Simple,
   /// Search all prediction modes on key frames and simple modes on other
   /// frames.
@@ -375,13 +377,6 @@ impl fmt::Display for PredictionModesSetting {
         PredictionModesSetting::ComplexAll => "Complex-All",
       }
     )
-  }
-}
-
-#[cfg(test)]
-impl Default for PredictionModesSetting {
-  fn default() -> Self {
-    PredictionModesSetting::Simple
   }
 }
 

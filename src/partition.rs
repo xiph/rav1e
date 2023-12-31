@@ -126,6 +126,7 @@ pub enum PartitionType {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(Default))]
 pub enum BlockSize {
   BLOCK_4X4,
   BLOCK_4X8,
@@ -139,6 +140,7 @@ pub enum BlockSize {
   BLOCK_32X32,
   BLOCK_32X64,
   BLOCK_64X32,
+  #[cfg_attr(test, default)]
   BLOCK_64X64,
   BLOCK_64X128,
   BLOCK_128X64,
@@ -173,13 +175,6 @@ impl PartialOrd for BlockSize {
       (Greater, _) | (_, Greater) => Some(Greater),
       (Less, _) | (_, Less) => Some(Less),
     }
-  }
-}
-
-#[cfg(test)]
-impl Default for BlockSize {
-  fn default() -> Self {
-    BlockSize::BLOCK_64X64
   }
 }
 
