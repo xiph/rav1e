@@ -441,7 +441,8 @@ cglobal weighted_sse_%1x%2, 6, 10, 9, \
 %endif
     RET
 
-    %undef sum, kernel_width, res
+    %undef sum
+    %undef kernel_width
 %endmacro
 
 INIT_XMM ssse3
