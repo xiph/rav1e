@@ -10,12 +10,10 @@
 #![allow(clippy::print_literal)]
 #![allow(clippy::unused_io_amount)]
 
-use rustc_version::{version, version_meta, Channel, Version};
 #[allow(unused_imports)]
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::exit;
 
 #[allow(dead_code)]
 fn rerun_dir<P: AsRef<Path>>(dir: P) {
@@ -235,24 +233,8 @@ fn build_asm_files() {
   rerun_dir("src/arm");
 }
 
-fn rustc_version_check() {
-  // This should match the version in the CI
-  // Make sure to updated README.md when this changes.
-  const REQUIRED_VERSION: &str = "1.70.0";
-  if version().unwrap() < Version::parse(REQUIRED_VERSION).unwrap() {
-    eprintln!("rav1e requires rustc >= {REQUIRED_VERSION}.");
-    exit(1);
-  }
-
-  if version_meta().unwrap().channel == Channel::Nightly {
-    println!("cargo:rustc-cfg=nightly_rustc");
-  }
-}
-
 #[allow(unused_variables)]
 fn main() {
-  rustc_version_check();
-
   built::write_built_file().expect("Failed to acquire build-time information");
 
   let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();

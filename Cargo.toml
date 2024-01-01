@@ -125,7 +125,6 @@ features = ["png"]
 
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
-rustc_version = "0.4"
 built = { version = "0.7.1", features = [] }
 
 [build-dependencies.nasm-rs]
