@@ -1208,7 +1208,7 @@ mod tests {
   use bitstream_io::{BigEndian, BitWriter};
   use nom::error::Error;
   use nom::IResult;
-  use quickcheck_macros::quickcheck;
+  use quickcheck::quickcheck;
 
   fn leb128(mut input: &[u8]) -> IResult<&[u8], u64, Error<&[u8]>> {
     use nom::bytes::complete::take;
@@ -1226,12 +1226,13 @@ mod tests {
     Ok((input, value))
   }
 
-  #[quickcheck]
-  pub fn validate_leb128_write(val: u32) -> bool {
-    let mut buf1 = Vec::new();
-    let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
-    bw1.write_uleb128(val as u64).unwrap();
-    let result = leb128(&buf1).unwrap();
-    u64::from(val) == result.1 && result.0.is_empty()
+  quickcheck! {
+    fn validate_leb128_write(val: u32) -> bool {
+      let mut buf1 = Vec::new();
+      let mut bw1 = BitWriter::endian(&mut buf1, BigEndian);
+      bw1.write_uleb128(val as u64).unwrap();
+      let result = leb128(&buf1).unwrap();
+      u64::from(val) == result.1 && result.0.is_empty()
+    }
   }
 }
