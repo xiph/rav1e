@@ -97,3 +97,40 @@ pub const fn cdf_5d<
 
   out
 }
+
+#[cfg(test)]
+mod test {
+  use super::*;
+
+  #[test]
+  fn cdf_len_ok() {
+    let _: [u16; 5] = cdf([]);
+    let _: [u16; 5] = cdf([1]);
+    let _: [u16; 5] = cdf([1, 2, 3, 4]);
+  }
+
+  #[test]
+  #[should_panic]
+  fn cdf_len_panics() {
+    let _: [u16; 5] = cdf([1, 2, 3, 4, 5]);
+  }
+
+  #[test]
+  #[should_panic]
+  fn cdf_val_panics() {
+    let _: [u16; 5] = cdf([40000]);
+  }
+
+  #[test]
+  fn cdf_vals_ok() {
+    let cdf: [u16; 5] = cdf([2000, 10000, 32768, 0]);
+    assert_eq!(cdf, [30768, 22768, 0, 32768, 0]);
+  }
+
+  #[test]
+  fn cdf_5d_ok() {
+    let cdf: [[[[[u16; 4]; 2]; 1]; 1]; 1] =
+      cdf_5d([[[[[1000, 2000], [3000, 4000]]]]]);
+    assert_eq!(cdf, [[[[[31768, 30768, 0, 0], [29768, 28768, 0, 0],]]]])
+  }
+}
