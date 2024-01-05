@@ -411,9 +411,6 @@ macro_rules! plane_region_common {
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rect.height);
         // SAFETY: The above assert ensures we do not access OOB data.
-        //
-        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
-        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.plane_cfg.stride);
           slice::from_raw_parts(ptr, self.rect.width)

@@ -151,9 +151,6 @@ macro_rules! tile_blocks_common {
       fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.rows);
         // SAFETY: The above assert ensures we do not access OOB data.
-        //
-        // FIXME: Remove `allow` once https://github.com/rust-lang/rust-clippy/issues/8264 fixed
-        #[allow(clippy::undocumented_unsafe_blocks)]
         unsafe {
           let ptr = self.data.add(index * self.frame_cols);
           slice::from_raw_parts(ptr, self.cols)
