@@ -7,12 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-// TODO: Nice to have (although I wasn't able to find a way to do it yet in rust): zero-fill arrays that are
-// shorter than required.  Need const fn (Rust Issue #24111) or const generics (Rust RFC #2000)
-macro_rules! cdf {
-    ($($x:expr),+) =>  {[$(32768 - $x),+, 0]}
-}
-
 pub const fn cdf<const VARS: usize, const CDF_LEN: usize>(
   vars: [u16; VARS],
 ) -> [u16; CDF_LEN] {
