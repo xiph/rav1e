@@ -34,7 +34,6 @@ fn hash_changed(
 ) -> Option<([u8; 8], PathBuf)> {
   use std::collections::hash_map::DefaultHasher;
   use std::hash::Hasher;
-  use std::io::Read;
 
   let mut hasher = DefaultHasher::new();
 
@@ -45,10 +44,7 @@ fn hash_changed(
     .chain(std::iter::once(Path::new("build.rs")));
 
   for path in paths {
-    if let Ok(mut f) = std::fs::File::open(path) {
-      let mut buf = Vec::new();
-      f.read_to_end(&mut buf).unwrap();
-
+    if let Ok(buf) = std::fs::read(path) {
       hasher.write(&buf);
     } else {
       panic!("Cannot open {}", path.display());
