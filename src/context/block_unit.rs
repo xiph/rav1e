@@ -12,6 +12,7 @@ use std::mem::MaybeUninit;
 use super::*;
 
 use crate::predict::PredictionMode;
+use crate::util::cdf;
 
 pub const MAX_PLANES: usize = 3;
 
@@ -555,55 +556,55 @@ pub struct NMVContext {
 // lv_map
 pub static default_nmv_context: NMVContext = {
   NMVContext {
-    joints_cdf: cdf!(4096, 11264, 19328),
+    joints_cdf: cdf([4096, 11264, 19328]),
     padding: [0; 12],
     comps: [
       NMVComponent {
-        classes_cdf: cdf!(
-          28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767
-        ),
-        class0_fp_cdf: [cdf!(16384, 24576, 26624), cdf!(12288, 21248, 24128)],
-        fp_cdf: cdf!(8192, 17408, 21248),
-        sign_cdf: cdf!(128 * 128),
-        class0_hp_cdf: cdf!(160 * 128),
-        hp_cdf: cdf!(128 * 128),
-        class0_cdf: cdf!(216 * 128),
-        bits_cdf: [
-          cdf!(128 * 136),
-          cdf!(128 * 140),
-          cdf!(128 * 148),
-          cdf!(128 * 160),
-          cdf!(128 * 176),
-          cdf!(128 * 192),
-          cdf!(128 * 224),
-          cdf!(128 * 234),
-          cdf!(128 * 234),
-          cdf!(128 * 240),
-        ],
+        classes_cdf: cdf([
+          28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767,
+        ]),
+        class0_fp_cdf: cdf_2d([[16384, 24576, 26624], [12288, 21248, 24128]]),
+        fp_cdf: cdf([8192, 17408, 21248]),
+        sign_cdf: cdf([128 * 128]),
+        class0_hp_cdf: cdf([160 * 128]),
+        hp_cdf: cdf([128 * 128]),
+        class0_cdf: cdf([216 * 128]),
+        bits_cdf: cdf_2d([
+          [128 * 136],
+          [128 * 140],
+          [128 * 148],
+          [128 * 160],
+          [128 * 176],
+          [128 * 192],
+          [128 * 224],
+          [128 * 234],
+          [128 * 234],
+          [128 * 240],
+        ]),
         padding: [0; 5],
       },
       NMVComponent {
-        classes_cdf: cdf!(
-          28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767
-        ),
-        class0_fp_cdf: [cdf!(16384, 24576, 26624), cdf!(12288, 21248, 24128)],
-        fp_cdf: cdf!(8192, 17408, 21248),
-        sign_cdf: cdf!(128 * 128),
-        class0_hp_cdf: cdf!(160 * 128),
-        hp_cdf: cdf!(128 * 128),
-        class0_cdf: cdf!(216 * 128),
-        bits_cdf: [
-          cdf!(128 * 136),
-          cdf!(128 * 140),
-          cdf!(128 * 148),
-          cdf!(128 * 160),
-          cdf!(128 * 176),
-          cdf!(128 * 192),
-          cdf!(128 * 224),
-          cdf!(128 * 234),
-          cdf!(128 * 234),
-          cdf!(128 * 240),
-        ],
+        classes_cdf: cdf([
+          28672, 30976, 31858, 32320, 32551, 32656, 32740, 32757, 32762, 32767,
+        ]),
+        class0_fp_cdf: cdf_2d([[16384, 24576, 26624], [12288, 21248, 24128]]),
+        fp_cdf: cdf([8192, 17408, 21248]),
+        sign_cdf: cdf([128 * 128]),
+        class0_hp_cdf: cdf([160 * 128]),
+        hp_cdf: cdf([128 * 128]),
+        class0_cdf: cdf([216 * 128]),
+        bits_cdf: cdf_2d([
+          [128 * 136],
+          [128 * 140],
+          [128 * 148],
+          [128 * 160],
+          [128 * 176],
+          [128 * 192],
+          [128 * 224],
+          [128 * 234],
+          [128 * 234],
+          [128 * 240],
+        ]),
         padding: [0; 5],
       },
     ],

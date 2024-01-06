@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 mod align;
-#[macro_use]
 mod cdf;
 mod kmeans;
 mod logexp;
@@ -18,6 +17,7 @@ pub use v_frame::math::*;
 pub use v_frame::pixel::*;
 
 pub use align::*;
+pub use cdf::*;
 pub use uninit::*;
 
 pub use kmeans::*;
