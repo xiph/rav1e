@@ -34,7 +34,6 @@ fn hash_changed(
 ) -> Option<([u8; 8], PathBuf)> {
   use std::collections::hash_map::DefaultHasher;
   use std::hash::Hasher;
-  use std::io::Read;
 
   let mut hasher = DefaultHasher::new();
 
@@ -45,19 +44,16 @@ fn hash_changed(
     .chain(std::iter::once(Path::new("build.rs")));
 
   for path in paths {
-    if let Ok(mut f) = std::fs::File::open(path) {
-      let mut buf = Vec::new();
-      f.read_to_end(&mut buf).unwrap();
-
+    if let Ok(buf) = std::fs::read(path) {
       hasher.write(&buf);
     } else {
       panic!("Cannot open {}", path.display());
     }
   }
 
-  let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
-
-  hasher.write(strip.as_bytes());
+  if let Some(cmd) = strip_command() {
+    hasher.write(cmd.as_bytes());
+  }
 
   let hash = hasher.finish().to_be_bytes();
 
@@ -161,17 +157,12 @@ fn build_nasm_files() {
 
     // Strip local symbols from the asm library since they
     // confuse the debugger.
-    fn strip<P: AsRef<Path>>(obj: P) {
-      let strip = env::var("STRIP").unwrap_or_else(|_| "strip".to_string());
-
-      let mut cmd = std::process::Command::new(strip);
-
-      cmd.arg("-x").arg(obj.as_ref());
-
-      let _ = cmd.output();
+    if let Some(strip) = strip_command() {
+      let _ = std::process::Command::new(strip)
+        .arg("-x")
+        .arg(Path::new(&out_dir).join("librav1easm.a"))
+        .status();
     }
-
-    strip(Path::new(&out_dir).join("librav1easm.a"));
 
     std::fs::write(hash_path, &hash[..]).unwrap();
   } else {
@@ -180,6 +171,27 @@ fn build_nasm_files() {
   println!("cargo:rustc-link-lib=static=rav1easm");
   rerun_dir("src/x86");
   rerun_dir("src/ext/x86");
+}
+
+fn strip_command() -> Option<String> {
+  let target = env::var("TARGET").expect("TARGET");
+  // follows Cargo's naming convention for the linker setting
+  let normalized_target = target.replace('-', "_").to_uppercase();
+  let explicit_strip =
+    env::var(format!("CARGO_TARGET_{normalized_target}_STRIP"))
+      .ok()
+      .or_else(|| env::var("STRIP").ok());
+  if explicit_strip.is_some() {
+    return explicit_strip;
+  }
+
+  // strip command is target-specific, e.g. macOS's strip breaks MUSL's archives
+  let host = env::var("HOST").expect("HOST");
+  if host != target {
+    return None;
+  }
+
+  Some("strip".into())
 }
 
 #[cfg(feature = "asm")]
