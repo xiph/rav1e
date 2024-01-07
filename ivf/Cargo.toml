@@ -1,6 +1,6 @@
 [package]
 name = "ivf"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
 description = "Simple ivf muxer"
