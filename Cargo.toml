@@ -74,13 +74,13 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3.4"
 bitstream-io = "2"
 cfg-if = "1.0"
-clap = { version = "4.4.11", optional = true, default-features = false, features = [
+clap = { version = "4.4.17", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
   "derive",
 ] }
-clap_complete = { version = "4.4.5", optional = true }
+clap_complete = { version = "4.4.7", optional = true }
 libc = "0.2"
 y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
@@ -106,11 +106,11 @@ console = { version = "0.15", optional = true }
 fern = { version = "0.6", optional = true }
 itertools = "0.12"
 simd_helpers = "0.1"
-wasm-bindgen = { version = "0.2.89", optional = true }
+wasm-bindgen = { version = "0.2.90", optional = true }
 nom = { version = "7.1.3", optional = true }
 new_debug_unreachable = "1.0.4"
 once_cell = "1.19.0"
-av1-grain = "0.2.2"
+av1-grain = "0.2.3"
 serde-big-array = { version = "0.5.1", optional = true }
 profiling = { version = "1" }
 tracing-subscriber = { version = "0.3.18", optional = true }
@@ -118,7 +118,7 @@ tracing-chrome = { version = "0.7.1", optional = true }
 tracing = { version = "0.1.40", optional = true }
 
 [dependencies.image]
-version = "0.24.7"
+version = "0.24.8"
 optional = true
 default-features = false
 features = ["png"]
