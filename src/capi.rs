@@ -397,8 +397,8 @@ pub unsafe extern fn rav1e_version_short() -> *const c_char {
   concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
 }
 
-static FULL_VERSION_C: once_cell::sync::OnceCell<CString> =
-  once_cell::sync::OnceCell::new();
+static FULL_VERSION_C: std::sync::OnceLock<CString> =
+  std::sync::OnceLock::new();
 
 /// Version information with the information
 /// provided by `git describe --tags`.

@@ -13,7 +13,6 @@ use crate::stats::MetricsEnabled;
 use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{CommandFactory, Parser as Clap, Subcommand};
 use clap_complete::{generate, Shell};
-use once_cell::sync::Lazy;
 use rav1e::prelude::*;
 use scan_fmt::scan_fmt;
 
@@ -22,6 +21,7 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 pub mod built_info {
   // The file has been placed there by the build script.
@@ -258,8 +258,11 @@ pub struct CliOptions {
   pub command: Option<Commands>,
 }
 
+static VERSION_STR: OnceLock<String> = OnceLock::new();
+static LONG_VERSION_STR: OnceLock<String> = OnceLock::new();
+
 fn get_version() -> &'static str {
-  static VERSION_STR: Lazy<String> = Lazy::new(|| {
+  VERSION_STR.get_or_init(|| {
     format!(
       "{} ({})",
       rav1e::version::full(),
@@ -267,12 +270,11 @@ fn get_version() -> &'static str {
       // not if there are optimizations.
       if cfg!(debug_assertions) { "debug" } else { "release" }
     )
-  });
-  &VERSION_STR
+  })
 }
 
 fn get_long_version() -> &'static str {
-  static LONG_VERSION_STR: Lazy<String> = Lazy::new(|| {
+  LONG_VERSION_STR.get_or_init(|| {
     let rustflags = env!("CARGO_ENCODED_RUSTFLAGS");
     let rustflags = if rustflags.trim().is_empty() {
       "(None)".to_string()
@@ -280,7 +282,6 @@ fn get_long_version() -> &'static str {
       // Replace non-printable ASCII Unit Separator with whitespace
       rustflags.replace(0x1F as char, " ")
     };
-
     format!(
       "{}\n{} {}\nCompiled CPU Features: {}\nRuntime Assembly Support: {}{}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}",
       get_version(),
@@ -297,8 +298,7 @@ fn get_long_version() -> &'static str {
       if cfg!(feature = "unstable") { "Enabled" } else { "Disabled" },
       rustflags
     )
-  });
-  &LONG_VERSION_STR
+  })
 }
 
 #[derive(Subcommand)]
@@ -351,8 +351,7 @@ pub struct ParsedCliOptions {
 }
 
 #[cfg(feature = "serialize")]
-static HELP_TEXT: once_cell::sync::OnceCell<String> =
-  once_cell::sync::OnceCell::new();
+static HELP_TEXT: OnceLock<String> = OnceLock::new();
 
 #[cfg(feature = "serialize")]
 fn build_speed_long_help() -> Option<&'static str> {

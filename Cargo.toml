@@ -109,7 +109,6 @@ simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.90", optional = true }
 nom = { version = "7.1.3", optional = true }
 new_debug_unreachable = "1.0.4"
-once_cell = "1.19.0"
 av1-grain = "0.2.3"
 serde-big-array = { version = "0.5.1", optional = true }
 profiling = { version = "1" }
