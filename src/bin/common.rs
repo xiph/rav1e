@@ -275,10 +275,13 @@ fn get_version() -> &'static str {
 
 fn get_long_version() -> &'static str {
   LONG_VERSION_STR.get_or_init(|| {
-    let mut rustflags = env!("CARGO_ENCODED_RUSTFLAGS");
-    if rustflags.trim().is_empty() {
-      rustflags = "(None)";
-    }
+    let rustflags = env!("CARGO_ENCODED_RUSTFLAGS");
+    let rustflags = if rustflags.trim().is_empty() {
+      "(None)".to_string()
+    } else {
+      // Replace non-printable ASCII Unit Separator with whitespace
+      rustflags.replace(0x1F as char, " ")
+    };
     format!(
       "{}\n{} {}\nCompiled CPU Features: {}\nRuntime Assembly Support: {}{}\nThreading: {}\nUnstable Features: {}\nCompiler Flags: {}",
       get_version(),
