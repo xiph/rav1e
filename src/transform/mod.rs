@@ -268,6 +268,12 @@ impl TxSize {
   pub const fn is_rect(self) -> bool {
     self.width_log2() != self.height_log2()
   }
+
+  /// Returns log2(width / height), e.g. `TX_16x4` -> log2(16 / 4) = 2
+  #[inline]
+  pub const fn rect_ratio_log2(self) -> i8 {
+    self.width_log2() as i8 - self.height_log2() as i8
+  }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd)]
@@ -284,13 +290,6 @@ pub enum TxSet {
   TX_SET_INTER_2, // TX_SET_DTT9_IDTX_1DDCT
   // Discrete Trig transforms w/ flip (9) + Identity (1) + 1D Hor/Ver (6)
   TX_SET_INTER_1, // TX_SET_ALL16
-}
-
-/// Utility function that returns the log of the ratio of the col and row sizes.
-#[inline]
-pub fn get_rect_tx_log_ratio(col: usize, row: usize) -> i8 {
-  debug_assert!(col > 0 && row > 0);
-  ILog::ilog(col) as i8 - ILog::ilog(row) as i8
 }
 
 // performs half a butterfly
@@ -548,9 +547,7 @@ mod test {
         tx_size.width(),
         tx_size.height()
       );
-      assert!(
-        get_rect_tx_log_ratio(tx_size.width(), tx_size.height()) == expected
-      );
+      assert!(tx_size.rect_ratio_log2() == expected);
     }
   }
 
