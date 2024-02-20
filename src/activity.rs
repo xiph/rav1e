@@ -106,11 +106,11 @@ struct RsqrtOutput {
 }
 
 /// Fixed point `rsqrt` for `ssim_boost`
-fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
+const fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
   const INSHIFT: u8 = 16;
   const OUTSHIFT: u8 = 14;
 
-  let k = ((ILog::ilog(x) - 1) >> 1) as i16;
+  let k = (x.ilog2() >> 1) as i16;
   /*t is x in the range [0.25, 1) in QINSHIFT, or x*2^(-s).
   Shift by log2(x) - log2(0.25*(1 << INSHIFT)) to ensure 0.25 lower bound.*/
   let s: i16 = 2 * k - (INSHIFT as i16 - 2);
@@ -140,7 +140,7 @@ fn ssim_boost_rsqrt(x: u64) -> RsqrtOutput {
   Coefficients here, and the final result r, are Q14. */
   let rsqrt: i32 = 23557 + mult16_16_q15(n, -13490 + mult16_16_q15(n, 6711));
 
-  debug_assert!((16384..32768).contains(&rsqrt));
+  debug_assert!(16384 <= rsqrt && rsqrt < 32768);
   RsqrtOutput { norm: rsqrt as u16, shift: rsqrt_shift }
 }
 
@@ -156,7 +156,7 @@ pub fn ssim_boost(svar: u32, dvar: u32, bit_depth: usize) -> DistortionScale {
 
 /// Apply ssim boost to a given input
 #[inline(always)]
-pub fn apply_ssim_boost(
+pub const fn apply_ssim_boost(
   input: u32, svar: u32, dvar: u32, bit_depth: usize,
 ) -> u32 {
   let coeff_shift = bit_depth - 8;
