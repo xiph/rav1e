@@ -1649,7 +1649,8 @@ pub(crate) mod rust {
 
     // perform inv txfm on every row
     let range = bd + 8;
-    let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][ILog::ilog(width) - 3];
+    let txfm_fn =
+      INV_TXFM_FNS[tx_types_1d.1 as usize][tx_size.width_log2() - 2];
     // 64 point transforms only signal 32 coeffs. We only take chunks of 32
     //   and skip over the last 32 transforms here.
     for (r, buffer_slice) in (0..height.min(32)).zip(buffer.chunks_mut(width))
@@ -1677,7 +1678,8 @@ pub(crate) mod rust {
 
     // perform inv txfm on every col
     let range = cmp::max(bd + 6, 16);
-    let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][ILog::ilog(height) - 3];
+    let txfm_fn =
+      INV_TXFM_FNS[tx_types_1d.0 as usize][tx_size.height_log2() - 2];
     for c in 0..width {
       let mut temp_in: [i32; 64] = [0; 64];
       let mut temp_out: [i32; 64] = [0; 64];
