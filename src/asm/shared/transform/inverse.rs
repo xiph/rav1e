@@ -86,7 +86,6 @@ pub mod test {
   use crate::transform::TxSize::*;
   use crate::transform::*;
   use rand::{random, thread_rng, Rng};
-  use std::mem::MaybeUninit;
 
   pub fn pick_eob<T: Coefficient>(
     coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,

@@ -8,7 +8,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use crate::activity::*;
-use crate::api::config::GrainTableSegment;
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;

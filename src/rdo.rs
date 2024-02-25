@@ -19,7 +19,6 @@ use crate::dist::*;
 use crate::ec::{Writer, WriterCounter, OD_BITRES};
 use crate::encode_block_with_modes;
 use crate::encoder::{FrameInvariants, IMPORTANCE_BLOCK_SIZE};
-use crate::frame::Frame;
 use crate::frame::*;
 use crate::header::ReferenceMode;
 use crate::lrf::*;

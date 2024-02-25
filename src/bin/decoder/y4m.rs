@@ -12,7 +12,6 @@ use std::io::Read;
 
 use crate::color::ChromaSampling::Cs400;
 use crate::decoder::{DecodeError, Decoder, FrameBuilder, VideoDetails};
-use crate::Frame;
 use rav1e::prelude::*;
 
 impl Decoder for y4m::Decoder<Box<dyn Read + Send>> {
