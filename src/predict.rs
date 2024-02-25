@@ -32,7 +32,6 @@ use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
-use std::convert::TryInto;
 
 pub const ANGLE_STEP: i8 = 3;
 
@@ -698,13 +697,7 @@ pub fn luma_ac<'ac, T: Pixel>(
 
 pub(crate) mod rust {
   use super::*;
-  use crate::context::MAX_TX_SIZE;
-  use crate::cpu_features::CpuFeatureLevel;
-  use crate::tiling::PlaneRegionMut;
-  use crate::transform::TxSize;
-  use crate::util::round_shift;
-  use crate::Pixel;
-  use std::mem::{size_of, MaybeUninit};
+  use std::mem::size_of;
 
   #[inline(always)]
   pub fn dispatch_predict_intra<T: Pixel>(
@@ -1514,7 +1507,6 @@ pub(crate) mod rust {
 mod test {
   use super::*;
   use crate::predict::rust::*;
-  use crate::util::Aligned;
   use num_traits::*;
 
   #[test]

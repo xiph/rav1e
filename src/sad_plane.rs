@@ -22,7 +22,6 @@ use crate::util::{CastFromPrimitive, Pixel};
 
 pub(crate) mod rust {
   use super::*;
-  use crate::cpu_features::CpuFeatureLevel;
 
   #[inline]
   pub(crate) fn sad_plane_internal<T: Pixel>(

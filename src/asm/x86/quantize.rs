@@ -160,7 +160,6 @@ mod test {
   use super::*;
   use rand::distributions::{Distribution, Uniform};
   use rand::{thread_rng, Rng};
-  use std::mem::MaybeUninit;
 
   #[test]
   fn dequantize_test() {
