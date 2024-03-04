@@ -12,5 +12,11 @@
   "fetchReleaseNotes": true,
   "lockFileMaintenance": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["clap", "clap_complete"],
+      "allowedVersions": "<=4.4"
+    }
+  ]
 }
