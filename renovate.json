@@ -22,6 +22,10 @@
         "clap_derive"
       ],
       "allowedVersions": "<=4.4"
+    },
+    {
+      "matchPackageNames": ["assert_cmd"],
+      "allowedVersions": "<=2.0.13"
     }
   ]
 }
