@@ -15,7 +15,12 @@
   },
   "packageRules": [
     {
-      "matchPackageNames": ["clap", "clap_complete"],
+      "matchPackageNames": [
+        "clap",
+        "clap_complete",
+        "clap_builder",
+        "clap_derive"
+      ],
       "allowedVersions": "<=4.4"
     }
   ]
