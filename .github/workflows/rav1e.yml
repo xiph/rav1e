@@ -25,9 +25,8 @@ jobs:
         run: |
           cargo fmt -- --check --verbose
       - name: Run clippy
-        uses: actions-rs/clippy-check@v1
+        uses: clechasseur/rs-clippy-check@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
 
   build-unix:
