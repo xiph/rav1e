@@ -192,7 +192,9 @@ pub(crate) mod rust {
         let ssq = get_integral_square(iimg_sq, iimg_stride, x, y, d);
         let (reta, retb) =
           sgrproj_sum_finish::<BD>(ssq, sum, n as u32, one_over_n, s);
+        debug_assert!(x < af.len());
         *af.get_unchecked_mut(x) = reta;
+        debug_assert!(x < bf.len());
         *bf.get_unchecked_mut(x) = retb;
       }
     }
@@ -367,9 +369,13 @@ unsafe fn get_integral_square(
   iimg: &[u32], stride: usize, x: usize, y: usize, size: usize,
 ) -> u32 {
   // Cancel out overflow in iimg by using wrapping arithmetic
+  debug_assert!(y * stride + x < iimg.len());
   let top_left = *iimg.get_unchecked(y * stride + x);
+  debug_assert!(y * stride + x + size < iimg.len());
   let top_right = *iimg.get_unchecked(y * stride + x + size);
+  debug_assert!((y + size) * stride + x < iimg.len());
   let bottom_left = *iimg.get_unchecked((y + size) * stride + x);
+  debug_assert!((y + size) * stride + x + size < iimg.len());
   let bottom_right = *iimg.get_unchecked((y + size) * stride + x + size);
   top_left
     .wrapping_add(bottom_right)
