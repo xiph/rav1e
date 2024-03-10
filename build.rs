@@ -76,10 +76,11 @@ fn build_nasm_files() {
 
   let dest_path = Path::new(&out_dir).join("config.asm");
   let mut config_file = File::create(&dest_path).unwrap();
-  config_file.write(b"	%define private_prefix rav1e\n").unwrap();
-  config_file.write(b"	%define ARCH_X86_32 0\n").unwrap();
+  config_file.write(b" %pragma preproc sane_empty_expansion true\n").unwrap();
+  config_file.write(b" %define private_prefix rav1e\n").unwrap();
+  config_file.write(b" %define ARCH_X86_32 0\n").unwrap();
   config_file.write(b" %define ARCH_X86_64 1\n").unwrap();
-  config_file.write(b"	%define PIC 1\n").unwrap();
+  config_file.write(b" %define PIC 1\n").unwrap();
   config_file.write(b" %define STACK_ALIGNMENT 16\n").unwrap();
   config_file.write(b" %define HAVE_AVX512ICL 1\n").unwrap();
   if env::var("CARGO_CFG_TARGET_VENDOR").unwrap() == "apple" {
@@ -136,7 +137,7 @@ fn build_nasm_files() {
     config_include_arg.push_str(&out_dir);
     config_include_arg.push('/');
     let mut nasm = nasm_rs::Build::new();
-    nasm.min_version(2, 14, 0);
+    nasm.min_version(2, 15, 0);
     for file in asm_files {
       nasm.file(file);
     }
