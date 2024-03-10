@@ -135,20 +135,17 @@ fn build_nasm_files() {
   if let Some((hash, hash_path)) =
     hash_changed(asm_files, &out_dir, &dest_path)
   {
-    let mut config_include_arg = String::from("-I");
-    config_include_arg.push_str(&out_dir);
-    config_include_arg.push('/');
-    let mut nasm = nasm_rs::Build::new();
-    nasm.min_version(2, 15, 0);
-    for file in asm_files {
-      nasm.file(file);
-    }
-    nasm.flag(&config_include_arg);
-    nasm.flag("-Isrc/");
-    let obj = nasm.compile_objects().unwrap_or_else(|e| {
-      println!("cargo:warning={e}");
-      panic!("NASM build failed. Make sure you have nasm installed or disable the \"asm\" feature.\n\
-        You can get NASM from https://nasm.us or your system's package manager.\n\nerror: {e}");
+    let obj = nasm_rs::Build::new()
+      .min_version(2, 15, 0)
+      .include(&out_dir)
+      .include("src")
+      .files(asm_files)
+      .compile_objects()
+      .unwrap_or_else(|e| {
+        panic!("NASM build failed. Make sure you have nasm installed or disable the \"asm\" feature.\n\
+                You can get NASM from https://nasm.us or your system's package manager.\n\
+                \n\
+                error: {e}");
     });
 
     // cc is better at finding the correct archiver
