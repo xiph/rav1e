@@ -1018,7 +1018,7 @@ fn fullpel_diamond_search<T: Pixel>(
 /// The search above has gone through the following steps.
 /// 1. Search '1' elements for better candidates than the center '0'.
 /// 2. Recenter around the best candidate ('(1)') and hexagon candidates that
-/// don't overlap with the previous search step (labeled '2').
+///    don't overlap with the previous search step (labeled '2').
 const HEXAGON_PATTERN: [MotionVector; 6] = search_pattern!(
   col: [  0,  2,  2,  0, -2, -2],
   row: [ -2, -1,  1,  2,  1, -1]
