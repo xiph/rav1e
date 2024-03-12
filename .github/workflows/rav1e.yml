@@ -29,6 +29,40 @@ jobs:
         with:
           args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
 
+  msrv:
+    runs-on: ubuntu-22.04
+
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: '-Dwarnings'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Minimum version in build.rs
+      - name: Install NASM 2.15
+        uses: ilammy/setup-nasm@v1
+        with:
+          version: 2.15
+
+      # Minimum version in Cargo.toml
+      - name: Install Rust 1.70.0
+        uses: dtolnay/rust-toolchain@1.70.0
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo check
+        run: cargo check
+
+      - name: Run cargo check (wasm32)
+        run: >
+          cargo check
+          --target wasm32-unknown-unknown
+          --no-default-features
+          -F wasm
+
   build-unix:
     strategy:
       matrix:
@@ -84,6 +118,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: 0
 
     runs-on: ubuntu-22.04
+    needs: [rustfmt-clippy, msrv]
 
     steps:
       - uses: actions/checkout@v4
@@ -307,6 +342,8 @@ jobs:
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
 
     runs-on: macos-latest
+    needs: [rustfmt-clippy, msrv]
+
     steps:
       - uses: actions/checkout@v4
       - name: Install sccache
@@ -382,6 +419,8 @@ jobs:
       SCCACHE_DIR: C:\sccache
 
     runs-on: windows-latest
+    needs: [rustfmt-clippy, msrv]
+
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/setup-nasm@v1
