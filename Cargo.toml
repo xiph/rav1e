@@ -167,6 +167,8 @@ bench = false
 
 [lib]
 bench = false
+# cdylib is required for wasm32-unknown-unknown
+crate-type = ["lib", "cdylib"]
 
 [[bench]]
 name = "bench"
