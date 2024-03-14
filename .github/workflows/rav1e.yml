@@ -49,9 +49,11 @@ jobs:
       - name: Install Rust 1.70.0
         uses: dtolnay/rust-toolchain@1.70.0
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown, wasm32-wasi
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-rust
 
       - name: Run cargo check
         run: cargo check
@@ -62,6 +64,39 @@ jobs:
           --target wasm32-unknown-unknown
           --no-default-features
           -F wasm
+
+      - name: Run cargo check (wasi)
+        run: >
+          cargo check
+          --target wasm32-wasi
+          --no-default-features
+
+  wasi:
+    runs-on: ubuntu-22.04
+    needs: [rustfmt-clippy, msrv]
+
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: '-Dwarnings'
+      CARGO_TARGET_WASM32_WASI_RUNNER: wasmtime
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wasmtime
+        uses: taiki-e/install-action@wasmtime
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasi
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: >
+          cargo test
+          --target wasm32-wasi
+          --no-default-features
 
   build-unix:
     strategy:
