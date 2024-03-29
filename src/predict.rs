@@ -23,6 +23,8 @@ cfg_if::cfg_if! {
   }
 }
 
+use aligned_vec::{avec, ABox};
+
 use crate::context::{TileBlockOffset, MAX_SB_SIZE_LOG2, MAX_TX_SIZE};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::FrameInvariants;
@@ -423,7 +425,7 @@ impl PredictionMode {
 /// compound inter prediction.
 #[derive(Debug)]
 pub struct InterCompoundBuffers {
-  data: AlignedBoxedSlice<i16>,
+  data: ABox<[i16]>,
 }
 
 impl InterCompoundBuffers {
@@ -452,7 +454,7 @@ impl InterCompoundBuffers {
 
 impl Default for InterCompoundBuffers {
   fn default() -> Self {
-    Self { data: AlignedBoxedSlice::new(2 * Self::BUFFER_SIZE, 0) }
+    Self { data: avec![0; 2 * Self::BUFFER_SIZE].into_boxed_slice() }
   }
 }
 
