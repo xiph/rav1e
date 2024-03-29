@@ -27,6 +27,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned-vec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4aa90d7ce82d4be67b64039a3d588d38dbcc6736577de4a847025ce5b0c468d1"
+
+[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1256,6 +1262,7 @@ dependencies = [
 name = "rav1e"
 version = "0.7.0"
 dependencies = [
+ "aligned-vec",
  "aom-sys",
  "arbitrary",
  "arg_enum_proc_macro",
