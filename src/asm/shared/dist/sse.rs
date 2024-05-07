@@ -10,7 +10,6 @@
 #[cfg(test)]
 pub mod test {
   use crate::config::CpuFeatureLevel;
-  use crate::dist::rust;
   use crate::dist::*;
   use crate::frame::*;
   use crate::partition::BlockSize;

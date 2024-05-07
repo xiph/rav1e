@@ -38,6 +38,7 @@ use num_traits::cast::FromPrimitive;
 
 use scan_fmt::scan_fmt;
 
+use crate::api::SceneDetectionSpeed;
 use crate::prelude as rav1e;
 
 type PixelRange = rav1e::PixelRange;
@@ -718,6 +719,11 @@ unsafe fn option_match(
       enc.enable_timing_info = value.parse().map_err(|_| ())?
     }
     "still_picture" => enc.still_picture = value.parse().map_err(|_| ())?,
+    "no_scene_detection" => {
+      if value.parse::<bool>().map_err(|_| ())? {
+        enc.speed_settings.scene_detection_mode = SceneDetectionSpeed::None;
+      }
+    }
 
     "level" => {
       enc.level_idx = match value {
@@ -762,6 +768,7 @@ unsafe fn option_match(
 /// - `"low_latency"`: flag to enable low latency mode, default `false`
 /// - `"enable_timing_info"`: flag to enable signaling timing info in the bitstream, default `false`
 /// - `"still_picture"`: flag for still picture mode, default `false`
+/// - `"no_scene_detection"`: flag to disable scene detection, default `false`
 ///
 /// Return a negative value on error or 0.
 #[no_mangle]

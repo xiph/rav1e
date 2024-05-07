@@ -10,7 +10,6 @@
 use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
-use crate::{ColorPrimaries, MatrixCoefficients, TransferCharacteristics};
 use clap::{CommandFactory, Parser as Clap, Subcommand};
 use clap_complete::{generate, Shell};
 use rav1e::prelude::*;

@@ -89,7 +89,7 @@ num-derive = "0.4"
 paste = "1.0"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
-dav1d-sys = { version = "0.6.0", package = "libdav1d-sys", optional = true }
+dav1d-sys = { version = "0.7.0", package = "libdav1d-sys", optional = true }
 aom-sys = { version = "0.3.3", optional = true }
 scan_fmt = { version = "0.2.6", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
@@ -115,6 +115,7 @@ profiling = { version = "1" }
 tracing-subscriber = { version = "0.3.18", optional = true }
 tracing-chrome = { version = "0.7.1", optional = true }
 tracing = { version = "0.1.40", optional = true }
+aligned-vec = "0.5.0"
 
 [dependencies.image]
 version = "0.24.8"
@@ -135,8 +136,6 @@ features = ["parallel"]
 signal-hook = { version = "0.3", optional = true }
 
 [dev-dependencies]
-assert_cmd = "2.0"
-criterion = "0.5"
 pretty_assertions = "1.4.0"
 interpolate_name = "0.2.4"
 nom = "7.1.3"
@@ -144,6 +143,14 @@ quickcheck = "1.0"
 rand = "0.8"
 rand_chacha = "0.3"
 semver = "1.0"
+
+# Exclude dependencies and features that don't work on wasm32:
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+assert_cmd = "2.0"
+criterion = "0.5"
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"

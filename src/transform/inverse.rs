@@ -1626,7 +1626,6 @@ static INV_TXFM_FNS: [[InvTxfmFn; 5]; 5] = [
 pub(crate) mod rust {
   use super::*;
   use crate::cpu_features::CpuFeatureLevel;
-  use crate::util::clamp;
 
   use simd_helpers::cold_for_target_arch;
   use std::cmp;

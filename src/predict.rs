@@ -23,6 +23,8 @@ cfg_if::cfg_if! {
   }
 }
 
+use aligned_vec::{avec, ABox};
+
 use crate::context::{TileBlockOffset, MAX_SB_SIZE_LOG2, MAX_TX_SIZE};
 use crate::cpu_features::CpuFeatureLevel;
 use crate::encoder::FrameInvariants;
@@ -32,7 +34,6 @@ use crate::partition::*;
 use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
-use std::convert::TryInto;
 
 pub const ANGLE_STEP: i8 = 3;
 
@@ -424,7 +425,7 @@ impl PredictionMode {
 /// compound inter prediction.
 #[derive(Debug)]
 pub struct InterCompoundBuffers {
-  data: AlignedBoxedSlice<i16>,
+  data: ABox<[i16]>,
 }
 
 impl InterCompoundBuffers {
@@ -453,7 +454,7 @@ impl InterCompoundBuffers {
 
 impl Default for InterCompoundBuffers {
   fn default() -> Self {
-    Self { data: AlignedBoxedSlice::new(2 * Self::BUFFER_SIZE, 0) }
+    Self { data: avec![0; 2 * Self::BUFFER_SIZE].into_boxed_slice() }
   }
 }
 
@@ -698,13 +699,7 @@ pub fn luma_ac<'ac, T: Pixel>(
 
 pub(crate) mod rust {
   use super::*;
-  use crate::context::MAX_TX_SIZE;
-  use crate::cpu_features::CpuFeatureLevel;
-  use crate::tiling::PlaneRegionMut;
-  use crate::transform::TxSize;
-  use crate::util::round_shift;
-  use crate::Pixel;
-  use std::mem::{size_of, MaybeUninit};
+  use std::mem::size_of;
 
   #[inline(always)]
   pub fn dispatch_predict_intra<T: Pixel>(
@@ -1514,7 +1509,6 @@ pub(crate) mod rust {
 mod test {
   use super::*;
   use crate::predict::rust::*;
-  use crate::util::Aligned;
   use num_traits::*;
 
   #[test]

@@ -25,10 +25,78 @@ jobs:
         run: |
           cargo fmt -- --check --verbose
       - name: Run clippy
-        uses: actions-rs/clippy-check@v1
+        uses: clechasseur/rs-clippy-check@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
+
+  msrv:
+    runs-on: ubuntu-22.04
+
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: '-Dwarnings'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Minimum version in build.rs
+      - name: Install NASM 2.15
+        uses: ilammy/setup-nasm@v1
+        with:
+          version: 2.15
+
+      # Minimum version in Cargo.toml
+      - name: Install Rust 1.70.0
+        uses: dtolnay/rust-toolchain@1.70.0
+        with:
+          targets: wasm32-unknown-unknown, wasm32-wasi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-rust
+
+      - name: Run cargo check
+        run: cargo check
+
+      - name: Run cargo check (wasm32)
+        run: >
+          cargo check
+          --target wasm32-unknown-unknown
+          --no-default-features
+          -F wasm
+
+      - name: Run cargo check (wasi)
+        run: >
+          cargo check
+          --target wasm32-wasi
+          --no-default-features
+
+  wasi:
+    runs-on: ubuntu-22.04
+    needs: [rustfmt-clippy, msrv]
+
+    env:
+      CARGO_INCREMENTAL: 0
+      RUSTFLAGS: '-Dwarnings'
+      CARGO_TARGET_WASM32_WASI_RUNNER: wasmtime
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wasmtime
+        uses: taiki-e/install-action@wasmtime
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasi
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: >
+          cargo test
+          --target wasm32-wasi
+          --no-default-features
 
   build-unix:
     strategy:
@@ -85,6 +153,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: 0
 
     runs-on: ubuntu-22.04
+    needs: [rustfmt-clippy, msrv]
 
     steps:
       - uses: actions/checkout@v4
@@ -277,7 +346,7 @@ jobs:
           sccache --stop-server
       - name: Codecov upload
         if: matrix.conf == 'grcov-codecov'
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: lcov.info
 
@@ -308,6 +377,8 @@ jobs:
       SCCACHE_DIR: /Users/runner/Library/Caches/Mozilla.sccache
 
     runs-on: macos-latest
+    needs: [rustfmt-clippy, msrv]
+
     steps:
       - uses: actions/checkout@v4
       - name: Install sccache
@@ -383,6 +454,8 @@ jobs:
       SCCACHE_DIR: C:\sccache
 
     runs-on: windows-latest
+    needs: [rustfmt-clippy, msrv]
+
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/setup-nasm@v1

@@ -7,7 +7,6 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use super::cdf_context::ContextWriter;
 use super::*;
 
 // Generates 4 bit field in which each bit set to 1 represents

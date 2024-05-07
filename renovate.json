@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:base",
+    "config:recommended",
     ":automergeAll",
     ":automergePr",
     ":automergeRequireAllStatusChecks",
@@ -9,8 +9,23 @@
     "group:allNonMajor",
     "schedule:earlyMondays"
   ],
-  "fetchReleaseNotes": true,
+  "fetchChangeLogs": "pr",
   "lockFileMaintenance": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": [
+        "clap",
+        "clap_complete",
+        "clap_builder",
+        "clap_derive"
+      ],
+      "allowedVersions": "<=4.4"
+    },
+    {
+      "matchPackageNames": ["assert_cmd"],
+      "allowedVersions": "<=2.0.13"
+    }
+  ]
 }

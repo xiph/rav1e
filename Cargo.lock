@@ -27,6 +27,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned-vec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4aa90d7ce82d4be67b64039a3d588d38dbcc6736577de4a847025ce5b0c468d1"
+
+[[package]]
 name = "anes"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -831,9 +837,9 @@ checksum = "302d7ab3130588088d277783b1e2d2e10c9e9e4a16dd9050e6ec93fb3e7048f4"
 
 [[package]]
 name = "libdav1d-sys"
-version = "0.6.0"
+version = "0.7.0+libdav1d.1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12c9cc342dc258130a727ad15f48d01ebb181aafec30dd65338d8e51db930572"
+checksum = "b0de922cdce0f7aca62567c9c454cbf49e5b1a7a79a10f97a3130547692aca71"
 dependencies = [
  "libc",
 ]
@@ -1256,6 +1262,7 @@ dependencies = [
 name = "rav1e"
 version = "0.7.0"
 dependencies = [
+ "aligned-vec",
  "aom-sys",
  "arbitrary",
  "arg_enum_proc_macro",

@@ -12,7 +12,6 @@ use std::mem::MaybeUninit;
 use super::*;
 
 use crate::predict::PredictionMode;
-use crate::util::cdf;
 
 pub const MAX_PLANES: usize = 3;
 

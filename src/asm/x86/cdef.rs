@@ -293,7 +293,6 @@ cpu_function_lookup_table!(
 mod test {
   pub const CDEF_HAVE_NONE: u8 = 0;
   use super::*;
-  use crate::frame::{AsRegion, Plane};
   use interpolate_name::interpolate_test;
   use rand::random;
   use std::str::FromStr;
