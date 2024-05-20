@@ -65,7 +65,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   scale_func: Option<ScaleFunction<T>>,
   /// Frame buffer for scaled frames
   downscaled_frame_buffer: Option<[Plane<T>; 2]>,
-  /// Buffer for FrameMEStats for cost scenecut
+  /// Buffer for `FrameMEStats` for cost scenecut
   frame_me_stats_buffer: Option<RefMEStats>,
   /// Deque offset for current
   lookahead_offset: usize,
@@ -84,7 +84,7 @@ pub struct SceneChangeDetector<T: Pixel> {
   /// Calculated intra costs for each input frame.
   /// These are cached for reuse later in rav1e.
   pub(crate) intra_costs: BTreeMap<u64, Box<[u32]>>,
-  /// Temporary buffer used by estimate_intra_costs.
+  /// Temporary buffer used by `estimate_intra_costs`.
   pub(crate) temp_plane: Option<Plane<T>>,
 }
 

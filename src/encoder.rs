@@ -146,11 +146,11 @@ pub struct Sequence {
   pub still_picture: bool,
   /// Use reduced header for still picture
   pub reduced_still_picture_hdr: bool,
-  /// enables/disables filter_intra
+  /// enables/disables `filter_intra`
   pub enable_filter_intra: bool,
   /// enables/disables corner/edge filtering and upsampling
   pub enable_intra_edge_filter: bool,
-  /// enables/disables interintra_compound
+  /// enables/disables `interintra_compound`
   pub enable_interintra_compound: bool,
   /// enables/disables masked compound
   pub enable_masked_compound: bool,
@@ -158,9 +158,9 @@ pub struct Sequence {
   /// 1 - enable vert/horiz filter selection
   pub enable_dual_filter: bool,
   /// 0 - disable order hint, and related tools
-  /// jnt_comp, ref_frame_mvs, frame_sign_bias
-  /// if 0, enable_jnt_comp and
-  /// enable_ref_frame_mvs must be set zs 0.
+  /// `jnt_comp`, `ref_frame_mvs`, `frame_sign_bias`
+  /// if 0, `enable_jnt_comp` and
+  /// `enable_ref_frame_mvs` must be set zs 0.
   pub enable_order_hint: bool,
   /// 0 - disable joint compound modes
   /// 1 - enable it
@@ -190,7 +190,7 @@ pub struct Sequence {
   pub display_model_info_present_flag: bool,
   pub decoder_model_info_present_flag: bool,
   pub level_idx: [u8; MAX_NUM_OPERATING_POINTS],
-  /// seq_tier in the spec. One bit: 0 or 1.
+  /// `seq_tier` in the spec. One bit: 0 or 1.
   pub tier: [usize; MAX_NUM_OPERATING_POINTS],
   pub film_grain_params_present: bool,
   pub timing_info_present: bool,
@@ -700,9 +700,9 @@ pub struct CodedFrameData<T: Pixel> {
   /// indicating how much future frames depend on the block (for example, via
   /// inter-prediction).
   pub block_importances: Box<[f32]>,
-  /// Pre-computed distortion_scale.
+  /// Pre-computed `distortion_scale`.
   pub distortion_scales: Box<[DistortionScale]>,
-  /// Pre-computed activity_scale.
+  /// Pre-computed `activity_scale`.
   pub activity_scales: Box<[DistortionScale]>,
   pub activity_mask: ActivityMask,
   /// Combined metric of activity and distortion
@@ -772,7 +772,7 @@ impl<T: Pixel> CodedFrameData<T> {
     for scale in self.distortion_scales.iter_mut() {
       *scale *= inv_mean;
     }
-    self.spatiotemporal_scores = self.distortion_scales.clone();
+    self.spatiotemporal_scores.clone_from(&self.distortion_scales);
     inv_mean.blog64() >> 1
   }
 
@@ -986,7 +986,7 @@ impl<T: Pixel> FrameInvariants<T> {
     let show_existing_frame =
       inter_cfg.get_show_existing_frame(fi.idx_in_group_output);
     if !show_existing_frame {
-      fi.coded_frame_data = previous_coded_fi.coded_frame_data.clone();
+      fi.coded_frame_data.clone_from(&previous_coded_fi.coded_frame_data);
     }
 
     fi.order_hint =

@@ -142,7 +142,7 @@ impl fmt::Display for FrameType {
 pub struct T35 {
   /// Country code.
   pub country_code: u8,
-  /// Country code extension bytes (if country_code == 0xFF)
+  /// Country code extension bytes (if `country_code` == 0xFF)
   pub country_code_extension_byte: u8,
   /// T.35 payload.
   pub data: Box<[u8]>,

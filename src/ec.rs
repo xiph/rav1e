@@ -121,7 +121,7 @@ pub struct WriterBase<S> {
   #[cfg(feature = "desync_finder")]
   /// Debug enable flag
   debug: bool,
-  /// Extra offset added to tell() and tell_frac() to approximate costs
+  /// Extra offset added to `tell()` and `tell_frac()` to approximate costs
   /// of actually coding a symbol
   fake_bits_frac: u32,
   /// Use-specific storage
