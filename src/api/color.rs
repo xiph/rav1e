@@ -171,19 +171,19 @@ pub enum MatrixCoefficients {
   BT601,
   /// SMPTE 240 M
   SMPTE240,
-  /// YCgCo
+  /// `YCgCo`
   YCgCo,
-  /// BT.2020 non-constant luminance, BT.2100 YCbCr
+  /// BT.2020 non-constant luminance, BT.2100 `YCbCr`
   BT2020NCL,
   /// BT.2020 constant luminance
   BT2020CL,
-  /// SMPTE ST 2085 YDzDx
+  /// SMPTE ST 2085 `YDzDx`
   SMPTE2085,
   /// Chromaticity-derived non-constant luminance
   ChromatNCL,
   /// Chromaticity-derived constant luminance
   ChromatCL,
-  /// BT.2020 ICtCp
+  /// BT.2020 `ICtCp`
   ICtCp,
 }
 

@@ -54,7 +54,7 @@ pub struct InterConfig {
   group_output_len: u64,
   /// Interval between consecutive S-frames.
   /// Keyframes reset this interval.
-  /// This MUST be a multiple of group_input_len.
+  /// This MUST be a multiple of `group_input_len`.
   pub(crate) switch_frame_interval: u64,
 }
 
@@ -229,12 +229,12 @@ pub(crate) struct ContextInner<T: Pixel> {
   pub(crate) output_frameno: u64,
   pub(super) inter_cfg: InterConfig,
   pub(super) frames_processed: u64,
-  /// Maps *input_frameno* to frames
+  /// Maps *`input_frameno`* to frames
   pub(super) frame_q: FrameQueue<T>,
-  /// Maps *output_frameno* to frame data
+  /// Maps *`output_frameno`* to frame data
   pub(super) frame_data: FrameDataQueue<T>,
-  /// A list of the input_frameno for keyframes in this encode.
-  /// Needed so that we don't need to keep all of the frame_invariants in
+  /// A list of the `input_frameno` for keyframes in this encode.
+  /// Needed so that we don't need to keep all of the `frame_invariants` in
   ///  memory for the whole life of the encode.
   // TODO: Is this needed at all?
   keyframes: BTreeSet<u64>,

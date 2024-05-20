@@ -721,7 +721,7 @@ pub struct QualityMetrics {
   pub ssim: Option<PlanarMetrics>,
   /// Multi-Scale Structural Similarity
   pub ms_ssim: Option<PlanarMetrics>,
-  /// CIEDE 2000 color difference algorithm: https://en.wikipedia.org/wiki/Color_difference#CIEDE2000
+  /// CIEDE 2000 [color difference algorithm](https://en.wikipedia.org/wiki/Color_difference#CIEDE2000)
   pub ciede: Option<f64>,
   /// Aligned Peak Signal-to-Noise Ratio for Y, U, and V planes
   pub apsnr: Option<PlanarMetrics>,

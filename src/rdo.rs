@@ -2003,7 +2003,7 @@ pub fn rdo_partition_decision<T: Pixel, W: Writer>(
       if rd < best_rd {
         best_rd = rd;
         best_partition = partition;
-        best_pred_modes = child_modes.clone();
+        best_pred_modes.clone_from(&child_modes);
       }
     }
     cw.rollback(&cw_checkpoint);

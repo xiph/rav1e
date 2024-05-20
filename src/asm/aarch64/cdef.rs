@@ -132,10 +132,10 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           // rows (that is, src.x, src.y-2).  It does _not_ point to
           // src.x-2, src.y-2.
           (pad)(
-            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
+            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
             src as *const u8,
             T::to_asm_stride(src_stride as usize),
-            left.data.as_ptr() as *const [u8; 2],
+            left.data.as_ptr(),
             top as *const u8,
             bottom as *const u8,
             8 >> ydec,
@@ -145,7 +145,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           (func)(
             dst.data_ptr_mut() as *mut u8,
             T::to_asm_stride(dst.plane_cfg.stride),
-            tmp.data.as_ptr().offset(2 * tmpstride + 8) as *const u16,
+            tmp.data.as_ptr().offset(2 * tmpstride + 8),
             pri_strength,
             sec_strength,
             dir as i32,
@@ -187,10 +187,10 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           }
 
           (pad)(
-            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8) as *mut u16,
+            tmp.data.as_mut_ptr().offset(2 * tmpstride + 8),
             src as *const u16,
             T::to_asm_stride(src_stride as usize),
-            left.data.as_ptr() as *const [u16; 2],
+            left.data.as_ptr(),
             top as *const u16,
             bottom as *const u16,
             8 >> ydec,
@@ -200,7 +200,7 @@ pub(crate) unsafe fn cdef_filter_block<T: Pixel>(
           (func)(
             dst.data_ptr_mut() as *mut u16,
             T::to_asm_stride(dst.plane_cfg.stride),
-            tmp.data.as_ptr().offset(2 * tmpstride + 8) as *const u16,
+            tmp.data.as_ptr().offset(2 * tmpstride + 8),
             pri_strength,
             sec_strength,
             dir as i32,
