@@ -128,7 +128,7 @@ cc = { version = "1.0", optional = true, features = ["parallel"] }
 built = { version = "0.7.1", features = [] }
 
 [build-dependencies.nasm-rs]
-version = "0.2"
+version = "0.3"
 optional = true
 features = ["parallel"]
 
