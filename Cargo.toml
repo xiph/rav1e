@@ -162,6 +162,11 @@ rand_chacha = "0.3"
 [target.'cfg(any(decode_test, decode_test_dav1d))'.dependencies]
 system-deps = "6"
 
+[lints.rust.unexpected_cfgs]
+level = "warn"
+# These custom cfgs are expected, so tell rustc not to output warnings for them
+check-cfg = ['cfg(nasm_x86_64)', 'cfg(asm_neon)', 'cfg(cargo_c)', 'cfg(fuzzing)']
+
 [[bin]]
 name = "rav1e"
 required-features = ["binaries"]
