@@ -83,7 +83,7 @@ impl From<y4m::Error> for DecodeError {
       y4m::Error::BadInput => DecodeError::BadInput,
       y4m::Error::UnknownColorspace => DecodeError::UnknownColorspace,
       y4m::Error::ParseError(_) => DecodeError::ParseError,
-      y4m::Error::IoError(e) => DecodeError::IoError(e),
+      y4m::Error::IoError(_) => DecodeError::IoError,
       // Note that this error code has nothing to do with the system running out of memory,
       // it means the y4m decoder has exceeded its memory allocation limit.
       y4m::Error::OutOfMemory => DecodeError::MemoryLimitExceeded,

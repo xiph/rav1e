@@ -7,8 +7,10 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-mod fast;
-mod standard;
+use std::cmp;
+use std::collections::BTreeMap;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use crate::api::{EncoderConfig, SceneDetectionSpeed};
 use crate::cpu_features::CpuFeatureLevel;
@@ -16,12 +18,11 @@ use crate::encoder::Sequence;
 use crate::frame::*;
 use crate::me::RefMEStats;
 use crate::util::Pixel;
-use std::collections::BTreeMap;
-use std::num::NonZeroUsize;
-use std::sync::Arc;
-use std::{cmp, u64};
 
 use self::fast::{detect_scale_factor, FAST_THRESHOLD};
+
+mod fast;
+mod standard;
 
 /// Experiments have determined this to be an optimal threshold
 const IMP_BLOCK_DIFF_THRESHOLD: f64 = 7.0;

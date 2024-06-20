@@ -8,39 +8,11 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-#![deny(bare_trait_objects)]
-#![allow(clippy::cast_lossless)]
-#![allow(clippy::cast_ptr_alignment)]
-#![allow(clippy::cognitive_complexity)]
-#![allow(clippy::needless_range_loop)]
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::verbose_bit_mask)]
-#![allow(clippy::unreadable_literal)]
-#![allow(clippy::many_single_char_names)]
-// Performance lints
-#![warn(clippy::linkedlist)]
-#![warn(clippy::missing_const_for_fn)]
-#![warn(clippy::mutex_integer)]
-#![warn(clippy::suboptimal_flops)]
-// Correctness lints
-#![warn(clippy::expl_impl_clone_on_copy)]
-#![warn(clippy::mem_forget)]
-#![warn(clippy::path_buf_push_overwrite)]
-// Clarity/formatting lints
-#![warn(clippy::map_flatten)]
-#![warn(clippy::mut_mut)]
-#![warn(clippy::needless_borrow)]
-#![warn(clippy::needless_continue)]
-#![warn(clippy::range_plus_one)]
-// Documentation lints
-#![warn(clippy::doc_markdown)]
-#![warn(clippy::missing_errors_doc)]
-#![warn(clippy::missing_panics_doc)]
+//! Simple ivf muxer
 
-/// Simple ivf muxer
-///
-use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};
 use std::io;
+
+use bitstream_io::{BitRead, BitReader, BitWrite, BitWriter, LittleEndian};
 
 /// # Panics
 ///
@@ -137,8 +109,9 @@ pub fn read_packet(r: &mut dyn io::Read) -> io::Result<Packet> {
 
 #[cfg(test)]
 mod tests {
-  use crate::{read_header, read_packet};
   use std::io::{BufReader, ErrorKind::InvalidData};
+
+  use crate::{read_header, read_packet};
 
   #[test]
   fn read_invalid_headers() {

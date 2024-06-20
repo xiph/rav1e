@@ -10,6 +10,12 @@
 
 #![allow(non_camel_case_types)]
 
+use std::fmt;
+use std::mem::MaybeUninit;
+
+use arrayvec::*;
+use itertools::izip;
+
 use crate::api::*;
 use crate::cdef::*;
 use crate::context::*;
@@ -42,11 +48,6 @@ use crate::write_tx_blocks;
 use crate::write_tx_tree;
 use crate::Tune;
 use crate::{encode_block_post_cdef, encode_block_pre_cdef};
-
-use arrayvec::*;
-use itertools::izip;
-use std::fmt;
-use std::mem::MaybeUninit;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum RDOType {
@@ -105,7 +106,7 @@ pub struct PartitionParameters {
 impl Default for PartitionParameters {
   fn default() -> Self {
     PartitionParameters {
-      rd_cost: std::f64::MAX,
+      rd_cost: f64::MAX,
       bo: TileBlockOffset::default(),
       bsize: BlockSize::BLOCK_32X32,
       pred_mode_luma: PredictionMode::default(),
@@ -734,7 +735,7 @@ pub fn rdo_tx_size_type<T: Pixel>(
 
   let mut best_tx_type = TxType::DCT_DCT;
   let mut best_tx_size = tx_size;
-  let mut best_rd = std::f64::MAX;
+  let mut best_rd = f64::MAX;
 
   let do_rdo_tx_size = fi.tx_mode_select
     && fi.config.speed_settings.transform.rdo_tx_decision
@@ -1703,7 +1704,7 @@ pub fn rdo_tx_type_decision<T: Pixel>(
   tx_types: &[TxType], cur_best_rd: f64,
 ) -> (TxType, f64) {
   let mut best_type = TxType::DCT_DCT;
-  let mut best_rd = std::f64::MAX;
+  let mut best_rd = f64::MAX;
 
   let PlaneConfig { xdec, ydec, .. } = ts.input.planes[1].cfg;
   let is_chroma_block =
@@ -1928,7 +1929,7 @@ fn rdo_partition_simple<T: Pixel, W: Writer>(
       );
       child_modes.push(mode_decision);
     } else {
-      //rd_cost_sum += std::f64::MAX;
+      //rd_cost_sum += f64::MAX;
       return None;
     }
   }

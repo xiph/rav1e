@@ -7,13 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-cfg_if::cfg_if! {
-  if #[cfg(nasm_x86_64)] {
-    use crate::asm::x86::lrf::*;
-  } else {
-    use self::rust::*;
-  }
-}
+use std::cmp;
+use std::iter::FusedIterator;
+use std::ops::{Index, IndexMut};
 
 use crate::api::SGRComplexityLevel;
 use crate::color::ChromaSampling::Cs400;
@@ -24,9 +20,14 @@ use crate::frame::{
 };
 use crate::tiling::{Area, PlaneRegion, PlaneRegionMut, Rect};
 use crate::util::{clamp, CastFromPrimitive, ILog, Pixel};
-use std::cmp;
-use std::iter::FusedIterator;
-use std::ops::{Index, IndexMut};
+
+cfg_if::cfg_if! {
+  if #[cfg(nasm_x86_64)] {
+    use crate::asm::x86::lrf::*;
+  } else {
+    use self::rust::*;
+  }
+}
 
 pub const RESTORATION_TILESIZE_MAX_LOG2: usize = 8;
 
@@ -1263,12 +1264,6 @@ pub struct RestorationPlaneConfig {
 pub struct RestorationPlane {
   pub cfg: RestorationPlaneConfig,
   pub units: FrameRestorationUnits,
-}
-
-#[derive(Clone, Default)]
-pub struct RestorationPlaneOffset {
-  pub row: usize,
-  pub col: usize,
 }
 
 impl RestorationPlane {

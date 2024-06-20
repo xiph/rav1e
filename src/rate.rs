@@ -7,6 +7,8 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::cmp;
+
 use crate::api::color::ChromaSampling;
 use crate::api::ContextInner;
 use crate::encoder::TEMPORAL_DELIMITER;
@@ -14,7 +16,6 @@ use crate::quantize::{ac_q, dc_q, select_ac_qi, select_dc_qi};
 use crate::util::{
   bexp64, bexp_q24, blog64, clamp, q24_to_q57, q57, q57_to_q24, Pixel,
 };
-use std::cmp;
 
 // The number of frame sub-types for which we track distinct parameters.
 // This does not include FRAME_SUBTYPE_SEF, because we don't need to do any
@@ -1205,7 +1206,7 @@ impl RCState {
       }
       if !trial {
         // Increment the frame count for filter adaptation purposes.
-        if !trial && self.nframes[fti] < ::std::i32::MAX {
+        if !trial && self.nframes[fti] < i32::MAX {
           self.nframes[fti] += 1;
         }
         self.reservoir_fullness -= bits;
@@ -1302,7 +1303,7 @@ impl RCState {
     }
     // If we have encoded too many frames, prevent us from reaching the
     //  ready state required to encode more.
-    if self.nencoded_frames + self.nsef_frames >= std::i32::MAX as i64 {
+    if self.nencoded_frames + self.nsef_frames >= i32::MAX as i64 {
       None?
     }
     cur_pos = self.buffer_val(

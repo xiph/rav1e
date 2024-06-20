@@ -9,7 +9,6 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
 use rav1e::prelude::*;
-use std::io;
 
 pub mod y4m;
 
@@ -25,13 +24,12 @@ pub trait Decoder: Send {
 }
 
 #[derive(Debug)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum DecodeError {
   EOF,
   BadInput,
   UnknownColorspace,
   ParseError,
-  IoError(io::Error),
+  IoError,
   MemoryLimitExceeded,
 }
 
