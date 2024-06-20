@@ -27,7 +27,7 @@ jobs:
       - name: Run clippy
         uses: clechasseur/rs-clippy-check@v3
         with:
-          args: -- -D warnings --verbose -A clippy::wrong-self-convention -A clippy::many_single_char_names -A clippy::upper-case-acronyms
+          args: -- -D warnings
 
   msrv:
     runs-on: ubuntu-22.04

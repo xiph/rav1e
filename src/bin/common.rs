@@ -342,6 +342,7 @@ pub struct ParsedCliOptions {
   pub metrics_enabled: MetricsEnabled,
   pub pass1file_name: Option<PathBuf>,
   pub pass2file_name: Option<PathBuf>,
+  #[cfg(feature = "serialize")]
   pub save_config: Option<PathBuf>,
   pub photon_noise: u8,
   #[cfg(feature = "unstable")]
@@ -390,6 +391,7 @@ fn build_speed_long_help() -> Option<&'static str> {
 pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
   let matches = CliOptions::parse();
 
+  #[cfg(feature = "serialize")]
   let mut save_config_path = None;
   let mut enc = None;
 
@@ -489,6 +491,7 @@ pub fn parse_cli() -> Result<ParsedCliOptions, CliError> {
     threads: matches.threads,
     pass1file_name: matches.first_pass.clone(),
     pass2file_name: matches.second_pass.clone(),
+    #[cfg(feature = "serialize")]
     save_config: save_config_path,
     photon_noise: matches.photon_noise,
     force_highbitdepth: matches.high_bitdepth,

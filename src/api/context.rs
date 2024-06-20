@@ -8,20 +8,19 @@
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 #![deny(missing_docs)]
 
+use std::fmt;
+use std::io;
+use std::sync::Arc;
+
+use bitstream_io::*;
+
 use crate::api::color::*;
 use crate::api::config::*;
 use crate::api::internal::*;
 use crate::api::util::*;
-
-use bitstream_io::*;
-
 use crate::encoder::*;
 use crate::frame::*;
 use crate::util::Pixel;
-
-use std::fmt;
-use std::io;
-use std::sync::Arc;
 
 /// The encoder context.
 ///
@@ -122,8 +121,8 @@ impl<T: Pixel> Context<T> {
       || (self.inner.config.still_picture && self.inner.frame_count > 0)
     {
       return Err(EncoderStatus::EnoughData);
-    // The rate control can process at most std::i32::MAX frames
-    } else if self.inner.frame_count == std::i32::MAX as u64 - 1 {
+    // The rate control can process at most i32::MAX frames
+    } else if self.inner.frame_count == i32::MAX as u64 - 1 {
       self.inner.limit = Some(self.inner.frame_count);
       self.is_flushing = true;
     }

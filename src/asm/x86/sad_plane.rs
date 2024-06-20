@@ -7,13 +7,13 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
-use crate::cpu_features::CpuFeatureLevel;
-use crate::sad_plane::*;
-use crate::util::{Pixel, PixelType};
+use std::mem;
 
 use v_frame::plane::Plane;
 
-use std::mem;
+use crate::cpu_features::CpuFeatureLevel;
+use crate::sad_plane::*;
+use crate::util::{Pixel, PixelType};
 
 macro_rules! decl_sad_plane_fn {
   ($($f:ident),+) => {
@@ -46,8 +46,12 @@ pub(crate) fn sad_plane_internal<T: Pixel>(
           // SAFETY: Calls Assembly code.
           unsafe {
             let result = $func(
-              mem::transmute(src.data_origin().as_ptr()),
-              mem::transmute(dst.data_origin().as_ptr()),
+              mem::transmute::<*const T, *const u8>(
+                src.data_origin().as_ptr(),
+              ),
+              mem::transmute::<*const T, *const u8>(
+                dst.data_origin().as_ptr(),
+              ),
               src.cfg.stride,
               src.cfg.width,
               src.cfg.height,

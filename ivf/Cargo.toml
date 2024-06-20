@@ -9,3 +9,15 @@ homepage = "https://github.com/xiph/rav1e"
 
 [dependencies]
 bitstream-io = "2"
+
+[lints.clippy]
+doc_link_with_quotes = "warn"
+doc_markdown = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+missing_safety_doc = "warn"
+comparison_chain = "allow"
+enum_variant_names = "allow"
+needless_range_loop = "allow"
+too_many_arguments = "allow"
+upper_case_acronyms = "allow"

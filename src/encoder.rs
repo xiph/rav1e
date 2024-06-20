@@ -7,6 +7,17 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use std::collections::VecDeque;
+use std::io::Write;
+use std::mem::MaybeUninit;
+use std::sync::Arc;
+use std::{fmt, io, mem};
+
+use arg_enum_proc_macro::ArgEnum;
+use arrayvec::*;
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use rayon::iter::*;
+
 use crate::activity::*;
 use crate::api::*;
 use crate::cdef::*;
@@ -36,17 +47,6 @@ use crate::tiling::*;
 use crate::transform::*;
 use crate::util::*;
 use crate::wasm_bindgen::*;
-
-use arg_enum_proc_macro::ArgEnum;
-use arrayvec::*;
-use bitstream_io::{BigEndian, BitWrite, BitWriter};
-use rayon::iter::*;
-
-use std::collections::VecDeque;
-use std::io::Write;
-use std::mem::MaybeUninit;
-use std::sync::Arc;
-use std::{fmt, io, mem};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2638,8 +2638,8 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
   inter_cfg: &InterConfig, enc_stats: &mut EncoderStats,
 ) -> PartitionGroupParameters {
   let rdo_type = RDOType::PixelDistRealRate;
-  let mut rd_cost = std::f64::MAX;
-  let mut best_rd = std::f64::MAX;
+  let mut rd_cost = f64::MAX;
+  let mut best_rd = f64::MAX;
   let mut rdo_output = PartitionGroupParameters {
     rd_cost,
     part_type: PartitionType::PARTITION_INVALID,
@@ -2817,13 +2817,13 @@ fn encode_partition_bottomup<T: Pixel, W: Writer>(
         let cost = child_rdo_output.rd_cost;
         assert!(cost >= 0.0);
 
-        if cost != std::f64::MAX {
+        if cost != f64::MAX {
           rd_cost += cost;
           if !must_split
             && fi.enable_early_exit
             && (rd_cost >= best_rd || rd_cost >= ref_rd_cost)
           {
-            assert!(cost != std::f64::MAX);
+            assert!(cost != f64::MAX);
             early_exit = true;
             break;
           } else if partition != PartitionType::PARTITION_SPLIT {
@@ -2948,7 +2948,7 @@ fn encode_partition_topdown<T: Pixel, W: Writer>(
   let mut rdo_output =
     block_output.clone().unwrap_or_else(|| PartitionGroupParameters {
       part_type: PartitionType::PARTITION_INVALID,
-      rd_cost: std::f64::MAX,
+      rd_cost: f64::MAX,
       part_modes: ArrayVec::new(),
     });
 
@@ -3520,7 +3520,7 @@ fn encode_tile<'a, T: Pixel>(
           &mut sbs_qe.w_post_cdef,
           BlockSize::BLOCK_64X64,
           tile_bo,
-          std::f64::MAX,
+          f64::MAX,
           inter_cfg,
           &mut enc_stats,
         );
