@@ -25,7 +25,6 @@ use crate::util::*;
 use super::clamp_value;
 use super::consts::*;
 use super::get_1d_tx_types;
-use super::get_rect_tx_log_ratio;
 use super::half_btf;
 use super::TxSize;
 use super::TxType;
@@ -1644,13 +1643,14 @@ pub(crate) mod rust {
     // For 64 point transforms, rely on the last 32 columns being initialized
     //   to zero for filling out missing input coeffs.
     let mut buffer = vec![0i32; width * height].into_boxed_slice();
-    let rect_type = get_rect_tx_log_ratio(width, height);
+    let rect_type = tx_size.rect_ratio_log2();
     let tx_types_1d = get_1d_tx_types(tx_type);
     let lossless = tx_type == TxType::WHT_WHT;
 
     // perform inv txfm on every row
     let range = bd + 8;
-    let txfm_fn = INV_TXFM_FNS[tx_types_1d.1 as usize][ILog::ilog(width) - 3];
+    let txfm_fn =
+      INV_TXFM_FNS[tx_types_1d.1 as usize][tx_size.width_log2() - 2];
     // 64 point transforms only signal 32 coeffs. We only take chunks of 32
     //   and skip over the last 32 transforms here.
     for (r, buffer_slice) in (0..height.min(32)).zip(buffer.chunks_mut(width))
@@ -1678,7 +1678,8 @@ pub(crate) mod rust {
 
     // perform inv txfm on every col
     let range = cmp::max(bd + 6, 16);
-    let txfm_fn = INV_TXFM_FNS[tx_types_1d.0 as usize][ILog::ilog(height) - 3];
+    let txfm_fn =
+      INV_TXFM_FNS[tx_types_1d.0 as usize][tx_size.height_log2() - 2];
     for c in 0..width {
       let mut temp_in: [i32; 64] = [0; 64];
       let mut temp_out: [i32; 64] = [0; 64];
