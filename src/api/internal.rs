@@ -479,9 +479,9 @@ impl<T: Pixel> ContextInner<T> {
   pub fn build_dump_properties() -> PathBuf {
     let mut data_location = PathBuf::new();
     if env::var_os("RAV1E_DATA_PATH").is_some() {
-      data_location.push(&env::var_os("RAV1E_DATA_PATH").unwrap());
+      data_location.push(env::var_os("RAV1E_DATA_PATH").unwrap());
     } else {
-      data_location.push(&env::current_dir().unwrap());
+      data_location.push(env::current_dir().unwrap());
       data_location.push(".lookahead_data");
     }
     fs::create_dir_all(&data_location).unwrap();
