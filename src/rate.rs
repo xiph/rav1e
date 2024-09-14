@@ -557,7 +557,7 @@ impl QuantizerParameters {
 
     // delta_q only gets 6 bits + a sign bit, so it can differ by 63 at most.
     let min_qi = base_q_idx.saturating_sub(63).max(1);
-    let max_qi = base_q_idx.saturating_add(63).min(255);
+    let max_qi = base_q_idx.saturating_add(63);
     let clamp_qi = |qi: u8| qi.clamp(min_qi, max_qi);
 
     QuantizerParameters {
