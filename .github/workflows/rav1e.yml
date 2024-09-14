@@ -325,7 +325,11 @@ jobs:
           CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: >
             ${{ env.SDE_PATH }}/sde -icx --
         run: |
-          cargo test --workspace --verbose --target x86_64-unknown-linux-gnu \
+          cargo test --workspace --target x86_64-unknown-linux-gnu \
+                     --lib --test doctests \
+                     --features=decode_test,decode_test_dav1d,quick_test
+          cargo test --workspace --target x86_64-unknown-linux-gnu \
+                     --doc \
                      --features=decode_test,decode_test_dav1d,quick_test
       - name: Run unit tests
         if: matrix.conf == 'no-asm-tests'
