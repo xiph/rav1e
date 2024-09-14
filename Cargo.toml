@@ -80,13 +80,13 @@ dump_lookahead_data = ["byteorder", "image"]
 arg_enum_proc_macro = "0.3.4"
 bitstream-io = "~2.3.0"
 cfg-if = "1.0"
-clap = { version = "~4.4.17", optional = true, default-features = false, features = [
+clap = { version = "4.5", optional = true, default-features = false, features = [
   "color",
   "std",
   "wrap_help",
   "derive",
 ] }
-clap_complete = { version = "~4.4.7", optional = true }
+clap_complete = { version = "4.5", optional = true }
 libc = "0.2"
 y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
