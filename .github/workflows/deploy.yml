@@ -114,10 +114,10 @@ jobs:
         CARGO_TARGET_X86_64_PC_WINDOWS_GNU_AR: "C:\\msys64\\mingw64\\bin\\ar.exe"
       run: |
         cargo fetch
-        cargo cinstall \
-          --profile ${{ matrix.profile }} \
-          --destdir="C:\" \
-          --libdir lib --prefix /usr/rav1e-windows-${{ matrix.conf }}-sdk \
+        cargo cinstall `
+          --profile ${{ matrix.profile }} `
+          --destdir="C:\" `
+          --libdir lib --prefix /usr/rav1e-windows-${{ matrix.conf }}-sdk `
           --offline
 
     - name: Copy LICENSE
