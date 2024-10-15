@@ -10,6 +10,8 @@
 use crate::error::*;
 use crate::muxer::{create_muxer, Muxer};
 use crate::stats::MetricsEnabled;
+use clap::builder::styling::AnsiColor;
+use clap::builder::Styles;
 use clap::{CommandFactory, Parser as Clap, Subcommand};
 use clap_complete::{generate, Shell};
 use rav1e::prelude::*;
@@ -30,6 +32,7 @@ pub mod built_info {
 #[derive(Clap)]
 #[clap(
   name = "rav1e",
+  styles = get_styles(),
   version = get_version(),
   long_version = get_long_version(),
   about = "AV1 video encoder",
@@ -259,6 +262,14 @@ pub struct CliOptions {
 
 static VERSION_STR: OnceLock<String> = OnceLock::new();
 static LONG_VERSION_STR: OnceLock<String> = OnceLock::new();
+
+fn get_styles() -> Styles {
+  Styles::styled()
+    .header(AnsiColor::Yellow.on_default())
+    .usage(AnsiColor::Green.on_default())
+    .literal(AnsiColor::Green.on_default())
+    .placeholder(AnsiColor::Green.on_default())
+}
 
 fn get_version() -> &'static str {
   VERSION_STR.get_or_init(|| {
