@@ -78,7 +78,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-bitstream-io = "~2.3.0"
+bitstream-io = "~2.5.0"
 cfg-if = "1.0"
 clap = { version = "4.5", optional = true, default-features = false, features = [
   "color",
@@ -109,7 +109,7 @@ thiserror = "1.0"
 byteorder = { version = "1.5.0", optional = true }
 log = "0.4"
 console = { version = "0.15", optional = true }
-fern = { version = "0.6", optional = true }
+fern = { version = "0.7", optional = true }
 itertools = "0.13"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.90", optional = true }
