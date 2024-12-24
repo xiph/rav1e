@@ -423,7 +423,7 @@ macro_rules! plane_region_common {
 plane_region_common!(PlaneRegion, as_ptr);
 plane_region_common!(PlaneRegionMut, as_mut_ptr, mut);
 
-impl<'a, T: Pixel> PlaneRegionMut<'a, T> {
+impl<T: Pixel> PlaneRegionMut<'_, T> {
   #[inline(always)]
   pub fn data_ptr_mut(&mut self) -> *mut T {
     self.data

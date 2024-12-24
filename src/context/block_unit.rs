@@ -676,7 +676,7 @@ impl IndexMut<PlaneBlockOffset> for FrameBlocks {
   }
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter<'_> {
   pub fn get_cdf_intra_mode_kf(
     &self, bo: TileBlockOffset,
   ) -> &[u16; INTRA_MODES] {

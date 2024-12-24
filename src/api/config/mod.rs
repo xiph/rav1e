@@ -422,10 +422,8 @@ impl Config {
         if config.height > AV1_LEVEL_MAX_V_SIZE[level_idx as usize] {
           return Err(LevelConstraintsExceeded);
         }
-        if ((config.width * config.height) as u64 * config.time_base.num
-          + config.time_base.den
-          - 1)
-          / config.time_base.den
+        if ((config.width * config.height) as u64 * config.time_base.num)
+          .div_ceil(config.time_base.den)
           > AV1_LEVEL_MAX_DISPLAY_RATE[level_idx as usize] as u64
         {
           return Err(LevelConstraintsExceeded);

@@ -45,7 +45,7 @@ impl CDFContext {
   }
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter<'_> {
   fn get_ref_frame_ctx_b0(&self, bo: TileBlockOffset) -> usize {
     let ref_counts = self.bc.blocks[bo].neighbors_ref_counts;
 
