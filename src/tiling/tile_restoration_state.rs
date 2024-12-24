@@ -277,7 +277,7 @@ tile_restoration_plane_common!(
   mut
 );
 
-impl<'a> TileRestorationPlaneMut<'a> {
+impl TileRestorationPlaneMut<'_> {
   #[inline(always)]
   pub fn restoration_unit_mut(
     &mut self, sbo: TileSuperBlockOffset,
@@ -412,7 +412,7 @@ tile_restoration_state_common!(
   mut
 );
 
-impl<'a> TileRestorationStateMut<'a> {
+impl TileRestorationStateMut<'_> {
   #[inline(always)]
   pub const fn as_const(&self) -> TileRestorationState {
     TileRestorationState {

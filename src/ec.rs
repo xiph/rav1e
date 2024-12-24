@@ -761,7 +761,6 @@ where
   /// - `n`: size of interval
   /// - `k`: "parameter"
   /// - `r`: reference
-
   fn count_signed_subexp_with_ref(
     &self, v: i32, low: i32, high: i32, k: u8, r: i32,
   ) -> u32 {

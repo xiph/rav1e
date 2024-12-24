@@ -189,8 +189,8 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
 
   let imp_bsize = BlockSize::from_width_and_height(imp_block_w, imp_block_h);
 
-  let n_imp_blocks_w = (w + CHUNK_SIZE - 1) / CHUNK_SIZE;
-  let n_imp_blocks_h = (h + CHUNK_SIZE - 1) / CHUNK_SIZE;
+  let n_imp_blocks_w = w.div_ceil(CHUNK_SIZE);
+  let n_imp_blocks_h = h.div_ceil(CHUNK_SIZE);
 
   // TODO: Copying biases into a buffer is slow. It would be best if biases were
   // passed directly. To do this, we would need different versions of the
@@ -223,6 +223,8 @@ pub fn sse_wxh<T: Pixel, F: Fn(Area, BlockSize) -> DistortionScale>(
   ))
 }
 
+// TODO consider saturating_sub later
+#[allow(clippy::implicit_saturating_sub)]
 pub const fn clip_visible_bsize(
   frame_w: usize, frame_h: usize, bsize: BlockSize, x: usize, y: usize,
 ) -> (usize, usize) {

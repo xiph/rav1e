@@ -523,7 +523,7 @@ pub struct TXB_CTX {
   pub dc_sign_ctx: usize,
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter<'_> {
   /// # Panics
   ///
   /// - If an invalid combination of `tx_type` and `tx_size` is passed

@@ -177,7 +177,7 @@ pub fn get_mv_class(z: u32) -> (usize, u32) {
   (c, offset)
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter<'_> {
   /// # Panics
   ///
   /// - If the `comp` is 0

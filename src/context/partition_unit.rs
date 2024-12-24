@@ -127,7 +127,7 @@ impl CFLParams {
   }
 }
 
-impl<'a> ContextWriter<'a> {
+impl ContextWriter<'_> {
   fn partition_gather_horz_alike(
     out: &mut [u16; 2], cdf_in: &[u16], _bsize: BlockSize,
   ) {
@@ -409,7 +409,7 @@ impl<'a> ContextWriter<'a> {
   }
 }
 
-impl<'a> BlockContext<'a> {
+impl BlockContext<'_> {
   /// # Panics
   ///
   /// - If called with a non-square `bsize`

@@ -115,29 +115,21 @@ impl TilingInfo {
       tile_width_sb_pre
     };
 
-    let cols = (frame_width_sb + tile_width_sb - 1) / tile_width_sb;
+    let cols = frame_width_sb.div_ceil(tile_width_sb);
 
     // Adjust tile_cols_log2 in case of rounding tile_width_sb to even.
     let tile_cols_log2 = Self::tile_log2(1, cols).unwrap();
     assert!(tile_cols_log2 >= min_tile_cols_log2);
 
-    let min_tile_rows_log2 = if min_tiles_log2 > tile_cols_log2 {
-      min_tiles_log2 - tile_cols_log2
-    } else {
-      0
-    };
+    let min_tile_rows_log2 = min_tiles_log2.saturating_sub(tile_cols_log2);
     let min_tile_rows_ratelimit_log2 =
-      if min_tiles_ratelimit_log2 > tile_cols_log2 {
-        min_tiles_ratelimit_log2 - tile_cols_log2
-      } else {
-        0
-      };
+      min_tiles_ratelimit_log2.saturating_sub(tile_cols_log2);
     let tile_rows_log2 = tile_rows_log2
       .max(min_tile_rows_log2)
       .clamp(min_tile_rows_ratelimit_log2, max_tile_rows_log2);
     let tile_height_sb = sb_rows.align_power_of_two_and_shift(tile_rows_log2);
 
-    let rows = (frame_height_sb + tile_height_sb - 1) / tile_height_sb;
+    let rows = frame_height_sb.div_ceil(tile_height_sb);
 
     Self {
       frame_width,

@@ -203,7 +203,7 @@ macro_rules! tile_common {
 tile_common!(Tile, PlaneRegion, iter);
 tile_common!(TileMut, PlaneRegionMut, iter_mut, mut);
 
-impl<'a, T: Pixel> TileMut<'a, T> {
+impl<T: Pixel> TileMut<'_, T> {
   #[inline(always)]
   pub fn as_const(&self) -> Tile<'_, T> {
     Tile {
