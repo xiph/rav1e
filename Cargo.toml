@@ -131,7 +131,7 @@ features = ["png"]
 
 [build-dependencies]
 cc = { version = "1.0", optional = true, features = ["parallel"] }
-built = { version = "0.7.1", features = [] }
+built = { version = "0.7.7", features = [] }
 
 [build-dependencies.nasm-rs]
 version = "0.3"
