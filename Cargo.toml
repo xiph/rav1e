@@ -166,7 +166,7 @@ rand = "0.8"
 rand_chacha = "0.3"
 
 [target.'cfg(any(decode_test, decode_test_dav1d))'.dependencies]
-system-deps = "6"
+system-deps = "7"
 
 [lints.rust.unexpected_cfgs]
 level = "warn"
