@@ -89,13 +89,13 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasi
+          targets: wasm32-wasip1-threads
       - uses: Swatinem/rust-cache@v2
 
       - name: Run tests
         run: >
           cargo test
-          --target wasm32-wasi
+          --target wasm32-wasip1-threads
           --no-default-features
 
   build-unix:
