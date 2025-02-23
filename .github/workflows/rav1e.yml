@@ -321,7 +321,7 @@ jobs:
           sccache --stop-server
       - name: Codecov upload
         if: matrix.conf == 'grcov-codecov'
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           files: lcov.info
 
