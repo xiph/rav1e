@@ -268,7 +268,7 @@ jobs:
           CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
-          cargo cbuild --offline
+          cargo cbuild
       - name: Install cargo-fuzz
         if: matrix.conf == 'fuzz'
         run: |
@@ -406,7 +406,7 @@ jobs:
           CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
-          cargo cbuild --target=${{ matrix.target }} --offline
+          cargo cbuild --target=${{ matrix.target }}
       - name: Stop sccache server
         run: |
           sccache --stop-server
@@ -488,7 +488,7 @@ jobs:
           CARGO_REGISTRIES_CRATES_IO_PROTOCOL: git
         run: |
           cargo fetch
-          cargo cbuild --offline
+          cargo cbuild
       - name: Stop sccache server
         run: |
           sccache --stop-server
