@@ -1307,7 +1307,8 @@ impl RCState {
       None?
     }
     cur_pos = self.buffer_val(
-      ((self.prev_metrics.show_frame as i64) << 31) | self.prev_metrics.fti as i64,
+      ((self.prev_metrics.show_frame as i64) << 31)
+        | self.prev_metrics.fti as i64,
       4,
       cur_pos,
     );
