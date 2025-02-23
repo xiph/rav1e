@@ -3,7 +3,7 @@ name = "rav1e"
 version = "0.7.0"
 authors = ["Thomas Daede <tdaede@xiph.org>"]
 edition = "2021"
-rust-version = "1.74.0"
+rust-version = "1.83.0"
 build = "build.rs"
 include = [
   "/Cargo.toml",
