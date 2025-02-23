@@ -1,4 +1,4 @@
-fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"
 force_explicit_abi = false
 max_width = 79
 tab_spaces = 2
