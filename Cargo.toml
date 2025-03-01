@@ -78,7 +78,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-bitstream-io = "~2.3.0"
+bitstream-io = "~2.6.0"
 cfg-if = "1.0"
 clap = { version = "4.5", optional = true, default-features = false, features = [
   "color",
@@ -110,7 +110,7 @@ byteorder = { version = "1.5.0", optional = true }
 log = "0.4"
 console = { version = "0.15", optional = true }
 fern = { version = "0.7", optional = true }
-itertools = "0.13"
+itertools = "0.14"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.90", optional = true }
 nom = { version = "7.1.3", optional = true }
@@ -146,8 +146,8 @@ pretty_assertions = "1.4.0"
 interpolate_name = "0.2.4"
 nom = "7.1.3"
 quickcheck = "1.0"
-rand = "0.8"
-rand_chacha = "0.3"
+rand = "0.9"
+rand_chacha = "0.9"
 semver = "1.0"
 
 # Exclude dependencies and features that don't work on wasm32:
@@ -162,8 +162,8 @@ criterion = "0.5"
 arbitrary = "1.3"
 interpolate_name = "0.2.4"
 libfuzzer-sys = "0.4.7"
-rand = "0.8"
-rand_chacha = "0.3"
+rand = "0.9"
+rand_chacha = "0.9"
 
 [target.'cfg(any(decode_test, decode_test_dav1d))'.dependencies]
 system-deps = "6"
