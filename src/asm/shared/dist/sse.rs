@@ -72,8 +72,9 @@ pub mod test {
   fn scaling_random(scales: &mut [u32]) {
     let mut rng = rng();
     for a in scales.iter_mut() {
-      *a = rng
-        .random_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
+      *a = rng.random_range(
+        DistortionScale::from(0.5).0..DistortionScale::from(1.5).0,
+      );
     }
   }
 
