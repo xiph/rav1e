@@ -1553,7 +1553,6 @@ dependencies = [
  "serde-big-array",
  "signal-hook",
  "simd_helpers",
- "system-deps",
  "thiserror 2.0.12",
  "toml",
  "tracing",
