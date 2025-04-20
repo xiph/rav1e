@@ -165,9 +165,6 @@ libfuzzer-sys = "0.4.7"
 rand = "0.9"
 rand_chacha = "0.9"
 
-[target.'cfg(any(decode_test, decode_test_dav1d))'.dependencies]
-system-deps = "6"
-
 [lints.rust.unexpected_cfgs]
 level = "warn"
 # These custom cfgs are expected, so tell rustc not to output warnings for them
