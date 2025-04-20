@@ -73,7 +73,7 @@ fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
   for row in plane.data_origin_mut().chunks_mut(stride) {
     for pixel in row {
-      let v: u8 = ra.gen();
+      let v: u8 = ra.random();
       *pixel = T::cast_from(v);
     }
   }
@@ -164,7 +164,7 @@ pub fn get_satd(c: &mut Criterion) {
 fn fill_scaling(ra: &mut ChaChaRng, scales: &mut [u32]) {
   for a in scales.iter_mut() {
     *a =
-      ra.gen_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
+      ra.random_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
   }
 }
 

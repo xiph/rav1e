@@ -5,7 +5,7 @@ use rav1e::bench::frame::*;
 
 fn init_plane_u8(width: usize, height: usize) -> Plane<u8> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let data: Vec<u8> = (0..(width * height)).map(|_| ra.gen()).collect();
+  let data: Vec<u8> = (0..(width * height)).map(|_| ra.random()).collect();
   let out = Plane::from_slice(&data, width);
   if out.cfg.width % 2 == 0 && out.cfg.height % 2 == 0 {
     out
@@ -25,7 +25,7 @@ fn init_plane_u8(width: usize, height: usize) -> Plane<u8> {
 
 fn init_plane_u16(width: usize, height: usize) -> Plane<u16> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let data: Vec<u16> = (0..(width * height)).map(|_| ra.gen()).collect();
+  let data: Vec<u16> = (0..(width * height)).map(|_| ra.random()).collect();
   Plane::from_slice(&data, width)
 }
 
@@ -58,7 +58,7 @@ pub fn downsample_10bit(c: &mut Criterion) {
 
 fn init_raw_plane_data(width: usize, height: usize) -> Vec<u8> {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  (0..(width * height)).map(|_| ra.gen()).collect()
+  (0..(width * height)).map(|_| ra.random()).collect()
 }
 
 pub fn copy_from_raw_u8_8bit(c: &mut Criterion) {

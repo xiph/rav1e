@@ -61,7 +61,7 @@ mod test {
   }
 
   fn test_forward_transform_simd(cpu: CpuFeatureLevel) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let tx_sizes = {
       use TxSize::*;
@@ -76,7 +76,7 @@ mod test {
       let area = tx_size.area();
 
       let input: Vec<i16> =
-        (0..area).map(|_| rng.gen_range(-255..256)).collect();
+        (0..area).map(|_| rng.random_range(-255..256)).collect();
 
       for &tx_type in get_valid_txfm_types(tx_size) {
         let mut output_ref = vec![MaybeUninit::new(0i16); area];

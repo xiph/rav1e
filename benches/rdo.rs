@@ -11,7 +11,7 @@ use rav1e::prelude::Plane;
 
 fn init_plane_u8(width: usize, height: usize, seed: u8) -> Plane<u8> {
   let mut ra = ChaChaRng::from_seed([seed; 32]);
-  let data: Vec<u8> = (0..(width * height)).map(|_| ra.gen()).collect();
+  let data: Vec<u8> = (0..(width * height)).map(|_| ra.random()).collect();
   Plane::from_slice(&data, width)
 }
 

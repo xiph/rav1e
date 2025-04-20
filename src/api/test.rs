@@ -75,7 +75,7 @@ fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {
       for pixel in row {
-        let v: u8 = ra.gen();
+        let v: u8 = ra.random();
         *pixel = T::cast_from(v);
       }
     }

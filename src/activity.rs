@@ -220,7 +220,7 @@ mod ssim_boost_tests {
   /// Test that `ssim_boost` has sufficient accuracy.
   #[test]
   fn accuracy_test() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let mut max_relative_error = 0f64;
     let bd = 12;
@@ -229,8 +229,8 @@ mod ssim_boost_tests {
     // Each scale is tested multiple times with randomized variances.
     for scale in 0..(bd + 3 * 2 - 2) {
       for _ in 0..40 {
-        let svar = rng.gen_range(0..(1 << scale));
-        let dvar = rng.gen_range(0..(1 << scale));
+        let svar = rng.random_range(0..(1 << scale));
+        let dvar = rng.random_range(0..(1 << scale));
 
         let float = reference_ssim_boost(svar, dvar, 12);
         let fixed =
