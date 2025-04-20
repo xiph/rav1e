@@ -251,6 +251,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c12d1856e42f0d817a835fe55853957c85c8c8a470114029143d3f12671446e"
 
 [[package]]
+name = "bitstream-io"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "680575de65ce8b916b82a447458b94a48776707d9c2681a9d8da351c06886a1f"
+dependencies = [
+ "core2",
+]
+
+[[package]]
 name = "bstr"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -440,6 +449,15 @@ dependencies = [
  "once_cell",
  "unicode-width",
  "windows-sys",
+]
+
+[[package]]
+name = "core2"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -984,7 +1002,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 name = "ivf"
 version = "0.1.3"
 dependencies = [
- "bitstream-io",
+ "bitstream-io 3.2.0",
 ]
 
 [[package]]
@@ -1503,7 +1521,7 @@ dependencies = [
  "av-metrics",
  "av1-grain",
  "backtrace",
- "bitstream-io",
+ "bitstream-io 2.3.0",
  "built",
  "byteorder",
  "cc",
