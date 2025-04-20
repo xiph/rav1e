@@ -610,7 +610,7 @@ fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
   for row in plane.data_origin_mut().chunks_mut(stride) {
     for pixel in row {
-      let v: u8 = ra.gen();
+      let v: u8 = ra.random();
       *pixel = T::cast_from(v);
     }
   }

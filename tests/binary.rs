@@ -2,8 +2,8 @@
 mod binary {
   use assert_cmd::Command;
   use interpolate_name::interpolate_test;
-  use rand::distributions::Alphanumeric;
-  use rand::{thread_rng, Rng};
+  use rand::distr::Alphanumeric;
+  use rand::{rng, Rng};
   use std::env::temp_dir;
   use std::fs::File;
   use std::io::Read;
@@ -22,7 +22,7 @@ mod binary {
 
   fn get_tempfile_path(extension: &str) -> PathBuf {
     let mut path = temp_dir();
-    let filename = thread_rng()
+    let filename = rng()
       .sample_iter(Alphanumeric)
       .take(12)
       .map(char::from)

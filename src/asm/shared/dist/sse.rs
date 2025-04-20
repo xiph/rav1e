@@ -16,10 +16,10 @@ pub mod test {
   use crate::rdo::DistortionScale;
   use crate::tiling::Area;
   use crate::util::*;
-  use rand::{thread_rng, Rng};
+  use rand::{rng, Rng};
 
   fn random_planes<T: Pixel>(bd: usize) -> (Plane<T>, Plane<T>) {
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     // Two planes with different strides
     let mut input_plane = Plane::new(640, 480, 0, 0, 128 + 8, 128 + 8);
@@ -27,13 +27,13 @@ pub mod test {
 
     for rows in input_plane.as_region_mut().rows_iter_mut() {
       for c in rows {
-        *c = T::cast_from(rng.gen_range(0u16..(1 << bd)));
+        *c = T::cast_from(rng.random_range(0u16..(1 << bd)));
       }
     }
 
     for rows in rec_plane.as_region_mut().rows_iter_mut() {
       for c in rows {
-        *c = T::cast_from(rng.gen_range(0u16..(1 << bd)));
+        *c = T::cast_from(rng.random_range(0u16..(1 << bd)));
       }
     }
 
@@ -70,10 +70,10 @@ pub mod test {
 
   /// Fill data for scaling of one
   fn scaling_random(scales: &mut [u32]) {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     for a in scales.iter_mut() {
       *a = rng
-        .gen_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
+        .random_range(DistortionScale::from(0.5).0..DistortionScale::from(1.5).0);
     }
   }
 

@@ -146,8 +146,8 @@ pretty_assertions = "1.4.0"
 interpolate_name = "0.2.4"
 nom = "7.1.3"
 quickcheck = "1.0"
-rand = "0.8"
-rand_chacha = "0.3"
+rand = "0.9"
+rand_chacha = "0.9"
 semver = "1.0"
 
 # Exclude dependencies and features that don't work on wasm32:

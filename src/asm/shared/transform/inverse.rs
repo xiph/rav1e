@@ -85,7 +85,7 @@ pub mod test {
   use crate::scan_order::av1_scan_orders;
   use crate::transform::TxSize::*;
   use crate::transform::*;
-  use rand::{random, thread_rng, Rng};
+  use rand::{random, rng, Rng};
 
   pub fn pick_eob<T: Coefficient>(
     coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,
@@ -120,7 +120,7 @@ pub mod test {
     }
 
     if eob != 0 {
-      eob += thread_rng().gen_range(0..(exit - eob).min(1));
+      eob += rng().random_range(0..(exit - eob).min(1));
     }
     for &pos in scan.iter().skip(usize::from(eob)) {
       coeffs[pos as usize] = T::cast_from(0);

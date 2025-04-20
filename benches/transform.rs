@@ -19,7 +19,7 @@ use std::mem::MaybeUninit;
 
 fn init_buffers(size: usize) -> (Vec<i32>, Vec<i32>) {
   let mut ra = ChaChaRng::from_seed([0; 32]);
-  let input: Vec<i32> = (0..size).map(|_| ra.gen()).collect();
+  let input: Vec<i32> = (0..size).map(|_| ra.random()).collect();
   let output = vec![0i32; size];
 
   (input, output)
@@ -80,7 +80,7 @@ pub fn av1_iadst8(c: &mut Criterion) {
 pub fn bench_forward_transforms(c: &mut Criterion) {
   let mut group = c.benchmark_group("forward_transform");
 
-  let mut rng = rand::thread_rng();
+  let mut rng = rand::rng();
   let cpu = CpuFeatureLevel::default();
 
   let tx_sizes = {
@@ -96,7 +96,7 @@ pub fn bench_forward_transforms(c: &mut Criterion) {
     let area = tx_size.area();
 
     let input: Vec<i16> =
-      (0..area).map(|_| rng.gen_range(-255..256)).collect();
+      (0..area).map(|_| rng.random_range(-255..256)).collect();
     let mut output = vec![MaybeUninit::new(0i16); area];
 
     for &tx_type in get_valid_txfm_types(tx_size) {

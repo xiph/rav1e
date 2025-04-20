@@ -159,11 +159,11 @@ unsafe fn dequantize_avx2(
 mod test {
   use super::*;
   use rand::distributions::{Distribution, Uniform};
-  use rand::{thread_rng, Rng};
+  use rand::{rng, Rng};
 
   #[test]
   fn dequantize_test() {
-    let mut rng = thread_rng();
+    let mut rng = rng();
 
     use TxSize::*;
     let tx_sizes = [
@@ -175,7 +175,7 @@ mod test {
     let bd: usize = 8;
 
     for &tx_size in &tx_sizes {
-      let qindex: u8 = rng.gen_range((MINQ as u8)..(MAXQ as u8));
+      let qindex: u8 = rng.random_range((MINQ as u8)..(MAXQ as u8));
       let dc_quant = dc_q(qindex, 0, bd).get() as i16;
       let ac_quant = ac_q(qindex, 0, bd).get() as i16;
 
@@ -186,7 +186,7 @@ mod test {
         out[0] = 0;
         out[1] = area as u16;
         for eob in out.iter_mut().skip(2) {
-          *eob = rng.gen_range(0..area as u16);
+          *eob = rng.random_range(0..area as u16);
         }
         out
       };

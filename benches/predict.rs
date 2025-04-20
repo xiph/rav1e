@@ -24,7 +24,7 @@ pub fn generate_block<T: Pixel>(rng: &mut ChaChaRng) -> (Plane<T>, Vec<i16>) {
     &vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
   );
-  let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.gen()).collect();
+  let ac: Vec<i16> = (0..(32 * 32)).map(|_| rng.random()).collect();
   (block, ac)
 }
 
