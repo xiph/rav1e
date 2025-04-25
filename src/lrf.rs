@@ -138,7 +138,7 @@ pub enum RestorationFilter {
 impl RestorationFilter {
   pub const fn notequal(self, cmp: RestorationFilter) -> bool {
     match self {
-      RestorationFilter::None {} => !matches!(cmp, RestorationFilter::None {}),
+      RestorationFilter::None => !matches!(cmp, RestorationFilter::None),
       RestorationFilter::Sgrproj { set, xqd } => {
         if let RestorationFilter::Sgrproj { set: set2, xqd: xqd2 } = cmp {
           !(set == set2 && xqd[0] == xqd2[0] && xqd[1] == xqd2[1])

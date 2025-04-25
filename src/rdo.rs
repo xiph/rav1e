@@ -2430,7 +2430,7 @@ pub fn rdo_loop_decision<T: Pixel, W: Writer>(
               } {
                 // We have a valid LRU, apply LRF, compute error
                 match best_lrf[lru_y * lru_w[pli] + lru_x][pli] {
-                  RestorationFilter::None {} => {
+                  RestorationFilter::None => {
                     err += rdo_loop_plane_error(
                       base_sbo,
                       loop_sbo,
