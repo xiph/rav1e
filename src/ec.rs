@@ -512,10 +512,10 @@ where
   ///
   /// - `s`: The index of the symbol to encode.
   /// - `cdf`: The CDF, such that symbol s falls in the range
-  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
-  ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be greater than 32704. There should be at most 16 values.
-  ///       The lower 6 bits of the last value hold the count.
+  ///   `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
+  ///   The values must be monotonically non-decreasing, and the last value
+  ///   must be greater than 32704. There should be at most 16 values.
+  ///   The lower 6 bits of the last value hold the count.
   #[inline(always)]
   fn symbol<const CDF_LEN: usize>(&mut self, s: u32, cdf: &[u16; CDF_LEN]) {
     debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));
@@ -541,10 +541,10 @@ where
   ///
   /// - `s`: The index of the symbol to encode.
   /// - `cdf`: The CDF, such that symbol s falls in the range
-  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
-  ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be greater 32704. There should be at most 16 values.
-  ///       The lower 6 bits of the last value hold the count.
+  ///   `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
+  ///   The values must be monotonically non-decreasing, and the last value
+  ///   must be greater 32704. There should be at most 16 values.
+  ///   The lower 6 bits of the last value hold the count.
   fn symbol_with_update<const CDF_LEN: usize>(
     &mut self, s: u32, cdf: CDFOffset<CDF_LEN>, log: &mut CDFContextLog,
     fc: &mut CDFContext,
@@ -565,10 +565,10 @@ where
   ///
   /// - `s`: The index of the symbol to encode.
   /// - `cdf`: The CDF, such that symbol s falls in the range
-  ///        `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
-  ///       The values must be monotonically non-decreasing, and the last value
-  ///       must be greater than 32704. There should be at most 16 values.
-  ///       The lower 6 bits of the last value hold the count.
+  ///   `[s > 0 ? cdf[s - 1] : 0, cdf[s])`.
+  ///   The values must be monotonically non-decreasing, and the last value
+  ///   must be greater than 32704. There should be at most 16 values.
+  ///   The lower 6 bits of the last value hold the count.
   fn symbol_bits(&self, s: u32, cdf: &[u16]) -> u32 {
     let mut bits = 0;
     debug_assert!(cdf[cdf.len() - 1] < (1 << EC_PROB_SHIFT));

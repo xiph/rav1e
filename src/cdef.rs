@@ -603,8 +603,8 @@ pub fn cdef_filter_tile<T: Pixel>(
 
   // No need to guard against having fewer actual coded blocks than
   // the output.rect() area.  Inner code already guards this case.
-  let fb_width = (output.planes[0].rect().width + 63) / 64;
-  let fb_height = (output.planes[0].rect().height + 63) / 64;
+  let fb_width = output.planes[0].rect().width.div_ceil(64);
+  let fb_height = output.planes[0].rect().height.div_ceil(64);
 
   // should parallelize this
   for fby in 0..fb_height {

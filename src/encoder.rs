@@ -3335,7 +3335,7 @@ fn encode_tile_group<T: Pixel>(
     fs.cdfs.reset_counts();
   }
 
-  let max_tile_size_bytes = ((ILog::ilog(max_len) + 7) / 8) as u32;
+  let max_tile_size_bytes = ILog::ilog(max_len).div_ceil(8) as u32;
   debug_assert!(max_tile_size_bytes > 0 && max_tile_size_bytes <= 4);
   fs.max_tile_size_bytes = max_tile_size_bytes;
 
