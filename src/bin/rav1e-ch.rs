@@ -291,7 +291,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   #[cfg(feature = "tracing")]
   {
-    use tracing_subscriber::layer::subscriberext;
+    use tracing_subscriber::layer::SubscriberExt;
     tracing::subscriber::set_global_default(
       tracing_subscriber::registry().with(chrome_layer),
     )

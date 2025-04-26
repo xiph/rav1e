@@ -357,6 +357,7 @@ pub struct ParsedCliOptions {
   pub save_config: Option<PathBuf>,
   pub photon_noise: u8,
   #[cfg(feature = "unstable")]
+  #[allow(unused)]
   pub slots: usize,
   pub force_highbitdepth: bool,
 }
