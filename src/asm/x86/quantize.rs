@@ -158,7 +158,7 @@ unsafe fn dequantize_avx2(
 #[cfg(test)]
 mod test {
   use super::*;
-  use rand::distributions::{Distribution, Uniform};
+  use rand::distr::{Distribution, Uniform};
   use rand::{rng, Rng};
 
   #[test]
@@ -196,7 +196,8 @@ mod test {
         let mut rcoeffs = Aligned::new([MaybeUninit::new(0i16); 32 * 32]);
 
         // Generate quantized coefficients up to the eob
-        let between = Uniform::from(-i16::MAX..=i16::MAX);
+        // SAFETY: always correct
+        let between = Uniform::new_inclusive(-i16::MAX, i16::MAX).unwrap();
         for (i, qcoeff) in
           qcoeffs.data.iter_mut().enumerate().take(eob as usize)
         {
