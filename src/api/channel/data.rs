@@ -15,7 +15,7 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::util::Pixel;
 
-use bitstream_io::*;
+use bitstream_io::{BigEndian, BitWrite2, BitWriter};
 use crossbeam::channel::{Receiver, Sender};
 use thiserror::Error;
 
