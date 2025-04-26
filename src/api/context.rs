@@ -12,7 +12,7 @@ use std::fmt;
 use std::io;
 use std::sync::Arc;
 
-use bitstream_io::*;
+use bitstream_io::{BigEndian, BitWrite2, BitWriter};
 
 use crate::api::color::*;
 use crate::api::config::*;
