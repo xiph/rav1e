@@ -29,7 +29,6 @@ pub use data::{
 };
 
 mod by_gop;
-pub use by_gop::*;
 
 impl Config {
   pub(crate) fn setup<T: Pixel>(
