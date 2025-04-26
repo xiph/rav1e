@@ -23,7 +23,7 @@ use crate::SegmentationState;
 use crate::Sequence;
 
 use arrayvec::ArrayVec;
-use bitstream_io::{BigEndian, BitWrite, BitWriter, LittleEndian};
+use bitstream_io::{BigEndian, BitWrite2, BitWriter, LittleEndian};
 
 use std::io;
 
@@ -887,7 +887,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if !grain_params.scaling_points_y.is_empty() {
           num_pos_chroma = num_pos_luma + 1;
           for i in 0..num_pos_luma {
-            self.write(8, grain_params.ar_coeffs_y[i] as i16 + 128)?;
+            self.write(8, (grain_params.ar_coeffs_y[i] as i16 + 128) as u8)?;
           }
         } else {
           num_pos_chroma = num_pos_luma;
@@ -897,14 +897,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           || !grain_params.scaling_points_cb.is_empty()
         {
           for i in 0..num_pos_chroma {
-            self.write(8, grain_params.ar_coeffs_cb[i] as i16 + 128)?;
+            self
+              .write(8, (grain_params.ar_coeffs_cb[i] as i16 + 128) as u8)?;
           }
         }
         if chroma_scaling_from_luma
           || !grain_params.scaling_points_cr.is_empty()
         {
           for i in 0..num_pos_chroma {
-            self.write(8, grain_params.ar_coeffs_cr[i] as i16 + 128)?;
+            self
+              .write(8, (grain_params.ar_coeffs_cr[i] as i16 + 128) as u8)?;
           }
         }
 

@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::context::{CDFContext, CDFContextLog, CDFOffset};
-use bitstream_io::{BigEndian, BitWrite, BitWriter};
+use bitstream_io::{BigEndian, BitWrite2, BitWriter};
 use std::io;
 
 pub const OD_BITRES: u8 = 3;
