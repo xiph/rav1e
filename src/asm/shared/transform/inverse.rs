@@ -200,7 +200,7 @@ pub mod test {
 
   macro_rules! test_itx_fns {
     ([$([$(($ENUM:expr, $TYPE1:ident, $TYPE2:ident)),*]),*], $W:expr, $H:expr) => {
-      paste::item! {
+      pastey::item! {
         $(
           $(
             #[test]

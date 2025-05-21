@@ -246,7 +246,7 @@ fn speed(s: u8, decoder: &str) {
 macro_rules! test_speeds {
   ($($S:expr),+) => {
     $(
-        paste::item!{
+        pastey::item!{
             #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
             #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
             #[ignore]
@@ -263,7 +263,7 @@ test_speeds! { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
 macro_rules! test_dimensions {
   ($(($W:expr, $H:expr)),+) => {
     $(
-        paste::item!{
+        pastey::item!{
             #[cfg_attr(feature = "decode_test", interpolate_name::interpolate_test(aom, "aom"))]
             #[cfg_attr(feature = "decode_test_dav1d", interpolate_name::interpolate_test(dav1d, "dav1d"))]
             fn [<dimension_ $W x $H>](decoder: &str) {
@@ -370,7 +370,7 @@ fn quantizer(decoder: &str, q: usize) {
 macro_rules! test_quantizer {
   ($($Q:expr),+) => {
     $(
-      paste::item!{
+      pastey::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         fn [<quantizer_ $Q>](decoder: &str) {
@@ -719,7 +719,7 @@ fn high_bit_depth(decoder: &str, depth: usize) {
 macro_rules! test_high_bit_depth {
   ($($B:expr),+) => {
     $(
-      paste::item!{
+      pastey::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         #[ignore]
@@ -750,7 +750,7 @@ fn chroma_sampling(decoder: &str, cs: ChromaSampling) {
 macro_rules! test_chroma_sampling {
   ($(($S:expr, $I:expr)),+) => {
     $(
-      paste::item!{
+      pastey::item!{
         #[cfg_attr(feature = "decode_test", interpolate_test(aom, "aom"))]
         #[cfg_attr(feature = "decode_test_dav1d", interpolate_test(dav1d, "dav1d"))]
         #[ignore]
