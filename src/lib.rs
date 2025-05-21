@@ -35,6 +35,7 @@
 //! [`Context::receive_packet`]: struct.Context.html#method.receive_packet
 
 #![allow(missing_abi)]
+#![allow(unused_unsafe)]
 
 #[macro_use]
 extern crate log; // Override assert! and assert_eq! in tests
