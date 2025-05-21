@@ -11,6 +11,7 @@ use super::*;
 use crate::test_encode_decode::{compare_plane, DecodeResult, TestDecoder};
 use crate::util::Pixel;
 use aom_sys::*;
+use log::debug;
 use std::collections::VecDeque;
 use std::ffi::CStr;
 use std::marker::PhantomData;
