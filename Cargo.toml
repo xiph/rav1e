@@ -55,7 +55,6 @@ tracing = [
   "tracing-chrome",
   "dep:tracing",
 ]
-scenechange = []
 serialize = [
   "serde",
   "toml",
@@ -78,6 +77,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
+av-scenechange = { version = "0.14.1", default-features = false }
 bitstream-io = "4.1.0"
 cfg-if = "1.0"
 clap = { version = "4.5", optional = true, default-features = false, features = [

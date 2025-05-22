@@ -14,7 +14,6 @@ use crate::api::{
   EncoderConfig, EncoderStatus, FrameType, Opaque, Packet, T35,
 };
 use crate::color::ChromaSampling::Cs400;
-use crate::cpu_features::CpuFeatureLevel;
 use crate::dist::get_satd;
 use crate::encoder::*;
 use crate::frame::*;
@@ -23,11 +22,11 @@ use crate::rate::{
   RCState, FRAME_NSUBTYPES, FRAME_SUBTYPE_I, FRAME_SUBTYPE_P,
   FRAME_SUBTYPE_SEF,
 };
-use crate::scenechange::SceneChangeDetector;
 use crate::stats::EncoderStats;
 use crate::tiling::Area;
 use crate::util::Pixel;
 use arrayvec::ArrayVec;
+use av_scenechange::SceneChangeDetector;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -274,6 +273,31 @@ impl<T: Pixel> ContextInner<T> {
     let seq = Arc::new(Sequence::new(enc));
     let inter_cfg = InterConfig::new(enc);
     let lookahead_distance = inter_cfg.keyframe_lookahead_distance() as usize;
+    let mut keyframe_detector = SceneChangeDetector::new(
+      (enc.width, enc.height),
+      enc.bit_depth,
+      av_scenechange::Rational32::new(
+        enc.time_base.den as i32,
+        enc.time_base.num as i32,
+      ),
+      enc.chroma_sampling,
+      lookahead_distance,
+      match enc.speed_settings.scene_detection_mode {
+        super::SceneDetectionSpeed::Fast => {
+          av_scenechange::SceneDetectionSpeed::Fast
+        }
+        super::SceneDetectionSpeed::Standard => {
+          av_scenechange::SceneDetectionSpeed::Standard
+        }
+        super::SceneDetectionSpeed::None => {
+          av_scenechange::SceneDetectionSpeed::None
+        }
+      },
+      enc.min_key_frame_interval as usize,
+      enc.max_key_frame_interval as usize,
+      av_scenechange::CpuFeatureLevel::default(),
+    );
+    keyframe_detector.enable_cache();
 
     ContextInner {
       frame_count: 0,
@@ -288,12 +312,7 @@ impl<T: Pixel> ContextInner<T> {
       packet_data,
       gop_output_frameno_start: BTreeMap::new(),
       gop_input_frameno_start: BTreeMap::new(),
-      keyframe_detector: SceneChangeDetector::new(
-        enc.clone(),
-        CpuFeatureLevel::default(),
-        lookahead_distance,
-        seq.clone(),
-      ),
+      keyframe_detector,
       config: Arc::new(enc.clone()),
       seq,
       rc_state: RCState::new(
@@ -840,19 +859,16 @@ impl<T: Pixel> ContextInner<T> {
       .lookahead_intra_costs = self
       .keyframe_detector
       .intra_costs
-      .remove(&fi.input_frameno)
+      .as_mut()
+      .and_then(|intra_costs| intra_costs.remove(&(fi.input_frameno as usize)))
       .unwrap_or_else(|| {
-        let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
-
-        let temp_plane = self
-          .keyframe_detector
-          .temp_plane
-          .get_or_insert_with(|| frame.planes[0].clone());
-
-        // We use the cached values from scenechange if available,
+        // We use the cached values from scenechange above if available,
         // otherwise we need to calculate them here.
+        let frame = self.frame_q[&fi.input_frameno].as_ref().unwrap();
+        let mut temp_plane = frame.planes[0].clone();
+
         estimate_intra_costs(
-          temp_plane,
+          &mut temp_plane,
           &**frame,
           fi.sequence.bit_depth,
           fi.cpu_feature_level,
@@ -869,8 +885,8 @@ impl<T: Pixel> ContextInner<T> {
     if keyframes_forced.contains(next_lookahead_frame)
       || keyframe_detector.analyze_next_frame(
         lookahead_frames,
-        *next_lookahead_frame,
-        *keyframes.iter().last().unwrap(),
+        *next_lookahead_frame as usize,
+        *keyframes.iter().last().unwrap() as usize,
       )
     {
       keyframes.insert(*next_lookahead_frame);
