@@ -23,7 +23,7 @@ use crate::SegmentationState;
 use crate::Sequence;
 
 use arrayvec::ArrayVec;
-use bitstream_io::{BigEndian, BitWrite2, BitWriter, LittleEndian};
+use bitstream_io::{BigEndian, BitWrite, BitWriter, LittleEndian};
 
 use std::io;
 
@@ -116,9 +116,8 @@ impl<W: io::Write> ULEB128Writer for BitWriter<W, BigEndian> {
       }
     }
 
-    for byte in coded_value {
-      self.write(8, byte)?;
-    }
+    self.write_bytes(&coded_value)?;
+
     Ok(())
   }
 }
@@ -132,7 +131,7 @@ impl<W: io::Write> LEWriter for BitWriter<W, BigEndian> {
   fn write_le(&mut self, bytes: u32, value: u64) -> io::Result<()> {
     let mut data = Vec::new();
     let mut bwle = BitWriter::endian(&mut data, LittleEndian);
-    bwle.write(bytes * 8, value)?;
+    bwle.write_var(bytes * 8, value)?;
     self.write_bytes(&data)
   }
 }
@@ -196,7 +195,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     &mut self, obu_type: ObuType, obu_extension: u32,
   ) -> io::Result<()> {
     self.write_bit(false)?; // forbidden bit.
-    self.write(4, obu_type as u32)?;
+    self.write::<4, u8>(obu_type as u8)?;
     self.write_bit(obu_extension != 0)?;
     self.write_bit(true)?; // obu_has_payload_length_field
     self.write_bit(false)?; // reserved
@@ -227,21 +226,21 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     match obu_meta_type {
       ObuMetaType::OBU_META_HDR_CLL => {
         let cll = seq.content_light.unwrap();
-        self.write(16, cll.max_content_light_level)?;
-        self.write(16, cll.max_frame_average_light_level)?;
+        self.write::<16, u16>(cll.max_content_light_level)?;
+        self.write::<16, u16>(cll.max_frame_average_light_level)?;
       }
       ObuMetaType::OBU_META_HDR_MDCV => {
         let mdcv = seq.mastering_display.unwrap();
         for i in 0..3 {
-          self.write(16, mdcv.primaries[i].x)?;
-          self.write(16, mdcv.primaries[i].y)?;
+          self.write::<16, u16>(mdcv.primaries[i].x)?;
+          self.write::<16, u16>(mdcv.primaries[i].y)?;
         }
 
-        self.write(16, mdcv.white_point.x)?;
-        self.write(16, mdcv.white_point.y)?;
+        self.write::<16, u16>(mdcv.white_point.x)?;
+        self.write::<16, u16>(mdcv.white_point.y)?;
 
-        self.write(32, mdcv.max_luminance)?;
-        self.write(32, mdcv.min_luminance)?;
+        self.write::<32, u32>(mdcv.max_luminance)?;
+        self.write::<32, u32>(mdcv.min_luminance)?;
       }
       _ => {}
     }
@@ -263,9 +262,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
     self.write_uleb128(ObuMetaType::OBU_META_ITUT_T35 as u64)?;
 
-    self.write(8, t35.country_code)?;
+    self.write::<8, u8>(t35.country_code)?;
     if t35.country_code == 0xFF {
-      self.write(8, t35.country_code_extension_byte)?;
+      self.write::<8, u8>(t35.country_code_extension_byte)?;
     }
     self.write_bytes(&t35.data)?;
 
@@ -283,7 +282,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       !fi.sequence.reduced_still_picture_hdr || fi.sequence.still_picture
     );
 
-    self.write(3, fi.sequence.profile)?; // profile
+    self.write::<3, u8>(fi.sequence.profile)?; // profile
     self.write_bit(fi.sequence.still_picture)?; // still_picture
     self.write_bit(fi.sequence.reduced_still_picture_hdr)?; // reduced_still_picture_header
 
@@ -293,14 +292,14 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       assert!(!fi.sequence.decoder_model_info_present_flag);
       assert_eq!(fi.sequence.operating_points_cnt_minus_1, 0);
       assert_eq!(fi.sequence.operating_point_idc[0], 0);
-      self.write(5, fi.sequence.level_idx[0])?; // level
+      self.write::<5, u8>(fi.sequence.level_idx[0])?; // level
       assert_eq!(fi.sequence.tier[0], 0);
     } else {
       self.write_bit(fi.sequence.timing_info_present)?; // timing info present
 
       if fi.sequence.timing_info_present {
-        self.write(32, fi.sequence.time_base.num)?;
-        self.write(32, fi.sequence.time_base.den)?;
+        self.write::<32, u64>(fi.sequence.time_base.num)?;
+        self.write::<32, u64>(fi.sequence.time_base.den)?;
 
         self.write_bit(true)?; // equal picture interval
         self.write_bit(true)?; // zero interval
@@ -308,11 +307,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       }
 
       self.write_bit(false)?; // initial display delay present flag
-      self.write(5, 0)?; // one operating point
-      self.write(12, 0)?; // idc
-      self.write(5, fi.sequence.level_idx[0])?; // level
+      self.write::<5, u8>(0)?; // one operating point
+      self.write::<12, u16>(0)?; // idc
+      self.write::<5, u8>(fi.sequence.level_idx[0])?; // level
       if fi.sequence.level_idx[0] > 7 {
-        self.write(1, 0)?; // tier
+        self.write::<1, u8>(0)?; // tier
       }
     }
 
@@ -342,8 +341,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       // We must always have delta_frame_id_length < frame_id_length,
       // in order for a frame to be referenced with a unique delta.
       // Avoid wasting bits by using a coding that enforces this restriction.
-      self.write(4, seq.delta_frame_id_length - 2)?;
-      self.write(3, seq.frame_id_length - seq.delta_frame_id_length - 1)?;
+      self.write::<4, u32>(seq.delta_frame_id_length - 2)?;
+      self.write::<3, u32>(
+        seq.frame_id_length - seq.delta_frame_id_length - 1,
+      )?;
     }
 
     self.write_bit(seq.use_128x128_superblock)?;
@@ -389,7 +390,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(seq.force_integer_mv == 2);
       }
       if seq.enable_order_hint {
-        self.write(3, seq.order_hint_bits_minus_1)?;
+        self.write::<3, u32>(seq.order_hint_bits_minus_1)?;
       }
     }
 
@@ -419,9 +420,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(seq.color_description.is_some())?;
     let mut srgb_triple = false;
     if let Some(color_description) = seq.color_description {
-      self.write(8, color_description.color_primaries as u8)?;
-      self.write(8, color_description.transfer_characteristics as u8)?;
-      self.write(8, color_description.matrix_coefficients as u8)?;
+      self.write::<8, _>(color_description.color_primaries as u8)?;
+      self.write::<8, _>(color_description.transfer_characteristics as u8)?;
+      self.write::<8, _>(color_description.matrix_coefficients as u8)?;
       srgb_triple = color_description.is_srgb_triple();
     }
 
@@ -449,7 +450,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         assert!(seq.chroma_sampling == ChromaSampling::Cs422);
       }
       if seq.chroma_sampling == ChromaSampling::Cs420 {
-        self.write(2, seq.chroma_sample_position as u32)?;
+        self.write::<2, u8>(seq.chroma_sample_position as u8)?;
       }
     }
     self.write_bit(true)?; // separate_uv_delta_q
@@ -471,7 +472,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       self.write_bit(fi.is_show_existing_frame())?;
 
       if fi.is_show_existing_frame() {
-        self.write(3, fi.frame_to_show_map_idx)?;
+        self.write::<3, u32>(fi.frame_to_show_map_idx)?;
 
         //TODO:
         /* temporal_point_info();
@@ -488,7 +489,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         return Ok(());
       }
 
-      self.write(2, fi.frame_type as u32)?;
+      self.write::<2, u8>(fi.frame_type as u8)?;
       self.write_bit(fi.show_frame)?; // show frame
 
       if fi.show_frame {
@@ -553,11 +554,11 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.sequence.enable_order_hint {
       let n = fi.sequence.order_hint_bits_minus_1 + 1;
       let mask = (1 << n) - 1;
-      self.write(n, fi.order_hint & mask)?;
+      self.write_var(n, fi.order_hint & mask)?;
     }
 
     if !fi.error_resilient && !fi.intra_only {
-      self.write(PRIMARY_REF_BITS, fi.primary_ref_frame)?;
+      self.write::<PRIMARY_REF_BITS, u32>(fi.primary_ref_frame)?;
     }
 
     if fi.sequence.decoder_model_info_present_flag {
@@ -568,7 +569,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if !fi.show_frame {
         // unshown keyframe (forward keyframe)
         unimplemented!();
-        self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+        self.write_var(REF_FRAMES as u32, fi.refresh_frame_flags)?;
       } else {
         assert!(fi.refresh_frame_flags == ALL_REF_FRAMES_MASK);
       }
@@ -581,7 +582,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       } else {
         // TODO: This should be set once inter mode is used
       }
-      self.write(REF_FRAMES as u32, fi.refresh_frame_flags)?;
+      self.write_var(REF_FRAMES as u32, fi.refresh_frame_flags)?;
     };
 
     if (!fi.intra_only || fi.refresh_frame_flags != ALL_REF_FRAMES_MASK) {
@@ -592,9 +593,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           let mask = (1 << n) - 1;
           if let Some(ref rec) = fi.rec_buffer.frames[i] {
             let ref_hint = rec.order_hint;
-            self.write(n, ref_hint & mask)?;
+            self.write_var(n, ref_hint & mask)?;
           } else {
-            self.write(n, 0)?;
+            self.write_var(n, 0)?;
           }
         }
       }
@@ -623,7 +624,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       for i in 0..INTER_REFS_PER_FRAME {
         if !frame_refs_short_signaling {
-          self.write(REF_FRAMES_LOG2 as u32, fi.ref_frames[i])?;
+          self.write_var(REF_FRAMES_LOG2 as u32, fi.ref_frames[i])?;
         }
         if fi.sequence.frame_id_numbers_present_flag {
           unimplemented!();
@@ -643,7 +644,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
 
       self.write_bit(fi.is_filter_switchable)?;
       if !fi.is_filter_switchable {
-        self.write(2, fi.default_filter as u8)?;
+        self.write::<2, u8>(fi.default_filter as u8)?;
       }
       self.write_bit(fi.is_motion_mode_switchable)?;
 
@@ -728,15 +729,15 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if tiles_log2 > 0 {
       // context_update_tile_id
       // for now, always use the first tile CDF
-      self.write(tiles_log2 as u32, fs.context_update_tile_id as u32)?;
+      self.write_var(tiles_log2 as u32, fs.context_update_tile_id as u32)?;
 
       // tile_size_bytes_minus_1
-      self.write(2, fs.max_tile_size_bytes - 1);
+      self.write::<2, u32>(fs.max_tile_size_bytes - 1)?;
     }
 
     // quantization
     assert!(fi.base_q_idx > 0);
-    self.write(8, fi.base_q_idx)?; // base_q_idx
+    self.write::<8, u8>(fi.base_q_idx)?; // base_q_idx
     self.write_delta_q(fi.dc_delta_q[0])?;
     if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
       assert!(fi.ac_delta_q[0] == 0);
@@ -839,7 +840,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if let Some(grain_params) = fi.film_grain_params() {
         // Apply grain
         self.write_bit(true)?;
-        self.write(16, grain_params.random_seed)?;
+        self.write::<16, u16>(grain_params.random_seed)?;
         if fi.frame_type == FrameType::INTER {
           // For the purposes of photon noise,
           // it's simpler to always update the params,
@@ -847,10 +848,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           self.write_bit(true)?;
         }
 
-        self.write(4, grain_params.scaling_points_y.len() as u8)?;
+        self.write::<4, u8>(grain_params.scaling_points_y.len() as u8)?;
         for point in &grain_params.scaling_points_y {
-          self.write(8, point[0])?;
-          self.write(8, point[1])?;
+          self.write::<8, u8>(point[0])?;
+          self.write::<8, u8>(point[1])?;
         }
 
         let chroma_scaling_from_luma =
@@ -865,20 +866,20 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           || (fi.sequence.chroma_sampling == ChromaSampling::Cs420
             && grain_params.scaling_points_y.is_empty()))
         {
-          self.write(4, grain_params.scaling_points_cb.len() as u8)?;
+          self.write::<4, u8>(grain_params.scaling_points_cb.len() as u8)?;
           for point in &grain_params.scaling_points_cb {
-            self.write(8, point[0])?;
-            self.write(8, point[1])?;
+            self.write::<8, u8>(point[0])?;
+            self.write::<8, u8>(point[1])?;
           }
-          self.write(4, grain_params.scaling_points_cr.len() as u8)?;
+          self.write::<4, u8>(grain_params.scaling_points_cr.len() as u8)?;
           for point in &grain_params.scaling_points_cr {
-            self.write(8, point[0])?;
-            self.write(8, point[1])?;
+            self.write::<8, u8>(point[0])?;
+            self.write::<8, u8>(point[1])?;
           }
         }
 
-        self.write(2, grain_params.scaling_shift - 8)?;
-        self.write(2, grain_params.ar_coeff_lag)?;
+        self.write::<2, u8>(grain_params.scaling_shift - 8)?;
+        self.write::<2, u8>(grain_params.ar_coeff_lag)?;
 
         let mut num_pos_luma =
           (2 * grain_params.ar_coeff_lag * (grain_params.ar_coeff_lag + 1))
@@ -887,7 +888,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         if !grain_params.scaling_points_y.is_empty() {
           num_pos_chroma = num_pos_luma + 1;
           for i in 0..num_pos_luma {
-            self.write(8, (grain_params.ar_coeffs_y[i] as i16 + 128) as u8)?;
+            self.write::<8, u8>(
+              (grain_params.ar_coeffs_y[i] as i16 + 128) as u8,
+            )?;
           }
         } else {
           num_pos_chroma = num_pos_luma;
@@ -897,30 +900,32 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           || !grain_params.scaling_points_cb.is_empty()
         {
           for i in 0..num_pos_chroma {
-            self
-              .write(8, (grain_params.ar_coeffs_cb[i] as i16 + 128) as u8)?;
+            self.write::<8, u8>(
+              (grain_params.ar_coeffs_cb[i] as i16 + 128) as u8,
+            )?;
           }
         }
         if chroma_scaling_from_luma
           || !grain_params.scaling_points_cr.is_empty()
         {
           for i in 0..num_pos_chroma {
-            self
-              .write(8, (grain_params.ar_coeffs_cr[i] as i16 + 128) as u8)?;
+            self.write::<8, u8>(
+              (grain_params.ar_coeffs_cr[i] as i16 + 128) as u8,
+            )?;
           }
         }
 
-        self.write(2, grain_params.ar_coeff_shift - 6)?;
-        self.write(2, grain_params.grain_scale_shift)?;
+        self.write::<2, u8>(grain_params.ar_coeff_shift - 6)?;
+        self.write::<2, u8>(grain_params.grain_scale_shift)?;
         if !grain_params.scaling_points_cb.is_empty() {
-          self.write(8, grain_params.cb_mult)?;
-          self.write(8, grain_params.cb_luma_mult)?;
-          self.write(9, grain_params.cb_offset)?;
+          self.write::<8, u8>(grain_params.cb_mult)?;
+          self.write::<8, u8>(grain_params.cb_luma_mult)?;
+          self.write::<9, u16>(grain_params.cb_offset)?;
         }
         if !grain_params.scaling_points_cr.is_empty() {
-          self.write(8, grain_params.cr_mult)?;
-          self.write(8, grain_params.cr_luma_mult)?;
-          self.write(9, grain_params.cr_offset)?;
+          self.write::<8, u8>(grain_params.cr_mult)?;
+          self.write::<8, u8>(grain_params.cr_luma_mult)?;
+          self.write::<9, u16>(grain_params.cr_offset)?;
         }
         self.write_bit(grain_params.overlap_flag)?;
         self.write_bit(fi.sequence.pixel_range == PixelRange::Limited)?;
@@ -950,10 +955,10 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     let height_bits = log_in_base_2(height as u32) as u32 + 1;
     assert!(width_bits <= 16);
     assert!(height_bits <= 16);
-    self.write(4, width_bits - 1)?;
-    self.write(4, height_bits - 1)?;
-    self.write(width_bits, width as u16)?;
-    self.write(height_bits, height as u16)?;
+    self.write::<4, u32>(width_bits - 1)?;
+    self.write::<4, u32>(height_bits - 1)?;
+    self.write_var(width_bits, width as u16)?;
+    self.write_var(height_bits, height as u16)?;
     Ok(())
   }
 
@@ -969,8 +974,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       let height_bits = log_in_base_2(height as u32) as u32 + 1;
       assert!(width_bits <= 16);
       assert!(height_bits <= 16);
-      self.write(width_bits, width as u16)?;
-      self.write(height_bits, height as u16)?;
+      self.write_var(width_bits, width as u16)?;
+      self.write_var(height_bits, height as u16)?;
     }
     if fi.sequence.enable_superres {
       unimplemented!();
@@ -983,8 +988,8 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
   ) -> io::Result<()> {
     self.write_bit(fi.render_and_frame_size_different)?;
     if fi.render_and_frame_size_different {
-      self.write(16, fi.render_width - 1)?;
-      self.write(16, fi.render_height - 1)?;
+      self.write::<16, u32>(fi.render_width - 1)?;
+      self.write::<16, u32>(fi.render_height - 1)?;
     }
     Ok(())
   }
@@ -1027,7 +1032,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
         self.write_bit(deblock.block_deltas_enabled)?;
       }
       if deblock.block_deltas_enabled {
-        self.write(2, deblock.block_delta_shift)?;
+        self.write::<2, u8>(deblock.block_delta_shift)?;
         self.write_bit(deblock.block_delta_multi)?;
       }
     }
@@ -1043,16 +1048,16 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       MAX_PLANES
     };
     assert!(deblock.levels[0] < 64);
-    self.write(6, deblock.levels[0])?; // loop deblocking filter level 0
+    self.write::<6, u8>(deblock.levels[0])?; // loop deblocking filter level 0
     assert!(deblock.levels[1] < 64);
-    self.write(6, deblock.levels[1])?; // loop deblocking filter level 1
+    self.write::<6, u8>(deblock.levels[1])?; // loop deblocking filter level 1
     if planes > 1 && (deblock.levels[0] > 0 || deblock.levels[1] > 0) {
       assert!(deblock.levels[2] < 64);
-      self.write(6, deblock.levels[2])?; // loop deblocking filter level 2
+      self.write::<6, u8>(deblock.levels[2])?; // loop deblocking filter level 2
       assert!(deblock.levels[3] < 64);
-      self.write(6, deblock.levels[3])?; // loop deblocking filter level 3
+      self.write::<6, u8>(deblock.levels[3])?; // loop deblocking filter level 3
     }
-    self.write(3, deblock.sharpness)?; // deblocking filter sharpness
+    self.write::<3, u8>(deblock.sharpness)?; // deblocking filter sharpness
     self.write_bit(deblock.deltas_enabled)?; // loop deblocking filter deltas enabled
     if deblock.deltas_enabled {
       self.write_bit(deblock.delta_updates_enabled)?; // deltas updates enabled
@@ -1069,7 +1074,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           let update = deblock.ref_deltas[i] != prev_ref_deltas[i];
           self.write_bit(update)?;
           if update {
-            self.write_signed(7, deblock.ref_deltas[i])?;
+            self.write_signed::<7, i8>(deblock.ref_deltas[i])?;
           }
         }
         // conditionally write mode delta updates
@@ -1084,7 +1089,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
           let update = deblock.mode_deltas[i] != prev_mode_deltas[i];
           self.write_bit(update)?;
           if update {
-            self.write_signed(7, deblock.mode_deltas[i])?;
+            self.write_signed::<7, i8>(deblock.mode_deltas[i])?;
           }
         }
       }
@@ -1098,15 +1103,15 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     if fi.sequence.enable_cdef && !fi.allow_intrabc {
       assert!(fi.cdef_damping >= 3);
       assert!(fi.cdef_damping <= 6);
-      self.write(2, fi.cdef_damping - 3)?;
+      self.write::<2, u8>(fi.cdef_damping - 3)?;
       assert!(fi.cdef_bits < 4);
-      self.write(2, fi.cdef_bits)?; // cdef bits
+      self.write::<2, u8>(fi.cdef_bits)?; // cdef bits
       for i in 0..(1 << fi.cdef_bits) {
         assert!(fi.cdef_y_strengths[i] < 64);
         assert!(fi.cdef_uv_strengths[i] < 64);
-        self.write(6, fi.cdef_y_strengths[i])?; // cdef y strength
+        self.write::<6, u8>(fi.cdef_y_strengths[i])?; // cdef y strength
         if fi.sequence.chroma_sampling != ChromaSampling::Cs400 {
-          self.write(6, fi.cdef_uv_strengths[i])?; // cdef uv strength
+          self.write::<6, u8>(fi.cdef_uv_strengths[i])?; // cdef uv strength
         }
       }
     }
@@ -1126,7 +1131,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       let mut use_lrf = false;
       let mut use_chroma_lrf = false;
       for i in 0..planes {
-        self.write(2, rs.planes[i].cfg.lrf_type)?; // filter type by plane
+        self.write::<2, u8>(rs.planes[i].cfg.lrf_type)?; // filter type by plane
         if rs.planes[i].cfg.lrf_type != RESTORE_NONE {
           use_lrf = true;
           if i > 0 {
@@ -1137,20 +1142,19 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
       if use_lrf {
         // The Y shift value written here indicates shift up from superblock size
         if !fi.sequence.use_128x128_superblock {
-          self.write(1, u8::from(rs.planes[0].cfg.unit_size > 64))?;
+          self.write::<1, u8>(u8::from(rs.planes[0].cfg.unit_size > 64))?;
         }
 
         if rs.planes[0].cfg.unit_size > 64 {
-          self.write(1, u8::from(rs.planes[0].cfg.unit_size > 128))?;
+          self.write::<1, u8>(u8::from(rs.planes[0].cfg.unit_size > 128))?;
         }
 
         if use_chroma_lrf
           && fi.sequence.chroma_sampling == ChromaSampling::Cs420
         {
-          self.write(
-            1,
-            u8::from(rs.planes[0].cfg.unit_size > rs.planes[1].cfg.unit_size),
-          )?;
+          self.write::<1, u8>(u8::from(
+            rs.planes[0].cfg.unit_size > rs.planes[1].cfg.unit_size,
+          ))?;
         }
       }
     }
@@ -1182,9 +1186,9 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
               let bits = seg_feature_bits[j];
               let data = segmentation.data[i][j];
               if seg_feature_is_signed[j] {
-                self.write_signed(bits + 1, data)?;
+                self.write_signed_var(bits + 1, data)?;
               } else {
-                self.write(bits, data)?;
+                self.write_var(bits, data)?;
               }
             }
           }
@@ -1198,7 +1202,7 @@ impl<W: io::Write> UncompressedHeader for BitWriter<W, BigEndian> {
     self.write_bit(delta_q != 0)?;
     if delta_q != 0 {
       assert!((-63..=63).contains(&delta_q));
-      self.write_signed(6 + 1, delta_q)?;
+      self.write_signed::<7, i8>(delta_q)?;
     }
     Ok(())
   }

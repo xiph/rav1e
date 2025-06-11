@@ -15,7 +15,7 @@ use std::{fmt, io, mem};
 
 use arg_enum_proc_macro::ArgEnum;
 use arrayvec::*;
-use bitstream_io::{BigEndian, BitWrite2, BitWriter};
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use rayon::iter::*;
 
 use crate::activity::*;
