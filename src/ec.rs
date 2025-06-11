@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::context::{CDFContext, CDFContextLog, CDFOffset};
-use bitstream_io::{BigEndian, BitWrite2, BitWriter};
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use std::io;
 
 pub const OD_BITRES: u8 = 3;
@@ -863,10 +863,10 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
       let l = 16 - n.leading_zeros() as u8;
       let m = (1 << l) - n;
       if v < m {
-        self.write(l as u32 - 1, v)
+        self.write_var(l as u32 - 1, v)
       } else {
-        self.write(l as u32 - 1, m + ((v - m) >> 1))?;
-        self.write(1, (v - m) & 1)
+        self.write_var(l as u32 - 1, m + ((v - m) >> 1))?;
+        self.write::<1, u16>((v - m) & 1)
       }
     } else {
       Ok(())
@@ -890,7 +890,7 @@ impl<W: io::Write> BCodeWriter for BitWriter<W, BigEndian> {
           i += 1;
           mk += a;
         } else {
-          return self.write(b as u32, v - mk);
+          return self.write_var(b as u32, v - mk);
         }
       }
     }
