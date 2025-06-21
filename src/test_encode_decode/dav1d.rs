@@ -10,6 +10,7 @@
 use super::*;
 use crate::test_encode_decode::{compare_plane, DecodeResult, TestDecoder};
 use crate::util::{CastFromPrimitive, Pixel};
+use log::debug;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::os::raw::c_int;

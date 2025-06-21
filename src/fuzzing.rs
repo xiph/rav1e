@@ -182,7 +182,7 @@ fn encode_frames(
 ) -> Result<(), EncoderStatus> {
   loop {
     let rv = ctx.receive_packet();
-    debug!("ctx.receive_packet() = {:#?}", rv);
+    log::debug!("ctx.receive_packet() = {:#?}", rv);
 
     match rv {
       Ok(_packet) => {}

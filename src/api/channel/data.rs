@@ -15,7 +15,7 @@ use crate::encoder::*;
 use crate::frame::*;
 use crate::util::Pixel;
 
-use bitstream_io::{BigEndian, BitWrite2, BitWriter};
+use bitstream_io::{BigEndian, BitWrite, BitWriter};
 use crossbeam::channel::{Receiver, Sender};
 use thiserror::Error;
 
@@ -353,20 +353,20 @@ impl<T: Pixel> PacketReceiver<T> {
       {
         let mut bw = BitWriter::endian(&mut buf, BigEndian);
         bw.write_bit(true)?; // marker
-        bw.write(7, 1)?; // version
-        bw.write(3, seq.profile)?;
-        bw.write(5, 31)?; // level
+        bw.write::<7, u8>(1)?; // version
+        bw.write::<3, u8>(seq.profile)?;
+        bw.write::<5, u8>(31)?; // level
         bw.write_bit(false)?; // tier
         bw.write_bit(seq.bit_depth > 8)?; // high_bitdepth
         bw.write_bit(seq.bit_depth == 12)?; // twelve_bit
         bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs400)?; // monochrome
         bw.write_bit(seq.chroma_sampling != ChromaSampling::Cs444)?; // chroma_subsampling_x
         bw.write_bit(seq.chroma_sampling == ChromaSampling::Cs420)?; // chroma_subsampling_y
-        bw.write(2, 0)?; // chroma_sample_position
-        bw.write(3, 0)?; // reserved
+        bw.write::<2, u8>(0)?; // chroma_sample_position
+        bw.write::<3, u8>(0)?; // reserved
         bw.write_bit(false)?; // initial_presentation_delay_present
 
-        bw.write(4, 0)?; // reserved
+        bw.write::<4, u8>(0)?; // reserved
       }
 
       Ok(buf)
