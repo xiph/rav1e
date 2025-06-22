@@ -300,7 +300,7 @@ mod test {
   macro_rules! test_cdef_filter_block {
     ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[interpolate_test(dir_0, 0)]
           #[interpolate_test(dir_1, 1)]
           #[interpolate_test(dir_2, 2)]
@@ -350,7 +350,7 @@ mod test {
   macro_rules! test_cdef_filter_block_hbd {
     ($(($XDEC:expr, $YDEC:expr)),*, $OPT:ident, $OPTLIT:literal) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[interpolate_test(dir_0, 0)]
           #[interpolate_test(dir_1, 1)]
           #[interpolate_test(dir_2, 2)]
@@ -399,7 +399,7 @@ mod test {
 
   macro_rules! test_cdef_dir {
     ($OPT:ident, $OPTLIT:literal) => {
-      paste::item! {
+      pastey::item! {
         #[test]
         fn [<cdef_dir_ $OPT>]() {
           use crate::context::{TileSuperBlockOffset, SuperBlockOffset};
@@ -446,7 +446,7 @@ mod test {
 
   macro_rules! test_cdef_dir_hbd {
     ($OPT:ident, $OPTLIT:literal) => {
-      paste::item! {
+      pastey::item! {
         #[test]
         fn [<cdef_dir_ $OPT _hbd>]() {
           use crate::context::{TileSuperBlockOffset, SuperBlockOffset};
