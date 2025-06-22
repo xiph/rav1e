@@ -417,7 +417,7 @@ mod test {
   macro_rules! test_dist_fns {
     ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:tt) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[test]
           fn [<get_ $DIST_TY _ $W x $H _bd_ $BD _ $OPT>]() {
             if $BD > 8 {

@@ -321,7 +321,7 @@ pub fn mc_avg<T: Pixel>(
 
 macro_rules! decl_mc_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    paste::item! {
+    pastey::item! {
       extern {
         $(
           fn [<$func_name _ssse3>](
@@ -389,7 +389,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mc_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    paste::item! {
+    pastey::item! {
       extern {
         $(
           fn [<$func_name _ssse3>](
@@ -444,7 +444,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mct_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    paste::item! {
+    pastey::item! {
       extern {
         $(
           fn [<$func_name _sse2>](
@@ -525,7 +525,7 @@ cpu_function_lookup_table!(
 
 macro_rules! decl_mct_hbd_fns {
   ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),+) => {
-    paste::item! {
+    pastey::item! {
       extern {
         $(
           fn [<$func_name _ssse3>](
@@ -630,7 +630,7 @@ mod test {
   macro_rules! test_put_fns {
     ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[test]
           fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
             if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {
@@ -717,7 +717,7 @@ mod test {
   macro_rules! test_prep_fns {
     ($(($mode_x:expr, $mode_y:expr, $func_name:ident)),*, $OPT:ident, $OPTLIT:tt, $BD:expr) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[test]
           fn [<test_ $func_name _bd_ $BD _ $OPT>]() {
             if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {

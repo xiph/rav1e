@@ -140,7 +140,7 @@ macro_rules! cpu_function_lookup_table {
 
   // use $name_$key as our values
   ($pub:vis, $name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
-    paste::item!{
+    pastey::item!{
       cpu_function_lookup_table!(
         $pub, $name: [$type], default: $empty, [$(($key, [<$name _$key>])),*]
       );
@@ -149,7 +149,7 @@ macro_rules! cpu_function_lookup_table {
 
   // version for default visibility
   ($name:ident: [$type:ty], default: $empty:expr, [$($key:ident),*]) => {
-     paste::item!{
+     pastey::item!{
       cpu_function_lookup_table!(
         $name: [$type], default: $empty, [$(($key, [<$name _$key>])),*]
       );
