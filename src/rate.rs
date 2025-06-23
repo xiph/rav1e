@@ -518,8 +518,7 @@ fn chroma_offset(
     ChromaSampling::Cs422 => (x >> 3) + (x >> 4) - (x >> 7), // 0.180
     ChromaSampling::Cs444 => (x >> 4) + (x >> 5) + (x >> 8), // 0.098
   };
-  // blog64(7) - blog64(4); blog64(5) - blog64(4)
-  (0x19D_5D9F_D501_0B37 - y, 0xA4_D3C2_5E68_DC58 - y)
+  (const { blog64(7) - blog64(4) } - y, const { blog64(5) - blog64(4) } - y)
 }
 
 impl QuantizerParameters {
