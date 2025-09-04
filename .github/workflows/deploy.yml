@@ -1,7 +1,5 @@
 name: deploy
 on:
-  schedule:
-    - cron: '0 21 * * TUE' # Run every Tuesday at 21:00 (UTC)
   push:
     tags:
       - 'v*.*.*'
@@ -133,7 +131,7 @@ jobs:
 
     - name: Package pre-release binaries
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/p')
       run: |
         7z a rav1e-windows-${{ matrix.name }}.zip `
              "C:\usr\rav1e-windows-${{ matrix.conf }}-sdk"
@@ -154,7 +152,7 @@ jobs:
 
     - name: Upload pre-release binaries
       if: >
-        startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/p')
       uses: actions/upload-artifact@v4
       with:
         name: librav1e (Windows-${{ matrix.name }})
@@ -289,8 +287,7 @@ jobs:
 
     - name: Get pre-release artifact filename
       if: |
-        startsWith(github.ref, 'refs/tags/p') ||
-        github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/p')
       run: |
         echo "ARTIFACT_FILE=${{ matrix.pkgname }}-${{ matrix.name }}.tar.gz" >> $GITHUB_ENV
         echo "ARTIFACT_NAME=${{ matrix.pkgname }} (${{ matrix.name }})" >> $GITHUB_ENV
@@ -306,8 +303,7 @@ jobs:
       if: >
         matrix.build == 'binary' &&
           (startsWith(github.ref, 'refs/tags/p') ||
-           startsWith(github.ref, 'refs/tags/v') ||
-           github.event_name == 'schedule')
+           startsWith(github.ref, 'refs/tags/v')
       run: |
         cd target/${{ matrix.target }}/release-strip
         tar -czvf $GITHUB_WORKSPACE/$ARTIFACT_FILE rav1e
@@ -316,8 +312,7 @@ jobs:
       if: >
         matrix.build == 'sdk' &&
           (startsWith(github.ref, 'refs/tags/p') ||
-           startsWith(github.ref, 'refs/tags/v') ||
-           github.event_name == 'schedule')
+           startsWith(github.ref, 'refs/tags/v')
       run: |
         cp LICENSE dist
         cd dist
@@ -326,8 +321,7 @@ jobs:
     - name: Upload artifact
       if: >
         startsWith(github.ref, 'refs/tags/p') ||
-        startsWith(github.ref, 'refs/tags/v') ||
-        github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.ARTIFACT_NAME }}
@@ -399,8 +393,7 @@ jobs:
 
     - name: Get pre-release artifact filename
       if: |
-        startsWith(github.ref, 'refs/tags/p') ||
-        github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/p')
       run: |
         echo "ARTIFACT_FILE=${{ matrix.pkgname }}-${{ matrix.name }}.${{ matrix.ext }}" >> $GITHUB_ENV
         echo "ARTIFACT_NAME=${{ matrix.pkgname }} (${{ matrix.name }})" >> $GITHUB_ENV
@@ -416,8 +409,7 @@ jobs:
       if: >
         matrix.build == 'binary' &&
           (startsWith(github.ref, 'refs/tags/p') ||
-           startsWith(github.ref, 'refs/tags/v') ||
-           github.event_name == 'schedule')
+           startsWith(github.ref, 'refs/tags/v')
       run: |
         cd target/${{ matrix.target }}/release-strip
         zip -9 $GITHUB_WORKSPACE/$ARTIFACT_FILE rav1e
@@ -426,8 +418,7 @@ jobs:
       if: >
         matrix.build == 'sdk' &&
           (startsWith(github.ref, 'refs/tags/p') ||
-           startsWith(github.ref, 'refs/tags/v') ||
-           github.event_name == 'schedule')
+           startsWith(github.ref, 'refs/tags/v')
       run: |
         cp LICENSE dist
         cd dist
@@ -436,8 +427,7 @@ jobs:
     - name: Upload artifact
       if: >
         startsWith(github.ref, 'refs/tags/p') ||
-        startsWith(github.ref, 'refs/tags/v') ||
-        github.event_name == 'schedule'
+        startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v4
       with:
         name: ${{ env.ARTIFACT_NAME }}
@@ -463,47 +453,6 @@ jobs:
       run: |
         VERSION=$(cargo pkgid | cut -d# -f2 | cut -d: -f2)
         echo "version=$VERSION"  >> $GITHUB_OUTPUT
-
-    - name: Get date for a scheduled pre-release
-      if: github.event_name == 'schedule'
-      id: tagDate
-      run: |
-        DATE=$(date "+%Y%m%d")
-        echo "date=$DATE" >> $GITHUB_OUTPUT
-
-    - name: Create a scheduled pre-release
-      if: github.event_name == 'schedule'
-      uses: softprops/action-gh-release@v2
-      with:
-        name: Weekly pre-release
-        prerelease: true
-        tag_name: p${{ steps.tagDate.outputs.date }}
-        files: |
-          Cargo.lock
-          rav1e (Windows-msvc-generic)/rav1e.exe
-          rav1e-ch (unstable) (AVX2)/rav1e-ch.exe
-          rav1e (linux-generic)/rav1e-linux-generic.tar.gz
-          rav1e (linux-i686)/rav1e-linux-i686.tar.gz
-          rav1e (linux-sse4)/rav1e-linux-sse4.tar.gz
-          rav1e (linux-avx2)/rav1e-linux-avx2.tar.gz
-          rav1e (linux-aarch64)/rav1e-linux-aarch64.tar.gz
-          rav1e (macos)/rav1e-macos.zip
-          rav1e (macos-aarch64)/rav1e-macos-aarch64.zip
-          librav1e (linux-generic)/librav1e-linux-generic.tar.gz
-          librav1e (linux-i686)/librav1e-linux-i686.tar.gz
-          librav1e (linux-sse4)/librav1e-linux-sse4.tar.gz
-          librav1e (linux-avx2)/librav1e-linux-avx2.tar.gz
-          librav1e (linux-aarch64)/librav1e-linux-aarch64.tar.gz
-          librav1e (macos)/librav1e-macos.tar.gz
-          librav1e (macos-aarch64)/librav1e-macos-aarch64.tar.gz
-          librav1e (Windows-msvc-generic)/rav1e-windows-msvc-generic.zip
-          librav1e (Windows-msvc-sse4)/rav1e-windows-msvc-sse4.zip
-          librav1e (Windows-msvc-avx2)/rav1e-windows-msvc-avx2.zip
-          librav1e (Windows-gnu-generic)/rav1e-windows-gnu-generic.zip
-          librav1e (Windows-gnu-sse4)/rav1e-windows-gnu-sse4.zip
-          librav1e (Windows-gnu-avx2)/rav1e-windows-gnu-avx2.zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create a pre-release
       if: startsWith(github.ref, 'refs/tags/p')

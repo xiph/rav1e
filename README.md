@@ -42,9 +42,6 @@ rav1e is an AV1 video encoder. It is designed to eventually cover all use cases,
 ## Documentation
 Find the documentation in [`doc/`](doc/README.md)
 
-## Releases
-For the foreseeable future, a weekly pre-release of rav1e will be [published](https://github.com/xiph/rav1e/releases) every Tuesday.
-
 ## Building
 
 ### Toolchain: Rust
