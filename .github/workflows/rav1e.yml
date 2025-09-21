@@ -34,7 +34,7 @@ jobs:
 
     env:
       CARGO_INCREMENTAL: 0
-      RUSTFLAGS: '-Dwarnings'
+      RUSTFLAGS: "-Dwarnings"
 
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
 
     env:
       CARGO_INCREMENTAL: 0
-      RUSTFLAGS: '-Dwarnings'
+      RUSTFLAGS: "-Dwarnings"
       CARGO_TARGET_WASM32_WASIP2_RUNNER: wasmtime
 
     steps:

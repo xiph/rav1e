@@ -77,7 +77,9 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-av-scenechange = { version = "0.14.1", default-features = false }
+av-scenechange = { version = "0.14.1", default-features = false, features = [
+  "asm",
+] }
 bitstream-io = "4.1.0"
 cfg-if = "1.0"
 clap = { version = "4.5", optional = true, default-features = false, features = [
@@ -221,7 +223,8 @@ no-default-features = true
 
 [lints.clippy]
 doc_link_with_quotes = "warn"
-doc_markdown = "warn"
+# TODO: Allow for now, since `built` generates code which fails this.
+# doc_markdown = "warn"
 missing_errors_doc = "warn"
 missing_panics_doc = "warn"
 missing_safety_doc = "warn"
