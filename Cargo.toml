@@ -120,7 +120,7 @@ new_debug_unreachable = "1.0.4"
 av1-grain = "0.2.3"
 serde-big-array = { version = "0.5.1", optional = true }
 profiling = { version = "1" }
-tracing-subscriber = { version = "0.3.18", optional = true }
+tracing-subscriber = { version = "0.3.20", optional = true }
 tracing-chrome = { version = "0.7.1", optional = true }
 tracing = { version = "0.1.40", optional = true }
 aligned-vec = "0.6.0"
