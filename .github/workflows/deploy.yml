@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: ilammy/setup-nasm@v1
 
     - name: Install stable
@@ -80,7 +80,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: ilammy/setup-nasm@v1
 
     - name: Install cargo-c
@@ -224,7 +224,7 @@ jobs:
     name: linux-binaries (${{ matrix.build }}, ${{ matrix.name }})
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
     - uses: ilammy/setup-nasm@v1
 
     - name: Install ${{ matrix.target }} target
@@ -364,7 +364,7 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx_deployment_target }}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Install nasm
       run: brew install nasm
@@ -449,7 +449,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Download artifacts
       uses: actions/download-artifact@v4

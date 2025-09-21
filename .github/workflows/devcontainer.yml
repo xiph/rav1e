@@ -17,7 +17,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install devcontainer-cli
         run: npm install -g @devcontainers/cli
       - name: Register qemu binfmt-misc entries for Docker
