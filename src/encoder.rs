@@ -1242,6 +1242,9 @@ impl<T: Pixel> FrameInvariants<T> {
   }
 
   pub fn set_quantizers(&mut self, qps: &QuantizerParameters) {
+    if self.frame_type == FrameType::KEY {
+      self.cdef_bits = 3;
+    }
     self.base_q_idx = qps.ac_qi[0];
     let base_q_idx = self.base_q_idx as i32;
     for pi in 0..3 {
