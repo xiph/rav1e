@@ -126,7 +126,7 @@ pub fn intra_bench<T: Pixel>(
   b: &mut Bencher, mode: PredictionMode, variant: PredictionVariant,
 ) {
   let mut rng = ChaChaRng::from_seed([0; 32]);
-  let edge_buf = Aligned::from_fn(|_| T::cast_from(rng.gen::<u8>()));
+  let edge_buf = Aligned::from_fn(|_| T::cast_from(rng.random::<u8>()));
   let edge_buf = IntraEdge::mock(&edge_buf);
   let (mut block, ac) = generate_block::<T>(&mut rng);
   let cpu = CpuFeatureLevel::default();
