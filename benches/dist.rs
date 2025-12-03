@@ -21,6 +21,7 @@ use rav1e::bench::rdo::DistortionScale;
 use rav1e::bench::tiling::*;
 use rav1e::bench::util::Aligned;
 use rav1e::Pixel;
+use std::hint::black_box;
 
 const DIST_BENCH_SET: &[(BlockSize, usize)] = &[
   (BLOCK_4X4, 8),
