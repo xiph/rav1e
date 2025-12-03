@@ -28,7 +28,7 @@ jobs:
       run: cargo build --release --features=unstable,channel-api --bin=rav1e-ch
 
     - name: Upload rav1e-ch msvc binary (unstable)
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: rav1e-ch (unstable) (AVX2)
         path: target/release/rav1e-ch.exe
@@ -147,7 +147,7 @@ jobs:
 
     - name: Upload rav1e msvc binary
       if: matrix.conf == 'msvc'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: rav1e (Windows-${{ matrix.name }})
         path: target/${{ matrix.profile }}/rav1e.exe
@@ -155,14 +155,14 @@ jobs:
     - name: Upload pre-release binaries
       if: >
         startsWith(github.ref, 'refs/tags/p') || github.event_name == 'schedule'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: librav1e (Windows-${{ matrix.name }})
         path: rav1e-windows-${{ matrix.name }}.zip
 
     - name: Upload release binaries
       if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: rav1e ${{ steps.tagName.outputs.version }} (Windows-${{ matrix.name }})
         path: rav1e-${{ steps.tagName.outputs.version }}-windows-${{ matrix.name }}.zip
@@ -328,7 +328,7 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'schedule'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ${{ env.ARTIFACT_NAME }}
         path: ${{ env.ARTIFACT_FILE }}
@@ -438,7 +438,7 @@ jobs:
         startsWith(github.ref, 'refs/tags/p') ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'schedule'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ${{ env.ARTIFACT_NAME }}
         path: ${{ env.ARTIFACT_FILE }}
@@ -452,7 +452,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Download artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
 
     - name: Install Rust stable
       uses: dtolnay/rust-toolchain@stable
