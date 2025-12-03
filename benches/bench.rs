@@ -29,6 +29,7 @@ use crate::rdo::rdo;
 use crate::transform::{forward_transforms, inverse_transforms};
 
 use criterion::*;
+use std::hint::black_box;
 use std::sync::Arc;
 use std::time::Duration;
 

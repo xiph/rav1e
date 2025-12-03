@@ -16,6 +16,7 @@ use rav1e::bench::partition::RefType;
 use rav1e::bench::util::Aligned;
 use rav1e::context::{BlockOffset, TileBlockOffset};
 use rav1e::prelude::*;
+use std::hint::black_box;
 use std::sync::Arc;
 
 fn bench_put_8tap_top_left_lbd(c: &mut Criterion) {
