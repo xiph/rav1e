@@ -128,10 +128,60 @@ pub struct WriterBase<S> {
   s: S,
 }
 
+/*
+ * import math
+ * def lr_compute(rngShift, diff):
+ *     u = ((rngShift * diff) >> 1) + 4
+ *     bits = 15 - math.floor(math.log2(u))
+ *     u = u << bits
+ *     return ((u >> 8) - 128, bits)
+ *
+ * def stats():
+ *     for diff in range(0, 513):
+ *         avg = sum([lr_compute(r, diff)[1] for r in range(128, 256)])
+ *         yield(avg)
+ *
+ * print([x for x in (stats())])
+ */
+// Units of 1/128 of a bit
+const ENTROPY_LOOKUP: &[u16; 513] = &[
+  1664, 1144, 1020, 936, 894, 844, 810, 786, 767, 739, 716, 698, 682, 669,
+  658, 648, 640, 625, 612, 600, 589, 579, 570, 562, 555, 548, 542, 536, 530,
+  525, 521, 516, 512, 504, 497, 490, 484, 478, 472, 466, 461, 456, 451, 447,
+  442, 438, 434, 431, 427, 424, 420, 417, 414, 411, 408, 405, 403, 400, 398,
+  395, 393, 391, 388, 386, 384, 380, 377, 373, 369, 366, 362, 359, 356, 353,
+  350, 347, 344, 341, 338, 336, 333, 331, 328, 326, 323, 321, 319, 317, 315,
+  312, 310, 308, 306, 305, 303, 301, 299, 297, 296, 294, 292, 291, 289, 287,
+  286, 284, 283, 282, 280, 279, 277, 276, 275, 273, 272, 271, 270, 268, 267,
+  266, 265, 264, 263, 262, 261, 260, 258, 257, 256, 254, 252, 251, 249, 247,
+  245, 243, 241, 240, 238, 236, 234, 233, 231, 230, 228, 226, 225, 223, 222,
+  220, 219, 217, 216, 215, 213, 212, 210, 209, 208, 207, 205, 204, 203, 201,
+  200, 199, 198, 197, 195, 194, 193, 192, 191, 190, 189, 188, 187, 186, 185,
+  184, 182, 181, 180, 180, 179, 178, 177, 176, 175, 174, 173, 172, 171, 170,
+  169, 168, 168, 167, 166, 165, 164, 163, 163, 162, 161, 160, 160, 159, 158,
+  157, 156, 156, 155, 154, 154, 153, 152, 151, 151, 150, 149, 149, 148, 147,
+  147, 146, 145, 145, 144, 144, 143, 142, 142, 141, 140, 140, 139, 139, 138,
+  138, 137, 136, 136, 135, 135, 134, 134, 133, 133, 132, 132, 131, 130, 130,
+  129, 129, 128, 127, 126, 126, 125, 124, 123, 122, 121, 120, 119, 118, 117,
+  116, 115, 114, 113, 113, 112, 111, 110, 109, 108, 107, 107, 106, 105, 104,
+  103, 102, 102, 101, 100, 99, 98, 98, 97, 96, 95, 95, 94, 93, 92, 92, 91, 90,
+  89, 89, 88, 87, 87, 86, 85, 85, 84, 83, 83, 82, 81, 81, 80, 79, 79, 78, 77,
+  77, 76, 75, 75, 74, 74, 73, 72, 72, 71, 70, 70, 69, 69, 68, 68, 67, 66, 66,
+  65, 65, 64, 64, 63, 62, 62, 61, 61, 60, 60, 59, 59, 58, 58, 57, 57, 56, 56,
+  55, 55, 54, 54, 53, 53, 52, 52, 51, 51, 50, 50, 49, 49, 48, 48, 47, 47, 46,
+  46, 45, 45, 44, 44, 44, 43, 43, 42, 42, 41, 41, 41, 40, 40, 39, 39, 38, 38,
+  38, 37, 37, 36, 36, 36, 35, 35, 34, 34, 34, 33, 33, 32, 32, 32, 31, 31, 30,
+  30, 30, 29, 29, 29, 28, 28, 27, 27, 27, 26, 26, 26, 25, 25, 25, 24, 24, 23,
+  23, 23, 22, 22, 22, 21, 21, 21, 20, 20, 20, 19, 19, 19, 18, 18, 18, 17, 17,
+  17, 17, 16, 16, 16, 15, 15, 15, 14, 14, 14, 13, 13, 13, 13, 12, 12, 12, 11,
+  11, 11, 10, 10, 10, 10, 9, 9, 9, 8, 8, 8, 8, 7, 7, 7, 7, 6, 6, 6, 5, 5, 5,
+  5, 4, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 0,
+];
+
 #[derive(Debug, Clone)]
 pub struct WriterCounter {
-  /// Bits that would be shifted out to date
-  bits: usize,
+  /// Data that would be shifted out to date, in units of 1/128 of a bit.
+  sub_bits: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -152,9 +202,8 @@ pub struct WriterEncoder {
 
 #[derive(Clone)]
 pub struct WriterCheckpoint {
-  /// Stream length coded/recorded to date, in the unit used by the Writer,
-  /// which may be bytes or bits. This depends on the assumption
-  /// that a Writer will only ever restore its own Checkpoint.
+  /// Stream length coded/recorded to date, in the unit used by the Writer.
+  /// This depends on the assumption that a Writer will only ever restore its own Checkpoint.
   stream_size: usize,
   /// To be defined by backend
   backend_var: usize,
@@ -168,7 +217,7 @@ pub struct WriterCheckpoint {
 impl WriterCounter {
   #[inline]
   pub const fn new() -> WriterBase<WriterCounter> {
-    WriterBase::new(WriterCounter { bits: 0 })
+    WriterBase::new(WriterCounter { sub_bits: 0 })
   }
 }
 
@@ -192,22 +241,22 @@ impl WriterEncoder {
 /// bit usage like in an Encoder for cost analysis.
 impl StorageBackend for WriterBase<WriterCounter> {
   #[inline]
-  fn store(&mut self, fl: u16, fh: u16, nms: u16) {
-    let (_l, r) = self.lr_compute(fl, fh, nms);
-    let d = r.leading_zeros() as usize;
-
-    self.s.bits += d;
-    self.rng = r << d;
+  fn store(&mut self, fl: u16, fh: u16, _nms: u16) {
+    self.s.sub_bits += unsafe {
+      *ENTROPY_LOOKUP.get_unchecked(
+        ((fl >> EC_PROB_SHIFT) - (fh >> EC_PROB_SHIFT)) as usize,
+      ) as usize
+    };
   }
   #[inline]
   fn stream_bits(&mut self) -> usize {
-    self.s.bits
+    self.s.sub_bits / 128
   }
   #[inline]
   fn checkpoint(&mut self) -> WriterCheckpoint {
     WriterCheckpoint {
-      stream_size: self.s.bits,
-      backend_var: 0,
+      stream_size: self.s.sub_bits,
+      backend_var: self.s.sub_bits,
       rng: self.rng,
       // We do not use `cnt` within Counter, but setting it here allows the compiler
       // to do a 32-bit merged load/store.
@@ -217,7 +266,8 @@ impl StorageBackend for WriterBase<WriterCounter> {
   #[inline]
   fn rollback(&mut self, checkpoint: &WriterCheckpoint) {
     self.rng = checkpoint.rng;
-    self.s.bits = checkpoint.stream_size;
+    self.cnt = checkpoint.cnt;
+    self.s.sub_bits = checkpoint.stream_size;
   }
 }
 
