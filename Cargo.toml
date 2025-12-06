@@ -77,7 +77,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-av-scenechange = { version = "0.14.1", default-features = false, features = [
+av-scenechange = { version = "0.19.0", default-features = false, features = [
   "asm",
 ] }
 bitstream-io = "4.1.0"
@@ -94,7 +94,7 @@ y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
 num-derive = "0.4"
-pastey = "0.1.0"
+pastey = "0.2.0"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.7.0", package = "libdav1d-sys", optional = true }
@@ -105,12 +105,12 @@ v_frame = "0.3.7"
 av-metrics = { version = "0.9.1", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
 crossbeam = { version = "0.8", optional = true }
-toml = { version = "0.8", optional = true }
+toml = { version = "0.9", optional = true }
 arrayvec = "0.7"
 thiserror = "2.0"
 byteorder = { version = "1.5.0", optional = true }
 log = "0.4"
-console = { version = "0.15", optional = true }
+console = { version = "0.16", optional = true }
 fern = { version = "0.7", optional = true }
 itertools = "0.14"
 simd_helpers = "0.1"
@@ -154,11 +154,11 @@ semver = "1.0"
 
 # Exclude dependencies and features that don't work on wasm32:
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-criterion = { version = "0.6", default-features = false }
+criterion = { version = "0.8", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 assert_cmd = "2.0"
-criterion = "0.6"
+criterion = "0.8"
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"
