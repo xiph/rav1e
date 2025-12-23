@@ -134,7 +134,12 @@ fn build_nasm_files() {
   if let Some((hash, hash_path)) =
     hash_changed(asm_files, &out_dir, &dest_path)
   {
-    let obj = nasm_rs::Build::new()
+    let mut nasm_build = nasm_rs::Build::new();
+    if let Ok(nasm) = env::var("NASM") {
+      nasm_build.nasm(nasm);
+    }
+
+    let obj = nasm_build
       .min_version(2, 15, 0)
       .include(&out_dir)
       .include("src")
@@ -143,6 +148,7 @@ fn build_nasm_files() {
       .unwrap_or_else(|e| {
         panic!("NASM build failed. Make sure you have nasm installed or disable the \"asm\" feature.\n\
                 You can get NASM from https://nasm.us or your system's package manager.\n\
+                Alternatively, you can configure the path to a NASM binary via the "NASM" env var.\n\
                 \n\
                 error: {e}");
     });
