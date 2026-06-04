@@ -1286,8 +1286,8 @@ impl ContextWriter<'_> {
 
     /* TODO: Find nearest match and assign nearest and near mvs */
 
-    // 7.10.2.11 Sort MV stack according to weight
-    mv_stack.sort_by(|a, b| b.weight.cmp(&a.weight));
+    // 7.10.2.11 Sort MV stack according to weight (descending order)
+    mv_stack.sort_by_key(|mv| std::cmp::Reverse(mv.weight));
 
     if mv_stack.len() < 2 {
       // 7.10.2.12 Extra search process
