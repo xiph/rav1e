@@ -347,12 +347,14 @@ impl<'a> BlockContext<'a> {
     }
   }
 
+  #[allow(clippy::manual_slice_fill)]
   fn reset_left_coeff_context(&mut self, plane: usize) {
     for c in &mut self.left_coeff_context[plane] {
       *c = 0;
     }
   }
 
+  #[allow(clippy::manual_slice_fill)]
   fn reset_left_partition_context(&mut self) {
     for c in &mut self.left_partition_context {
       *c = 0;
@@ -385,6 +387,7 @@ impl<'a> BlockContext<'a> {
     }
   }
 
+  #[allow(clippy::manual_slice_fill)]
   fn reset_left_tx_context(&mut self) {
     for c in &mut self.left_tx_context {
       *c = 0;
