@@ -46,8 +46,8 @@ jobs:
           version: 2.15
 
       # Minimum version in Cargo.toml
-      - name: Install Rust 1.83.0
-        uses: dtolnay/rust-toolchain@1.83.0
+      - name: Install Rust 1.85.1
+        uses: dtolnay/rust-toolchain@1.85.1
         with:
           targets: wasm32-unknown-unknown, wasm32-wasip2
 
@@ -119,7 +119,7 @@ jobs:
           - conf: beta-build
             toolchain: beta
           - conf: msrv-tests
-            toolchain: 1.83.0
+            toolchain: 1.85.1
           - conf: aom-tests
             toolchain: stable
           - conf: dav1d-tests
