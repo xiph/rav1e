@@ -77,7 +77,7 @@ dump_lookahead_data = ["byteorder", "image"]
 
 [dependencies]
 arg_enum_proc_macro = "0.3.4"
-av-scenechange = { version = "0.14.1", default-features = false, features = [
+av-scenechange = { version = "0.24.0", default-features = false, features = [
   "asm",
 ] }
 bitstream-io = "4.1.0"
@@ -93,31 +93,31 @@ libc = "0.2"
 y4m = { version = "0.8", optional = true }
 backtrace = { version = "0.3", optional = true }
 num-traits = "0.2"
-num-derive = "0.4"
-pastey = "0.1.0"
+num-derive = "0.5"
+pastey = "0.2.0"
 noop_proc_macro = "0.3.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
 dav1d-sys = { version = "0.7.0", package = "libdav1d-sys", optional = true }
 aom-sys = { version = "0.3.3", optional = true }
 scan_fmt = { version = "0.2.6", optional = true, default-features = false }
 ivf = { version = "0.1", path = "ivf/", optional = true }
-v_frame = "0.3.7"
+v_frame = "0.7.0"
 av-metrics = { version = "0.9.1", optional = true, default-features = false }
 rayon = { package = "maybe-rayon", version = "0.1", default-features = false }
 crossbeam = { version = "0.8", optional = true }
-toml = { version = "0.8", optional = true }
+toml = { version = "0.9", optional = true }
 arrayvec = "0.7"
 thiserror = "2.0"
 byteorder = { version = "1.5.0", optional = true }
 log = "0.4"
-console = { version = "0.15", optional = true }
+console = { version = "0.16", optional = true }
 fern = { version = "0.7", optional = true }
-itertools = "0.14"
+itertools = "0.15"
 simd_helpers = "0.1"
 wasm-bindgen = { version = "0.2.90", optional = true }
 nom = { version = "8.0.0", optional = true }
 new_debug_unreachable = "1.0.4"
-av1-grain = "0.2.3"
+av1-grain = "0.5.0"
 serde-big-array = { version = "0.5.1", optional = true }
 profiling = { version = "1" }
 tracing-subscriber = { version = "0.3.18", optional = true }
@@ -141,7 +141,7 @@ optional = true
 features = ["parallel"]
 
 [target.'cfg(unix)'.dependencies]
-signal-hook = { version = "0.3", optional = true }
+signal-hook = { version = "0.4", optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.4.0"
@@ -154,11 +154,11 @@ semver = "1.0"
 
 # Exclude dependencies and features that don't work on wasm32:
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-criterion = { version = "0.6", default-features = false }
+criterion = { version = "0.8", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 assert_cmd = "2.0"
-criterion = "0.6"
+criterion = "0.8"
 
 [target.'cfg(fuzzing)'.dependencies]
 arbitrary = "1.3"
