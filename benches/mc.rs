@@ -1,8 +1,8 @@
 #![allow(clippy::unit_arg)]
 
+use chacha20::ChaCha20Rng;
 use criterion::*;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{RngExt, SeedableRng};
 use rav1e::bench::context::BlockContext;
 use rav1e::bench::context::CDFContext;
 use rav1e::bench::context::ContextWriter;
@@ -20,7 +20,7 @@ use std::hint::black_box;
 use std::sync::Arc;
 
 fn bench_put_8tap_top_left_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -51,7 +51,7 @@ fn bench_put_8tap_top_left_lbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_top_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -82,7 +82,7 @@ fn bench_put_8tap_top_lbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_left_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -113,7 +113,7 @@ fn bench_put_8tap_left_lbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_center_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -144,7 +144,7 @@ fn bench_put_8tap_center_lbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_top_left_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -175,7 +175,7 @@ fn bench_put_8tap_top_left_hbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_top_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -206,7 +206,7 @@ fn bench_put_8tap_top_hbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_left_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -237,7 +237,7 @@ fn bench_put_8tap_left_hbd(c: &mut Criterion) {
 }
 
 fn bench_put_8tap_center_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -268,7 +268,7 @@ fn bench_put_8tap_center_hbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_top_left_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -299,7 +299,7 @@ fn bench_prep_8tap_top_left_lbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_top_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -330,7 +330,7 @@ fn bench_prep_8tap_top_lbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_left_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -361,7 +361,7 @@ fn bench_prep_8tap_left_lbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_center_lbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -392,7 +392,7 @@ fn bench_prep_8tap_center_lbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_top_left_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -423,7 +423,7 @@ fn bench_prep_8tap_top_left_hbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_top_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -454,7 +454,7 @@ fn bench_prep_8tap_top_hbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_left_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -485,7 +485,7 @@ fn bench_prep_8tap_left_hbd(c: &mut Criterion) {
 }
 
 fn bench_prep_8tap_center_hbd(c: &mut Criterion) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -607,7 +607,7 @@ criterion_group!(
   bench_motion_compensate_hbd,
 );
 
-fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
+fn fill_plane<T: Pixel>(ra: &mut ChaCha20Rng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
   for row in plane.data_origin_mut().chunks_mut(stride) {
     for pixel in row {
@@ -618,7 +618,7 @@ fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
 }
 
 fn new_plane<T: Pixel>(
-  ra: &mut ChaChaRng, width: usize, height: usize,
+  ra: &mut ChaCha20Rng, width: usize, height: usize,
 ) -> Plane<T> {
   let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
 

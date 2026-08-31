@@ -16,7 +16,7 @@ pub mod test {
   use crate::rdo::DistortionScale;
   use crate::tiling::Area;
   use crate::util::*;
-  use rand::{rng, Rng};
+  use rand::{rng, RngExt};
 
   fn random_planes<T: Pixel>(bd: usize) -> (Plane<T>, Plane<T>) {
     let mut rng = rng();

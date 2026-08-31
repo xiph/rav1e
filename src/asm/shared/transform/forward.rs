@@ -46,7 +46,7 @@ mod test {
   use crate::cpu_features::*;
   use crate::transform::{forward_transform, get_valid_txfm_types, TxSize};
   use crate::util::slice_assume_init_mut;
-  use rand::Rng;
+  use rand::RngExt;
   use std::mem::MaybeUninit;
 
   // Ensure that the simd results match the rust code

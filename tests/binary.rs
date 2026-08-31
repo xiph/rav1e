@@ -3,7 +3,7 @@ mod binary {
   use assert_cmd::Command;
   use interpolate_name::interpolate_test;
   use rand::distr::Alphanumeric;
-  use rand::{rng, Rng};
+  use rand::{rng, RngExt};
   use std::env::temp_dir;
   use std::fs::File;
   use std::io::Read;

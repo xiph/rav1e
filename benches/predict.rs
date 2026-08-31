@@ -7,9 +7,9 @@
 // Media Patent License 1.0 was not distributed with this source code in the
 // PATENTS file, you can obtain it at www.aomedia.org/license/patent.
 
+use chacha20::ChaCha20Rng;
 use criterion::*;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{RngExt, SeedableRng};
 use rav1e::bench::cpu_features::CpuFeatureLevel;
 use rav1e::bench::frame::*;
 use rav1e::bench::partition::{BlockSize, IntraEdge};
@@ -19,7 +19,9 @@ use rav1e::bench::util::*;
 
 pub const BLOCK_SIZE: BlockSize = BlockSize::BLOCK_32X32;
 
-pub fn generate_block<T: Pixel>(rng: &mut ChaChaRng) -> (Plane<T>, Vec<i16>) {
+pub fn generate_block<T: Pixel>(
+  rng: &mut ChaCha20Rng,
+) -> (Plane<T>, Vec<i16>) {
   let block = Plane::from_slice(
     &vec![T::cast_from(0); BLOCK_SIZE.width() * BLOCK_SIZE.height()],
     BLOCK_SIZE.width(),
@@ -125,7 +127,7 @@ pub fn pred_bench(c: &mut Criterion) {
 pub fn intra_bench<T: Pixel>(
   b: &mut Bencher, mode: PredictionMode, variant: PredictionVariant,
 ) {
-  let mut rng = ChaChaRng::from_seed([0; 32]);
+  let mut rng = ChaCha20Rng::from_seed([0; 32]);
   let edge_buf = Aligned::from_fn(|_| T::cast_from(rng.random::<u8>()));
   let edge_buf = IntraEdge::mock(&edge_buf);
   let (mut block, ac) = generate_block::<T>(&mut rng);

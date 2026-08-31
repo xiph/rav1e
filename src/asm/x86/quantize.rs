@@ -159,7 +159,7 @@ unsafe fn dequantize_avx2(
 mod test {
   use super::*;
   use rand::distr::{Distribution, Uniform};
-  use rand::{rng, Rng};
+  use rand::{rng, RngExt};
 
   #[test]
   fn dequantize_test() {

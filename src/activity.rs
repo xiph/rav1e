@@ -189,7 +189,7 @@ pub const fn apply_ssim_boost(
 mod ssim_boost_tests {
   use super::*;
   use interpolate_name::interpolate_test;
-  use rand::Rng;
+  use rand::RngExt;
 
   /// Test to make sure extreme values of `ssim_boost` don't overflow.
   #[test]

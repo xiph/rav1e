@@ -85,7 +85,7 @@ pub mod test {
   use crate::scan_order::av1_scan_orders;
   use crate::transform::TxSize::*;
   use crate::transform::*;
-  use rand::{random, rng, Rng};
+  use rand::{random, rng, RngExt};
 
   pub fn pick_eob<T: Coefficient>(
     coeffs: &mut [T], tx_size: TxSize, tx_type: TxType, sub_h: usize,
