@@ -70,7 +70,7 @@ fn setup_encoder<T: Pixel>(
 }
 
 /*
-fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
+fn fill_frame<T: Pixel>(ra: &mut ChaCha20Rng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {

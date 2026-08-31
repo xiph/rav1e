@@ -17,10 +17,10 @@ use crate::util::Pixel;
 use crate::*;
 
 use arrayvec::ArrayVec;
+use chacha20::ChaCha20Rng;
 use interpolate_name::interpolate_test;
 use log::debug;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{RngExt, SeedableRng};
 use std::collections::VecDeque;
 
 #[cfg(feature = "decode_test")]
@@ -33,7 +33,7 @@ use aom::AomDecoder;
 #[cfg(feature = "decode_test_dav1d")]
 use dav1d::Dav1dDecoder;
 
-fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
+fn fill_frame<T: Pixel>(ra: &mut ChaCha20Rng, frame: &mut Frame<T>) {
   for plane in frame.planes.iter_mut() {
     let stride = plane.cfg.stride;
     for row in plane.data.chunks_mut(stride) {
@@ -46,7 +46,7 @@ fn fill_frame<T: Pixel>(ra: &mut ChaChaRng, frame: &mut Frame<T>) {
 }
 
 fn read_frame_batch<T: Pixel>(
-  ctx: &mut Context<T>, ra: &mut ChaChaRng, limit: usize,
+  ctx: &mut Context<T>, ra: &mut ChaCha20Rng, limit: usize,
 ) {
   for _ in 0..limit {
     let mut input = ctx.new_frame();
@@ -76,7 +76,7 @@ pub(crate) trait TestDecoder<T: Pixel> {
     tile_cols_log2: usize, tile_rows_log2: usize, still_picture: bool,
     grain_table: Option<Vec<GrainTableSegment>>,
   ) {
-    let mut ra = ChaChaRng::from_seed([0; 32]);
+    let mut ra = ChaCha20Rng::from_seed([0; 32]);
 
     let mut ctx: Context<T> = setup_encoder(
       w,

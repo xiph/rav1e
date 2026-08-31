@@ -9,9 +9,9 @@
 
 #![allow(clippy::trivially_copy_pass_by_ref)]
 
+use chacha20::ChaCha20Rng;
 use criterion::*;
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaChaRng;
+use rand::{RngExt, SeedableRng};
 use rav1e::bench::cpu_features::*;
 use rav1e::bench::dist;
 use rav1e::bench::frame::*;
@@ -70,7 +70,7 @@ const DIST_BENCH_SET: &[(BlockSize, usize)] = &[
   (BLOCK_64X16, 10),
 ];
 
-fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
+fn fill_plane<T: Pixel>(ra: &mut ChaCha20Rng, plane: &mut Plane<T>) {
   let stride = plane.cfg.stride;
   for row in plane.data_origin_mut().chunks_mut(stride) {
     for pixel in row {
@@ -81,7 +81,7 @@ fn fill_plane<T: Pixel>(ra: &mut ChaChaRng, plane: &mut Plane<T>) {
 }
 
 fn new_plane<T: Pixel>(
-  ra: &mut ChaChaRng, width: usize, height: usize,
+  ra: &mut ChaCha20Rng, width: usize, height: usize,
 ) -> Plane<T> {
   let mut p = Plane::new(width, height, 0, 0, 128 + 8, 128 + 8);
 
@@ -102,7 +102,7 @@ type DistFn<T> = fn(
 fn run_dist_bench<T: Pixel>(
   b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize), func: DistFn<T>,
 ) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
@@ -162,7 +162,7 @@ pub fn get_satd(c: &mut Criterion) {
 }
 
 /// Fill data for scaling of one
-fn fill_scaling(ra: &mut ChaChaRng, scales: &mut [u32]) {
+fn fill_scaling(ra: &mut ChaCha20Rng, scales: &mut [u32]) {
   for a in scales.iter_mut() {
     *a = ra.random_range(
       DistortionScale::from(0.5).0..DistortionScale::from(1.5).0,
@@ -185,7 +185,7 @@ fn run_weighted_sse_bench<T: Pixel>(
   b: &mut Bencher, &(bs, bit_depth): &(BlockSize, usize),
   func: WeightedSseFn<T>,
 ) {
-  let mut ra = ChaChaRng::from_seed([0; 32]);
+  let mut ra = ChaCha20Rng::from_seed([0; 32]);
   let cpu = CpuFeatureLevel::default();
   let w = 640;
   let h = 480;
