@@ -94,8 +94,7 @@ mod rdo_tables;
 #[macro_use]
 mod util;
 mod cdef;
-#[doc(hidden)]
-pub mod context;
+mod context;
 mod deblock;
 mod encoder;
 mod entropymode;
@@ -108,8 +107,7 @@ mod recon_intra;
 mod scan_order;
 mod segmentation;
 mod stats;
-#[doc(hidden)]
-pub mod tiling;
+mod tiling;
 mod token_cdfs;
 
 mod api;
