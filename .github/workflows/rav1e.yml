@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ilammy/setup-nasm@v1
       - name: Install stable
         uses: dtolnay/rust-toolchain@stable
@@ -37,7 +37,7 @@ jobs:
       RUSTFLAGS: "-Dwarnings"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Minimum version in build.rs
       - name: Install NASM 2.15
@@ -81,7 +81,7 @@ jobs:
       CARGO_TARGET_WASM32_WASIP2_RUNNER: wasmtime
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install wasmtime
         uses: taiki-e/install-action@wasmtime
@@ -154,7 +154,7 @@ jobs:
     needs: [rustfmt-clippy, msrv]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set no-asm-tests env vars
         if: matrix.conf == 'no-asm-tests'
         run: |
@@ -356,7 +356,7 @@ jobs:
     needs: [rustfmt-clippy, msrv]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install sccache
         run: |
           brew install sccache
@@ -433,7 +433,7 @@ jobs:
     needs: [rustfmt-clippy, msrv]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ilammy/setup-nasm@v1
       - name: Install sccache
         run: |
