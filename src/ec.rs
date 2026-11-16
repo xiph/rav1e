@@ -421,7 +421,7 @@ impl WriterBase<WriterRecorder> {
     }
     self.rng = 0x8000;
     self.cnt = -9;
-    self.s.storage.truncate(0);
+    self.s.storage.clear();
     self.s.bits = 0;
   }
 }

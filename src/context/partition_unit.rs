@@ -218,30 +218,36 @@ impl ContextWriter<'_> {
     }
 
     /* Pick CDF index based on number of matching/out-of-bounds segment IDs. */
-    let cdf_index: u8;
-    if prev_ul < 0 || prev_u < 0 || prev_l < 0 {
+    let cdf_index: u8 = if prev_ul < 0 || prev_u < 0 || prev_l < 0 {
       /* Edge case */
-      cdf_index = 0;
+      0
     } else if (prev_ul == prev_u) && (prev_ul == prev_l) {
-      cdf_index = 2;
+      2
     } else if (prev_ul == prev_u) || (prev_ul == prev_l) || (prev_u == prev_l)
     {
-      cdf_index = 1;
+      1
     } else {
-      cdf_index = 0;
-    }
+      0
+    };
 
     /* If 2 or more are identical returns that as predictor, otherwise prev_l. */
-    let r: i8;
-    if prev_u == -1 {
+    let r: i8 = if prev_u == -1 {
       /* edge case */
-      r = if prev_l == -1 { 0 } else { prev_l };
+      if prev_l == -1 {
+        0
+      } else {
+        prev_l
+      }
     } else if prev_l == -1 {
       /* edge case */
-      r = prev_u;
+      prev_u
     } else {
-      r = if prev_ul == prev_u { prev_u } else { prev_l };
-    }
+      if prev_ul == prev_u {
+        prev_u
+      } else {
+        prev_l
+      }
+    };
 
     ((r as u8).min(last_active_segid), cdf_index)
   }

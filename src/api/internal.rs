@@ -463,8 +463,8 @@ impl<T: Pixel> ContextInner<T> {
       .cloned();
     let mut next_limit =
       gop_input_frameno_start + self.config.max_key_frame_interval;
-    if !ignore_limit && self.limit.is_some() {
-      next_limit = next_limit.min(self.limit.unwrap());
+    if let (false, Some(limit)) = (ignore_limit, self.limit) {
+      next_limit = next_limit.min(limit);
     }
     if next_detected.is_none() {
       return next_limit;

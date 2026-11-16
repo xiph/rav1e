@@ -348,15 +348,11 @@ impl<'a> BlockContext<'a> {
   }
 
   fn reset_left_coeff_context(&mut self, plane: usize) {
-    for c in &mut self.left_coeff_context[plane] {
-      *c = 0;
-    }
+    self.left_coeff_context[plane].fill(0);
   }
 
   fn reset_left_partition_context(&mut self) {
-    for c in &mut self.left_partition_context {
-      *c = 0;
-    }
+    self.left_partition_context.fill(0);
   }
 
   pub fn update_tx_size_context(
@@ -386,9 +382,7 @@ impl<'a> BlockContext<'a> {
   }
 
   fn reset_left_tx_context(&mut self) {
-    for c in &mut self.left_tx_context {
-      *c = 0;
-    }
+    self.left_tx_context.fill(0);
   }
 
   pub fn reset_left_contexts(&mut self, planes: usize) {
@@ -1287,7 +1281,7 @@ impl ContextWriter<'_> {
     /* TODO: Find nearest match and assign nearest and near mvs */
 
     // 7.10.2.11 Sort MV stack according to weight
-    mv_stack.sort_by(|a, b| b.weight.cmp(&a.weight));
+    mv_stack.sort_by_key(|mv| std::cmp::Reverse(mv.weight));
 
     if mv_stack.len() < 2 {
       // 7.10.2.12 Extra search process
