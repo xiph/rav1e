@@ -393,7 +393,7 @@ pub fn get_satd<T: Pixel>(
 macro_rules! get_sad_hbd_ssse3 {
   ($(($W:expr, $H:expr, $BS:expr)),*) => {
     $(
-      paste::item! {
+      pastey::item! {
         #[target_feature(enable = "ssse3")]
         unsafe extern fn [<rav1e_sad_ $W x $H _hbd_ssse3>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
@@ -443,7 +443,7 @@ get_sad_hbd_ssse3!(
 macro_rules! get_sad_hbd_avx2_WxH {
   ($(($W:expr, $H:expr)),*) => {
     $(
-      paste::item! {
+      pastey::item! {
         #[target_feature(enable = "avx2")]
         unsafe extern fn [<rav1e_sad_ $W x $H _hbd_avx2>](
           src: *const u16, src_stride: isize, dst: *const u16, dst_stride: isize,
@@ -738,7 +738,7 @@ mod test {
   macro_rules! test_dist_fns {
     ($(($W:expr, $H:expr)),*, $DIST_TY:ident, $BD:expr, $OPT:ident, $OPTLIT:tt) => {
       $(
-        paste::item! {
+        pastey::item! {
           #[test]
           fn [<get_ $DIST_TY _ $W x $H _bd_ $BD _ $OPT>]() {
             if CpuFeatureLevel::default() < CpuFeatureLevel::from_str($OPTLIT).unwrap() {

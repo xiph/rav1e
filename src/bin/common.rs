@@ -24,6 +24,8 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+// The generated dependency metadata has documentation we do not author.
+#[allow(clippy::doc_markdown)]
 pub mod built_info {
   // The file has been placed there by the build script.
   include!(concat!(env!("OUT_DIR"), "/built.rs"));

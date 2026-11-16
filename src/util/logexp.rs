@@ -303,8 +303,8 @@ mod test {
 
   #[test]
   fn blog64_bexp64_round_trip() {
-    for a in 1..=std::u16::MAX as i64 {
-      let b = std::i64::MAX / a;
+    for a in 1..=u16::MAX as i64 {
+      let b = i64::MAX / a;
       let (log_a, log_b, log_ab) = (blog64(a), blog64(b), blog64(a * b));
       assert!((log_a + log_b - log_ab).abs() < 4);
       assert!(bexp64(log_a) == a);
@@ -330,8 +330,8 @@ mod test {
 
   #[test]
   fn blog32_bexp_q24_round_trip() {
-    for a in 1..=std::u16::MAX as u32 {
-      let b = (std::u32::MAX >> 9) / a;
+    for a in 1..=u16::MAX as u32 {
+      let b = (u32::MAX >> 9) / a;
       let (log_a, log_b, log_ab) = (blog32(a), blog32(b), blog32(a * b));
       assert!((log_a + log_b - log_ab).abs() < 4);
       assert!((bexp_q24(log_a) - (i64::from(a) << 24)).abs() < (1 << 24 >> 1));
@@ -344,8 +344,8 @@ mod test {
 
   #[test]
   fn blog32_q11_bexp32_q10_round_trip() {
-    for a in 1..=std::i16::MAX as i32 {
-      let b = std::i16::MAX as i32 / a;
+    for a in 1..=i16::MAX as i32 {
+      let b = i16::MAX as i32 / a;
       let (log_a, log_b, log_ab) = (
         blog32_q11(a as u32),
         blog32_q11(b as u32),

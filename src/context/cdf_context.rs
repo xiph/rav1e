@@ -599,7 +599,7 @@ impl<const CDF_LEN_MAX_PLUS_1: usize>
     &mut self, fc: &mut CDFContext, cdf: CDFOffset<CDF_LEN>,
   ) -> &mut [u16; CDF_LEN] {
     debug_assert!(CDF_LEN < CDF_LEN_MAX_PLUS_1);
-    debug_assert!(cdf.offset <= u16::MAX.into());
+    debug_assert!(cdf.offset <= <u16>::MAX.into());
     // SAFETY: Maintain an invariant of non-zero spare capacity, so that
     // branching may be deferred until writes are issued. Benchmarks indicate
     // this is faster than first testing capacity and possibly reallocating.
